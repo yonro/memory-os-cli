@@ -18,7 +18,9 @@ npm install -g @yonro/memory-os
 ```bash
 memory-os status --url https://api.memory-os.yonro.com
 memory-os token status
+memory-os mcp list
 memory-os mcp add codex --url https://api.memory-os.yonro.com
+memory-os mcp add cursor --url https://api.memory-os.yonro.com
 memory-os privacy
 ```
 
@@ -51,7 +53,26 @@ PowerShell:
 Do not commit tokens to source control, MCP config files, `.env` files, logs, or
 chat transcripts.
 
-## Codex MCP setup
+## MCP setup
+
+List supported client generators:
+
+```bash
+memory-os mcp list
+```
+
+Current write-capable clients:
+
+```text
+codex   ~/.codex/config.toml
+cursor  ~/.cursor/mcp.json
+```
+
+Claude, Copilot, and other client generators should only be added after their
+official user-scoped config format is verified. The CLI should not guess formats
+that could lead to insecure token handling.
+
+### Codex
 
 Generate a Codex MCP config snippet:
 
@@ -67,6 +88,23 @@ memory-os mcp add codex --url https://api.memory-os.yonro.com --write
 
 The generated config references `MEMORY_OS_MCP_TOKEN` and does not include the
 token value.
+
+### Cursor
+
+Generate a Cursor MCP config snippet:
+
+```bash
+memory-os mcp add cursor --url https://api.memory-os.yonro.com
+```
+
+Merge it into the default Cursor user config path:
+
+```bash
+memory-os mcp add cursor --url https://api.memory-os.yonro.com --write
+```
+
+The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
+config manually if you need to rotate the endpoint.
 
 ## Release model
 

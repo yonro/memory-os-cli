@@ -6,6 +6,23 @@ const PACKAGE_NAME = '@yonro/memory-os';
 const TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
 const MCP_SERVER_NAME = 'memory_os';
 
+const MCP_CLIENTS = new Map([
+  ['codex', {
+    label: 'Codex',
+    defaultConfigPath: defaultCodexConfigPath,
+    buildSnippet: codexTomlSnippet,
+    writeConfig: appendTomlServerConfig,
+    configKind: 'toml'
+  }],
+  ['cursor', {
+    label: 'Cursor',
+    defaultConfigPath: defaultCursorConfigPath,
+    buildSnippet: cursorJsonSnippet,
+    writeConfig: mergeJsonMcpConfig,
+    configKind: 'json'
+  }]
+]);
+
 class UsageError extends Error {
   constructor(message) {
     super(message);
@@ -74,7 +91,8 @@ function writeHelp(io) {
   writeLine(io.stdout, '  memory-os status --url <https://api.example.com> [--json]');
   writeLine(io.stdout, '  memory-os token status');
   writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
-  writeLine(io.stdout, '  memory-os mcp add codex --url <https://api.example.com> [--write] [--config <path>]');
+  writeLine(io.stdout, '  memory-os mcp list');
+  writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> [--write] [--config <path>]');
   writeLine(io.stdout, '  memory-os privacy');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`.');
@@ -173,27 +191,46 @@ async function tokenCommand(args, io) {
 
 async function mcpCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  const target = args[1] ?? '';
 
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
-    writeLine(io.stdout, '  memory-os mcp add codex --url <https://api.example.com>');
-    writeLine(io.stdout, '  memory-os mcp add codex --url <https://api.example.com> --write [--config <path>]');
+    writeLine(io.stdout, '  memory-os mcp list');
+    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com>');
+    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> --write [--config <path>]');
     return 0;
   }
 
-  if (subcommand !== 'add' || target !== 'codex') {
-    throw new UsageError('Supported MCP setup command: memory-os mcp add codex --url <url>');
+  if (subcommand === 'list') {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify(supportedMcpClients(), null, 2));
+      return 0;
+    }
+
+    writeLine(io.stdout, 'Supported MCP clients:');
+    for (const client of supportedMcpClients()) {
+      writeLine(io.stdout, `  ${client.id.padEnd(8)} ${client.label} (${client.configKind})`);
+    }
+    writeLine(io.stdout, `All generated configs reference ${TOKEN_ENV_VAR}; token values are never embedded.`);
+    return 0;
+  }
+
+  const target = args[1] ?? '';
+  const client = MCP_CLIENTS.get(target);
+
+  if (subcommand !== 'add' || !client) {
+    throw new UsageError(`Supported MCP setup command: memory-os mcp add <${supportedMcpClientIds().join('|')}> --url <url>`);
   }
 
   const baseUrl = normalizeBaseUrl(requiredOption(args, '--url'));
-  const configPath = optionValue(args, '--config') ?? defaultCodexConfigPath(io.env);
+  const configPath = optionValue(args, '--config') ?? client.defaultConfigPath(io.env);
   const mcpUrl = endpointUrl(baseUrl, '/mcp');
-  const snippet = codexTomlSnippet(mcpUrl);
+  const snippet = client.buildSnippet(mcpUrl);
 
   if (hasFlag(args, '--json')) {
     writeLine(io.stdout, JSON.stringify({
-      client: 'codex',
+      client: target,
+      label: client.label,
+      configKind: client.configKind,
       configPath,
       serverName: MCP_SERVER_NAME,
       url: mcpUrl,
@@ -204,13 +241,13 @@ async function mcpCommand(args, io) {
   }
 
   if (hasFlag(args, '--write')) {
-    await appendCodexConfig(configPath, snippet);
-    writeLine(io.stdout, `Updated Codex MCP config: ${configPath}`);
-    writeLine(io.stdout, `Token value was not written. Codex will read ${TOKEN_ENV_VAR} from the environment.`);
+    await client.writeConfig(configPath, mcpUrl);
+    writeLine(io.stdout, `Updated ${client.label} MCP config: ${configPath}`);
+    writeLine(io.stdout, `Token value was not written. ${client.label} will read ${TOKEN_ENV_VAR} from the environment.`);
     return 0;
   }
 
-  writeLine(io.stdout, `Add this to your Codex config (${configPath}):`);
+  writeLine(io.stdout, `Add this to your ${client.label} config (${configPath}):`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, snippet.trimEnd());
   writeLine(io.stdout, '');
@@ -222,7 +259,7 @@ function writePrivacy(io) {
   writeLine(io.stdout, 'Memory OS CLI privacy and security defaults:');
   writeLine(io.stdout, '- No telemetry or analytics.');
   writeLine(io.stdout, '- `status` does not send tokens.');
-  writeLine(io.stdout, `- MCP configs reference ${TOKEN_ENV_VAR}; token values are not written into project files.`);
+  writeLine(io.stdout, `- MCP configs reference ${TOKEN_ENV_VAR}; token values are not embedded.`);
   writeLine(io.stdout, '- Plaintext token storage requires explicit --allow-plaintext.');
   writeLine(io.stdout, '- npm publishing is restricted by package.json files whitelist.');
 }
@@ -284,16 +321,72 @@ bearer_token_env_var = "${TOKEN_ENV_VAR}"
 `;
 }
 
-async function appendCodexConfig(configPath, snippet) {
+function cursorJsonSnippet(mcpUrl) {
+  return `${JSON.stringify(cursorJsonConfig(mcpUrl), null, 2)}\n`;
+}
+
+async function appendTomlServerConfig(configPath, mcpUrl) {
+  const snippet = codexTomlSnippet(mcpUrl);
   const existing = await readTextIfExists(configPath);
   if (existing.includes(`[mcp_servers.${MCP_SERVER_NAME}]`)) {
-    throw new UsageError(`Codex config already contains [mcp_servers.${MCP_SERVER_NAME}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
+    throw new UsageError(`MCP config already contains [mcp_servers.${MCP_SERVER_NAME}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   const prefix = existing.trim().length === 0 ? '' : '\n\n';
   await fs.appendFile(configPath, `${prefix}${snippet}`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
+}
+
+async function mergeJsonMcpConfig(configPath, mcpUrl) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+
+  if (parsed.mcpServers[MCP_SERVER_NAME]) {
+    throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+
+  parsed.mcpServers[MCP_SERVER_NAME] = cursorJsonServerConfig(mcpUrl);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function cursorJsonConfig(mcpUrl) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: cursorJsonServerConfig(mcpUrl)
+    }
+  };
+}
+
+function cursorJsonServerConfig(mcpUrl) {
+  return {
+    url: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`
+    }
+  };
+}
+
+function supportedMcpClients() {
+  return Array.from(MCP_CLIENTS.entries()).map(([id, client]) => ({
+    id,
+    label: client.label,
+    configKind: client.configKind
+  }));
+}
+
+function supportedMcpClientIds() {
+  return Array.from(MCP_CLIENTS.keys());
 }
 
 function credentialsPath(env) {
@@ -320,6 +413,11 @@ function configRoot(env) {
 function defaultCodexConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
   return path.join(home, '.codex', 'config.toml');
+}
+
+function defaultCursorConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.cursor', 'mcp.json');
 }
 
 async function writePlaintextCredential(credentialPath, token) {
@@ -417,6 +515,18 @@ async function readTextIfExists(filePath) {
     }
     throw error;
   }
+}
+
+function parseJsonConfig(content, configPath) {
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw new UsageError(`Invalid JSON in ${configPath}: ${error.message}`);
+  }
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function escapeTomlString(value) {
