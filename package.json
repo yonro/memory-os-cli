@@ -1,0 +1,44 @@
+{
+  "name": "@yonro/memory-os",
+  "version": "0.1.0",
+  "description": "Privacy-first CLI and MCP setup helper for Memory OS.",
+  "type": "module",
+  "bin": {
+    "memory-os": "bin/memory-os.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "lint": "node --check bin/memory-os.js && node --check src/cli.js && node --check test/cli.test.js",
+    "test": "node --test",
+    "pack:dry-run": "npm pack --dry-run",
+    "prepublishOnly": "npm run lint && npm test && npm run pack:dry-run"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yonro/memory-os-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yonro/memory-os-cli/issues"
+  },
+  "homepage": "https://github.com/yonro/memory-os-cli#readme",
+  "keywords": [
+    "memory-os",
+    "mcp",
+    "agent",
+    "cli",
+    "privacy"
+  ],
+  "license": "UNLICENSED"
+}

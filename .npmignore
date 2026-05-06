@@ -1,0 +1,8 @@
+*
+!bin/
+!bin/**
+!src/
+!src/**
+!README.md
+!LICENSE
+!.npmignore

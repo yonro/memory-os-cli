@@ -1,0 +1,12 @@
+node_modules/
+npm-debug.log*
+coverage/
+.nyc_output/
+dist/
+*.tgz
+.env
+.env.*
+!.env.example
+credentials.json
+.DS_Store
+Thumbs.db
