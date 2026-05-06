@@ -48,6 +48,10 @@ export async function run(args, io = defaultIo()) {
       return await statusCommand(args.slice(1), io);
     }
 
+    if (command === 'setup') {
+      return await setupCommand(args.slice(1), io);
+    }
+
     if (command === 'token') {
       return await tokenCommand(args.slice(1), io);
     }
@@ -88,6 +92,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `Memory OS CLI (${PACKAGE_NAME})`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Usage:');
+  writeLine(io.stdout, '  memory-os setup --url <https://api.example.com> [--client <codex|cursor>] [--write] [--json]');
   writeLine(io.stdout, '  memory-os status --url <https://api.example.com> [--json]');
   writeLine(io.stdout, '  memory-os token status');
   writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
@@ -140,6 +145,49 @@ async function statusCommand(args, io) {
   }
 
   return result.ok ? 0 : 1;
+}
+
+async function setupCommand(args, io) {
+  const baseUrl = normalizeBaseUrl(requiredOption(args, '--url'));
+  const outputJson = hasFlag(args, '--json');
+  const writeConfig = hasFlag(args, '--write');
+  const clientId = optionValue(args, '--client');
+  const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
+
+  if (writeConfig && !clientId) {
+    throw new UsageError('Setup --write requires --client <codex|cursor> so the CLI never writes broad config implicitly.');
+  }
+
+  const discoveryUrl = endpointUrl(baseUrl, '/.well-known/memory-os.json');
+  const discovery = await fetchJson(discoveryUrl, timeoutMs, io);
+  ensureDiscoveryService(discovery, discoveryUrl);
+
+  const statusUrl = stringValue(discovery, ['urls', 'onboarding_status'])
+    ?? stringValue(discovery, ['onboarding_status_url'])
+    ?? endpointUrl(baseUrl, '/v1/onboarding/status');
+  const status = await fetchJson(statusUrl, timeoutMs, io);
+  const setupPlan = buildSetupPlan({ baseUrl, discoveryUrl, statusUrl, discovery, status });
+
+  if (clientId) {
+    const client = MCP_CLIENTS.get(clientId);
+    if (!client) {
+      throw new UsageError(`Unsupported MCP client: ${clientId}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
+    }
+
+    setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env);
+    if (writeConfig) {
+      await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl);
+      setupPlan.selectedClient.written = true;
+    }
+  }
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(setupPlan, null, 2));
+    return 0;
+  }
+
+  writeSetupSummary(setupPlan, io);
+  return 0;
 }
 
 async function tokenCommand(args, io) {
@@ -287,6 +335,151 @@ async function probe(url, timeoutMs, io) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchJson(url, timeoutMs, io) {
+  if (typeof io.fetch !== 'function') {
+    throw new UsageError('This Node runtime does not provide fetch; use Node.js 20 or newer.');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await io.fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new UsageError(`Discovery request failed with HTTP ${response.status}: ${url}`);
+    }
+    return await response.json();
+  } catch (error) {
+    if (error instanceof UsageError) {
+      throw error;
+    }
+    const reason = error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message;
+    throw new UsageError(`Discovery request failed: ${url} (${reason})`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function ensureDiscoveryService(discovery, discoveryUrl) {
+  const service = stringValue(discovery, ['service']);
+  if (service && service !== 'memory-os') {
+    throw new UsageError(`Discovery document at ${discoveryUrl} is for '${service}', not 'memory-os'.`);
+  }
+}
+
+function buildSetupPlan({ baseUrl, discoveryUrl, statusUrl, discovery, status }) {
+  const apiBase = stringValue(discovery, ['urls', 'api_base'])
+    ?? stringValue(discovery, ['api_base_url'])
+    ?? baseUrl;
+  const mcpUrl = stringValue(discovery, ['urls', 'mcp'])
+    ?? stringValue(discovery, ['mcp_url'])
+    ?? endpointUrl(apiBase, '/mcp');
+  const tokenPortalUrl = stringValue(discovery, ['urls', 'token_portal'])
+    ?? stringValue(discovery, ['token_portal_url'])
+    ?? stringValue(status, ['requirements', 'token_portal_url']);
+  const tokenEnvVar = stringValue(discovery, ['auth', 'token_env_var'])
+    ?? stringValue(status, ['requirements', 'token_env_var'])
+    ?? TOKEN_ENV_VAR;
+
+  return {
+    schemaVersion: '1.0',
+    baseUrl,
+    discoveryUrl,
+    statusUrl,
+    apiBase,
+    mcpUrl,
+    guideUrl: stringValue(discovery, ['urls', 'guide']) ?? endpointUrl(apiBase, '/guide'),
+    docsUrl: stringValue(discovery, ['urls', 'docs']),
+    tokenPortalUrl,
+    tokenEnvVar,
+    onboardingReady: booleanValue(status, ['ready']),
+    supportedClients: discoveryMcpClients(discovery),
+    localClients: supportedMcpClients(),
+    privacy: {
+      telemetry: false,
+      tokenSent: false,
+      tokenEmbeddedInConfig: false
+    },
+    boundaries: {
+      clientAllowed: arrayValue(discovery, ['agent_boundary', 'client_allowed'])
+        ?? arrayValue(status, ['agent_boundary', 'client_allowed'])
+        ?? [],
+      adminRequired: arrayValue(discovery, ['agent_boundary', 'admin_required'])
+        ?? arrayValue(status, ['agent_boundary', 'admin_required'])
+        ?? []
+    }
+  };
+}
+
+function clientSetupPlan(clientId, client, mcpUrl, env) {
+  return {
+    id: clientId,
+    label: client.label,
+    configKind: client.configKind,
+    configPath: client.defaultConfigPath(env),
+    serverName: MCP_SERVER_NAME,
+    mcpUrl,
+    tokenEnvVar: TOKEN_ENV_VAR,
+    writesTokenValue: false,
+    written: false
+  };
+}
+
+function writeSetupSummary(plan, io) {
+  writeLine(io.stdout, `Memory OS setup discovery: ${plan.baseUrl}`);
+  writeLine(io.stdout, `  API: ${plan.apiBase}`);
+  writeLine(io.stdout, `  MCP: ${plan.mcpUrl}`);
+  writeLine(io.stdout, `  Guide: ${plan.guideUrl}`);
+  if (plan.docsUrl) {
+    writeLine(io.stdout, `  Docs: ${plan.docsUrl}`);
+  }
+  if (plan.tokenPortalUrl) {
+    writeLine(io.stdout, `  Token portal: ${plan.tokenPortalUrl}`);
+  }
+  writeLine(io.stdout, `  Token env var: ${plan.tokenEnvVar}`);
+  writeLine(io.stdout, `  Onboarding ready: ${plan.onboardingReady === null ? 'unknown' : plan.onboardingReady}`);
+  writeLine(io.stdout, 'Privacy: telemetry disabled; no token sent; generated config references env vars only.');
+
+  if (plan.boundaries.adminRequired.length > 0) {
+    writeLine(io.stdout, `Admin-only actions: ${plan.boundaries.adminRequired.join(', ')}`);
+  }
+
+  if (plan.selectedClient) {
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, `Selected client: ${plan.selectedClient.label}`);
+    writeLine(io.stdout, `  Config path: ${plan.selectedClient.configPath}`);
+    writeLine(io.stdout, `  Written: ${plan.selectedClient.written}`);
+    writeLine(io.stdout, `  Token value embedded: ${plan.selectedClient.writesTokenValue}`);
+    if (!plan.selectedClient.written) {
+      writeLine(io.stdout, `  Next: memory-os mcp add ${plan.selectedClient.id} --url ${plan.apiBase} --write`);
+    }
+    return;
+  }
+
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Next steps:');
+  writeLine(io.stdout, `  1. Create a scoped token in the token portal and store it in ${plan.tokenEnvVar}.`);
+  writeLine(io.stdout, `  2. Configure a client, for example: memory-os setup --url ${plan.baseUrl} --client codex --write`);
+  writeLine(io.stdout, '  3. Run memory-os status to smoke-test the service without sending the token.');
+}
+
+function discoveryMcpClients(discovery) {
+  const clients = discovery?.clients?.mcp;
+  if (!Array.isArray(clients)) {
+    return [];
+  }
+
+  return clients
+    .filter((client) => isPlainObject(client) && typeof client.id === 'string')
+    .map((client) => ({
+      id: client.id,
+      configEndpoint: typeof client.config_endpoint === 'string' ? client.config_endpoint : null
+    }));
 }
 
 function normalizeBaseUrl(input) {
@@ -475,6 +668,32 @@ function optionValue(args, name) {
   }
 
   return value;
+}
+
+function stringValue(source, keys) {
+  const value = valueAtPath(source, keys);
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function booleanValue(source, keys) {
+  const value = valueAtPath(source, keys);
+  return typeof value === 'boolean' ? value : null;
+}
+
+function arrayValue(source, keys) {
+  const value = valueAtPath(source, keys);
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : null;
+}
+
+function valueAtPath(source, keys) {
+  let current = source;
+  for (const key of keys) {
+    if (!isPlainObject(current) || !(key in current)) {
+      return null;
+    }
+    current = current[key];
+  }
+  return current;
 }
 
 function hasFlag(args, name) {

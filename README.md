@@ -16,6 +16,7 @@ npm install -g @yonro/memory-os
 ## Commands
 
 ```bash
+memory-os setup --url https://api.memory-os.yonro.com
 memory-os status --url https://api.memory-os.yonro.com
 memory-os token status
 memory-os mcp list
@@ -52,6 +53,30 @@ PowerShell:
 
 Do not commit tokens to source control, MCP config files, `.env` files, logs, or
 chat transcripts.
+
+## Hosted discovery setup
+
+Phase B setup uses the Memory OS hosted discovery contract. The CLI reads public,
+secret-free discovery and onboarding status documents, then tells the user where
+the API, MCP endpoint, docs, and token portal are.
+
+```bash
+memory-os setup --url https://api.memory-os.yonro.com
+```
+
+Discovery requests do not send `MEMORY_OS_MCP_TOKEN` or any Authorization
+header. Token creation still happens in the website or enterprise console.
+
+Generate and write a client config from discovery:
+
+```bash
+memory-os setup --url https://api.memory-os.yonro.com --client codex --write
+memory-os setup --url https://api.memory-os.yonro.com --client cursor --write
+```
+
+`--write` requires an explicit `--client` so the CLI never performs broad config
+writes implicitly. Generated config references `MEMORY_OS_MCP_TOKEN`; it does not
+embed the token value.
 
 ## MCP setup
 

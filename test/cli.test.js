@@ -85,6 +85,83 @@ test('mcp cursor config can be merged into a user-scoped json file', async () =>
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
+test('setup discovers hosted service without sending token values', async () => {
+  const requests = [];
+  const result = await invoke(['setup', '--url', 'https://api.example.test', '--json'], {
+    env: { MEMORY_OS_MCP_TOKEN: 'secret-token-that-must-not-leak' },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      if (url.endsWith('/.well-known/memory-os.json')) {
+        return jsonResponse({
+          service: 'memory-os',
+          urls: {
+            api_base: 'https://api.example.test',
+            mcp: 'https://mcp.example.test/mcp',
+            guide: 'https://api.example.test/guide',
+            docs: 'https://docs.example.test/memory-os',
+            token_portal: 'https://console.example.test/tokens',
+            onboarding_status: 'https://api.example.test/v1/onboarding/status'
+          },
+          clients: {
+            mcp: [
+              { id: 'codex', config_endpoint: 'https://api.example.test/v1/mcp/config/codex' },
+              { id: 'cursor', config_endpoint: 'https://api.example.test/v1/mcp/config/cursor' }
+            ]
+          },
+          auth: {
+            token_env_var: 'MEMORY_OS_MCP_TOKEN',
+            token_in_discovery: false
+          },
+          agent_boundary: {
+            client_allowed: ['discover_service', 'configure_local_mcp'],
+            admin_required: ['issue_token', 'run_database_migration']
+          }
+        });
+      }
+      return jsonResponse({
+        ready: true,
+        requirements: {
+          token_required: true,
+          token_env_var: 'MEMORY_OS_MCP_TOKEN',
+          token_portal_url: 'https://console.example.test/tokens'
+        }
+      });
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.equal(request.init.headers.authorization, undefined);
+  }
+
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.mcpUrl, 'https://mcp.example.test/mcp');
+  assert.equal(plan.tokenPortalUrl, 'https://console.example.test/tokens');
+  assert.deepEqual(plan.boundaries.adminRequired, ['issue_token', 'run_database_migration']);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('setup writes cursor config from discovered mcp url without token value', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-'));
+  const result = await invoke(['setup', '--url', 'https://api.example.test', '--client', 'cursor', '--write', '--json'], {
+    env: {
+      HOME: tempDir,
+      MEMORY_OS_MCP_TOKEN: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+
+  const configPath = path.join(tempDir, '.cursor', 'mcp.json');
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.memory_os.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.memory_os.headers.Authorization, 'Bearer ${env:MEMORY_OS_MCP_TOKEN}');
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
 async function invoke(args, options = {}) {
   let stdout = '';
   let stderr = '';
@@ -98,4 +175,35 @@ async function invoke(args, options = {}) {
   });
 
   return { code, stdout, stderr };
+}
+
+function jsonResponse(payload) {
+  return {
+    ok: true,
+    status: 200,
+    async json() {
+      return payload;
+    }
+  };
+}
+
+function discoveryFetch() {
+  return async (url) => {
+    if (url.endsWith('/.well-known/memory-os.json')) {
+      return jsonResponse({
+        service: 'memory-os',
+        urls: {
+          api_base: 'https://api.example.test',
+          mcp: 'https://mcp.example.test/mcp',
+          token_portal: 'https://console.example.test/tokens',
+          onboarding_status: 'https://api.example.test/v1/onboarding/status'
+        },
+        auth: {
+          token_env_var: 'MEMORY_OS_MCP_TOKEN'
+        }
+      });
+    }
+
+    return jsonResponse({ ready: true });
+  };
 }
