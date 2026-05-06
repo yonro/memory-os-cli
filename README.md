@@ -16,12 +16,14 @@ npm install -g @yonro/memory-os
 ## Commands
 
 ```bash
-memory-os setup --url https://api.memory-os.yonro.com
-memory-os status --url https://api.memory-os.yonro.com
+export MEMORY_OS_URL="https://<your-memory-os-api-domain>"
+
+memory-os setup --url "$MEMORY_OS_URL"
+memory-os status --url "$MEMORY_OS_URL"
 memory-os token status
 memory-os mcp list
-memory-os mcp add codex --url https://api.memory-os.yonro.com
-memory-os mcp add cursor --url https://api.memory-os.yonro.com
+memory-os mcp add codex --url "$MEMORY_OS_URL"
+memory-os mcp add cursor --url "$MEMORY_OS_URL"
 memory-os privacy
 ```
 
@@ -61,7 +63,7 @@ secret-free discovery and onboarding status documents, then tells the user where
 the API, MCP endpoint, docs, and token portal are.
 
 ```bash
-memory-os setup --url https://api.memory-os.yonro.com
+memory-os setup --url "$MEMORY_OS_URL"
 ```
 
 Discovery requests do not send `MEMORY_OS_MCP_TOKEN` or any Authorization
@@ -70,8 +72,8 @@ header. Token creation still happens in the website or enterprise console.
 Generate and write a client config from discovery:
 
 ```bash
-memory-os setup --url https://api.memory-os.yonro.com --client codex --write
-memory-os setup --url https://api.memory-os.yonro.com --client cursor --write
+memory-os setup --url "$MEMORY_OS_URL" --client codex --write
+memory-os setup --url "$MEMORY_OS_URL" --client cursor --write
 ```
 
 `--write` requires an explicit `--client` so the CLI never performs broad config
@@ -102,13 +104,13 @@ that could lead to insecure token handling.
 Generate a Codex MCP config snippet:
 
 ```bash
-memory-os mcp add codex --url https://api.memory-os.yonro.com
+memory-os mcp add codex --url "$MEMORY_OS_URL"
 ```
 
 Write it to the default Codex config path:
 
 ```bash
-memory-os mcp add codex --url https://api.memory-os.yonro.com --write
+memory-os mcp add codex --url "$MEMORY_OS_URL" --write
 ```
 
 The generated config references `MEMORY_OS_MCP_TOKEN` and does not include the
@@ -119,13 +121,13 @@ token value.
 Generate a Cursor MCP config snippet:
 
 ```bash
-memory-os mcp add cursor --url https://api.memory-os.yonro.com
+memory-os mcp add cursor --url "$MEMORY_OS_URL"
 ```
 
 Merge it into the default Cursor user config path:
 
 ```bash
-memory-os mcp add cursor --url https://api.memory-os.yonro.com --write
+memory-os mcp add cursor --url "$MEMORY_OS_URL" --write
 ```
 
 The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
