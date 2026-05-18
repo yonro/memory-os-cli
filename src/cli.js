@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const PACKAGE_NAME = '@yonro/memory-os';
+const CLI_VERSION = '0.4.118';
 const TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
 const MCP_SERVER_NAME = 'memory_os';
 
@@ -40,8 +41,16 @@ export async function run(args, io = defaultIo()) {
     }
 
     if (command === '--version' || command === '-v' || command === 'version') {
-      writeLine(io.stdout, '0.1.0');
+      writeLine(io.stdout, CLI_VERSION);
       return 0;
+    }
+
+    if (command === 'doctor') {
+      return await doctorCommand(args.slice(1), io);
+    }
+
+    if (command === 'discovery') {
+      return await discoveryCommand(args.slice(1), io);
     }
 
     if (command === 'status') {
@@ -58,6 +67,10 @@ export async function run(args, io = defaultIo()) {
 
     if (command === 'mcp') {
       return await mcpCommand(args.slice(1), io);
+    }
+
+    if (command === 'env') {
+      return envCommand(args.slice(1), io);
     }
 
     if (command === 'privacy') {
@@ -92,15 +105,111 @@ function writeHelp(io) {
   writeLine(io.stdout, `Memory OS CLI (${PACKAGE_NAME})`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Usage:');
+  writeLine(io.stdout, '  memory-os doctor --base-url <https://api.example.com> [--json]');
+  writeLine(io.stdout, '  memory-os discovery show --base-url <https://api.example.com> [--json]');
   writeLine(io.stdout, '  memory-os setup --url <https://api.example.com> [--client <codex|cursor>] [--write] [--json]');
   writeLine(io.stdout, '  memory-os status --url <https://api.example.com> [--json]');
   writeLine(io.stdout, '  memory-os token status');
   writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
   writeLine(io.stdout, '  memory-os mcp list');
+  writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
   writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> [--write] [--config <path>]');
+  writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--json]');
   writeLine(io.stdout, '  memory-os privacy');
   writeLine(io.stdout, '');
-  writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`.');
+  writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`, `doctor`, or `discovery`.');
+}
+
+async function doctorCommand(args, io) {
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+  const outputJson = hasFlag(args, '--json');
+  const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
+  const discoveryUrl = endpointUrl(baseUrl, '/.well-known/agent-discovery.json');
+  const discovery = await fetchJson(discoveryUrl, timeoutMs, io);
+  ensureDiscoveryService(discovery, discoveryUrl);
+
+  const rootVersion = await bestEffortRootVersion(discovery, timeoutMs, io);
+  const mcpUrl = discoveryMcpUrl(discovery, baseUrl);
+  const checks = [
+    { name: 'node_version', ok: Number.parseInt(process.versions.node.split('.')[0], 10) >= 20, detail: process.versions.node },
+    { name: 'discovery_reachable', ok: true, detail: discoveryUrl },
+    { name: 'mcp_url_present', ok: Boolean(mcpUrl), detail: mcpUrl ?? 'missing' },
+    { name: 'no_remote_code_execution', ok: booleanValue(discovery, ['security', 'no_remote_code_execution']) === true, detail: String(booleanValue(discovery, ['security', 'no_remote_code_execution'])) },
+    {
+      name: 'token_not_in_discovery',
+      ok: booleanValue(discovery, ['security', 'token_in_discovery']) === false && booleanValue(discovery, ['auth', 'token_in_discovery']) === false,
+      detail: `security=${booleanValue(discovery, ['security', 'token_in_discovery'])} auth=${booleanValue(discovery, ['auth', 'token_in_discovery'])}`
+    },
+    {
+      name: 'service_version_compatible',
+      ok: rootVersion.version ? sameMajorMinor(CLI_VERSION, rootVersion.version) : true,
+      detail: rootVersion.version ? `service=${rootVersion.version} cli=${CLI_VERSION}` : `service version unavailable${rootVersion.error ? `: ${rootVersion.error}` : ''}`
+    }
+  ];
+  const report = {
+    ok: checks.every((check) => check.ok),
+    cli: { package: PACKAGE_NAME, version: CLI_VERSION, node: process.versions.node },
+    discovery: {
+      url: discoveryUrl,
+      schemaVersion: stringValue(discovery, ['schema_version']),
+      protocol: stringValue(discovery, ['protocol']),
+      service: stringValue(discovery, ['service']),
+      serviceVersion: rootVersion.version ?? null,
+      mcpUrl,
+      supportedClients: agentDiscoveryClientIds(discovery)
+    },
+    checks
+  };
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(report, null, 2));
+    return report.ok ? 0 : 1;
+  }
+
+  writeLine(io.stdout, `Memory OS CLI ${CLI_VERSION}`);
+  writeLine(io.stdout, `Discovery: ${discoveryUrl}`);
+  writeLine(io.stdout, `MCP: ${mcpUrl ?? 'missing'}`);
+  if (rootVersion.version) {
+    writeLine(io.stdout, `Service version: ${rootVersion.version}`);
+  }
+  writeLine(io.stdout, `Supported clients: ${report.discovery.supportedClients.join(', ') || 'unknown'}`);
+  for (const check of checks) {
+    writeLine(io.stdout, `${check.ok ? 'OK' : 'FAIL'} ${check.name}: ${check.detail}`);
+  }
+  return report.ok ? 0 : 1;
+}
+
+async function discoveryCommand(args, io) {
+  const subcommand = args[0] ?? 'help';
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    writeLine(io.stdout, 'Discovery commands:');
+    writeLine(io.stdout, '  memory-os discovery show --base-url <https://api.example.com> [--json]');
+    return 0;
+  }
+  if (subcommand !== 'show') {
+    throw new UsageError(`Unknown discovery command: ${subcommand}`);
+  }
+
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args.slice(1), io.env));
+  const outputJson = hasFlag(args, '--json');
+  const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
+  const discoveryUrl = endpointUrl(baseUrl, '/.well-known/agent-discovery.json');
+  const discovery = await fetchJson(discoveryUrl, timeoutMs, io);
+  ensureDiscoveryService(discovery, discoveryUrl);
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(discovery, null, 2));
+    return 0;
+  }
+
+  writeLine(io.stdout, `${stringValue(discovery, ['name']) ?? 'Memory OS'} discovery`);
+  writeLine(io.stdout, `URL: ${discoveryUrl}`);
+  writeLine(io.stdout, `Protocol: ${stringValue(discovery, ['protocol']) ?? 'unknown'}`);
+  writeLine(io.stdout, `MCP: ${discoveryMcpUrl(discovery, baseUrl) ?? 'missing'}`);
+  writeLine(io.stdout, `Docs: ${stringValue(discovery, ['urls', 'docs']) ?? 'unknown'}`);
+  writeLine(io.stdout, `Clients: ${agentDiscoveryClientIds(discovery).join(', ') || 'unknown'}`);
+  writeLine(io.stdout, 'Security: read-only discovery; tokens are not returned; remote code execution is not advertised.');
+  return 0;
 }
 
 async function statusCommand(args, io) {
@@ -243,6 +352,7 @@ async function mcpCommand(args, io) {
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
     writeLine(io.stdout, '  memory-os mcp list');
+    writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
     writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com>');
     writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> --write [--config <path>]');
     return 0;
@@ -259,6 +369,28 @@ async function mcpCommand(args, io) {
       writeLine(io.stdout, `  ${client.id.padEnd(8)} ${client.label} (${client.configKind})`);
     }
     writeLine(io.stdout, `All generated configs reference ${TOKEN_ENV_VAR}; token values are never embedded.`);
+    return 0;
+  }
+
+  if (subcommand === 'config') {
+    const clientId = optionValue(args, '--client') ?? args[1] ?? 'generic';
+    const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+    const mcpUrl = endpointUrl(baseUrl, '/mcp');
+    const template = mcpConfigTemplate(clientId, mcpUrl);
+
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify(template, null, 2));
+      return 0;
+    }
+
+    writeLine(io.stdout, `Memory OS MCP config template for ${clientId}`);
+    writeLine(io.stdout, `Requires env: ${TOKEN_ENV_VAR}`);
+    if (typeof template.snippet === 'string') {
+      writeLine(io.stdout, template.snippet.trimEnd());
+    } else {
+      writeLine(io.stdout, JSON.stringify(template.snippet, null, 2));
+    }
+    writeLine(io.stdout, 'Review the template before applying it. Token values are not included.');
     return 0;
   }
 
@@ -300,6 +432,44 @@ async function mcpCommand(args, io) {
   writeLine(io.stdout, snippet.trimEnd());
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
+  return 0;
+}
+
+function envCommand(args, io) {
+  const subcommand = args[0] ?? 'help';
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    writeLine(io.stdout, 'Env commands:');
+    writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--base-url <url>] [--json]');
+    return 0;
+  }
+  if (subcommand !== 'example') {
+    throw new UsageError(`Unknown env command: ${subcommand}`);
+  }
+
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args.slice(1), io.env));
+  const outputJson = hasFlag(args, '--json');
+  const shell = optionValue(args, '--shell') ?? (process.platform === 'win32' ? 'powershell' : 'bash');
+  const placeholder = '<paste-token-from-your-secret-store>';
+  const payload = { MEMORY_OS_URL: baseUrl, MEMORY_OS_BASE_URL: baseUrl, [TOKEN_ENV_VAR]: placeholder };
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(payload, null, 2));
+    return 0;
+  }
+
+  if (shell === 'powershell') {
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('MEMORY_OS_URL', '${baseUrl}', 'User')`);
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('MEMORY_OS_BASE_URL', '${baseUrl}', 'User')`);
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${TOKEN_ENV_VAR}', '${placeholder}', 'User')`);
+  } else if (shell === 'cmd') {
+    writeLine(io.stdout, `setx MEMORY_OS_URL "${baseUrl}"`);
+    writeLine(io.stdout, `setx MEMORY_OS_BASE_URL "${baseUrl}"`);
+    writeLine(io.stdout, `setx ${TOKEN_ENV_VAR} "${placeholder}"`);
+  } else {
+    writeLine(io.stdout, `export MEMORY_OS_URL="${baseUrl}"`);
+    writeLine(io.stdout, `export MEMORY_OS_BASE_URL="${baseUrl}"`);
+    writeLine(io.stdout, `export ${TOKEN_ENV_VAR}="${placeholder}"`);
+  }
   return 0;
 }
 
@@ -414,6 +584,84 @@ function buildSetupPlan({ baseUrl, discoveryUrl, statusUrl, discovery, status })
         ?? []
     }
   };
+}
+
+async function bestEffortRootVersion(discovery, timeoutMs, io) {
+  const rootDiscoveryUrl = stringValue(discovery, ['urls', 'root_discovery']);
+  if (!rootDiscoveryUrl) {
+    return {};
+  }
+  try {
+    const rootDiscovery = await fetchJson(rootDiscoveryUrl, timeoutMs, io);
+    return { version: stringValue(rootDiscovery, ['version']) ?? undefined };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+function discoveryMcpUrl(discovery, baseUrl) {
+  return stringValue(discovery, ['api', 'mcp', 'url'])
+    ?? stringValue(discovery, ['urls', 'mcp'])
+    ?? endpointUrl(baseUrl, '/mcp');
+}
+
+function agentDiscoveryClientIds(discovery) {
+  const clients = Array.isArray(discovery?.clients) ? discovery.clients : [];
+  const ids = clients
+    .filter((client) => isPlainObject(client) && typeof client.id === 'string')
+    .map((client) => client.id);
+  if (ids.length > 0) {
+    return ids;
+  }
+  const supported = arrayValue(discovery, ['supported_clients']);
+  return supported ?? [];
+}
+
+function mcpConfigTemplate(clientId, mcpUrl) {
+  if (clientId === 'codex') {
+    return {
+      client: clientId,
+      serverName: MCP_SERVER_NAME,
+      snippetFormat: 'toml',
+      snippet: codexTomlSnippet(mcpUrl),
+      requiresEnv: [TOKEN_ENV_VAR],
+      writesTokenValue: false
+    };
+  }
+
+  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' ? 'memory_os' : 'memory-os';
+  return {
+    client: clientId,
+    serverName,
+    snippetFormat: 'json',
+    snippet: {
+      mcpServers: {
+        [serverName]: {
+          type: 'http',
+          url: mcpUrl,
+          headers: {
+            Authorization: `Bearer \${${TOKEN_ENV_VAR}}`
+          }
+        }
+      }
+    },
+    requiresEnv: [TOKEN_ENV_VAR],
+    writesTokenValue: false
+  };
+}
+
+function sameMajorMinor(left, right) {
+  const leftParts = left.split('.');
+  const rightParts = right.split('.');
+  return leftParts[0] === rightParts[0] && leftParts[1] === rightParts[1];
+}
+
+function baseUrlOption(args, env) {
+  return optionValue(args, '--base-url')
+    ?? optionValue(args, '--url')
+    ?? env.MEMORY_OS_BASE_URL
+    ?? env.MEMORY_OS_URL
+    ?? 'https://xmemo.dev';
 }
 
 function clientSetupPlan(clientId, client, mcpUrl, env) {

@@ -66,6 +66,69 @@ test('mcp list exposes supported clients without token values', async () => {
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
+test('doctor validates agent discovery without sending token values', async () => {
+  const requests = [];
+  const result = await invoke(['doctor', '--base-url', 'https://api.example.test', '--json'], {
+    env: { MEMORY_OS_MCP_TOKEN: 'secret-token-that-must-not-leak' },
+    fetch: agentDiscoveryFetch(requests)
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.equal(request.init.headers.authorization, undefined);
+  }
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.cli.version, '0.4.118');
+  assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
+  assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('discovery show returns read-only agent discovery', async () => {
+  const requests = [];
+  const result = await invoke(['discovery', 'show', '--base-url', 'https://api.example.test', '--json'], {
+    env: { MEMORY_OS_MCP_TOKEN: 'secret-token-that-must-not-leak' },
+    fetch: agentDiscoveryFetch(requests)
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].init.headers.authorization, undefined);
+
+  const discovery = JSON.parse(result.stdout);
+  assert.equal(discovery.service, 'memory-os');
+  assert.equal(discovery.security.no_remote_code_execution, true);
+  assert.equal(discovery.security.token_in_discovery, false);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('mcp config emits generic template without token values', async () => {
+  const result = await invoke(['mcp', 'config', '--client', 'generic', '--base-url', 'https://api.example.test', '--json'], {
+    env: { MEMORY_OS_MCP_TOKEN: 'secret-token-that-must-not-leak' }
+  });
+
+  assert.equal(result.code, 0);
+  const template = JSON.parse(result.stdout);
+  assert.equal(template.client, 'generic');
+  assert.equal(template.snippet.mcpServers['memory-os'].url, 'https://api.example.test/mcp');
+  assert.equal(template.writesTokenValue, false);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('env example emits shell-specific placeholders', async () => {
+  const result = await invoke(['env', 'example', '--shell', 'bash', '--base-url', 'https://api.example.test'], {
+    env: { MEMORY_OS_MCP_TOKEN: 'secret-token-that-must-not-leak' }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /export MEMORY_OS_URL="https:\/\/api\.example\.test"/);
+  assert.match(result.stdout, /export MEMORY_OS_MCP_TOKEN="<paste-token-from-your-secret-store>"/);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
 test('mcp cursor config can be merged into a user-scoped json file', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-cli-'));
   const configPath = path.join(tempDir, 'mcp.json');
@@ -205,5 +268,49 @@ function discoveryFetch() {
     }
 
     return jsonResponse({ ready: true });
+  };
+}
+
+function agentDiscoveryFetch(requests) {
+  return async (url, init) => {
+    requests.push({ url, init });
+    if (url.endsWith('/.well-known/agent-discovery.json')) {
+      return jsonResponse({
+        service: 'memory-os',
+        name: 'Memory OS',
+        schema_version: '1.0',
+        protocol: 'mcp',
+        urls: {
+          docs: 'https://docs.example.test/memory-os',
+          root_discovery: 'https://api.example.test/.well-known/memory-os.json'
+        },
+        api: {
+          mcp: {
+            url: 'https://api.example.test/mcp'
+          }
+        },
+        clients: [
+          { id: 'codex' },
+          { id: 'copilot-cli' },
+          { id: 'gemini-cli' }
+        ],
+        security: {
+          no_remote_code_execution: true,
+          token_in_discovery: false
+        },
+        auth: {
+          token_in_discovery: false
+        }
+      });
+    }
+
+    if (url.endsWith('/.well-known/memory-os.json')) {
+      return jsonResponse({
+        service: 'memory-os',
+        version: '0.4.118'
+      });
+    }
+
+    return { ok: false, status: 404 };
   };
 }
