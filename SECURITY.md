@@ -6,8 +6,8 @@ Memory OS CLI is designed to minimize local secret exposure.
 
 - No telemetry or analytics are collected.
 - Token values are never printed by CLI commands.
-- Generated MCP config references `MEMORY_OS_MCP_TOKEN` instead of embedding a
-  token value.
+- Generated MCP config references `XMEMO_KEY` instead of embedding a token value.
+- Agent instance IDs are non-secret and stored in user-scoped config outside git.
 - Plaintext token storage requires explicit `--allow-plaintext`.
 - npm publish is constrained by the package `files` whitelist.
 

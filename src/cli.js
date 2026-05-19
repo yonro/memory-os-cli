@@ -1,10 +1,16 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const PACKAGE_NAME = '@yonro/memory-os';
-const CLI_VERSION = '0.4.118';
-const TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
+const CLI_VERSION = '0.4.124';
+const TOKEN_ENV_VAR = 'XMEMO_KEY';
+const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
+const AGENT_ID_ENV_VAR = 'XMEMO_AGENT_ID';
+const AGENT_INSTANCE_ENV_VAR = 'XMEMO_AGENT_INSTANCE_ID';
+const AGENT_ID_HEADER = 'X-Memory-OS-Agent-ID';
+const AGENT_INSTANCE_HEADER = 'X-Memory-OS-Agent-Instance-ID';
 const MCP_SERVER_NAME = 'memory_os';
 
 const MCP_CLIENTS = new Map([
@@ -283,9 +289,10 @@ async function setupCommand(args, io) {
       throw new UsageError(`Unsupported MCP client: ${clientId}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
     }
 
-    setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env);
+    const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
+    setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity);
     if (writeConfig) {
-      await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl);
+      await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity);
       setupPlan.selectedClient.written = true;
     }
   }
@@ -313,7 +320,7 @@ async function tokenCommand(args, io) {
 
   if (subcommand === 'status') {
     const credentialPath = credentialsPath(io.env);
-    const hasEnvironmentToken = Boolean(io.env[TOKEN_ENV_VAR]);
+    const hasEnvironmentToken = Boolean(io.env[TOKEN_ENV_VAR] ?? io.env[LEGACY_TOKEN_ENV_VAR]);
     const hasPlaintextCredential = await fileExists(credentialPath);
     writeLine(io.stdout, `Environment token: ${hasEnvironmentToken ? 'present' : 'missing'} (${TOKEN_ENV_VAR})`);
     writeLine(io.stdout, `User credential file: ${hasPlaintextCredential ? 'present' : 'missing'} (${credentialPath})`);
@@ -404,9 +411,9 @@ async function mcpCommand(args, io) {
   const baseUrl = normalizeBaseUrl(requiredOption(args, '--url'));
   const configPath = optionValue(args, '--config') ?? client.defaultConfigPath(io.env);
   const mcpUrl = endpointUrl(baseUrl, '/mcp');
-  const snippet = client.buildSnippet(mcpUrl);
 
   if (hasFlag(args, '--json')) {
+    const identity = envReferenceIdentity(target);
     writeLine(io.stdout, JSON.stringify({
       client: target,
       label: client.label,
@@ -415,18 +422,24 @@ async function mcpCommand(args, io) {
       serverName: MCP_SERVER_NAME,
       url: mcpUrl,
       tokenEnvVar: TOKEN_ENV_VAR,
+      agentId: identity.agentId,
+      agentInstanceId: identity.agentInstanceId,
+      agentInstanceIdPath: identity.path,
       writesTokenValue: false
     }, null, 2));
     return 0;
   }
 
+  const identity = hasFlag(args, '--write') ? await agentIdentity(target, io.env) : envReferenceIdentity(target);
   if (hasFlag(args, '--write')) {
-    await client.writeConfig(configPath, mcpUrl);
+    await client.writeConfig(configPath, mcpUrl, identity);
     writeLine(io.stdout, `Updated ${client.label} MCP config: ${configPath}`);
     writeLine(io.stdout, `Token value was not written. ${client.label} will read ${TOKEN_ENV_VAR} from the environment.`);
+    writeLine(io.stdout, `Agent instance ID stored outside git: ${identity.path}`);
     return 0;
   }
 
+  const snippet = client.buildSnippet(mcpUrl, identity);
   writeLine(io.stdout, `Add this to your ${client.label} config (${configPath}):`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, snippet.trimEnd());
@@ -450,7 +463,13 @@ function envCommand(args, io) {
   const outputJson = hasFlag(args, '--json');
   const shell = optionValue(args, '--shell') ?? (process.platform === 'win32' ? 'powershell' : 'bash');
   const placeholder = '<paste-token-from-your-secret-store>';
-  const payload = { MEMORY_OS_URL: baseUrl, MEMORY_OS_BASE_URL: baseUrl, [TOKEN_ENV_VAR]: placeholder };
+  const payload = {
+    MEMORY_OS_URL: baseUrl,
+    MEMORY_OS_BASE_URL: baseUrl,
+    [TOKEN_ENV_VAR]: placeholder,
+    [AGENT_ID_ENV_VAR]: '<agent-family>',
+    [AGENT_INSTANCE_ENV_VAR]: '<stable-random-id-for-this-local-agent>'
+  };
 
   if (outputJson) {
     writeLine(io.stdout, JSON.stringify(payload, null, 2));
@@ -461,14 +480,20 @@ function envCommand(args, io) {
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('MEMORY_OS_URL', '${baseUrl}', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('MEMORY_OS_BASE_URL', '${baseUrl}', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${TOKEN_ENV_VAR}', '${placeholder}', 'User')`);
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${AGENT_ID_ENV_VAR}', '<agent-family>', 'User')`);
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${AGENT_INSTANCE_ENV_VAR}', '<stable-random-id-for-this-local-agent>', 'User')`);
   } else if (shell === 'cmd') {
     writeLine(io.stdout, `setx MEMORY_OS_URL "${baseUrl}"`);
     writeLine(io.stdout, `setx MEMORY_OS_BASE_URL "${baseUrl}"`);
     writeLine(io.stdout, `setx ${TOKEN_ENV_VAR} "${placeholder}"`);
+    writeLine(io.stdout, `setx ${AGENT_ID_ENV_VAR} "<agent-family>"`);
+    writeLine(io.stdout, `setx ${AGENT_INSTANCE_ENV_VAR} "<stable-random-id-for-this-local-agent>"`);
   } else {
     writeLine(io.stdout, `export MEMORY_OS_URL="${baseUrl}"`);
     writeLine(io.stdout, `export MEMORY_OS_BASE_URL="${baseUrl}"`);
     writeLine(io.stdout, `export ${TOKEN_ENV_VAR}="${placeholder}"`);
+    writeLine(io.stdout, `export ${AGENT_ID_ENV_VAR}="<agent-family>"`);
+    writeLine(io.stdout, `export ${AGENT_INSTANCE_ENV_VAR}="<stable-random-id-for-this-local-agent>"`);
   }
   return 0;
 }
@@ -478,6 +503,7 @@ function writePrivacy(io) {
   writeLine(io.stdout, '- No telemetry or analytics.');
   writeLine(io.stdout, '- `status` does not send tokens.');
   writeLine(io.stdout, `- MCP configs reference ${TOKEN_ENV_VAR}; token values are not embedded.`);
+  writeLine(io.stdout, `- Agent instance IDs are non-secret and stored in user-scoped config outside git.`);
   writeLine(io.stdout, '- Plaintext token storage requires explicit --allow-plaintext.');
   writeLine(io.stdout, '- npm publishing is restricted by package.json files whitelist.');
 }
@@ -625,6 +651,13 @@ function mcpConfigTemplate(clientId, mcpUrl) {
       snippetFormat: 'toml',
       snippet: codexTomlSnippet(mcpUrl),
       requiresEnv: [TOKEN_ENV_VAR],
+      optionalEnv: [AGENT_INSTANCE_ENV_VAR],
+      agentIdentity: {
+        agentId: 'codex',
+        agentIdHeader: AGENT_ID_HEADER,
+        agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
+        agentInstanceHeader: AGENT_INSTANCE_HEADER
+      },
       writesTokenValue: false
     };
   }
@@ -640,12 +673,21 @@ function mcpConfigTemplate(clientId, mcpUrl) {
           type: 'http',
           url: mcpUrl,
           headers: {
-            Authorization: `Bearer \${${TOKEN_ENV_VAR}}`
+            Authorization: `Bearer \${${TOKEN_ENV_VAR}}`,
+            [AGENT_ID_HEADER]: clientId,
+            [AGENT_INSTANCE_HEADER]: `\${${AGENT_INSTANCE_ENV_VAR}}`
           }
         }
       }
     },
     requiresEnv: [TOKEN_ENV_VAR],
+    optionalEnv: [AGENT_INSTANCE_ENV_VAR],
+    agentIdentity: {
+      agentId: clientId,
+      agentIdHeader: AGENT_ID_HEADER,
+      agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
+      agentInstanceHeader: AGENT_INSTANCE_HEADER
+    },
     writesTokenValue: false
   };
 }
@@ -664,7 +706,7 @@ function baseUrlOption(args, env) {
     ?? 'https://xmemo.dev';
 }
 
-function clientSetupPlan(clientId, client, mcpUrl, env) {
+function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
   return {
     id: clientId,
     label: client.label,
@@ -673,6 +715,9 @@ function clientSetupPlan(clientId, client, mcpUrl, env) {
     serverName: MCP_SERVER_NAME,
     mcpUrl,
     tokenEnvVar: TOKEN_ENV_VAR,
+    agentId: identity.agentId,
+    agentInstanceId: identity.agentInstanceId,
+    agentInstanceIdPath: identity.path,
     writesTokenValue: false,
     written: false
   };
@@ -703,6 +748,8 @@ function writeSetupSummary(plan, io) {
     writeLine(io.stdout, `  Config path: ${plan.selectedClient.configPath}`);
     writeLine(io.stdout, `  Written: ${plan.selectedClient.written}`);
     writeLine(io.stdout, `  Token value embedded: ${plan.selectedClient.writesTokenValue}`);
+    writeLine(io.stdout, `  Agent ID: ${plan.selectedClient.agentId}`);
+    writeLine(io.stdout, `  Agent instance ID stored: ${plan.selectedClient.agentInstanceIdPath}`);
     if (!plan.selectedClient.written) {
       writeLine(io.stdout, `  Next: memory-os mcp add ${plan.selectedClient.id} --url ${plan.apiBase} --write`);
     }
@@ -762,8 +809,8 @@ bearer_token_env_var = "${TOKEN_ENV_VAR}"
 `;
 }
 
-function cursorJsonSnippet(mcpUrl) {
-  return `${JSON.stringify(cursorJsonConfig(mcpUrl), null, 2)}\n`;
+function cursorJsonSnippet(mcpUrl, identity = envReferenceIdentity('cursor')) {
+  return `${JSON.stringify(cursorJsonConfig(mcpUrl, identity), null, 2)}\n`;
 }
 
 async function appendTomlServerConfig(configPath, mcpUrl) {
@@ -779,7 +826,7 @@ async function appendTomlServerConfig(configPath, mcpUrl) {
   await bestEffortChmod(configPath, 0o600);
 }
 
-async function mergeJsonMcpConfig(configPath, mcpUrl) {
+async function mergeJsonMcpConfig(configPath, mcpUrl, identity) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
 
@@ -795,26 +842,74 @@ async function mergeJsonMcpConfig(configPath, mcpUrl) {
     throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
-  parsed.mcpServers[MCP_SERVER_NAME] = cursorJsonServerConfig(mcpUrl);
+  parsed.mcpServers[MCP_SERVER_NAME] = cursorJsonServerConfig(mcpUrl, identity);
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
 }
 
-function cursorJsonConfig(mcpUrl) {
+function cursorJsonConfig(mcpUrl, identity = envReferenceIdentity('cursor')) {
   return {
     mcpServers: {
-      [MCP_SERVER_NAME]: cursorJsonServerConfig(mcpUrl)
+      [MCP_SERVER_NAME]: cursorJsonServerConfig(mcpUrl, identity)
     }
   };
 }
 
-function cursorJsonServerConfig(mcpUrl) {
+function cursorJsonServerConfig(mcpUrl, identity = envReferenceIdentity('cursor')) {
   return {
     url: mcpUrl,
     headers: {
-      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
     }
+  };
+}
+
+async function agentIdentity(clientId, env) {
+  const configuredInstanceId = env[AGENT_INSTANCE_ENV_VAR];
+  if (configuredInstanceId) {
+    return {
+      agentId: clientId,
+      agentInstanceId: configuredInstanceId,
+      path: `${AGENT_INSTANCE_ENV_VAR} environment variable`
+    };
+  }
+
+  const identityPath = agentInstanceIdentityPath(env, clientId);
+  const existing = await readAgentInstanceIdentity(identityPath);
+  if (existing) {
+    return { agentId: clientId, agentInstanceId: existing, path: identityPath };
+  }
+
+  const generated = `xmemo-${clientId}-${randomUUID()}`;
+  await fs.mkdir(path.dirname(identityPath), { recursive: true, mode: 0o700 });
+  await bestEffortChmod(path.dirname(identityPath), 0o700);
+  await fs.writeFile(identityPath, `${JSON.stringify({ version: 1, agentId: clientId, agentInstanceId: generated }, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(identityPath, 0o600);
+  return { agentId: clientId, agentInstanceId: generated, path: identityPath };
+}
+
+async function readAgentInstanceIdentity(identityPath) {
+  const existing = await readTextIfExists(identityPath);
+  if (!existing.trim()) {
+    return null;
+  }
+  const parsed = parseJsonConfig(existing, identityPath);
+  const value = stringValue(parsed, ['agentInstanceId']);
+  return value || null;
+}
+
+function agentInstanceIdentityPath(env, clientId) {
+  return path.join(configRoot(env), 'agent-instances', `${clientId}.json`);
+}
+
+function envReferenceIdentity(clientId) {
+  return {
+    agentId: clientId,
+    agentInstanceId: `\${${AGENT_INSTANCE_ENV_VAR}}`,
+    path: `${AGENT_INSTANCE_ENV_VAR} environment variable`
   };
 }
 
