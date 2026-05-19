@@ -75,6 +75,10 @@ export async function run(args, io = defaultIo()) {
       return await mcpCommand(args.slice(1), io);
     }
 
+    if (command === 'smoke') {
+      return await smokeCommand(args.slice(1), io);
+    }
+
     if (command === 'env') {
       return envCommand(args.slice(1), io);
     }
@@ -119,7 +123,9 @@ function writeHelp(io) {
   writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
   writeLine(io.stdout, '  memory-os mcp list');
   writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
+  writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
   writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> [--write] [--config <path>]');
+  writeLine(io.stdout, '  memory-os smoke --client codex [--config <path>] [--json]');
   writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--json]');
   writeLine(io.stdout, '  memory-os privacy');
   writeLine(io.stdout, '');
@@ -360,6 +366,7 @@ async function mcpCommand(args, io) {
     writeLine(io.stdout, 'MCP commands:');
     writeLine(io.stdout, '  memory-os mcp list');
     writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
+    writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
     writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com>');
     writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> --write [--config <path>]');
     return 0;
@@ -398,6 +405,22 @@ async function mcpCommand(args, io) {
       writeLine(io.stdout, JSON.stringify(template.snippet, null, 2));
     }
     writeLine(io.stdout, 'Review the template before applying it. Token values are not included.');
+    return 0;
+  }
+
+  if (subcommand === 'profile') {
+    const clientId = args[1] ?? 'codex';
+    if (clientId !== 'codex') {
+      throw new UsageError('Only the Codex memory behavior profile is available in this MCP-depth release.');
+    }
+
+    const profile = codexMemoryProfile();
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify(profile, null, 2));
+      return 0;
+    }
+
+    writeCodexMemoryProfile(profile, io);
     return 0;
   }
 
@@ -446,6 +469,34 @@ async function mcpCommand(args, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
   return 0;
+}
+
+async function smokeCommand(args, io) {
+  const clientId = optionValue(args, '--client');
+  const outputJson = hasFlag(args, '--json');
+  if (!clientId) {
+    throw new UsageError('Smoke requires --client codex for this MCP-depth release.');
+  }
+  if (clientId !== 'codex') {
+    throw new UsageError('Only Codex smoke checks are available in this MCP-depth release.');
+  }
+
+  const configPath = optionValue(args, '--config') ?? defaultCodexConfigPath(io.env);
+  const report = await codexSmokeReport(configPath, io.env);
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(report, null, 2));
+    return report.ok ? 0 : 1;
+  }
+
+  writeLine(io.stdout, `Memory OS Codex MCP smoke: ${report.ok ? 'ok' : 'failed'}`);
+  writeLine(io.stdout, `Config: ${report.configPath}`);
+  writeLine(io.stdout, `Token env: ${report.tokenEnvVar}`);
+  for (const check of report.checks) {
+    const status = check.ok ? 'OK' : check.required ? 'FAIL' : 'WARN';
+    writeLine(io.stdout, `  ${status} ${check.name}: ${check.detail}`);
+  }
+  return report.ok ? 0 : 1;
 }
 
 function envCommand(args, io) {
@@ -809,6 +860,131 @@ bearer_token_env_var = "${TOKEN_ENV_VAR}"
 `;
 }
 
+function codexMemoryProfile() {
+  return {
+    client: 'codex',
+    profileVersion: 'codex-mcp-depth-v1',
+    mcpServerName: MCP_SERVER_NAME,
+    requiredTokenEnv: TOKEN_ENV_VAR,
+    objective: 'Use Memory OS deliberately through MCP for project context recall and high-signal write-back.',
+    instructions: [
+      'At the start of a non-trivial task, call Memory OS recall/search for relevant project decisions, conventions, prior fixes, and active context unless the user explicitly asks not to use memory.',
+      'Use recalled memories as evidence, not as unquestioned truth. Prefer current repository files when memory conflicts with code.',
+      'After meaningful decisions, bug fixes, release steps, or durable conventions, write a concise Memory OS memory with scope, source, and no secret values.',
+      'Never store tokens, API keys, cookies, private keys, raw credentials, or sensitive customer data in Memory OS.',
+      'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
+      'Keep Memory OS authentication through the XMEMO_KEY environment variable; do not paste token values into prompts, config files, or logs.'
+    ],
+    setupCommand: 'memory-os setup --url "$MEMORY_OS_URL" --client codex --write',
+    smokeCommand: 'memory-os smoke --client codex'
+  };
+}
+
+function writeCodexMemoryProfile(profile, io) {
+  writeLine(io.stdout, 'Memory OS Codex memory behavior profile');
+  writeLine(io.stdout, `Profile: ${profile.profileVersion}`);
+  writeLine(io.stdout, `MCP server: ${profile.mcpServerName}`);
+  writeLine(io.stdout, `Token env: ${profile.requiredTokenEnv}`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Recommended Codex instructions:');
+  for (const instruction of profile.instructions) {
+    writeLine(io.stdout, `- ${instruction}`);
+  }
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `Setup: ${profile.setupCommand}`);
+  writeLine(io.stdout, `Smoke test: ${profile.smokeCommand}`);
+}
+
+async function codexSmokeReport(configPath, env) {
+  const configText = await readTextIfExists(configPath);
+  const block = tomlServerBlock(configText, MCP_SERVER_NAME);
+  const mcpUrl = block ? tomlStringValue(block, 'url') : null;
+  const bearerTokenEnvVar = block ? tomlStringValue(block, 'bearer_token_env_var') : null;
+  const tokenValue = env[TOKEN_ENV_VAR] ?? '';
+  const identityPath = agentInstanceIdentityPath(env, 'codex');
+  const identityPresent = await fileExists(identityPath);
+  const checks = [
+    {
+      name: 'config_present',
+      ok: configText.trim().length > 0,
+      required: true,
+      detail: configText.trim().length > 0 ? 'found' : 'missing'
+    },
+    {
+      name: 'memory_os_server_present',
+      ok: Boolean(block),
+      required: true,
+      detail: block ? `[mcp_servers.${MCP_SERVER_NAME}]` : `missing [mcp_servers.${MCP_SERVER_NAME}]`
+    },
+    {
+      name: 'mcp_url_present',
+      ok: Boolean(mcpUrl),
+      required: true,
+      detail: mcpUrl ?? 'missing url'
+    },
+    {
+      name: 'bearer_token_env_var',
+      ok: bearerTokenEnvVar === TOKEN_ENV_VAR,
+      required: true,
+      detail: bearerTokenEnvVar ?? 'missing bearer_token_env_var'
+    },
+    {
+      name: 'token_env_present',
+      ok: Boolean(env[TOKEN_ENV_VAR]),
+      required: true,
+      detail: env[TOKEN_ENV_VAR] ? 'present' : `missing ${TOKEN_ENV_VAR}`
+    },
+    {
+      name: 'token_not_embedded_in_config',
+      ok: !tokenValue || !configText.includes(tokenValue),
+      required: true,
+      detail: 'token value not printed or embedded'
+    },
+    {
+      name: 'agent_instance_identity_file',
+      ok: identityPresent,
+      required: false,
+      detail: identityPresent ? identityPath : `optional; create with memory-os mcp add codex --write (${identityPath})`
+    }
+  ];
+
+  return {
+    ok: checks.every((check) => !check.required || check.ok),
+    client: 'codex',
+    configPath,
+    serverName: MCP_SERVER_NAME,
+    mcpUrl,
+    tokenEnvVar: TOKEN_ENV_VAR,
+    agentInstanceIdPath: identityPath,
+    checks
+  };
+}
+
+function tomlServerBlock(content, serverName) {
+  const header = `[mcp_servers.${serverName}]`;
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === header);
+  if (start === -1) {
+    return '';
+  }
+
+  const block = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^\s*\[/.test(line)) {
+      break;
+    }
+    block.push(line);
+  }
+  return block.join('\n');
+}
+
+function tomlStringValue(block, key) {
+  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"((?:\\\\.|[^"\\\\])*)"\\s*$`, 'm');
+  const match = block.match(pattern);
+  return match ? unescapeTomlString(match[1]) : null;
+}
+
 function cursorJsonSnippet(mcpUrl, identity = envReferenceIdentity('cursor')) {
   return `${JSON.stringify(cursorJsonConfig(mcpUrl, identity), null, 2)}\n`;
 }
@@ -1093,6 +1269,14 @@ function isPlainObject(value) {
 
 function escapeTomlString(value) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function unescapeTomlString(value) {
+  return value.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function writeLine(stream, line) {

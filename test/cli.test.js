@@ -240,6 +240,55 @@ test('setup writes cursor config from discovered mcp url without token value', a
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
+test('codex setup writes env-referenced config and smoke validates it', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-'));
+  const env = {
+    HOME: tempDir,
+    MEMORY_OS_CONFIG_HOME: tempDir,
+    XMEMO_KEY: 'secret-token-that-must-not-leak'
+  };
+  const setup = await invoke(['setup', '--url', 'https://api.example.test', '--client', 'codex', '--write', '--json'], {
+    env,
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(setup.code, 0);
+  assert.doesNotMatch(setup.stdout, /secret-token-that-must-not-leak/);
+
+  const configPath = path.join(tempDir, '.codex', 'config.toml');
+  const config = await fs.readFile(configPath, 'utf8');
+  assert.match(config, /\[mcp_servers\.memory_os\]/);
+  assert.match(config, /url = "https:\/\/mcp\.example\.test\/mcp"/);
+  assert.match(config, /bearer_token_env_var = "XMEMO_KEY"/);
+  assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
+
+  const smoke = await invoke(['smoke', '--client', 'codex', '--config', configPath, '--json'], { env });
+
+  assert.equal(smoke.code, 0);
+  assert.doesNotMatch(smoke.stdout, /secret-token-that-must-not-leak/);
+  const report = JSON.parse(smoke.stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.client, 'codex');
+  assert.equal(report.mcpUrl, 'https://mcp.example.test/mcp');
+  assert.equal(report.tokenEnvVar, 'XMEMO_KEY');
+  assert.equal(report.checks.find((check) => check.name === 'bearer_token_env_var').ok, true);
+  assert.equal(report.checks.find((check) => check.name === 'agent_instance_identity_file').ok, true);
+});
+
+test('codex memory behavior profile documents recall and write-back', async () => {
+  const result = await invoke(['mcp', 'profile', 'codex', '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const profile = JSON.parse(result.stdout);
+  assert.equal(profile.client, 'codex');
+  assert.equal(profile.mcpServerName, 'memory_os');
+  assert.match(profile.instructions.join('\n'), /recall\/search/);
+  assert.match(profile.instructions.join('\n'), /write a concise Memory OS memory/);
+});
+
 async function invoke(args, options = {}) {
   let stdout = '';
   let stderr = '';

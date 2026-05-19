@@ -26,7 +26,9 @@ memory-os token status
 memory-os env example --shell bash --base-url "$MEMORY_OS_URL"
 memory-os mcp list
 memory-os mcp config --client generic --base-url "$MEMORY_OS_URL"
+memory-os mcp profile codex
 memory-os mcp add codex --url "$MEMORY_OS_URL"
+memory-os smoke --client codex
 memory-os mcp add cursor --url "$MEMORY_OS_URL"
 memory-os privacy
 ```
@@ -133,6 +135,20 @@ memory-os mcp add codex --url "$MEMORY_OS_URL" --write
 The generated config references `XMEMO_KEY` and does not include the token
 value. Codex custom identity headers are not written until the CLI format is
 verified to support them.
+
+Codex MCP-depth checks:
+
+```bash
+memory-os mcp profile codex
+memory-os smoke --client codex
+```
+
+`memory-os mcp profile codex` prints the recommended memory behavior profile:
+recall/search at the start of non-trivial tasks, write back high-signal
+decisions and fixes, and never store secrets. `memory-os smoke --client codex`
+checks the local Codex TOML config for the `memory_os` MCP server,
+`bearer_token_env_var = "XMEMO_KEY"`, token presence in the environment, and
+absence of embedded token values.
 
 ### Cursor
 
