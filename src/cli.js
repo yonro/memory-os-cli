@@ -4,7 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const PACKAGE_NAME = '@yonro/memory-os';
-const CLI_VERSION = '0.4.124';
+const CLI_VERSION = '0.4.126';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
 const AGENT_ID_ENV_VAR = 'XMEMO_AGENT_ID';
@@ -12,6 +12,9 @@ const AGENT_INSTANCE_ENV_VAR = 'XMEMO_AGENT_INSTANCE_ID';
 const AGENT_ID_HEADER = 'X-Memory-OS-Agent-ID';
 const AGENT_INSTANCE_HEADER = 'X-Memory-OS-Agent-Instance-ID';
 const MCP_SERVER_NAME = 'memory_os';
+const CODEX_PROFILE_TARGET = 'AGENTS.md';
+const CODEX_PROFILE_MARKER_START = '<!-- memory-os:codex-profile:start -->';
+const CODEX_PROFILE_MARKER_END = '<!-- memory-os:codex-profile:end -->';
 
 const MCP_CLIENTS = new Map([
   ['codex', {
@@ -75,6 +78,10 @@ export async function run(args, io = defaultIo()) {
       return await mcpCommand(args.slice(1), io);
     }
 
+    if (command === 'profile') {
+      return await profileCommand(args.slice(1), io);
+    }
+
     if (command === 'smoke') {
       return await smokeCommand(args.slice(1), io);
     }
@@ -117,13 +124,15 @@ function writeHelp(io) {
   writeLine(io.stdout, 'Usage:');
   writeLine(io.stdout, '  memory-os doctor --base-url <https://api.example.com> [--json]');
   writeLine(io.stdout, '  memory-os discovery show --base-url <https://api.example.com> [--json]');
-  writeLine(io.stdout, '  memory-os setup --url <https://api.example.com> [--client <codex|cursor>] [--write] [--json]');
+  writeLine(io.stdout, '  memory-os setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]');
   writeLine(io.stdout, '  memory-os status --url <https://api.example.com> [--json]');
   writeLine(io.stdout, '  memory-os token status');
   writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
   writeLine(io.stdout, '  memory-os mcp list');
   writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
   writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
+  writeLine(io.stdout, '  memory-os profile install codex [--target AGENTS.md] [--dry-run|--json]');
+  writeLine(io.stdout, '  memory-os profile uninstall codex [--target AGENTS.md] [--json]');
   writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> [--write] [--config <path>]');
   writeLine(io.stdout, '  memory-os smoke --client codex [--config <path>] [--json]');
   writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--json]');
@@ -269,11 +278,18 @@ async function statusCommand(args, io) {
 }
 
 async function setupCommand(args, io) {
-  const baseUrl = normalizeBaseUrl(requiredOption(args, '--url'));
-  const outputJson = hasFlag(args, '--json');
-  const writeConfig = hasFlag(args, '--write');
-  const clientId = optionValue(args, '--client');
-  const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
+  const positionalClientId = positionalClientArg(args);
+  const optionArgs = positionalClientId ? args.slice(1) : args;
+  const baseUrl = normalizeBaseUrl(baseUrlOption(optionArgs, io.env));
+  const outputJson = hasFlag(optionArgs, '--json');
+  const shortClientSetup = Boolean(positionalClientId);
+  const writeConfig = hasFlag(optionArgs, '--write') || (shortClientSetup && hasFlag(optionArgs, '--yes'));
+  const clientId = positionalClientId ?? optionValue(optionArgs, '--client');
+  const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
+  const installProfile = shortClientSetup
+    && clientId === 'codex'
+    && writeConfig
+    && !hasFlag(optionArgs, '--no-profile');
 
   if (writeConfig && !clientId) {
     throw new UsageError('Setup --write requires --client <codex|cursor> so the CLI never writes broad config implicitly.');
@@ -301,6 +317,14 @@ async function setupCommand(args, io) {
       await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity);
       setupPlan.selectedClient.written = true;
     }
+
+    if (clientId === 'codex' && shortClientSetup) {
+      const profileTarget = optionValue(optionArgs, '--profile-target')
+        ?? optionValue(optionArgs, '--target')
+        ?? defaultCodexProfileTarget();
+      const profileResult = await codexProfileInstallResult(profileTarget, { write: installProfile });
+      setupPlan.selectedClient.codexProfile = profileResult;
+    }
   }
 
   if (outputJson) {
@@ -309,6 +333,47 @@ async function setupCommand(args, io) {
   }
 
   writeSetupSummary(setupPlan, io);
+  return 0;
+}
+
+async function profileCommand(args, io) {
+  const subcommand = args[0] ?? 'help';
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    writeLine(io.stdout, 'Profile commands:');
+    writeLine(io.stdout, '  memory-os profile install codex [--target AGENTS.md] [--dry-run|--json]');
+    writeLine(io.stdout, '  memory-os profile status codex [--target AGENTS.md] [--json]');
+    writeLine(io.stdout, '  memory-os profile uninstall codex [--target AGENTS.md] [--json]');
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
+    return 0;
+  }
+
+  const clientId = args[1];
+  if (clientId !== 'codex') {
+    throw new UsageError(`Unsupported profile client: ${clientId ?? 'missing'}. Supported clients: codex.`);
+  }
+
+  const optionArgs = args.slice(2);
+  const outputJson = hasFlag(optionArgs, '--json');
+  const targetPath = optionValue(optionArgs, '--target') ?? defaultCodexProfileTarget();
+  let result;
+
+  if (subcommand === 'install') {
+    result = await codexProfileInstallResult(targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
+  } else if (subcommand === 'status') {
+    result = await codexProfileStatusResult(targetPath);
+  } else if (subcommand === 'uninstall') {
+    result = await codexProfileUninstallResult(targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
+  } else {
+    throw new UsageError(`Unknown profile command: ${subcommand}`);
+  }
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(result, null, 2));
+    return 0;
+  }
+
+  writeProfileResult(subcommand, result, io);
   return 0;
 }
 
@@ -801,6 +866,15 @@ function writeSetupSummary(plan, io) {
     writeLine(io.stdout, `  Token value embedded: ${plan.selectedClient.writesTokenValue}`);
     writeLine(io.stdout, `  Agent ID: ${plan.selectedClient.agentId}`);
     writeLine(io.stdout, `  Agent instance ID stored: ${plan.selectedClient.agentInstanceIdPath}`);
+    if (plan.selectedClient.codexProfile) {
+      const profile = plan.selectedClient.codexProfile;
+      writeLine(io.stdout, `  Codex profile target: ${profile.targetPath}`);
+      writeLine(io.stdout, `  Codex profile installed: ${profile.written}`);
+      writeLine(io.stdout, `  Codex profile changed: ${profile.changed}`);
+      if (!profile.written) {
+        writeLine(io.stdout, `  Profile preview: memory-os profile install codex --target ${profile.targetPath}`);
+      }
+    }
     if (!plan.selectedClient.written) {
       writeLine(io.stdout, `  Next: memory-os mcp add ${plan.selectedClient.id} --url ${plan.apiBase} --write`);
     }
@@ -875,7 +949,7 @@ function codexMemoryProfile() {
       'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
       'Keep Memory OS authentication through the XMEMO_KEY environment variable; do not paste token values into prompts, config files, or logs.'
     ],
-    setupCommand: 'memory-os setup --url "$MEMORY_OS_URL" --client codex --write',
+    setupCommand: 'memory-os setup codex --url "$MEMORY_OS_URL" --yes',
     smokeCommand: 'memory-os smoke --client codex'
   };
 }
@@ -893,6 +967,164 @@ function writeCodexMemoryProfile(profile, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Setup: ${profile.setupCommand}`);
   writeLine(io.stdout, `Smoke test: ${profile.smokeCommand}`);
+}
+
+function codexProfileInstructionText() {
+  const profile = codexMemoryProfile();
+  const lines = [
+    '## Memory OS Codex profile',
+    '',
+    `MCP server: \`${profile.mcpServerName}\``,
+    `Token env var: \`${profile.requiredTokenEnv}\``,
+    '',
+    profile.objective,
+    '',
+    'Recommended Codex behavior:'
+  ];
+  for (const instruction of profile.instructions) {
+    lines.push(`- ${instruction}`);
+  }
+  lines.push('');
+  return `${lines.join('\n')}\n`;
+}
+
+function codexProfileMarkerBlock() {
+  return `${CODEX_PROFILE_MARKER_START}\n${codexProfileInstructionText()}${CODEX_PROFILE_MARKER_END}\n`;
+}
+
+function defaultCodexProfileTarget() {
+  return path.resolve(process.cwd(), CODEX_PROFILE_TARGET);
+}
+
+async function codexProfileInstallResult(targetPath, options = {}) {
+  const resolvedTarget = path.resolve(targetPath);
+  const existing = await readTextIfExists(resolvedTarget);
+  const marker = markerBounds(existing);
+  const block = codexProfileMarkerBlock();
+  let nextText;
+
+  if (marker.present) {
+    nextText = `${existing.slice(0, marker.start)}${block}${existing.slice(marker.end)}`;
+  } else if (existing.trim().length === 0) {
+    nextText = block;
+  } else {
+    const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+    nextText = `${existing}${separator}${block}`;
+  }
+
+  const changed = nextText !== existing;
+  const write = Boolean(options.write);
+  if (write && changed) {
+    await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fs.writeFile(resolvedTarget, nextText);
+  }
+
+  return {
+    client: 'codex',
+    action: 'install',
+    targetPath: resolvedTarget,
+    markerStart: CODEX_PROFILE_MARKER_START,
+    markerEnd: CODEX_PROFILE_MARKER_END,
+    installed: marker.present || (write && changed),
+    written: write,
+    changed,
+    markerPresent: marker.present,
+    writesTokenValue: false
+  };
+}
+
+async function codexProfileStatusResult(targetPath) {
+  const resolvedTarget = path.resolve(targetPath);
+  const existing = await readTextIfExists(resolvedTarget);
+  const marker = markerBounds(existing);
+  return {
+    client: 'codex',
+    action: 'status',
+    targetPath: resolvedTarget,
+    installed: marker.present,
+    markerPresent: marker.present,
+    markerStart: CODEX_PROFILE_MARKER_START,
+    markerEnd: CODEX_PROFILE_MARKER_END,
+    writesTokenValue: false
+  };
+}
+
+async function codexProfileUninstallResult(targetPath, options = {}) {
+  const resolvedTarget = path.resolve(targetPath);
+  const existing = await readTextIfExists(resolvedTarget);
+  const marker = markerBounds(existing);
+  const write = Boolean(options.write);
+  let changed = false;
+
+  if (marker.present) {
+    let nextText = `${existing.slice(0, marker.start)}${existing.slice(marker.end)}`;
+    nextText = nextText.replace(/\n{3,}/g, '\n\n');
+    if (nextText.trim().length === 0) {
+      nextText = '';
+    } else if (!nextText.endsWith('\n')) {
+      nextText = `${nextText}\n`;
+    }
+    changed = nextText !== existing;
+    if (write && changed) {
+      await fs.writeFile(resolvedTarget, nextText);
+    }
+  }
+
+  return {
+    client: 'codex',
+    action: 'uninstall',
+    targetPath: resolvedTarget,
+    installed: marker.present && !(write && changed),
+    written: write,
+    changed,
+    markerPresent: marker.present,
+    markerStart: CODEX_PROFILE_MARKER_START,
+    markerEnd: CODEX_PROFILE_MARKER_END,
+    writesTokenValue: false
+  };
+}
+
+function markerBounds(content) {
+  const start = content.indexOf(CODEX_PROFILE_MARKER_START);
+  const end = content.indexOf(CODEX_PROFILE_MARKER_END);
+  if (start === -1 && end === -1) {
+    return { present: false, start: -1, end: -1 };
+  }
+
+  if (start === -1 || end === -1 || end < start) {
+    throw new UsageError('Codex profile markers are incomplete or out of order; edit the target file manually before retrying.');
+  }
+
+  if (
+    content.indexOf(CODEX_PROFILE_MARKER_START, start + CODEX_PROFILE_MARKER_START.length) !== -1
+    || content.indexOf(CODEX_PROFILE_MARKER_END, end + CODEX_PROFILE_MARKER_END.length) !== -1
+  ) {
+    throw new UsageError('Codex profile markers appear more than once; edit the target file manually before retrying.');
+  }
+
+  const afterEnd = end + CODEX_PROFILE_MARKER_END.length;
+  const trailingNewlineLength = content.slice(afterEnd, afterEnd + 2) === '\r\n'
+    ? 2
+    : content.slice(afterEnd, afterEnd + 1) === '\n'
+      ? 1
+      : 0;
+
+  return {
+    present: true,
+    start,
+    end: afterEnd + trailingNewlineLength
+  };
+}
+
+function writeProfileResult(action, result, io) {
+  writeLine(io.stdout, `Memory OS Codex profile ${action}`);
+  writeLine(io.stdout, `  Target: ${result.targetPath}`);
+  writeLine(io.stdout, `  Installed: ${result.installed}`);
+  if ('written' in result) {
+    writeLine(io.stdout, `  Written: ${result.written}`);
+    writeLine(io.stdout, `  Changed: ${result.changed}`);
+  }
+  writeLine(io.stdout, '  Token value embedded: false');
 }
 
 async function codexSmokeReport(configPath, env) {
@@ -1173,6 +1405,19 @@ function requiredOption(args, name) {
     throw new UsageError(`Missing required option ${name}.`);
   }
   return value;
+}
+
+function positionalClientArg(args) {
+  const candidate = args[0];
+  if (!candidate || candidate.startsWith('--')) {
+    return null;
+  }
+
+  if (!MCP_CLIENTS.has(candidate)) {
+    throw new UsageError(`Unsupported setup client: ${candidate}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
+  }
+
+  return candidate;
 }
 
 function optionValue(args, name) {

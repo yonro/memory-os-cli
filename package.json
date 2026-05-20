@@ -1,6 +1,6 @@
 {
   "name": "@yonro/memory-os",
-  "version": "0.4.125",
+  "version": "0.4.126",
   "description": "Privacy-first CLI and MCP setup helper for Memory OS.",
   "type": "module",
   "bin": {

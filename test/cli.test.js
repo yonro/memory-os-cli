@@ -81,7 +81,7 @@ test('doctor validates agent discovery without sending token values', async () =
 
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
-  assert.equal(report.cli.version, '0.4.124');
+  assert.equal(report.cli.version, '0.4.126');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -273,6 +273,103 @@ test('codex setup writes env-referenced config and smoke validates it', async ()
   assert.equal(report.tokenEnvVar, 'XMEMO_KEY');
   assert.equal(report.checks.find((check) => check.name === 'bearer_token_env_var').ok, true);
   assert.equal(report.checks.find((check) => check.name === 'agent_instance_identity_file').ok, true);
+});
+
+test('setup codex shorthand previews project profile without writing files', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-preview-'));
+  const profilePath = path.join(tempDir, 'AGENTS.md');
+  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--profile-target', profilePath, '--json'], {
+    env: {
+      HOME: tempDir,
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'codex');
+  assert.equal(plan.selectedClient.written, false);
+  assert.equal(plan.selectedClient.codexProfile.targetPath, profilePath);
+  assert.equal(plan.selectedClient.codexProfile.written, false);
+  assert.equal(plan.selectedClient.codexProfile.changed, true);
+  await assert.rejects(fs.readFile(profilePath, 'utf8'), /ENOENT/);
+});
+
+test('setup codex --yes writes mcp config and marker-scoped project profile', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-yes-'));
+  const profilePath = path.join(tempDir, 'AGENTS.md');
+  const env = {
+    HOME: tempDir,
+    MEMORY_OS_CONFIG_HOME: tempDir,
+    XMEMO_KEY: 'secret-token-that-must-not-leak'
+  };
+  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--yes', '--profile-target', profilePath, '--json'], {
+    env,
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.codexProfile.written, true);
+  assert.equal(plan.selectedClient.codexProfile.writesTokenValue, false);
+
+  const config = await fs.readFile(path.join(tempDir, '.codex', 'config.toml'), 'utf8');
+  assert.match(config, /bearer_token_env_var = "XMEMO_KEY"/);
+  assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
+
+  const profile = await fs.readFile(profilePath, 'utf8');
+  assert.match(profile, /<!-- memory-os:codex-profile:start -->/);
+  assert.match(profile, /<!-- memory-os:codex-profile:end -->/);
+  assert.match(profile, /Use Memory OS deliberately through MCP/);
+  assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
+test('profile install, status, and uninstall preserve user AGENTS content', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-profile-'));
+  const profilePath = path.join(tempDir, 'AGENTS.md');
+  await fs.writeFile(profilePath, '# Project instructions\n\nKeep this line.\n');
+
+  const install = await invoke(['profile', 'install', 'codex', '--target', profilePath, '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+  assert.equal(install.code, 0);
+  assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
+
+  const installed = await fs.readFile(profilePath, 'utf8');
+  assert.match(installed, /# Project instructions/);
+  assert.match(installed, /Keep this line\./);
+  assert.equal((installed.match(/memory-os:codex-profile:start/g) ?? []).length, 1);
+
+  const reinstall = await invoke(['profile', 'install', 'codex', '--target', profilePath, '--json']);
+  assert.equal(reinstall.code, 0);
+  const afterReinstall = await fs.readFile(profilePath, 'utf8');
+  assert.equal((afterReinstall.match(/memory-os:codex-profile:start/g) ?? []).length, 1);
+
+  const status = await invoke(['profile', 'status', 'codex', '--target', profilePath, '--json']);
+  assert.equal(status.code, 0);
+  assert.equal(JSON.parse(status.stdout).installed, true);
+
+  const uninstall = await invoke(['profile', 'uninstall', 'codex', '--target', profilePath, '--json']);
+  assert.equal(uninstall.code, 0);
+  const uninstalled = await fs.readFile(profilePath, 'utf8');
+  assert.match(uninstalled, /Keep this line\./);
+  assert.doesNotMatch(uninstalled, /memory-os:codex-profile:start/);
+});
+
+test('profile install fails closed on incomplete marker block', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-profile-bad-'));
+  const profilePath = path.join(tempDir, 'AGENTS.md');
+  await fs.writeFile(profilePath, '<!-- memory-os:codex-profile:start -->\n');
+
+  const result = await invoke(['profile', 'install', 'codex', '--target', profilePath]);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /markers are incomplete/i);
 });
 
 test('codex memory behavior profile documents recall and write-back', async () => {

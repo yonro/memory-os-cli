@@ -21,13 +21,13 @@ export MEMORY_OS_URL="https://xmemo.dev"
 memory-os doctor --base-url "$MEMORY_OS_URL"
 memory-os discovery show --base-url "$MEMORY_OS_URL"
 memory-os setup --url "$MEMORY_OS_URL"
+memory-os setup codex --url "$MEMORY_OS_URL"
 memory-os status --url "$MEMORY_OS_URL"
 memory-os token status
 memory-os env example --shell bash --base-url "$MEMORY_OS_URL"
 memory-os mcp list
 memory-os mcp config --client generic --base-url "$MEMORY_OS_URL"
-memory-os mcp profile codex
-memory-os mcp add codex --url "$MEMORY_OS_URL"
+memory-os profile status codex
 memory-os smoke --client codex
 memory-os mcp add cursor --url "$MEMORY_OS_URL"
 memory-os privacy
@@ -83,6 +83,7 @@ public service discovery document does not return token values.
 Generate and write a client config from discovery:
 
 ```bash
+memory-os setup codex --url "$MEMORY_OS_URL" --yes
 memory-os setup --url "$MEMORY_OS_URL" --client codex --write
 memory-os setup --url "$MEMORY_OS_URL" --client cursor --write
 ```
@@ -91,6 +92,13 @@ memory-os setup --url "$MEMORY_OS_URL" --client cursor --write
 writes implicitly. Generated config references `XMEMO_KEY`; it does not embed
 the token value. Write-capable client configs also include stable non-secret
 agent identity headers where the client format supports them.
+
+`memory-os setup codex` is the recommended Codex path. Without `--yes` it
+previews the Codex MCP config and the project-scoped `AGENTS.md` memory profile.
+With `--yes`, it writes the Codex MCP config and installs the profile into the
+current project's `AGENTS.md` marker block. Use `--profile-target <path>` to
+choose a different project instruction file, or `--no-profile` to configure MCP
+only.
 
 ## MCP setup
 
@@ -120,7 +128,31 @@ should only be added after their official user-scoped config format is verified.
 
 ### Codex
 
-Generate a Codex MCP config snippet:
+Recommended Codex setup:
+
+```bash
+memory-os setup codex --url "$MEMORY_OS_URL"
+memory-os setup codex --url "$MEMORY_OS_URL" --yes
+memory-os smoke --client codex
+```
+
+`setup codex` is visible and opt-in: the first command previews the writes, and
+`--yes` performs them. The MCP config stays in user-scoped Codex config, while
+the Memory OS Codex behavior profile is installed into the current project's
+`AGENTS.md` between these markers:
+
+```html
+<!-- memory-os:codex-profile:start -->
+<!-- memory-os:codex-profile:end -->
+```
+
+Repeat installs update only that marker block. Remove it with:
+
+```bash
+memory-os profile uninstall codex
+```
+
+Advanced: generate a Codex MCP config snippet without touching files:
 
 ```bash
 memory-os mcp add codex --url "$MEMORY_OS_URL"
@@ -140,6 +172,9 @@ Codex MCP-depth checks:
 
 ```bash
 memory-os mcp profile codex
+memory-os profile install codex --dry-run
+memory-os profile install codex
+memory-os profile status codex
 memory-os smoke --client codex
 ```
 
