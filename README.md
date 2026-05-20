@@ -79,9 +79,11 @@ Discovery requests do not send `XMEMO_KEY` or any Authorization
 header. Token creation still happens in the website or enterprise console; the
 public service discovery document does not return token values.
 
-The hosted default is `https://xmemo.dev`, so normal users do not need to type a
-service address. Use `--url <service-url>` or `MEMORY_OS_URL` only for private,
-enterprise, or self-hosted deployments.
+The hosted default service/base URL is `https://xmemo.dev`, so normal users do
+not need to type a service address. The MCP endpoint is discovered from that
+base URL and written as `https://xmemo.dev/mcp`; `https://mcp.xmemo.dev` is not
+the current canonical setup URL. Use `--url <service-url>` or `MEMORY_OS_URL`
+only for private, enterprise, or self-hosted deployments.
 
 Generate and write a client config from discovery:
 
