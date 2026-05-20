@@ -16,20 +16,19 @@ npm install -g @yonro/memory-os
 ## Commands
 
 ```bash
-export MEMORY_OS_URL="https://xmemo.dev"
-
-memory-os doctor --base-url "$MEMORY_OS_URL"
-memory-os discovery show --base-url "$MEMORY_OS_URL"
-memory-os setup --url "$MEMORY_OS_URL"
-memory-os setup codex --url "$MEMORY_OS_URL"
-memory-os status --url "$MEMORY_OS_URL"
-memory-os token status
-memory-os env example --shell bash --base-url "$MEMORY_OS_URL"
-memory-os mcp list
-memory-os mcp config --client generic --base-url "$MEMORY_OS_URL"
-memory-os profile status codex
+memory-os setup codex
+memory-os setup codex --yes
 memory-os smoke --client codex
-memory-os mcp add cursor --url "$MEMORY_OS_URL"
+memory-os doctor
+memory-os discovery show
+memory-os setup
+memory-os status
+memory-os token status
+memory-os env example --shell bash
+memory-os mcp list
+memory-os mcp config --client generic
+memory-os profile status codex
+memory-os mcp add cursor --url "https://your-private-service.example"
 memory-os privacy
 ```
 
@@ -71,21 +70,26 @@ secret-free discovery and onboarding status documents, then tells the user where
 the API, MCP endpoint, docs, and any server-advertised onboarding links are.
 
 ```bash
-memory-os doctor --base-url "$MEMORY_OS_URL"
-memory-os discovery show --base-url "$MEMORY_OS_URL"
-memory-os setup --url "$MEMORY_OS_URL"
+memory-os doctor
+memory-os discovery show
+memory-os setup
 ```
 
 Discovery requests do not send `XMEMO_KEY` or any Authorization
 header. Token creation still happens in the website or enterprise console; the
 public service discovery document does not return token values.
 
+The hosted default is `https://xmemo.dev`, so normal users do not need to type a
+service address. Use `--url <service-url>` or `MEMORY_OS_URL` only for private,
+enterprise, or self-hosted deployments.
+
 Generate and write a client config from discovery:
 
 ```bash
-memory-os setup codex --url "$MEMORY_OS_URL" --yes
-memory-os setup --url "$MEMORY_OS_URL" --client codex --write
-memory-os setup --url "$MEMORY_OS_URL" --client cursor --write
+memory-os setup codex --yes
+memory-os setup codex --url "https://your-private-service.example" --yes
+memory-os setup --url "https://your-private-service.example" --client codex --write
+memory-os setup --url "https://your-private-service.example" --client cursor --write
 ```
 
 `--write` requires an explicit `--client` so the CLI never performs broad config
@@ -119,8 +123,8 @@ For clients without a verified user-scoped write path, generate a read-only
 template and apply it manually after review:
 
 ```bash
-memory-os mcp config --client copilot-cli --base-url "$MEMORY_OS_URL"
-memory-os mcp config --client generic --base-url "$MEMORY_OS_URL" --json
+memory-os mcp config --client copilot-cli --base-url "https://your-private-service.example"
+memory-os mcp config --client generic --base-url "https://your-private-service.example" --json
 ```
 
 Only Codex and Cursor currently have write-capable helpers. Other client writes
@@ -131,8 +135,8 @@ should only be added after their official user-scoped config format is verified.
 Recommended Codex setup:
 
 ```bash
-memory-os setup codex --url "$MEMORY_OS_URL"
-memory-os setup codex --url "$MEMORY_OS_URL" --yes
+memory-os setup codex
+memory-os setup codex --yes
 memory-os smoke --client codex
 ```
 

@@ -138,6 +138,8 @@ function writeHelp(io) {
   writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--json]');
   writeLine(io.stdout, '  memory-os privacy');
   writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Default service URL: https://xmemo.dev; use --url or MEMORY_OS_URL for private deployments.');
+  writeLine(io.stdout, '');
   writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`, `doctor`, or `discovery`.');
 }
 
