@@ -122,10 +122,10 @@ function writeHelp(io) {
   writeLine(io.stdout, `Memory OS CLI (${PACKAGE_NAME})`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Usage:');
-  writeLine(io.stdout, '  memory-os doctor --base-url <https://api.example.com> [--json]');
-  writeLine(io.stdout, '  memory-os discovery show --base-url <https://api.example.com> [--json]');
+  writeLine(io.stdout, '  memory-os doctor [--base-url <https://api.example.com>] [--json]');
+  writeLine(io.stdout, '  memory-os discovery show [--base-url <https://api.example.com>] [--json]');
   writeLine(io.stdout, '  memory-os setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]');
-  writeLine(io.stdout, '  memory-os status --url <https://api.example.com> [--json]');
+  writeLine(io.stdout, '  memory-os status [--url <https://api.example.com>] [--json]');
   writeLine(io.stdout, '  memory-os token status');
   writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
   writeLine(io.stdout, '  memory-os mcp list');
@@ -133,7 +133,7 @@ function writeHelp(io) {
   writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
   writeLine(io.stdout, '  memory-os profile install codex [--target AGENTS.md] [--dry-run|--json]');
   writeLine(io.stdout, '  memory-os profile uninstall codex [--target AGENTS.md] [--json]');
-  writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> [--write] [--config <path>]');
+  writeLine(io.stdout, '  memory-os mcp add <codex|cursor> [--url <https://api.example.com>] [--write] [--config <path>]');
   writeLine(io.stdout, '  memory-os smoke --client codex [--config <path>] [--json]');
   writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--json]');
   writeLine(io.stdout, '  memory-os privacy');
@@ -206,7 +206,7 @@ async function discoveryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Discovery commands:');
-    writeLine(io.stdout, '  memory-os discovery show --base-url <https://api.example.com> [--json]');
+    writeLine(io.stdout, '  memory-os discovery show [--base-url <https://api.example.com>] [--json]');
     return 0;
   }
   if (subcommand !== 'show') {
@@ -236,7 +236,7 @@ async function discoveryCommand(args, io) {
 }
 
 async function statusCommand(args, io) {
-  const baseUrl = normalizeBaseUrl(requiredOption(args, '--url'));
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');
   const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
   const endpoints = [
@@ -434,8 +434,8 @@ async function mcpCommand(args, io) {
     writeLine(io.stdout, '  memory-os mcp list');
     writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
     writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
-    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com>');
-    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> --url <https://api.example.com> --write [--config <path>]');
+    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> [--url <https://api.example.com>]');
+    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> [--url <https://api.example.com>] --write [--config <path>]');
     return 0;
   }
 
@@ -495,10 +495,10 @@ async function mcpCommand(args, io) {
   const client = MCP_CLIENTS.get(target);
 
   if (subcommand !== 'add' || !client) {
-    throw new UsageError(`Supported MCP setup command: memory-os mcp add <${supportedMcpClientIds().join('|')}> --url <url>`);
+    throw new UsageError(`Supported MCP setup command: memory-os mcp add <${supportedMcpClientIds().join('|')}> [--url <url>]`);
   }
 
-  const baseUrl = normalizeBaseUrl(requiredOption(args, '--url'));
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const configPath = optionValue(args, '--config') ?? client.defaultConfigPath(io.env);
   const mcpUrl = endpointUrl(baseUrl, '/mcp');
 
