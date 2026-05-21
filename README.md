@@ -16,17 +16,31 @@ internal scripts are not part of this npm package.
 npm install -g @xmemo/client
 ```
 
+Upgrade an existing global install:
+
+```bash
+xmemo update
+# or
+xmemo --update
+```
+
+Both commands run `npm install -g @xmemo/client@latest`. Use
+`xmemo update --dry-run` to print the exact command without changing anything.
+
 ## Commands
 
 ```bash
+xmemo update
 xmemo setup codex
 xmemo setup codex --yes
 xmemo smoke --client codex
 xmemo doctor
 xmemo discovery show
 xmemo setup
+xmemo login
 xmemo status
 xmemo token status
+xmemo token add --from-stdin
 xmemo env example --shell bash
 xmemo mcp list
 xmemo mcp config --client generic
@@ -43,15 +57,40 @@ xmemo privacy
   token values into project files.
 - The CLI generates one stable non-secret `XMEMO_AGENT_INSTANCE_ID` per local
   client profile and stores it in user-scoped config outside git.
-- `xmemo token set` refuses plaintext credential storage unless
+- `xmemo login` and `xmemo token add` store tokens only in the user-scoped
+  XMemo CLI credential file outside git; token values are never printed.
+- Legacy `xmemo token set` refuses plaintext credential storage unless
   `--allow-plaintext` is explicitly provided.
 - The npm package uses a `files` whitelist so only `bin`, `src`, `README.md`,
   and `LICENSE` are published.
 
 ## Token flow
 
+Recommended personal-user flow:
+
+```bash
+xmemo login
+xmemo token status --verify
+```
+
+`xmemo login` uses the hosted device-login flow when the service advertises it:
+the CLI shows a browser URL and one-time code, the user authorizes in XMemo, and
+the CLI stores the issued MCP token in the user-scoped credential file.
+
+Users who already have a token can configure it directly without shell profiles:
+
+```bash
+printf '%s\n' 'your-token' | xmemo token add --from-stdin
+xmemo token status --verify
+```
+
+This is the preferred fallback while a hosted service is rolling out device
+login. It still avoids project files, MCP config files, logs, and chat
+transcripts.
+
 Tokens should be created by the XMemo website or enterprise console, then
-stored in a user environment variable or enterprise secret manager:
+stored with `xmemo login`, `xmemo token add`, a user environment variable, or an
+enterprise secret manager:
 
 ```bash
 export XMEMO_KEY="your-token"
@@ -129,12 +168,34 @@ For clients without a verified user-scoped write path, generate a read-only
 template and apply it manually after review:
 
 ```bash
-xmemo mcp config --client copilot-cli --base-url "https://your-private-service.example"
+xmemo mcp config --client copilot-cli
 xmemo mcp config --client generic --base-url "https://your-private-service.example" --json
 ```
 
 Only Codex and Cursor currently have write-capable helpers. Other client writes
 should only be added after their official user-scoped config format is verified.
+
+### Copilot CLI
+
+Copilot CLI has `/mcp` management, but it does not currently document a stable
+cross-platform user config file path/format for third-party tools to edit
+directly. The recommended personal-user path is therefore local proxy mode:
+
+```bash
+xmemo login
+xmemo mcp config --client copilot-cli
+xmemo mcp proxy
+```
+
+The generated Copilot CLI template points at `http://127.0.0.1:8765/mcp` and
+does not include token or identity headers. `xmemo mcp proxy` reads the token
+saved by `xmemo login` or `xmemo token add --from-stdin`, adds the XMemo bearer
+token and local agent identity, then forwards requests to `https://xmemo.dev/mcp`.
+If you specifically want the older environment-variable template, run:
+
+```bash
+xmemo mcp config --client copilot-cli --remote-env
+```
 
 ### Codex
 

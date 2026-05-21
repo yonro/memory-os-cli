@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 const PRODUCT_NAME = 'XMemo';
@@ -8,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.126';
+const CLI_VERSION = '0.4.128';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -20,6 +22,10 @@ const MCP_SERVER_NAME = 'memory_os';
 const CODEX_PROFILE_TARGET = 'AGENTS.md';
 const CODEX_PROFILE_MARKER_START = '<!-- memory-os:codex-profile:start -->';
 const CODEX_PROFILE_MARKER_END = '<!-- memory-os:codex-profile:end -->';
+const DEVICE_LOGIN_START_PATH = '/api/v1/auth/device/start';
+const DEVICE_LOGIN_TOKEN_PATH = '/api/v1/auth/device/token';
+const DEFAULT_PROXY_HOST = '127.0.0.1';
+const DEFAULT_PROXY_PORT = 8765;
 
 const MCP_CLIENTS = new Map([
   ['codex', {
@@ -59,6 +65,10 @@ export async function run(args, io = defaultIo()) {
       return 0;
     }
 
+    if (command === 'update' || command === '--update') {
+      return await updateCommand(args.slice(1), io);
+    }
+
     if (command === 'doctor') {
       return await doctorCommand(args.slice(1), io);
     }
@@ -73,6 +83,10 @@ export async function run(args, io = defaultIo()) {
 
     if (command === 'setup') {
       return await setupCommand(args.slice(1), io);
+    }
+
+    if (command === 'login') {
+      return await loginCommand(args.slice(1), io);
     }
 
     if (command === 'token') {
@@ -119,7 +133,8 @@ function defaultIo() {
     stdin: process.stdin,
     stdout: process.stdout,
     stderr: process.stderr,
-    fetch: globalThis.fetch
+    fetch: globalThis.fetch,
+    spawn
   };
 }
 
@@ -128,14 +143,19 @@ function writeHelp(io) {
   writeLine(io.stdout, `Fallback npm package: ${FALLBACK_PACKAGE_NAME}; legacy command alias: ${LEGACY_COMMAND_NAME}`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Usage:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} --update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} token status`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin`);
   writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
@@ -147,6 +167,50 @@ function writeHelp(io) {
   writeLine(io.stdout, `Default service URL: ${DEFAULT_SERVICE_URL}; use --url or XMEMO_URL for private deployments.`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`, `doctor`, or `discovery`.');
+  writeLine(io.stdout, '`login` and `token add` store credentials only in the user-scoped XMemo CLI config directory.');
+}
+
+async function updateCommand(args, io) {
+  const outputJson = hasFlag(args, '--json');
+  const dryRun = hasFlag(args, '--dry-run');
+  const npmCommand = npmExecutable();
+  const npmArgs = ['install', '-g', `${PACKAGE_NAME}@latest`];
+  const report = {
+    package: PACKAGE_NAME,
+    command: [npmCommand, ...npmArgs],
+    dryRun,
+    tokenSent: false,
+    projectFilesModified: false
+  };
+
+  if (dryRun) {
+    if (outputJson) {
+      writeLine(io.stdout, JSON.stringify(report, null, 2));
+    } else {
+      writeLine(io.stdout, `Update command: ${report.command.join(' ')}`);
+      writeLine(io.stdout, 'Dry run only; no changes made.');
+    }
+    return 0;
+  }
+
+  if (!outputJson) {
+    writeLine(io.stdout, `Updating ${PACKAGE_NAME} with: ${report.command.join(' ')}`);
+  }
+  const result = await runProcess(npmCommand, npmArgs, io, { stream: !outputJson });
+  report.exitCode = result.code;
+  report.completed = result.code === 0;
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(report, null, 2));
+  }
+  if (result.code !== 0) {
+    const detail = result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`;
+    throw new UsageError(`Update failed: ${detail}`);
+  }
+  if (!outputJson) {
+    writeLine(io.stdout, `Update complete. Run \`${COMMAND_NAME} --version\` to confirm.`);
+  }
+  return 0;
 }
 
 async function doctorCommand(args, io) {
@@ -385,46 +449,119 @@ async function profileCommand(args, io) {
   return 0;
 }
 
+async function loginCommand(args, io) {
+  const outputJson = hasFlag(args, '--json');
+  const fromStdin = hasFlag(args, '--from-stdin') || hasFlag(args, '--token-stdin');
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+  const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '30000', '--timeout-ms');
+  const pollOnce = hasFlag(args, '--poll-once');
+
+  if (fromStdin) {
+    const result = await storeTokenFromStdin(io, { source: 'stdin' });
+    if (outputJson) {
+      writeLine(io.stdout, JSON.stringify(result, null, 2));
+    } else {
+      writeLine(io.stdout, `${PRODUCT_NAME} login complete.`);
+      writeLine(io.stdout, `Stored token in user-scoped credential file: ${result.credentialPath}`);
+      writeLine(io.stdout, 'Token value was not printed. Project files were not modified.');
+    }
+    return 0;
+  }
+
+  const start = await startDeviceLogin(baseUrl, timeoutMs, io);
+  if (!outputJson) {
+    writeLine(io.stdout, `${PRODUCT_NAME} device login`);
+    writeLine(io.stdout, `Open: ${start.verificationUriComplete ?? start.verificationUri}`);
+    if (start.userCode) {
+      writeLine(io.stdout, `Code: ${start.userCode}`);
+    }
+    writeLine(io.stdout, 'Waiting for authorization...');
+  }
+
+  const token = await pollDeviceLogin(baseUrl, start, timeoutMs, io, { pollOnce });
+  const result = await storeTokenValue(token, { source: 'device-login' }, io.env);
+  const payload = {
+    ...result,
+    baseUrl,
+    verificationUri: start.verificationUri,
+    deviceLogin: true
+  };
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(payload, null, 2));
+  } else {
+    writeLine(io.stdout, 'Login complete. Token stored securely in the user-scoped XMemo CLI config directory.');
+    writeLine(io.stdout, `Credential path: ${result.credentialPath}`);
+    writeLine(io.stdout, `Verify with: ${COMMAND_NAME} token status --verify`);
+  }
+  return 0;
+}
+
 async function tokenCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Token commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} token status`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin`);
     writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
     writeLine(io.stdout, '');
-    writeLine(io.stdout, `Preferred enterprise path: set ${TOKEN_ENV_VAR} in your user or secret manager environment.`);
+    writeLine(io.stdout, `${COMMAND_NAME} login is the recommended personal-user path.`);
+    writeLine(io.stdout, `${COMMAND_NAME} token add --from-stdin stores a token in the user-scoped XMemo CLI config directory.`);
     return 0;
   }
 
   if (subcommand === 'status') {
-    const credentialPath = credentialsPath(io.env);
+    const credential = await readStoredCredential(io.env);
     const hasEnvironmentToken = Boolean(io.env[TOKEN_ENV_VAR] ?? io.env[LEGACY_TOKEN_ENV_VAR]);
-    const hasPlaintextCredential = await fileExists(credentialPath);
+    const hasUserCredential = Boolean(credential.token);
     writeLine(io.stdout, `Environment token: ${hasEnvironmentToken ? 'present' : 'missing'} (${TOKEN_ENV_VAR})`);
-    writeLine(io.stdout, `User credential file: ${hasPlaintextCredential ? 'present' : 'missing'} (${credentialPath})`);
+    writeLine(io.stdout, `User credential file: ${hasUserCredential ? 'present' : 'missing'} (${credential.path})`);
     writeLine(io.stdout, 'Token values are never printed.');
-    return hasEnvironmentToken || hasPlaintextCredential ? 0 : 1;
+    if (hasFlag(args, '--verify')) {
+      const token = await resolveCredentialToken(io.env);
+      if (!token) {
+        writeLine(io.stderr, `No token found. Run \`${COMMAND_NAME} login\` or \`${COMMAND_NAME} token add --from-stdin\`.`);
+        return 1;
+      }
+      const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+      const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '10000', '--timeout-ms');
+      const verification = await verifyTokenWithMcp(baseUrl, token, timeoutMs, io);
+      writeLine(io.stdout, `Remote token verification: ${verification.ok ? 'ok' : 'failed'} (${verification.detail})`);
+      return verification.ok ? 0 : 1;
+    }
+    return hasEnvironmentToken || hasUserCredential ? 0 : 1;
+  }
+
+  if (subcommand === 'add') {
+    if (!hasFlag(args, '--from-stdin')) {
+      throw new UsageError('Refusing command-line token input. Pipe the token through stdin with --from-stdin.');
+    }
+    const result = await storeTokenFromStdin(io, { source: 'token-add' });
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify(result, null, 2));
+    } else {
+      writeLine(io.stdout, `Stored token in user-scoped credential file: ${result.credentialPath}`);
+      writeLine(io.stdout, 'Token value was not printed. Project files were not modified.');
+    }
+    return 0;
   }
 
   if (subcommand === 'set') {
     if (!hasFlag(args, '--from-stdin')) {
       throw new UsageError('Refusing command-line token input. Pipe the token through stdin with --from-stdin.');
     }
-
     const token = (await readAll(io.stdin)).trim();
     validateToken(token);
-
     if (!hasFlag(args, '--allow-plaintext')) {
       writeLine(io.stderr, 'Token was read from stdin but was not stored.');
       writeLine(io.stderr, 'Enterprise default refuses plaintext token storage without --allow-plaintext.');
-      writeLine(io.stderr, `Preferred: store the token in ${TOKEN_ENV_VAR} via your OS, shell profile, CI secret, or enterprise secret manager.`);
+      writeLine(io.stderr, `Preferred personal-user path: ${COMMAND_NAME} login or ${COMMAND_NAME} token add --from-stdin.`);
       return 2;
     }
 
-    const credentialPath = credentialsPath(io.env);
-    await writePlaintextCredential(credentialPath, token);
-    writeLine(io.stdout, `Stored token in user-scoped credential file: ${credentialPath}`);
+    const result = await storeTokenValue(token, { source: 'token-set' }, io.env);
+    writeLine(io.stdout, `Stored token in user-scoped credential file: ${result.credentialPath}`);
     writeLine(io.stdout, 'Token value was not printed. Do not commit this file.');
     return 0;
   }
@@ -438,7 +575,8 @@ async function mcpCommand(args, io) {
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|generic> [--base-url <url>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>] --write [--config <path>]`);
@@ -463,7 +601,12 @@ async function mcpCommand(args, io) {
     const clientId = optionValue(args, '--client') ?? args[1] ?? 'generic';
     const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
     const mcpUrl = endpointUrl(baseUrl, '/mcp');
-    const template = mcpConfigTemplate(clientId, mcpUrl);
+    const useLocalProxy = clientId === 'copilot-cli' && !hasFlag(args, '--remote-env');
+    const proxyPort = parsePositiveInteger(optionValue(args, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
+    const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
+    const template = useLocalProxy
+      ? mcpLocalProxyTemplate(clientId, proxyUrl)
+      : mcpConfigTemplate(clientId, mcpUrl);
 
     if (hasFlag(args, '--json')) {
       writeLine(io.stdout, JSON.stringify(template, null, 2));
@@ -471,7 +614,12 @@ async function mcpCommand(args, io) {
     }
 
     writeLine(io.stdout, `${PRODUCT_NAME} MCP config template for ${clientId}`);
-    writeLine(io.stdout, `Requires env: ${TOKEN_ENV_VAR}`);
+    if (useLocalProxy) {
+      writeLine(io.stdout, `Requires credential: ${COMMAND_NAME} login or ${COMMAND_NAME} token add --from-stdin`);
+      writeLine(io.stdout, `Run local proxy: ${template.requiresLocalCommand}`);
+    } else {
+      writeLine(io.stdout, `Requires env: ${TOKEN_ENV_VAR}`);
+    }
     if (typeof template.snippet === 'string') {
       writeLine(io.stdout, template.snippet.trimEnd());
     } else {
@@ -479,6 +627,10 @@ async function mcpCommand(args, io) {
     }
     writeLine(io.stdout, 'Review the template before applying it. Token values are not included.');
     return 0;
+  }
+
+  if (subcommand === 'proxy') {
+    return await mcpProxyCommand(args.slice(1), io);
   }
 
   if (subcommand === 'profile') {
@@ -542,6 +694,82 @@ async function mcpCommand(args, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
   return 0;
+}
+
+async function mcpProxyCommand(args, io) {
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+  const mcpUrl = endpointUrl(baseUrl, '/mcp');
+  const host = optionValue(args, '--host') ?? DEFAULT_PROXY_HOST;
+  const port = parsePositiveInteger(optionValue(args, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
+  const token = await resolveCredentialToken(io.env);
+  if (!token) {
+    throw new UsageError(`No token found. Run \`${COMMAND_NAME} login\` or \`${COMMAND_NAME} token add --from-stdin\` first.`);
+  }
+  validateToken(token);
+  const identity = await agentIdentity('copilot-cli', io.env);
+
+  const server = http.createServer(async (request, response) => {
+    try {
+      await handleMcpProxyRequest({ request, response, mcpUrl, token, identity, io });
+    } catch (error) {
+      response.statusCode = 502;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ error: 'mcp_proxy_error', message: error.message }));
+    }
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+
+  writeLine(io.stdout, `${PRODUCT_NAME} MCP proxy listening on http://${host}:${port}/mcp`);
+  writeLine(io.stdout, `Forwarding to ${mcpUrl}`);
+  writeLine(io.stdout, `Credential source: ${TOKEN_ENV_VAR} or ${credentialsPath(io.env)}`);
+  return 0;
+}
+
+async function handleMcpProxyRequest({ request, response, mcpUrl, token, identity, io }) {
+  const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? `${DEFAULT_PROXY_HOST}:${DEFAULT_PROXY_PORT}`}`);
+  if (request.method !== 'POST' || requestUrl.pathname !== '/mcp') {
+    response.statusCode = 404;
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ error: 'not_found' }));
+    return;
+  }
+
+  const body = await readAll(request);
+  const upstreamHeaders = {
+    accept: String(request.headers.accept || 'application/json, text/event-stream'),
+    'content-type': String(request.headers['content-type'] || 'application/json'),
+    authorization: `Bearer ${token}`,
+    [AGENT_ID_HEADER]: identity.agentId,
+    [AGENT_INSTANCE_HEADER]: identity.agentInstanceId,
+    'user-agent': `XMemo-CLI-Proxy/${CLI_VERSION} (+https://github.com/yonro/memory-os-cli)`
+  };
+  const sessionId = request.headers['mcp-session-id'];
+  if (sessionId) {
+    upstreamHeaders['mcp-session-id'] = Array.isArray(sessionId) ? sessionId[0] : sessionId;
+  }
+
+  const upstream = await io.fetch(mcpUrl, {
+    method: 'POST',
+    headers: upstreamHeaders,
+    body
+  });
+
+  response.statusCode = upstream.status;
+  for (const header of ['content-type', 'mcp-session-id']) {
+    const value = upstream.headers.get(header);
+    if (value) {
+      response.setHeader(header, value);
+    }
+  }
+  const buffer = Buffer.from(await upstream.arrayBuffer());
+  response.end(buffer);
 }
 
 async function smokeCommand(args, io) {
@@ -636,8 +864,143 @@ function writePrivacy(io) {
   writeLine(io.stdout, '- `status` does not send tokens.');
   writeLine(io.stdout, `- MCP configs reference ${TOKEN_ENV_VAR}; token values are not embedded.`);
   writeLine(io.stdout, `- Agent instance IDs are non-secret and stored in user-scoped config outside git.`);
-  writeLine(io.stdout, '- Plaintext token storage requires explicit --allow-plaintext.');
+  writeLine(io.stdout, '- `login` and `token add` store credentials in the user-scoped XMemo CLI config directory.');
+  writeLine(io.stdout, '- Legacy `token set` plaintext storage requires explicit --allow-plaintext.');
   writeLine(io.stdout, '- npm publishing is restricted by package.json files whitelist.');
+}
+
+async function startDeviceLogin(baseUrl, timeoutMs, io) {
+  const payload = await postJson(endpointUrl(baseUrl, DEVICE_LOGIN_START_PATH), {
+    client_id: PACKAGE_NAME,
+    cli_version: CLI_VERSION,
+    token_type: 'mcp_token',
+    scopes: ['memory:read', 'memory:write']
+  }, timeoutMs, io);
+
+  const deviceCode = stringValue(payload, ['device_code']);
+  const verificationUri = stringValue(payload, ['verification_uri']);
+  if (!deviceCode || !verificationUri) {
+    throw new UsageError(`Device login did not return device_code and verification_uri from ${baseUrl}.`);
+  }
+
+  return {
+    deviceCode,
+    userCode: stringValue(payload, ['user_code']),
+    verificationUri,
+    verificationUriComplete: stringValue(payload, ['verification_uri_complete']),
+    expiresIn: Number.isFinite(Number(payload.expires_in)) ? Number(payload.expires_in) : 600,
+    interval: Number.isFinite(Number(payload.interval)) ? Math.max(1, Number(payload.interval)) : 5
+  };
+}
+
+async function pollDeviceLogin(baseUrl, start, timeoutMs, io, options = {}) {
+  const deadline = Date.now() + Math.min(start.expiresIn * 1000, timeoutMs);
+  while (Date.now() <= deadline) {
+    const payload = await postJson(endpointUrl(baseUrl, DEVICE_LOGIN_TOKEN_PATH), {
+      device_code: start.deviceCode,
+      grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
+    }, timeoutMs, io, { allowDevicePending: true });
+
+    const token = stringValue(payload, ['access_token']) ?? stringValue(payload, ['token']);
+    if (token) {
+      validateToken(token);
+      return token;
+    }
+
+    const error = stringValue(payload, ['error']);
+    if (error && error !== 'authorization_pending' && error !== 'slow_down') {
+      throw new UsageError(`Device login failed: ${error}`);
+    }
+    if (options.pollOnce) {
+      throw new UsageError('Device login is still pending.');
+    }
+    await sleep((error === 'slow_down' ? start.interval + 5 : start.interval) * 1000);
+  }
+
+  throw new UsageError('Device login expired before authorization completed.');
+}
+
+async function storeTokenFromStdin(io, metadata = {}) {
+  const token = (await readAll(io.stdin)).trim();
+  validateToken(token);
+  return await storeTokenValue(token, metadata, io.env);
+}
+
+async function storeTokenValue(token, metadata, env) {
+  validateToken(token);
+  const credentialPath = credentialsPath(env);
+  await writePlaintextCredential(credentialPath, token, metadata);
+  return {
+    ok: true,
+    credentialPath,
+    tokenPresent: true,
+    tokenPrinted: false,
+    projectFilesModified: false,
+    storage: 'user-scoped-credential-file'
+  };
+}
+
+async function readStoredCredential(env) {
+  const credentialPath = credentialsPath(env);
+  const content = await readTextIfExists(credentialPath);
+  if (!content.trim()) {
+    return { path: credentialPath, token: null };
+  }
+
+  const parsed = parseJsonConfig(content, credentialPath);
+  return {
+    path: credentialPath,
+    token: stringValue(parsed, ['token']),
+    storage: stringValue(parsed, ['storage'])
+  };
+}
+
+async function resolveCredentialToken(env) {
+  const environmentToken = env[TOKEN_ENV_VAR] ?? env[LEGACY_TOKEN_ENV_VAR];
+  if (environmentToken) {
+    return environmentToken;
+  }
+  const credential = await readStoredCredential(env);
+  return credential.token;
+}
+
+async function verifyTokenWithMcp(baseUrl, token, timeoutMs, io) {
+  const url = endpointUrl(baseUrl, '/mcp');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await io.fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+        'user-agent': `XMemo-CLI/${CLI_VERSION} (+https://github.com/yonro/memory-os-cli)`
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: { name: COMMAND_NAME, version: CLI_VERSION }
+        }
+      }),
+      signal: controller.signal
+    });
+    return {
+      ok: response.ok,
+      detail: response.ok ? `HTTP ${response.status}` : `HTTP ${response.status}`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      detail: error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function probe(url, timeoutMs, io) {
@@ -688,6 +1051,44 @@ async function fetchJson(url, timeoutMs, io) {
     }
     const reason = error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message;
     throw new UsageError(`Discovery request failed: ${url} (${reason})`);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function postJson(url, payload, timeoutMs, io, options = {}) {
+  if (typeof io.fetch !== 'function') {
+    throw new UsageError('This Node runtime does not provide fetch; use Node.js 20 or newer.');
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await io.fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const responsePayload = await response.json();
+    if (!response.ok) {
+      const error = stringValue(responsePayload, ['error']) ?? stringValue(responsePayload, ['detail']) ?? `HTTP ${response.status}`;
+      if (options.allowDevicePending && (error === 'authorization_pending' || error === 'slow_down')) {
+        return { error };
+      }
+      throw new UsageError(`Request failed with HTTP ${response.status}: ${url} (${error})`);
+    }
+    return responsePayload;
+  } catch (error) {
+    if (error instanceof UsageError) {
+      throw error;
+    }
+    const reason = error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message;
+    throw new UsageError(`Request failed: ${url} (${reason})`);
   } finally {
     clearTimeout(timeout);
   }
@@ -814,6 +1215,32 @@ function mcpConfigTemplate(clientId, mcpUrl) {
     },
     requiresEnv: [TOKEN_ENV_VAR],
     optionalEnv: [AGENT_INSTANCE_ENV_VAR],
+    agentIdentity: {
+      agentId: clientId,
+      agentIdHeader: AGENT_ID_HEADER,
+      agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
+      agentInstanceHeader: AGENT_INSTANCE_HEADER
+    },
+    writesTokenValue: false
+  };
+}
+
+function mcpLocalProxyTemplate(clientId, proxyUrl) {
+  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' ? 'memory_os' : 'memory-os';
+  return {
+    client: clientId,
+    serverName,
+    snippetFormat: 'json',
+    snippet: {
+      mcpServers: {
+        [serverName]: {
+          type: 'http',
+          url: proxyUrl
+        }
+      }
+    },
+    requiresCredential: [`${COMMAND_NAME} login`, `${COMMAND_NAME} token add --from-stdin`],
+    requiresLocalCommand: `${COMMAND_NAME} mcp proxy --port ${new URL(proxyUrl).port || DEFAULT_PROXY_PORT}`,
     agentIdentity: {
       agentId: clientId,
       agentIdHeader: AGENT_ID_HEADER,
@@ -1386,13 +1813,15 @@ function defaultCursorConfigPath(env) {
   return path.join(home, '.cursor', 'mcp.json');
 }
 
-async function writePlaintextCredential(credentialPath, token) {
+async function writePlaintextCredential(credentialPath, token, metadata = {}) {
   await fs.mkdir(path.dirname(credentialPath), { recursive: true, mode: 0o700 });
   await bestEffortChmod(path.dirname(credentialPath), 0o700);
   const payload = {
     version: 1,
     tokenEnvVar: TOKEN_ENV_VAR,
-    storage: 'plaintext-user-config',
+    storage: 'user-scoped-credential-file',
+    createdAt: new Date().toISOString(),
+    metadata,
     token
   };
   await fs.writeFile(credentialPath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
@@ -1493,6 +1922,46 @@ function parsePositiveInteger(value, name) {
   }
   return parsed;
 }
+
+async function sleep(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+function npmExecutable() {
+  return os.platform() === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+
+async function runProcess(command, args, io, { stream = true } = {}) {
+  const spawnFn = io.spawn ?? spawn;
+  return await new Promise((resolve, reject) => {
+    const child = spawnFn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk) => {
+      const text = String(chunk);
+      stdout += text;
+      if (stream) {
+        io.stdout.write(text);
+      }
+    });
+    child.stderr?.on('data', (chunk) => {
+      const text = String(chunk);
+      stderr += text;
+      if (stream) {
+        io.stderr.write(text);
+      }
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      resolve({ code: code ?? 0, stdout, stderr });
+    });
+  });
+}
+
 
 async function readAll(stream) {
   let content = '';

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { test } from 'node:test';
+import { EventEmitter } from 'node:events';
 import { run } from '../src/cli.js';
 
 test('help documents privacy defaults', async () => {
@@ -14,8 +15,45 @@ test('help documents privacy defaults', async () => {
   assert.match(result.stdout, /@xmemo\/client/);
   assert.match(result.stdout, /@yonro\/xmemo-client/);
   assert.match(result.stdout, /legacy command alias: memory-os/);
+  assert.match(result.stdout, /xmemo update/);
+  assert.match(result.stdout, /xmemo --update/);
   assert.match(result.stdout, /no telemetry/i);
   assert.match(result.stdout, /no token in project files/i);
+});
+
+test('update dry-run documents npm global install command', async () => {
+  const result = await invoke(['update', '--dry-run', '--json']);
+
+  assert.equal(result.code, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.package, '@xmemo/client');
+  assert.equal(payload.dryRun, true);
+  assert.deepEqual(payload.command.slice(1), ['install', '-g', '@xmemo/client@latest']);
+  assert.match(payload.command[0], /^npm(\.cmd)?$/);
+  assert.equal(payload.tokenSent, false);
+  assert.equal(payload.projectFilesModified, false);
+});
+
+test('update runs npm global install and streams progress', async () => {
+  const calls = [];
+  const result = await invoke(['update'], {
+    spawn: spawnStub(calls, { code: 0, stdout: 'updated package\n' })
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].command, /^npm(\.cmd)?$/);
+  assert.deepEqual(calls[0].args, ['install', '-g', '@xmemo/client@latest']);
+  assert.match(result.stdout, /updated package/);
+  assert.match(result.stdout, /Update complete/);
+});
+
+test('--update alias supports dry-run', async () => {
+  const result = await invoke(['--update', '--dry-run']);
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /npm(\.cmd)? install -g @xmemo\/client@latest/);
+  assert.match(result.stdout, /Dry run only/);
 });
 
 test('status does not send authorization tokens', async () => {
@@ -65,6 +103,98 @@ test('token set refuses plaintext storage unless explicit', async () => {
 
   assert.equal(result.code, 2);
   assert.match(result.stderr, /refuses plaintext token storage/i);
+});
+
+test('login from stdin stores token in user credential file without printing it', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-login-'));
+  const token = 'mem_os_test_token_1234567890';
+  const result = await invoke(['login', '--from-stdin', '--json'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    stdin: token
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, new RegExp(token));
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.tokenPrinted, false);
+  assert.equal(payload.projectFilesModified, false);
+
+  const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
+  assert.equal(credential.token, token);
+  assert.equal(credential.storage, 'user-scoped-credential-file');
+});
+
+test('token add from stdin stores token and status sees user credential', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-add-'));
+  const token = 'mem_os_test_token_1234567890';
+  const add = await invoke(['token', 'add', '--from-stdin'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    stdin: token
+  });
+
+  assert.equal(add.code, 0);
+  assert.doesNotMatch(add.stdout, new RegExp(token));
+
+  const status = await invoke(['token', 'status'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir }
+  });
+  assert.equal(status.code, 0);
+  assert.match(status.stdout, /User credential file: present/);
+  assert.doesNotMatch(status.stdout, new RegExp(token));
+});
+
+test('token status verify uses stored credential without printing it', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-verify-'));
+  const token = 'mem_os_test_token_1234567890';
+  await invoke(['token', 'add', '--from-stdin'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    stdin: token
+  });
+  const requests = [];
+  const status = await invoke(['token', 'status', '--verify', '--base-url', 'https://api.example.test'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      return { ok: true, status: 200 };
+    }
+  });
+
+  assert.equal(status.code, 0);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, 'https://api.example.test/mcp');
+  assert.equal(requests[0].init.headers.authorization, `Bearer ${token}`);
+  assert.doesNotMatch(status.stdout, new RegExp(token));
+});
+
+test('device login stores issued token without printing it', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-'));
+  const token = 'mem_os_device_token_1234567890';
+  const requests = [];
+  const result = await invoke(['login', '--base-url', 'https://api.example.test', '--json'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    fetch: async (url, init) => {
+      requests.push({ url, init });
+      if (url.endsWith('/api/v1/auth/device/start')) {
+        return jsonResponse({
+          device_code: 'device-code-1',
+          user_code: 'ABCD-EFGH',
+          verification_uri: 'https://api.example.test/device',
+          interval: 1,
+          expires_in: 600
+        });
+      }
+      return jsonResponse({ access_token: token });
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(requests.length, 2);
+  assert.doesNotMatch(result.stdout, new RegExp(token));
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.deviceLogin, true);
+  const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
+  assert.equal(credential.token, token);
+  assert.equal(credential.metadata.source, 'device-login');
 });
 
 test('mcp codex config references env var without leaking token value', async () => {
@@ -122,7 +252,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.126');
+  assert.equal(report.cli.version, '0.4.128');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -159,6 +289,33 @@ test('mcp config emits generic template without token values', async () => {
   assert.equal(template.snippet.mcpServers['memory-os'].headers['X-Memory-OS-Agent-ID'], 'generic');
   assert.equal(template.snippet.mcpServers['memory-os'].headers['X-Memory-OS-Agent-Instance-ID'], '${XMEMO_AGENT_INSTANCE_ID}');
   assert.equal(template.writesTokenValue, false);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('mcp config for copilot-cli uses local proxy without token headers by default', async () => {
+  const result = await invoke(['mcp', 'config', '--client', 'copilot-cli', '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+
+  assert.equal(result.code, 0);
+  const template = JSON.parse(result.stdout);
+  assert.equal(template.client, 'copilot-cli');
+  assert.equal(template.snippet.mcpServers['memory-os'].url, 'http://127.0.0.1:8765/mcp');
+  assert.equal(template.snippet.mcpServers['memory-os'].headers, undefined);
+  assert.equal(template.requiresLocalCommand, 'xmemo mcp proxy --port 8765');
+  assert.equal(template.writesTokenValue, false);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('mcp config for copilot-cli can still emit remote env template', async () => {
+  const result = await invoke(['mcp', 'config', '--client', 'copilot-cli', '--remote-env', '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+
+  assert.equal(result.code, 0);
+  const template = JSON.parse(result.stdout);
+  assert.equal(template.snippet.mcpServers['memory-os'].url, 'https://xmemo.dev/mcp');
+  assert.equal(template.snippet.mcpServers['memory-os'].headers.Authorization, 'Bearer ${XMEMO_KEY}');
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -437,10 +594,30 @@ async function invoke(args, options = {}) {
     stdin: Readable.from([options.stdin ?? '']),
     stdout: { write: (chunk) => { stdout += chunk; } },
     stderr: { write: (chunk) => { stderr += chunk; } },
-    fetch: options.fetch
+    fetch: options.fetch,
+    spawn: options.spawn
   });
 
   return { code, stdout, stderr };
+}
+
+function spawnStub(calls, { code = 0, stdout = '', stderr = '' } = {}) {
+  return (command, args, options) => {
+    calls.push({ command, args, options });
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    queueMicrotask(() => {
+      if (stdout) {
+        child.stdout.emit('data', stdout);
+      }
+      if (stderr) {
+        child.stderr.emit('data', stderr);
+      }
+      child.emit('close', code);
+    });
+    return child;
+  };
 }
 
 function jsonResponse(payload) {
