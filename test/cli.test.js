@@ -16,7 +16,8 @@ test('help documents privacy defaults', async () => {
   assert.match(result.stdout, /@yonro\/xmemo-client/);
   assert.match(result.stdout, /legacy command alias: memory-os/);
   assert.match(result.stdout, /xmemo update/);
-  assert.match(result.stdout, /xmemo --update/);
+  assert.doesNotMatch(result.stdout, /xmemo --update/);
+  assert.match(result.stdout, /xmemo auth status/);
   assert.match(result.stdout, /no telemetry/i);
   assert.match(result.stdout, /no token in project files/i);
 });
@@ -143,6 +144,28 @@ test('token add from stdin stores token and status sees user credential', async 
   assert.doesNotMatch(status.stdout, new RegExp(token));
 });
 
+test('auth status reports login state without printing tokens', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-auth-status-'));
+  const token = 'mem_os_test_token_1234567890';
+  await invoke(['login', '--from-stdin'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    stdin: token
+  });
+
+  const status = await invoke(['auth', 'status', '--json'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir }
+  });
+
+  assert.equal(status.code, 0);
+  assert.doesNotMatch(status.stdout, new RegExp(token));
+  const payload = JSON.parse(status.stdout);
+  assert.equal(payload.loggedIn, true);
+  assert.equal(payload.tokenSource, 'user-credential-file');
+  assert.equal(payload.userCredentialFile.present, true);
+  assert.equal(payload.privacy.tokenPrinted, false);
+  assert.equal(payload.privacy.projectFilesModified, false);
+});
+
 test('token status verify uses stored credential without printing it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-verify-'));
   const token = 'mem_os_test_token_1234567890';
@@ -252,7 +275,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.128');
+  assert.equal(report.cli.version, '0.4.129');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);

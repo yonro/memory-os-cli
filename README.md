@@ -20,12 +20,10 @@ Upgrade an existing global install:
 
 ```bash
 xmemo update
-# or
-xmemo --update
 ```
 
-Both commands run `npm install -g @xmemo/client@latest`. Use
-`xmemo update --dry-run` to print the exact command without changing anything.
+This runs `npm install -g @xmemo/client@latest`. Use `xmemo update --dry-run`
+to print the exact command without changing anything.
 
 ## Commands
 
@@ -38,6 +36,7 @@ xmemo doctor
 xmemo discovery show
 xmemo setup
 xmemo login
+xmemo auth status
 xmemo status
 xmemo token status
 xmemo token add --from-stdin
@@ -70,6 +69,7 @@ Recommended personal-user flow:
 
 ```bash
 xmemo login
+xmemo auth status
 xmemo token status --verify
 ```
 

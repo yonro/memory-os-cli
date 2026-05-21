@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.128';
+const CLI_VERSION = '0.4.129';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -89,6 +89,10 @@ export async function run(args, io = defaultIo()) {
       return await loginCommand(args.slice(1), io);
     }
 
+    if (command === 'auth') {
+      return await authCommand(args.slice(1), io);
+    }
+
     if (command === 'token') {
       return await tokenCommand(args.slice(1), io);
     }
@@ -144,11 +148,11 @@ function writeHelp(io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Usage:');
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} --update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin`);
@@ -497,6 +501,24 @@ async function loginCommand(args, io) {
   return 0;
 }
 
+async function authCommand(args, io) {
+  const subcommand = args[0] ?? 'help';
+
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    writeLine(io.stdout, 'Auth commands:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, `Use \`${COMMAND_NAME} login\` to sign in and \`${COMMAND_NAME} token add --from-stdin\` to store an existing token.`);
+    return 0;
+  }
+
+  if (subcommand === 'status') {
+    return await credentialStatusCommand(args.slice(1), io, { mode: 'auth' });
+  }
+
+  throw new UsageError(`Unknown auth command: ${subcommand}`);
+}
+
 async function tokenCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
@@ -512,25 +534,7 @@ async function tokenCommand(args, io) {
   }
 
   if (subcommand === 'status') {
-    const credential = await readStoredCredential(io.env);
-    const hasEnvironmentToken = Boolean(io.env[TOKEN_ENV_VAR] ?? io.env[LEGACY_TOKEN_ENV_VAR]);
-    const hasUserCredential = Boolean(credential.token);
-    writeLine(io.stdout, `Environment token: ${hasEnvironmentToken ? 'present' : 'missing'} (${TOKEN_ENV_VAR})`);
-    writeLine(io.stdout, `User credential file: ${hasUserCredential ? 'present' : 'missing'} (${credential.path})`);
-    writeLine(io.stdout, 'Token values are never printed.');
-    if (hasFlag(args, '--verify')) {
-      const token = await resolveCredentialToken(io.env);
-      if (!token) {
-        writeLine(io.stderr, `No token found. Run \`${COMMAND_NAME} login\` or \`${COMMAND_NAME} token add --from-stdin\`.`);
-        return 1;
-      }
-      const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
-      const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '10000', '--timeout-ms');
-      const verification = await verifyTokenWithMcp(baseUrl, token, timeoutMs, io);
-      writeLine(io.stdout, `Remote token verification: ${verification.ok ? 'ok' : 'failed'} (${verification.detail})`);
-      return verification.ok ? 0 : 1;
-    }
-    return hasEnvironmentToken || hasUserCredential ? 0 : 1;
+    return await credentialStatusCommand(args.slice(1), io, { mode: 'token' });
   }
 
   if (subcommand === 'add') {
@@ -567,6 +571,75 @@ async function tokenCommand(args, io) {
   }
 
   throw new UsageError(`Unknown token command: ${subcommand}`);
+}
+
+async function credentialStatusCommand(args, io, { mode }) {
+  const outputJson = hasFlag(args, '--json');
+  const verify = hasFlag(args, '--verify');
+  const credential = await readStoredCredential(io.env);
+  const environmentToken = io.env[TOKEN_ENV_VAR] ?? io.env[LEGACY_TOKEN_ENV_VAR] ?? '';
+  const hasEnvironmentToken = Boolean(environmentToken);
+  const hasUserCredential = Boolean(credential.token);
+  const tokenSource = hasEnvironmentToken ? 'environment' : hasUserCredential ? 'user-credential-file' : 'missing';
+  const report = {
+    loggedIn: hasEnvironmentToken || hasUserCredential,
+    tokenSource,
+    environmentToken: {
+      present: hasEnvironmentToken,
+      variable: hasEnvironmentToken && io.env[TOKEN_ENV_VAR] ? TOKEN_ENV_VAR : hasEnvironmentToken ? LEGACY_TOKEN_ENV_VAR : TOKEN_ENV_VAR
+    },
+    userCredentialFile: {
+      present: hasUserCredential,
+      path: credential.path,
+      storage: credential.storage ?? null
+    },
+    privacy: {
+      tokenPrinted: false,
+      projectFilesModified: false
+    }
+  };
+
+  if (verify) {
+    const token = await resolveCredentialToken(io.env);
+    if (!token) {
+      if (outputJson) {
+        writeLine(io.stdout, JSON.stringify({ ...report, verification: { ok: false, detail: 'no token found' } }, null, 2));
+      } else {
+        writeCredentialStatus(report, io, { mode });
+        writeLine(io.stderr, `No token found. Run \`${COMMAND_NAME} login\` or \`${COMMAND_NAME} token add --from-stdin\`.`);
+      }
+      return 1;
+    }
+    const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+    const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '10000', '--timeout-ms');
+    const verification = await verifyTokenWithMcp(baseUrl, token, timeoutMs, io);
+    report.verification = verification;
+    if (outputJson) {
+      writeLine(io.stdout, JSON.stringify(report, null, 2));
+      return verification.ok ? 0 : 1;
+    }
+    writeCredentialStatus(report, io, { mode });
+    writeLine(io.stdout, `Remote token verification: ${verification.ok ? 'ok' : 'failed'} (${verification.detail})`);
+    return verification.ok ? 0 : 1;
+  }
+
+  if (outputJson) {
+    writeLine(io.stdout, JSON.stringify(report, null, 2));
+  } else {
+    writeCredentialStatus(report, io, { mode });
+  }
+  return report.loggedIn ? 0 : 1;
+}
+
+function writeCredentialStatus(report, io, { mode }) {
+  if (mode === 'auth') {
+    writeLine(io.stdout, `${PRODUCT_NAME} auth status`);
+    writeLine(io.stdout, `Logged in: ${report.loggedIn ? 'yes' : 'no'}`);
+    writeLine(io.stdout, `Credential source: ${report.tokenSource}`);
+  }
+  writeLine(io.stdout, `Environment token: ${report.environmentToken.present ? 'present' : 'missing'} (${report.environmentToken.variable})`);
+  writeLine(io.stdout, `User credential file: ${report.userCredentialFile.present ? 'present' : 'missing'} (${report.userCredentialFile.path})`);
+  writeLine(io.stdout, 'Token values are never printed.');
 }
 
 async function mcpCommand(args, io) {
