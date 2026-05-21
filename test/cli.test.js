@@ -166,6 +166,33 @@ test('auth status reports login state without printing tokens', async () => {
   assert.equal(payload.privacy.projectFilesModified, false);
 });
 
+test('auth status shows stored device-login account without token warning noise', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-auth-account-'));
+  const token = 'mem_os_test_token_1234567890';
+  await invoke(['login', '--from-stdin'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    stdin: token
+  });
+  const credentialPath = path.join(tempDir, 'credentials.json');
+  const credential = JSON.parse(await fs.readFile(credentialPath, 'utf8'));
+  credential.metadata.account = {
+    userId: 'usr_real',
+    email: 'real@example.test',
+    displayName: 'Real User'
+  };
+  await fs.writeFile(credentialPath, `${JSON.stringify(credential, null, 2)}\n`);
+
+  const status = await invoke(['auth', 'status'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir }
+  });
+
+  assert.equal(status.code, 0);
+  assert.match(status.stdout, /Account: Real User <real@example\.test>/);
+  assert.match(status.stdout, /Credential is ready; token value remains hidden\./);
+  assert.doesNotMatch(status.stdout, /Token values are never printed/);
+  assert.doesNotMatch(status.stdout, new RegExp(token));
+});
+
 test('token status verify uses stored credential without printing it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-verify-'));
   const token = 'mem_os_test_token_1234567890';
@@ -206,7 +233,14 @@ test('device login stores issued token without printing it', async () => {
           expires_in: 600
         });
       }
-      return jsonResponse({ access_token: token });
+      return jsonResponse({
+        access_token: token,
+        user: {
+          user_id: 'usr_real',
+          email: 'real@example.test',
+          display_name: 'Real User'
+        }
+      });
     }
   });
 
@@ -215,9 +249,48 @@ test('device login stores issued token without printing it', async () => {
   assert.doesNotMatch(result.stdout, new RegExp(token));
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.deviceLogin, true);
+  assert.deepEqual(payload.account, {
+    userId: 'usr_real',
+    email: 'real@example.test',
+    displayName: 'Real User'
+  });
   const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
   assert.equal(credential.token, token);
   assert.equal(credential.metadata.source, 'device-login');
+  assert.deepEqual(credential.metadata.account, payload.account);
+});
+
+test('device login text confirms account and no extra token configuration', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-text-'));
+  const token = 'mem_os_device_token_1234567890';
+  const result = await invoke(['login', '--base-url', 'https://api.example.test'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    fetch: async (url) => {
+      if (url.endsWith('/api/v1/auth/device/start')) {
+        return jsonResponse({
+          device_code: 'device-code-1',
+          user_code: 'ABCD-EFGH',
+          verification_uri: 'https://api.example.test/device',
+          interval: 1,
+          expires_in: 600
+        });
+      }
+      return jsonResponse({
+        access_token: token,
+        user: {
+          user_id: 'usr_real',
+          email: 'real@example.test',
+          display_name: 'Real User'
+        }
+      });
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Signed in as: Real User <real@example\.test>/);
+  assert.match(result.stdout, /No extra token configuration is required\./);
+  assert.doesNotMatch(result.stdout, /Verify with: xmemo token status --verify/);
+  assert.doesNotMatch(result.stdout, new RegExp(token));
 });
 
 test('mcp codex config references env var without leaking token value', async () => {

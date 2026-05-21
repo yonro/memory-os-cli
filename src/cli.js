@@ -483,11 +483,12 @@ async function loginCommand(args, io) {
   }
 
   const token = await pollDeviceLogin(baseUrl, start, timeoutMs, io, { pollOnce });
-  const result = await storeTokenValue(token, { source: 'device-login' }, io.env);
+  const result = await storeTokenValue(token.accessToken, { source: 'device-login', account: token.account }, io.env);
   const payload = {
     ...result,
     baseUrl,
     verificationUri: start.verificationUri,
+    account: token.account,
     deviceLogin: true
   };
 
@@ -495,8 +496,12 @@ async function loginCommand(args, io) {
     writeLine(io.stdout, JSON.stringify(payload, null, 2));
   } else {
     writeLine(io.stdout, 'Login complete. Token stored securely in the user-scoped XMemo CLI config directory.');
+    if (token.account) {
+      writeLine(io.stdout, `Signed in as: ${formatAccount(token.account)}`);
+    }
     writeLine(io.stdout, `Credential path: ${result.credentialPath}`);
-    writeLine(io.stdout, `Verify with: ${COMMAND_NAME} token status --verify`);
+    writeLine(io.stdout, 'No extra token configuration is required.');
+    writeLine(io.stdout, `Optional check: ${COMMAND_NAME} token status --verify`);
   }
   return 0;
 }
@@ -593,6 +598,7 @@ async function credentialStatusCommand(args, io, { mode }) {
       path: credential.path,
       storage: credential.storage ?? null
     },
+    account: credential.account ?? null,
     privacy: {
       tokenPrinted: false,
       projectFilesModified: false
@@ -639,7 +645,10 @@ function writeCredentialStatus(report, io, { mode }) {
   }
   writeLine(io.stdout, `Environment token: ${report.environmentToken.present ? 'present' : 'missing'} (${report.environmentToken.variable})`);
   writeLine(io.stdout, `User credential file: ${report.userCredentialFile.present ? 'present' : 'missing'} (${report.userCredentialFile.path})`);
-  writeLine(io.stdout, 'Token values are never printed.');
+  if (report.account) {
+    writeLine(io.stdout, `Account: ${formatAccount(report.account)}`);
+  }
+  writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${COMMAND_NAME} login\` to sign in.`);
 }
 
 async function mcpCommand(args, io) {
@@ -974,10 +983,13 @@ async function pollDeviceLogin(baseUrl, start, timeoutMs, io, options = {}) {
       grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
     }, timeoutMs, io, { allowDevicePending: true });
 
-    const token = stringValue(payload, ['access_token']) ?? stringValue(payload, ['token']);
-    if (token) {
-      validateToken(token);
-      return token;
+    const accessToken = stringValue(payload, ['access_token']) ?? stringValue(payload, ['token']);
+    if (accessToken) {
+      validateToken(accessToken);
+      return {
+        accessToken,
+        account: accountFromPayload(payload)
+      };
     }
 
     const error = stringValue(payload, ['error']);
@@ -1024,8 +1036,34 @@ async function readStoredCredential(env) {
   return {
     path: credentialPath,
     token: stringValue(parsed, ['token']),
-    storage: stringValue(parsed, ['storage'])
+    storage: stringValue(parsed, ['storage']),
+    account: accountFromPayload(parsed.metadata)
   };
+}
+
+function accountFromPayload(payload) {
+  const account = payload && typeof payload === 'object'
+    ? (payload.user && typeof payload.user === 'object' ? payload.user : payload.account)
+    : null;
+  if (!account || typeof account !== 'object') {
+    return null;
+  }
+  const userId = stringValue(account, ['user_id']) ?? stringValue(account, ['id']) ?? stringValue(account, ['userId']);
+  const email = stringValue(account, ['email']);
+  const displayName = stringValue(account, ['display_name']) ?? stringValue(account, ['name']) ?? stringValue(account, ['displayName']);
+  if (!userId && !email && !displayName) {
+    return null;
+  }
+  return {
+    userId: userId ?? null,
+    email: email ?? null,
+    displayName: displayName ?? null
+  };
+}
+
+function formatAccount(account) {
+  const label = account.displayName || account.email || account.userId || 'XMemo account';
+  return account.email && account.displayName ? `${account.displayName} <${account.email}>` : label;
 }
 
 async function resolveCredentialToken(env) {

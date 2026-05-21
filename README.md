@@ -56,8 +56,11 @@ xmemo privacy
   token values into project files.
 - The CLI generates one stable non-secret `XMEMO_AGENT_INSTANCE_ID` per local
   client profile and stores it in user-scoped config outside git.
-- `xmemo login` and `xmemo token add` store tokens only in the user-scoped
-  XMemo CLI credential file outside git; token values are never printed.
+- `xmemo login` stores the issued credential in the user-scoped XMemo CLI
+  config directory, shows the approved account when the server provides it,
+  and does not require extra token configuration afterward.
+- `xmemo token add` remains available for existing tokens and still avoids
+  project files, shell history, and printed token values.
 - Legacy `xmemo token set` refuses plaintext credential storage unless
   `--allow-plaintext` is explicitly provided.
 - The npm package uses a `files` whitelist so only `bin`, `src`, `README.md`,
@@ -75,7 +78,11 @@ xmemo token status --verify
 
 `xmemo login` uses the hosted device-login flow when the service advertises it:
 the CLI shows a browser URL and one-time code, the user authorizes in XMemo, and
-the CLI stores the issued MCP token in the user-scoped credential file.
+the CLI stores the issued MCP token in the user-scoped credential file. When the
+service returns approved account metadata, the CLI prints the account label so
+users can confirm which XMemo account was connected. No manual token setup is
+needed after a successful `xmemo login`; `xmemo token status --verify` is only
+an optional connectivity check.
 
 Users who already have a token can configure it directly without shell profiles:
 
