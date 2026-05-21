@@ -4,8 +4,8 @@
 client setup. It is intentionally small: the npm package contains only the CLI
 and setup helper code needed on a user's machine.
 
-The Memory OS server, database, token registry, DevFlow state, deployment files,
-logs, and internal scripts are not part of this npm package.
+The Memory OS server, database, token registry, deployment files, logs, and
+internal scripts are not part of this npm package.
 
 ## Install
 
