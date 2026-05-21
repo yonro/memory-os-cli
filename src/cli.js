@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.129';
+const CLI_VERSION = '0.4.131';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -151,7 +151,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--timeout-ms <ms>] [--http-timeout-ms <ms>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
@@ -169,6 +169,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} privacy`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Default service URL: ${DEFAULT_SERVICE_URL}; use --url or XMEMO_URL for private deployments.`);
+  writeLine(io.stdout, '`login --timeout-ms` controls the full browser approval window; HTTP calls use `--http-timeout-ms`.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`, `doctor`, or `discovery`.');
   writeLine(io.stdout, '`login` and `token add` store credentials only in the user-scoped XMemo CLI config directory.');
@@ -457,7 +458,8 @@ async function loginCommand(args, io) {
   const outputJson = hasFlag(args, '--json');
   const fromStdin = hasFlag(args, '--from-stdin') || hasFlag(args, '--token-stdin');
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
-  const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '30000', '--timeout-ms');
+  const httpTimeoutMs = parsePositiveInteger(optionValue(args, '--http-timeout-ms') ?? '30000', '--http-timeout-ms');
+  const loginTimeoutOption = optionValue(args, '--timeout-ms');
   const pollOnce = hasFlag(args, '--poll-once');
 
   if (fromStdin) {
@@ -472,7 +474,10 @@ async function loginCommand(args, io) {
     return 0;
   }
 
-  const start = await startDeviceLogin(baseUrl, timeoutMs, io);
+  const start = await startDeviceLogin(baseUrl, httpTimeoutMs, io);
+  const loginTimeoutMs = loginTimeoutOption
+    ? parsePositiveInteger(loginTimeoutOption, '--timeout-ms')
+    : Math.max(1000, start.expiresIn * 1000);
   if (!outputJson) {
     writeLine(io.stdout, `${PRODUCT_NAME} device login`);
     writeLine(io.stdout, `Open: ${start.verificationUriComplete ?? start.verificationUri}`);
@@ -482,7 +487,7 @@ async function loginCommand(args, io) {
     writeLine(io.stdout, 'Waiting for authorization...');
   }
 
-  const token = await pollDeviceLogin(baseUrl, start, timeoutMs, io, { pollOnce });
+  const token = await pollDeviceLogin(baseUrl, start, loginTimeoutMs, httpTimeoutMs, io, { pollOnce });
   const result = await storeTokenValue(token.accessToken, { source: 'device-login', account: token.account }, io.env);
   const payload = {
     ...result,
@@ -975,13 +980,15 @@ async function startDeviceLogin(baseUrl, timeoutMs, io) {
   };
 }
 
-async function pollDeviceLogin(baseUrl, start, timeoutMs, io, options = {}) {
-  const deadline = Date.now() + Math.min(start.expiresIn * 1000, timeoutMs);
+async function pollDeviceLogin(baseUrl, start, loginTimeoutMs, httpTimeoutMs, io, options = {}) {
+  const deadline = Date.now() + Math.min(start.expiresIn * 1000, loginTimeoutMs);
+  const sleepFn = io.sleep ?? sleep;
+  let intervalSeconds = start.interval;
   while (Date.now() <= deadline) {
     const payload = await postJson(endpointUrl(baseUrl, DEVICE_LOGIN_TOKEN_PATH), {
       device_code: start.deviceCode,
       grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
-    }, timeoutMs, io, { allowDevicePending: true });
+    }, httpTimeoutMs, io, { allowDevicePending: true });
 
     const accessToken = stringValue(payload, ['access_token']) ?? stringValue(payload, ['token']);
     if (accessToken) {
@@ -999,7 +1006,10 @@ async function pollDeviceLogin(baseUrl, start, timeoutMs, io, options = {}) {
     if (options.pollOnce) {
       throw new UsageError('Device login is still pending.');
     }
-    await sleep((error === 'slow_down' ? start.interval + 5 : start.interval) * 1000);
+    if (error === 'slow_down') {
+      intervalSeconds += 5;
+    }
+    await sleepFn(intervalSeconds * 1000);
   }
 
   throw new UsageError('Device login expired before authorization completed.');

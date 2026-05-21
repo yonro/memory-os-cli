@@ -82,7 +82,9 @@ the CLI stores the issued MCP token in the user-scoped credential file. When the
 service returns approved account metadata, the CLI prints the account label so
 users can confirm which XMemo account was connected. No manual token setup is
 needed after a successful `xmemo login`; `xmemo token status --verify` is only
-an optional connectivity check.
+an optional connectivity check. The CLI waits for the full browser authorization
+window by default; use `--timeout-ms` only to shorten or extend that approval
+window, and `--http-timeout-ms` only for individual service requests.
 
 Users who already have a token can configure it directly without shell profiles:
 

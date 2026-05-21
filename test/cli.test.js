@@ -260,6 +260,46 @@ test('device login stores issued token without printing it', async () => {
   assert.deepEqual(credential.metadata.account, payload.account);
 });
 
+test('device login waits for the service approval window by default', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-window-'));
+  const token = 'mem_os_device_token_1234567890';
+  const originalNow = Date.now;
+  const nowValues = [0, 0, 31_000];
+  const sleeps = [];
+  let polls = 0;
+  Date.now = () => nowValues.shift() ?? 31_000;
+  try {
+    const result = await invoke(['login', '--base-url', 'https://api.example.test', '--json'], {
+      env: { MEMORY_OS_CONFIG_HOME: tempDir },
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      fetch: async (url) => {
+        if (url.endsWith('/api/v1/auth/device/start')) {
+          return jsonResponse({
+            device_code: 'device-code-1',
+            user_code: 'ABCD-EFGH',
+            verification_uri: 'https://api.example.test/device',
+            interval: 1,
+            expires_in: 600
+          });
+        }
+        polls += 1;
+        if (polls === 1) {
+          return devicePendingResponse();
+        }
+        return jsonResponse({ access_token: token });
+      }
+    });
+
+    assert.equal(result.code, 0);
+    assert.deepEqual(sleeps, [1000]);
+    assert.equal(polls, 2);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('device login text confirms account and no extra token configuration', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-text-'));
   const token = 'mem_os_device_token_1234567890';
@@ -348,7 +388,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.129');
+  assert.equal(report.cli.version, '0.4.131');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -691,10 +731,21 @@ async function invoke(args, options = {}) {
     stdout: { write: (chunk) => { stdout += chunk; } },
     stderr: { write: (chunk) => { stderr += chunk; } },
     fetch: options.fetch,
-    spawn: options.spawn
+    spawn: options.spawn,
+    sleep: options.sleep
   });
 
   return { code, stdout, stderr };
+}
+
+function devicePendingResponse() {
+  return {
+    ok: false,
+    status: 400,
+    async json() {
+      return { error: 'authorization_pending', interval: 1 };
+    }
+  };
 }
 
 function spawnStub(calls, { code = 0, stdout = '', stderr = '' } = {}) {
