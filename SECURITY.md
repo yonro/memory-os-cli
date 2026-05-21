@@ -1,6 +1,6 @@
 # Security Policy
 
-Memory OS CLI is designed to minimize local secret exposure.
+XMemo CLI is designed to minimize local secret exposure.
 
 ## Defaults
 
@@ -29,5 +29,5 @@ Do not include real tokens in:
 - screenshots
 - chat transcripts
 
-Use the Memory OS website or enterprise console to create, rotate, and revoke
+Use the XMemo website or enterprise console to create, rotate, and revoke
 tokens.

@@ -1,9 +1,10 @@
 {
-  "name": "@yonro/memory-os",
+  "name": "@xmemo/client",
   "version": "0.4.126",
-  "description": "Privacy-first CLI and MCP setup helper for Memory OS.",
+  "description": "Privacy-first CLI and MCP setup helper for XMemo.",
   "type": "module",
   "bin": {
+    "xmemo": "bin/memory-os.js",
     "memory-os": "bin/memory-os.js"
   },
   "files": [
@@ -34,6 +35,7 @@
   },
   "homepage": "https://github.com/yonro/memory-os-cli#readme",
   "keywords": [
+    "xmemo",
     "memory-os",
     "mcp",
     "agent",

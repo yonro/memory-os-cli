@@ -10,6 +10,10 @@ test('help documents privacy defaults', async () => {
   const result = await invoke(['help']);
 
   assert.equal(result.code, 0);
+  assert.match(result.stdout, /XMemo CLI/);
+  assert.match(result.stdout, /@xmemo\/client/);
+  assert.match(result.stdout, /@yonro\/xmemo-client/);
+  assert.match(result.stdout, /legacy command alias: memory-os/);
   assert.match(result.stdout, /no telemetry/i);
   assert.match(result.stdout, /no token in project files/i);
 });
@@ -117,6 +121,7 @@ test('doctor validates agent discovery without sending token values', async () =
 
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
+  assert.equal(report.cli.package, '@xmemo/client');
   assert.equal(report.cli.version, '0.4.126');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
@@ -163,6 +168,7 @@ test('env example emits shell-specific placeholders', async () => {
   });
 
   assert.equal(result.code, 0);
+  assert.match(result.stdout, /export XMEMO_URL="https:\/\/api\.example\.test"/);
   assert.match(result.stdout, /export MEMORY_OS_URL="https:\/\/api\.example\.test"/);
   assert.match(result.stdout, /export XMEMO_KEY="<paste-token-from-your-secret-store>"/);
   assert.match(result.stdout, /export XMEMO_AGENT_ID="<agent-family>"/);
@@ -361,7 +367,7 @@ test('setup codex --yes writes mcp config and marker-scoped project profile', as
   const profile = await fs.readFile(profilePath, 'utf8');
   assert.match(profile, /<!-- memory-os:codex-profile:start -->/);
   assert.match(profile, /<!-- memory-os:codex-profile:end -->/);
-  assert.match(profile, /Use Memory OS deliberately through MCP/);
+  assert.match(profile, /Use XMemo deliberately through MCP/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -419,7 +425,7 @@ test('codex memory behavior profile documents recall and write-back', async () =
   assert.equal(profile.client, 'codex');
   assert.equal(profile.mcpServerName, 'memory_os');
   assert.match(profile.instructions.join('\n'), /recall\/search/);
-  assert.match(profile.instructions.join('\n'), /write a concise Memory OS memory/);
+  assert.match(profile.instructions.join('\n'), /write a concise XMemo memory/);
 });
 
 async function invoke(args, options = {}) {

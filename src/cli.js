@@ -3,8 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const PACKAGE_NAME = '@yonro/memory-os';
+const PRODUCT_NAME = 'XMemo';
+const PACKAGE_NAME = '@xmemo/client';
+const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
+const COMMAND_NAME = 'xmemo';
+const LEGACY_COMMAND_NAME = 'memory-os';
 const CLI_VERSION = '0.4.126';
+const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
 const AGENT_ID_ENV_VAR = 'XMEMO_AGENT_ID';
@@ -99,7 +104,7 @@ export async function run(args, io = defaultIo()) {
   } catch (error) {
     if (error instanceof UsageError) {
       writeLine(io.stderr, `Error: ${error.message}`);
-      writeLine(io.stderr, 'Run `memory-os help` for usage.');
+      writeLine(io.stderr, `Run \`${COMMAND_NAME} help\` for usage.`);
       return 2;
     }
 
@@ -119,26 +124,27 @@ function defaultIo() {
 }
 
 function writeHelp(io) {
-  writeLine(io.stdout, `Memory OS CLI (${PACKAGE_NAME})`);
+  writeLine(io.stdout, `${PRODUCT_NAME} CLI (${PACKAGE_NAME})`);
+  writeLine(io.stdout, `Fallback npm package: ${FALLBACK_PACKAGE_NAME}; legacy command alias: ${LEGACY_COMMAND_NAME}`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Usage:');
-  writeLine(io.stdout, '  memory-os doctor [--base-url <https://api.example.com>] [--json]');
-  writeLine(io.stdout, '  memory-os discovery show [--base-url <https://api.example.com>] [--json]');
-  writeLine(io.stdout, '  memory-os setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]');
-  writeLine(io.stdout, '  memory-os status [--url <https://api.example.com>] [--json]');
-  writeLine(io.stdout, '  memory-os token status');
-  writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
-  writeLine(io.stdout, '  memory-os mcp list');
-  writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
-  writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
-  writeLine(io.stdout, '  memory-os profile install codex [--target AGENTS.md] [--dry-run|--json]');
-  writeLine(io.stdout, '  memory-os profile uninstall codex [--target AGENTS.md] [--json]');
-  writeLine(io.stdout, '  memory-os mcp add <codex|cursor> [--url <https://api.example.com>] [--write] [--config <path>]');
-  writeLine(io.stdout, '  memory-os smoke --client codex [--config <path>] [--json]');
-  writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--json]');
-  writeLine(io.stdout, '  memory-os privacy');
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} token status`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>] [--write] [--config <path>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} privacy`);
   writeLine(io.stdout, '');
-  writeLine(io.stdout, 'Default service URL: https://xmemo.dev; use --url or MEMORY_OS_URL for private deployments.');
+  writeLine(io.stdout, `Default service URL: ${DEFAULT_SERVICE_URL}; use --url or XMEMO_URL for private deployments.`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Privacy defaults: no telemetry, no token in project files, and no token is sent by `status`, `doctor`, or `discovery`.');
 }
@@ -189,7 +195,7 @@ async function doctorCommand(args, io) {
     return report.ok ? 0 : 1;
   }
 
-  writeLine(io.stdout, `Memory OS CLI ${CLI_VERSION}`);
+  writeLine(io.stdout, `${PRODUCT_NAME} CLI ${CLI_VERSION}`);
   writeLine(io.stdout, `Discovery: ${discoveryUrl}`);
   writeLine(io.stdout, `MCP: ${mcpUrl ?? 'missing'}`);
   if (rootVersion.version) {
@@ -206,7 +212,7 @@ async function discoveryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Discovery commands:');
-    writeLine(io.stdout, '  memory-os discovery show [--base-url <https://api.example.com>] [--json]');
+    writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
     return 0;
   }
   if (subcommand !== 'show') {
@@ -225,7 +231,7 @@ async function discoveryCommand(args, io) {
     return 0;
   }
 
-  writeLine(io.stdout, `${stringValue(discovery, ['name']) ?? 'Memory OS'} discovery`);
+  writeLine(io.stdout, `${stringValue(discovery, ['name']) ?? PRODUCT_NAME} discovery`);
   writeLine(io.stdout, `URL: ${discoveryUrl}`);
   writeLine(io.stdout, `Protocol: ${stringValue(discovery, ['protocol']) ?? 'unknown'}`);
   writeLine(io.stdout, `MCP: ${discoveryMcpUrl(discovery, baseUrl) ?? 'missing'}`);
@@ -266,7 +272,7 @@ async function statusCommand(args, io) {
     return result.ok ? 0 : 1;
   }
 
-  writeLine(io.stdout, `Memory OS status for ${baseUrl}`);
+  writeLine(io.stdout, `${PRODUCT_NAME} status for ${baseUrl}`);
   writeLine(io.stdout, 'Privacy: telemetry disabled; no token sent.');
   for (const item of probes) {
     if (item.ok) {
@@ -342,9 +348,9 @@ async function profileCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Profile commands:');
-    writeLine(io.stdout, '  memory-os profile install codex [--target AGENTS.md] [--dry-run|--json]');
-    writeLine(io.stdout, '  memory-os profile status codex [--target AGENTS.md] [--json]');
-    writeLine(io.stdout, '  memory-os profile uninstall codex [--target AGENTS.md] [--json]');
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile status codex [--target AGENTS.md] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
     return 0;
@@ -384,8 +390,8 @@ async function tokenCommand(args, io) {
 
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Token commands:');
-    writeLine(io.stdout, '  memory-os token status');
-    writeLine(io.stdout, '  memory-os token set --from-stdin [--allow-plaintext]');
+    writeLine(io.stdout, `  ${COMMAND_NAME} token status`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, `Preferred enterprise path: set ${TOKEN_ENV_VAR} in your user or secret manager environment.`);
     return 0;
@@ -431,11 +437,11 @@ async function mcpCommand(args, io) {
 
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
-    writeLine(io.stdout, '  memory-os mcp list');
-    writeLine(io.stdout, '  memory-os mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]');
-    writeLine(io.stdout, '  memory-os mcp profile codex [--json]');
-    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> [--url <https://api.example.com>]');
-    writeLine(io.stdout, '  memory-os mcp add <codex|cursor> [--url <https://api.example.com>] --write [--config <path>]');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|generic> [--base-url <url>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>] --write [--config <path>]`);
     return 0;
   }
 
@@ -464,7 +470,7 @@ async function mcpCommand(args, io) {
       return 0;
     }
 
-    writeLine(io.stdout, `Memory OS MCP config template for ${clientId}`);
+    writeLine(io.stdout, `${PRODUCT_NAME} MCP config template for ${clientId}`);
     writeLine(io.stdout, `Requires env: ${TOKEN_ENV_VAR}`);
     if (typeof template.snippet === 'string') {
       writeLine(io.stdout, template.snippet.trimEnd());
@@ -495,7 +501,7 @@ async function mcpCommand(args, io) {
   const client = MCP_CLIENTS.get(target);
 
   if (subcommand !== 'add' || !client) {
-    throw new UsageError(`Supported MCP setup command: memory-os mcp add <${supportedMcpClientIds().join('|')}> [--url <url>]`);
+    throw new UsageError(`Supported MCP setup command: ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <url>]`);
   }
 
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
@@ -556,7 +562,7 @@ async function smokeCommand(args, io) {
     return report.ok ? 0 : 1;
   }
 
-  writeLine(io.stdout, `Memory OS Codex MCP smoke: ${report.ok ? 'ok' : 'failed'}`);
+  writeLine(io.stdout, `${PRODUCT_NAME} Codex MCP smoke: ${report.ok ? 'ok' : 'failed'}`);
   writeLine(io.stdout, `Config: ${report.configPath}`);
   writeLine(io.stdout, `Token env: ${report.tokenEnvVar}`);
   for (const check of report.checks) {
@@ -570,7 +576,7 @@ function envCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Env commands:');
-    writeLine(io.stdout, '  memory-os env example [--shell bash|powershell|cmd] [--base-url <url>] [--json]');
+    writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--base-url <url>] [--json]`);
     return 0;
   }
   if (subcommand !== 'example') {
@@ -582,6 +588,8 @@ function envCommand(args, io) {
   const shell = optionValue(args, '--shell') ?? (process.platform === 'win32' ? 'powershell' : 'bash');
   const placeholder = '<paste-token-from-your-secret-store>';
   const payload = {
+    XMEMO_URL: baseUrl,
+    XMEMO_BASE_URL: baseUrl,
     MEMORY_OS_URL: baseUrl,
     MEMORY_OS_BASE_URL: baseUrl,
     [TOKEN_ENV_VAR]: placeholder,
@@ -595,18 +603,24 @@ function envCommand(args, io) {
   }
 
   if (shell === 'powershell') {
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('XMEMO_URL', '${baseUrl}', 'User')`);
+    writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('XMEMO_BASE_URL', '${baseUrl}', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('MEMORY_OS_URL', '${baseUrl}', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('MEMORY_OS_BASE_URL', '${baseUrl}', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${TOKEN_ENV_VAR}', '${placeholder}', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${AGENT_ID_ENV_VAR}', '<agent-family>', 'User')`);
     writeLine(io.stdout, `[Environment]::SetEnvironmentVariable('${AGENT_INSTANCE_ENV_VAR}', '<stable-random-id-for-this-local-agent>', 'User')`);
   } else if (shell === 'cmd') {
+    writeLine(io.stdout, `setx XMEMO_URL "${baseUrl}"`);
+    writeLine(io.stdout, `setx XMEMO_BASE_URL "${baseUrl}"`);
     writeLine(io.stdout, `setx MEMORY_OS_URL "${baseUrl}"`);
     writeLine(io.stdout, `setx MEMORY_OS_BASE_URL "${baseUrl}"`);
     writeLine(io.stdout, `setx ${TOKEN_ENV_VAR} "${placeholder}"`);
     writeLine(io.stdout, `setx ${AGENT_ID_ENV_VAR} "<agent-family>"`);
     writeLine(io.stdout, `setx ${AGENT_INSTANCE_ENV_VAR} "<stable-random-id-for-this-local-agent>"`);
   } else {
+    writeLine(io.stdout, `export XMEMO_URL="${baseUrl}"`);
+    writeLine(io.stdout, `export XMEMO_BASE_URL="${baseUrl}"`);
     writeLine(io.stdout, `export MEMORY_OS_URL="${baseUrl}"`);
     writeLine(io.stdout, `export MEMORY_OS_BASE_URL="${baseUrl}"`);
     writeLine(io.stdout, `export ${TOKEN_ENV_VAR}="${placeholder}"`);
@@ -617,7 +631,7 @@ function envCommand(args, io) {
 }
 
 function writePrivacy(io) {
-  writeLine(io.stdout, 'Memory OS CLI privacy and security defaults:');
+  writeLine(io.stdout, `${PRODUCT_NAME} CLI privacy and security defaults:`);
   writeLine(io.stdout, '- No telemetry or analytics.');
   writeLine(io.stdout, '- `status` does not send tokens.');
   writeLine(io.stdout, `- MCP configs reference ${TOKEN_ENV_VAR}; token values are not embedded.`);
@@ -819,9 +833,11 @@ function sameMajorMinor(left, right) {
 function baseUrlOption(args, env) {
   return optionValue(args, '--base-url')
     ?? optionValue(args, '--url')
+    ?? env.XMEMO_BASE_URL
+    ?? env.XMEMO_URL
     ?? env.MEMORY_OS_BASE_URL
     ?? env.MEMORY_OS_URL
-    ?? 'https://xmemo.dev';
+    ?? DEFAULT_SERVICE_URL;
 }
 
 function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
@@ -842,7 +858,7 @@ function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
 }
 
 function writeSetupSummary(plan, io) {
-  writeLine(io.stdout, `Memory OS setup discovery: ${plan.baseUrl}`);
+  writeLine(io.stdout, `${PRODUCT_NAME} setup discovery: ${plan.baseUrl}`);
   writeLine(io.stdout, `  API: ${plan.apiBase}`);
   writeLine(io.stdout, `  MCP: ${plan.mcpUrl}`);
   writeLine(io.stdout, `  Guide: ${plan.guideUrl}`);
@@ -874,11 +890,11 @@ function writeSetupSummary(plan, io) {
       writeLine(io.stdout, `  Codex profile installed: ${profile.written}`);
       writeLine(io.stdout, `  Codex profile changed: ${profile.changed}`);
       if (!profile.written) {
-        writeLine(io.stdout, `  Profile preview: memory-os profile install codex --target ${profile.targetPath}`);
+        writeLine(io.stdout, `  Profile preview: ${COMMAND_NAME} profile install codex --target ${profile.targetPath}`);
       }
     }
     if (!plan.selectedClient.written) {
-      writeLine(io.stdout, `  Next: memory-os mcp add ${plan.selectedClient.id} --url ${plan.apiBase} --write`);
+      writeLine(io.stdout, `  Next: ${COMMAND_NAME} mcp add ${plan.selectedClient.id} --url ${plan.apiBase} --write`);
     }
     return;
   }
@@ -886,8 +902,8 @@ function writeSetupSummary(plan, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Next steps:');
   writeLine(io.stdout, `  1. Create a scoped token in the token portal and store it in ${plan.tokenEnvVar}.`);
-  writeLine(io.stdout, `  2. Configure a client, for example: memory-os setup --url ${plan.baseUrl} --client codex --write`);
-  writeLine(io.stdout, '  3. Run memory-os status to smoke-test the service without sending the token.');
+  writeLine(io.stdout, `  2. Configure a client, for example: ${COMMAND_NAME} setup --url ${plan.baseUrl} --client codex --write`);
+  writeLine(io.stdout, `  3. Run ${COMMAND_NAME} status to smoke-test the service without sending the token.`);
 }
 
 function discoveryMcpClients(discovery) {
@@ -942,22 +958,22 @@ function codexMemoryProfile() {
     profileVersion: 'codex-mcp-depth-v1',
     mcpServerName: MCP_SERVER_NAME,
     requiredTokenEnv: TOKEN_ENV_VAR,
-    objective: 'Use Memory OS deliberately through MCP for project context recall and high-signal write-back.',
+    objective: 'Use XMemo deliberately through MCP for project context recall and high-signal write-back.',
     instructions: [
-      'At the start of a non-trivial task, call Memory OS recall/search for relevant project decisions, conventions, prior fixes, and active context unless the user explicitly asks not to use memory.',
+      'At the start of a non-trivial task, call XMemo recall/search for relevant project decisions, conventions, prior fixes, and active context unless the user explicitly asks not to use memory.',
       'Use recalled memories as evidence, not as unquestioned truth. Prefer current repository files when memory conflicts with code.',
-      'After meaningful decisions, bug fixes, release steps, or durable conventions, write a concise Memory OS memory with scope, source, and no secret values.',
-      'Never store tokens, API keys, cookies, private keys, raw credentials, or sensitive customer data in Memory OS.',
+      'After meaningful decisions, bug fixes, release steps, or durable conventions, write a concise XMemo memory with scope, source, and no secret values.',
+      'Never store tokens, API keys, cookies, private keys, raw credentials, or sensitive customer data in XMemo.',
       'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
-      'Keep Memory OS authentication through the XMEMO_KEY environment variable; do not paste token values into prompts, config files, or logs.'
+      'Keep XMemo authentication through the XMEMO_KEY environment variable; do not paste token values into prompts, config files, or logs.'
     ],
-    setupCommand: 'memory-os setup codex --url "$MEMORY_OS_URL" --yes',
-    smokeCommand: 'memory-os smoke --client codex'
+    setupCommand: `${COMMAND_NAME} setup codex --url "$XMEMO_URL" --yes`,
+    smokeCommand: `${COMMAND_NAME} smoke --client codex`
   };
 }
 
 function writeCodexMemoryProfile(profile, io) {
-  writeLine(io.stdout, 'Memory OS Codex memory behavior profile');
+  writeLine(io.stdout, `${PRODUCT_NAME} Codex memory behavior profile`);
   writeLine(io.stdout, `Profile: ${profile.profileVersion}`);
   writeLine(io.stdout, `MCP server: ${profile.mcpServerName}`);
   writeLine(io.stdout, `Token env: ${profile.requiredTokenEnv}`);
@@ -974,7 +990,7 @@ function writeCodexMemoryProfile(profile, io) {
 function codexProfileInstructionText() {
   const profile = codexMemoryProfile();
   const lines = [
-    '## Memory OS Codex profile',
+    '## XMemo Codex profile',
     '',
     `MCP server: \`${profile.mcpServerName}\``,
     `Token env var: \`${profile.requiredTokenEnv}\``,
@@ -1119,7 +1135,7 @@ function markerBounds(content) {
 }
 
 function writeProfileResult(action, result, io) {
-  writeLine(io.stdout, `Memory OS Codex profile ${action}`);
+  writeLine(io.stdout, `${PRODUCT_NAME} Codex profile ${action}`);
   writeLine(io.stdout, `  Target: ${result.targetPath}`);
   writeLine(io.stdout, `  Installed: ${result.installed}`);
   if ('written' in result) {
@@ -1178,7 +1194,7 @@ async function codexSmokeReport(configPath, env) {
       name: 'agent_instance_identity_file',
       ok: identityPresent,
       required: false,
-      detail: identityPresent ? identityPath : `optional; create with memory-os mcp add codex --write (${identityPath})`
+      detail: identityPresent ? identityPath : `optional; create with ${COMMAND_NAME} mcp add codex --write (${identityPath})`
     }
   ];
 
@@ -1340,20 +1356,24 @@ function credentialsPath(env) {
 }
 
 function configRoot(env) {
+  if (env.XMEMO_CONFIG_HOME) {
+    return env.XMEMO_CONFIG_HOME;
+  }
+
   if (env.MEMORY_OS_CONFIG_HOME) {
     return env.MEMORY_OS_CONFIG_HOME;
   }
 
   if (process.platform === 'win32' && env.LOCALAPPDATA) {
-    return path.join(env.LOCALAPPDATA, 'MemoryOS', 'CLI');
+    return path.join(env.LOCALAPPDATA, 'XMemo', 'CLI');
   }
 
   if (env.XDG_CONFIG_HOME) {
-    return path.join(env.XDG_CONFIG_HOME, 'memory-os');
+    return path.join(env.XDG_CONFIG_HOME, 'xmemo');
   }
 
   const home = env.HOME || os.homedir();
-  return path.join(home, '.config', 'memory-os');
+  return path.join(home, '.config', 'xmemo');
 }
 
 function defaultCodexConfigPath(env) {
