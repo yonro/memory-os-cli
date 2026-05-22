@@ -390,7 +390,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.133');
+  assert.equal(report.cli.version, '0.4.134');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -577,9 +577,9 @@ test('setup writes cursor config from discovered mcp url without token value', a
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
-test('setup cursor shorthand writes config with --yes', async () => {
+test('setup cursor shorthand writes config by default', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-'));
-  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--yes', '--json'], {
+  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--json'], {
     env: {
       HOME: tempDir,
       XMEMO_KEY: 'secret-token-that-must-not-leak'
@@ -666,10 +666,10 @@ test('codex setup writes env-referenced config and smoke validates it', async ()
   assert.equal(report.checks.find((check) => check.name === 'agent_instance_identity_file').ok, true);
 });
 
-test('setup codex shorthand previews project profile without writing files', async () => {
+test('setup codex shorthand previews project profile with dry-run', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-preview-'));
   const profilePath = path.join(tempDir, 'AGENTS.md');
-  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--profile-target', profilePath, '--json'], {
+  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--profile-target', profilePath, '--dry-run', '--json'], {
     env: {
       HOME: tempDir,
       MEMORY_OS_CONFIG_HOME: tempDir,
@@ -689,7 +689,7 @@ test('setup codex shorthand previews project profile without writing files', asy
   await assert.rejects(fs.readFile(profilePath, 'utf8'), /ENOENT/);
 });
 
-test('setup codex --yes writes mcp config and marker-scoped project profile', async () => {
+test('setup codex writes mcp config and marker-scoped project profile by default', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-yes-'));
   const profilePath = path.join(tempDir, 'AGENTS.md');
   const env = {
@@ -697,7 +697,7 @@ test('setup codex --yes writes mcp config and marker-scoped project profile', as
     MEMORY_OS_CONFIG_HOME: tempDir,
     XMEMO_KEY: 'secret-token-that-must-not-leak'
   };
-  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--yes', '--profile-target', profilePath, '--json'], {
+  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--profile-target', profilePath, '--json'], {
     env,
     fetch: discoveryFetch()
   });

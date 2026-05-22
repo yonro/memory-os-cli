@@ -30,9 +30,9 @@ to print the exact command without changing anything.
 ```bash
 xmemo update
 xmemo setup codex
-xmemo setup codex --yes
+xmemo setup codex --dry-run
 xmemo setup cursor
-xmemo setup cursor --yes
+xmemo setup cursor --dry-run
 xmemo setup copilot
 xmemo doctor
 xmemo discovery show
@@ -142,24 +142,23 @@ accepted as a compatibility alias.
 Generate and write a client config from discovery:
 
 ```bash
-xmemo setup codex --yes
-xmemo setup codex --url "https://your-private-service.example" --yes
-xmemo setup cursor --yes
+xmemo setup codex
+xmemo setup codex --url "https://your-private-service.example"
+xmemo setup cursor
 xmemo setup copilot
 ```
 
-`xmemo setup <client>` is the unified setup entry point. Without `--yes` it
-previews what will happen. With `--yes`, write-capable clients apply the
-user-scoped config. Generated config references `XMEMO_KEY`; it does not embed
-the token value. Write-capable client configs also include stable non-secret
-agent identity headers where the client format supports them.
+`xmemo setup <client>` is the unified setup entry point. For write-capable
+clients, it applies the user-scoped config directly; use `--dry-run` to preview
+without writing. Generated config references `XMEMO_KEY`; it does not embed the
+token value. Write-capable client configs also include stable non-secret agent
+identity headers where the client format supports them. `--yes` remains accepted
+for Codex and Cursor as a compatibility no-op.
 
-`xmemo setup codex` is the recommended Codex path. Without `--yes` it
-previews the Codex MCP config and the project-scoped `AGENTS.md` memory profile.
-With `--yes`, it writes the Codex MCP config and installs the profile into the
-current project's `AGENTS.md` marker block. Use `--profile-target <path>` to
-choose a different project instruction file, or `--no-profile` to configure MCP
-only.
+`xmemo setup codex` is the recommended Codex path. It writes the Codex MCP
+config and installs the profile into the current project's `AGENTS.md` marker
+block. Use `--dry-run` to preview, `--profile-target <path>` to choose a
+different project instruction file, or `--no-profile` to configure MCP only.
 
 ## MCP setup
 
@@ -218,14 +217,12 @@ Recommended Codex setup:
 
 ```bash
 xmemo setup codex
-xmemo setup codex --yes
 xmemo smoke --client codex
 ```
 
-`setup codex` is visible and opt-in: the first command previews the writes, and
-`--yes` performs them. The MCP config stays in user-scoped Codex config, while
-the XMemo Codex behavior profile is installed into the current project's
-`AGENTS.md` between these markers:
+`setup codex` writes the MCP config to user-scoped Codex config and installs the
+XMemo Codex behavior profile into the current project's `AGENTS.md` between
+these markers. Use `xmemo setup codex --dry-run` to preview without writing.
 
 ```html
 <!-- memory-os:codex-profile:start -->
@@ -277,11 +274,11 @@ Recommended Cursor setup:
 
 ```bash
 xmemo setup cursor
-xmemo setup cursor --yes
 ```
 
-`setup cursor` previews the Cursor MCP config. `setup cursor --yes` merges it
-into the default Cursor user config path. The lower-level equivalent remains:
+`setup cursor` merges the Cursor MCP config into the default Cursor user config
+path. Use `xmemo setup cursor --dry-run` to preview without writing. The
+lower-level equivalent remains:
 
 ```bash
 xmemo mcp add cursor --url "$XMEMO_URL" --write

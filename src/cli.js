@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.133';
+const CLI_VERSION = '0.4.134';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -157,7 +157,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot> [--url <https://api.example.com>] [--write|--yes] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot> [--url <https://api.example.com>] [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--timeout-ms <ms>] [--http-timeout-ms <ms>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
@@ -367,8 +367,9 @@ async function setupCommand(args, io) {
   const baseUrl = normalizeBaseUrl(baseUrlOption(optionArgs, io.env));
   const outputJson = hasFlag(optionArgs, '--json');
   const shortClientSetup = Boolean(positionalClientId);
-  const writeConfig = hasFlag(optionArgs, '--write') || (shortClientSetup && hasFlag(optionArgs, '--yes'));
   const clientId = normalizeSetupClientId(positionalClientId ?? optionValue(optionArgs, '--client'));
+  const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
+  const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || (shortClientSetup && clientId !== 'copilot-cli'));
   const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
   const installProfile = shortClientSetup
     && clientId === 'codex'
@@ -391,7 +392,7 @@ async function setupCommand(args, io) {
 
   if (clientId) {
     if (clientId === 'copilot-cli') {
-      if (writeConfig) {
+      if (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes')) {
         throw new UsageError(`Copilot CLI setup cannot be written automatically yet. Run \`${COMMAND_NAME} setup copilot\` to print the local proxy template, then add it with Copilot CLI MCP management.`);
       }
       const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
@@ -1493,7 +1494,7 @@ function writeSetupSummary(plan, io) {
       }
     }
     if (!plan.selectedClient.written) {
-      writeLine(io.stdout, `  Next: ${COMMAND_NAME} setup ${plan.selectedClient.id} --url ${plan.baseUrl} --yes`);
+      writeLine(io.stdout, `  Next: ${COMMAND_NAME} setup ${plan.selectedClient.id} --url ${plan.baseUrl}`);
     }
     return;
   }
@@ -1501,7 +1502,7 @@ function writeSetupSummary(plan, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Next steps:');
   writeLine(io.stdout, `  1. Create a scoped token in the token portal and store it in ${plan.tokenEnvVar}.`);
-  writeLine(io.stdout, `  2. Configure a client, for example: ${COMMAND_NAME} setup codex --url ${plan.baseUrl} --yes`);
+  writeLine(io.stdout, `  2. Configure a client, for example: ${COMMAND_NAME} setup codex --url ${plan.baseUrl}`);
   writeLine(io.stdout, `  3. Run ${COMMAND_NAME} status to smoke-test the service without sending the token.`);
 }
 
@@ -1566,7 +1567,7 @@ function codexMemoryProfile() {
       'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
       'Keep XMemo authentication through the XMEMO_KEY environment variable; do not paste token values into prompts, config files, or logs.'
     ],
-    setupCommand: `${COMMAND_NAME} setup codex --url "$XMEMO_URL" --yes`,
+    setupCommand: `${COMMAND_NAME} setup codex --url "$XMEMO_URL"`,
     smokeCommand: `${COMMAND_NAME} smoke --client codex`
   };
 }
