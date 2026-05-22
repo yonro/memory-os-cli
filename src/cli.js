@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.132';
+const CLI_VERSION = '0.4.133';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -42,6 +42,13 @@ const MCP_CLIENTS = new Map([
     writeConfig: mergeJsonMcpConfig,
     configKind: 'json'
   }]
+]);
+
+const SETUP_CLIENT_ALIASES = new Map([
+  ['codex', 'codex'],
+  ['cursor', 'cursor'],
+  ['copilot', 'copilot-cli'],
+  ['copilot-cli', 'copilot-cli']
 ]);
 
 class UsageError extends Error {
@@ -150,7 +157,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup [codex|cursor] [--url <https://api.example.com>] [--write|--yes] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot> [--url <https://api.example.com>] [--write|--yes] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--timeout-ms <ms>] [--http-timeout-ms <ms>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
@@ -361,7 +368,7 @@ async function setupCommand(args, io) {
   const outputJson = hasFlag(optionArgs, '--json');
   const shortClientSetup = Boolean(positionalClientId);
   const writeConfig = hasFlag(optionArgs, '--write') || (shortClientSetup && hasFlag(optionArgs, '--yes'));
-  const clientId = positionalClientId ?? optionValue(optionArgs, '--client');
+  const clientId = normalizeSetupClientId(positionalClientId ?? optionValue(optionArgs, '--client'));
   const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
   const installProfile = shortClientSetup
     && clientId === 'codex'
@@ -383,24 +390,32 @@ async function setupCommand(args, io) {
   const setupPlan = buildSetupPlan({ baseUrl, discoveryUrl, statusUrl, discovery, status });
 
   if (clientId) {
-    const client = MCP_CLIENTS.get(clientId);
-    if (!client) {
-      throw new UsageError(`Unsupported MCP client: ${clientId}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
-    }
+    if (clientId === 'copilot-cli') {
+      if (writeConfig) {
+        throw new UsageError(`Copilot CLI setup cannot be written automatically yet. Run \`${COMMAND_NAME} setup copilot\` to print the local proxy template, then add it with Copilot CLI MCP management.`);
+      }
+      const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
+      setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort);
+    } else {
+      const client = MCP_CLIENTS.get(clientId);
+      if (!client) {
+        throw new UsageError(`Unsupported MCP client: ${clientId}. Supported clients: ${supportedSetupClientIds().join(', ')}.`);
+      }
 
-    const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
-    setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity);
-    if (writeConfig) {
-      await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity);
-      setupPlan.selectedClient.written = true;
-    }
+      const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
+      setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity);
+      if (writeConfig) {
+        await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity);
+        setupPlan.selectedClient.written = true;
+      }
 
-    if (clientId === 'codex' && shortClientSetup) {
-      const profileTarget = optionValue(optionArgs, '--profile-target')
-        ?? optionValue(optionArgs, '--target')
-        ?? defaultCodexProfileTarget();
-      const profileResult = await codexProfileInstallResult(profileTarget, { write: installProfile });
-      setupPlan.selectedClient.codexProfile = profileResult;
+      if (clientId === 'codex' && shortClientSetup) {
+        const profileTarget = optionValue(optionArgs, '--profile-target')
+          ?? optionValue(optionArgs, '--target')
+          ?? defaultCodexProfileTarget();
+        const profileResult = await codexProfileInstallResult(profileTarget, { write: installProfile });
+        setupPlan.selectedClient.codexProfile = profileResult;
+      }
     }
   }
 
@@ -1410,6 +1425,28 @@ function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
   };
 }
 
+function copilotSetupPlan(mcpUrl, proxyPort) {
+  const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
+  const template = mcpLocalProxyTemplate('copilot-cli', proxyUrl);
+  return {
+    id: 'copilot-cli',
+    label: 'Copilot CLI',
+    configKind: 'local-proxy',
+    configPath: 'Copilot CLI MCP config',
+    serverName: template.serverName,
+    mcpUrl,
+    proxyUrl,
+    tokenEnvVar: TOKEN_ENV_VAR,
+    requiresCredential: template.requiresCredential,
+    requiresLocalCommand: template.requiresLocalCommand,
+    template: template.snippet,
+    agentId: template.agentIdentity.agentId,
+    writesTokenValue: false,
+    writeSupported: false,
+    written: false
+  };
+}
+
 function writeSetupSummary(plan, io) {
   writeLine(io.stdout, `${PRODUCT_NAME} setup discovery: ${plan.baseUrl}`);
   writeLine(io.stdout, `  API: ${plan.apiBase}`);
@@ -1436,7 +1473,16 @@ function writeSetupSummary(plan, io) {
     writeLine(io.stdout, `  Written: ${plan.selectedClient.written}`);
     writeLine(io.stdout, `  Token value embedded: ${plan.selectedClient.writesTokenValue}`);
     writeLine(io.stdout, `  Agent ID: ${plan.selectedClient.agentId}`);
-    writeLine(io.stdout, `  Agent instance ID stored: ${plan.selectedClient.agentInstanceIdPath}`);
+    if (plan.selectedClient.agentInstanceIdPath) {
+      writeLine(io.stdout, `  Agent instance ID stored: ${plan.selectedClient.agentInstanceIdPath}`);
+    }
+    if (plan.selectedClient.configKind === 'local-proxy') {
+      writeLine(io.stdout, `  Local proxy: ${plan.selectedClient.requiresLocalCommand}`);
+      writeLine(io.stdout, '  MCP template:');
+      writeLine(io.stdout, JSON.stringify(plan.selectedClient.template, null, 2));
+      writeLine(io.stdout, `  Next: add the template with Copilot CLI MCP management, then keep \`${plan.selectedClient.requiresLocalCommand}\` running while you use Copilot CLI.`);
+      return;
+    }
     if (plan.selectedClient.codexProfile) {
       const profile = plan.selectedClient.codexProfile;
       writeLine(io.stdout, `  Codex profile target: ${profile.targetPath}`);
@@ -1447,7 +1493,7 @@ function writeSetupSummary(plan, io) {
       }
     }
     if (!plan.selectedClient.written) {
-      writeLine(io.stdout, `  Next: ${COMMAND_NAME} mcp add ${plan.selectedClient.id} --url ${plan.apiBase} --write`);
+      writeLine(io.stdout, `  Next: ${COMMAND_NAME} setup ${plan.selectedClient.id} --url ${plan.baseUrl} --yes`);
     }
     return;
   }
@@ -1455,7 +1501,7 @@ function writeSetupSummary(plan, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Next steps:');
   writeLine(io.stdout, `  1. Create a scoped token in the token portal and store it in ${plan.tokenEnvVar}.`);
-  writeLine(io.stdout, `  2. Configure a client, for example: ${COMMAND_NAME} setup --url ${plan.baseUrl} --client codex --write`);
+  writeLine(io.stdout, `  2. Configure a client, for example: ${COMMAND_NAME} setup codex --url ${plan.baseUrl} --yes`);
   writeLine(io.stdout, `  3. Run ${COMMAND_NAME} status to smoke-test the service without sending the token.`);
 }
 
@@ -1904,6 +1950,10 @@ function supportedMcpClientIds() {
   return Array.from(MCP_CLIENTS.keys());
 }
 
+function supportedSetupClientIds() {
+  return ['codex', 'cursor', 'copilot'];
+}
+
 function credentialsPath(env) {
   return path.join(configRoot(env), 'credentials.json');
 }
@@ -1990,11 +2040,20 @@ function positionalClientArg(args) {
     return null;
   }
 
-  if (!MCP_CLIENTS.has(candidate)) {
-    throw new UsageError(`Unsupported setup client: ${candidate}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
+  return normalizeSetupClientId(candidate);
+}
+
+function normalizeSetupClientId(candidate) {
+  if (!candidate) {
+    return null;
   }
 
-  return candidate;
+  const normalized = SETUP_CLIENT_ALIASES.get(candidate);
+  if (!normalized) {
+    throw new UsageError(`Unsupported setup client: ${candidate}. Supported clients: ${supportedSetupClientIds().join(', ')}.`);
+  }
+
+  return normalized;
 }
 
 function optionValue(args, name) {

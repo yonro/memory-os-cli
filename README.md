@@ -31,7 +31,9 @@ to print the exact command without changing anything.
 xmemo update
 xmemo setup codex
 xmemo setup codex --yes
-xmemo smoke --client codex
+xmemo setup cursor
+xmemo setup cursor --yes
+xmemo setup copilot
 xmemo doctor
 xmemo discovery show
 xmemo setup
@@ -44,7 +46,7 @@ xmemo env example --shell bash
 xmemo mcp list
 xmemo mcp config --client generic
 xmemo profile status codex
-xmemo mcp add cursor --url "https://your-private-service.example"
+xmemo smoke --client codex
 xmemo privacy
 ```
 
@@ -142,12 +144,13 @@ Generate and write a client config from discovery:
 ```bash
 xmemo setup codex --yes
 xmemo setup codex --url "https://your-private-service.example" --yes
-xmemo setup --url "https://your-private-service.example" --client codex --write
-xmemo setup --url "https://your-private-service.example" --client cursor --write
+xmemo setup cursor --yes
+xmemo setup copilot
 ```
 
-`--write` requires an explicit `--client` so the CLI never performs broad config
-writes implicitly. Generated config references `XMEMO_KEY`; it does not embed
+`xmemo setup <client>` is the unified setup entry point. Without `--yes` it
+previews what will happen. With `--yes`, write-capable clients apply the
+user-scoped config. Generated config references `XMEMO_KEY`; it does not embed
 the token value. Write-capable client configs also include stable non-secret
 agent identity headers where the client format supports them.
 
@@ -192,7 +195,7 @@ directly. The recommended personal-user path is therefore local proxy mode:
 
 ```bash
 xmemo login
-xmemo mcp config --client copilot-cli
+xmemo setup copilot
 xmemo mcp proxy
 ```
 
@@ -200,6 +203,9 @@ The generated Copilot CLI template points at `http://127.0.0.1:8765/mcp` and
 does not include token or identity headers. `xmemo mcp proxy` reads the token
 saved by `xmemo login` or `xmemo token add --from-stdin`, adds the XMemo bearer
 token and local agent identity, then forwards requests to `https://xmemo.dev/mcp`.
+Copilot CLI does not currently document a stable cross-platform config file for
+third-party tools to edit, so `xmemo setup copilot` prints the template and next
+command instead of writing directly.
 If you specifically want the older environment-variable template, run:
 
 ```bash
@@ -267,13 +273,15 @@ absence of embedded token values.
 
 ### Cursor
 
-Generate a Cursor MCP config snippet:
+Recommended Cursor setup:
 
 ```bash
-xmemo mcp add cursor --url "$XMEMO_URL"
+xmemo setup cursor
+xmemo setup cursor --yes
 ```
 
-Merge it into the default Cursor user config path:
+`setup cursor` previews the Cursor MCP config. `setup cursor --yes` merges it
+into the default Cursor user config path. The lower-level equivalent remains:
 
 ```bash
 xmemo mcp add cursor --url "$XMEMO_URL" --write

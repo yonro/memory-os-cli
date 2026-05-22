@@ -390,7 +390,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.132');
+  assert.equal(report.cli.version, '0.4.133');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -575,6 +575,60 @@ test('setup writes cursor config from discovered mcp url without token value', a
   assert.equal(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-ID'], 'cursor');
   assert.match(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-cursor-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('setup cursor shorthand writes config with --yes', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-'));
+  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--yes', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'cursor');
+  assert.equal(plan.selectedClient.written, true);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.memory_os.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.memory_os.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+});
+
+test('setup copilot prints local proxy template without direct config writes', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-copilot-'));
+  const result = await invoke(['setup', 'copilot', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'copilot-cli');
+  assert.equal(plan.selectedClient.configKind, 'local-proxy');
+  assert.equal(plan.selectedClient.writeSupported, false);
+  assert.equal(plan.selectedClient.written, false);
+  assert.equal(plan.selectedClient.requiresLocalCommand, 'xmemo mcp proxy --port 8765');
+  assert.equal(plan.selectedClient.template.mcpServers['memory-os'].url, 'http://127.0.0.1:8765/mcp');
+
+  await assert.rejects(fs.readFile(path.join(tempDir, '.copilot', 'mcp.json'), 'utf8'), /ENOENT/);
+});
+
+test('setup copilot refuses unsupported automatic writes', async () => {
+  const result = await invoke(['setup', 'copilot', '--url', 'https://api.example.test', '--yes'], {
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /cannot be written automatically/i);
 });
 
 test('codex setup writes env-referenced config and smoke validates it', async () => {
