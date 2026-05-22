@@ -189,6 +189,8 @@ test('auth status shows stored device-login account without token warning noise'
   assert.equal(status.code, 0);
   assert.match(status.stdout, /Account: Real User <real@example\.test>/);
   assert.match(status.stdout, /Credential is ready; token value remains hidden\./);
+  assert.doesNotMatch(status.stdout, /User credential file:/);
+  assert.doesNotMatch(status.stdout, new RegExp(credentialPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(status.stdout, /Token values are never printed/);
   assert.doesNotMatch(status.stdout, new RegExp(token));
 });
@@ -388,7 +390,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.131');
+  assert.equal(report.cli.version, '0.4.132');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);

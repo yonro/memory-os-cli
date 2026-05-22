@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.131';
+const CLI_VERSION = '0.4.132';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -647,6 +647,11 @@ function writeCredentialStatus(report, io, { mode }) {
     writeLine(io.stdout, `${PRODUCT_NAME} auth status`);
     writeLine(io.stdout, `Logged in: ${report.loggedIn ? 'yes' : 'no'}`);
     writeLine(io.stdout, `Credential source: ${report.tokenSource}`);
+    if (report.account) {
+      writeLine(io.stdout, `Account: ${formatAccount(report.account)}`);
+    }
+    writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${COMMAND_NAME} login\` to sign in.`);
+    return;
   }
   writeLine(io.stdout, `Environment token: ${report.environmentToken.present ? 'present' : 'missing'} (${report.environmentToken.variable})`);
   writeLine(io.stdout, `User credential file: ${report.userCredentialFile.present ? 'present' : 'missing'} (${report.userCredentialFile.path})`);
