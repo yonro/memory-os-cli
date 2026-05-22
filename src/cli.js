@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.134';
+const CLI_VERSION = '0.4.135';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -369,7 +369,7 @@ async function setupCommand(args, io) {
   const shortClientSetup = Boolean(positionalClientId);
   const clientId = normalizeSetupClientId(positionalClientId ?? optionValue(optionArgs, '--client'));
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
-  const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || (shortClientSetup && clientId !== 'copilot-cli'));
+  const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup);
   const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
   const installProfile = shortClientSetup
     && clientId === 'codex'
@@ -392,11 +392,12 @@ async function setupCommand(args, io) {
 
   if (clientId) {
     if (clientId === 'copilot-cli') {
-      if (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes')) {
-        throw new UsageError(`Copilot CLI setup cannot be written automatically yet. Run \`${COMMAND_NAME} setup copilot\` to print the local proxy template, then add it with Copilot CLI MCP management.`);
-      }
       const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
-      setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort);
+      setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
+      if (writeConfig) {
+        await mergeCopilotMcpConfig(setupPlan.selectedClient.configPath, setupPlan.selectedClient.proxyUrl);
+        setupPlan.selectedClient.written = true;
+      }
     } else {
       const client = MCP_CLIENTS.get(clientId);
       if (!client) {
@@ -1426,14 +1427,14 @@ function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
   };
 }
 
-function copilotSetupPlan(mcpUrl, proxyPort) {
+function copilotSetupPlan(mcpUrl, proxyPort, env) {
   const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
   const template = mcpLocalProxyTemplate('copilot-cli', proxyUrl);
   return {
     id: 'copilot-cli',
     label: 'Copilot CLI',
     configKind: 'local-proxy',
-    configPath: 'Copilot CLI MCP config',
+    configPath: defaultCopilotConfigPath(env),
     serverName: template.serverName,
     mcpUrl,
     proxyUrl,
@@ -1443,7 +1444,7 @@ function copilotSetupPlan(mcpUrl, proxyPort) {
     template: template.snippet,
     agentId: template.agentIdentity.agentId,
     writesTokenValue: false,
-    writeSupported: false,
+    writeSupported: true,
     written: false
   };
 }
@@ -1479,9 +1480,14 @@ function writeSetupSummary(plan, io) {
     }
     if (plan.selectedClient.configKind === 'local-proxy') {
       writeLine(io.stdout, `  Local proxy: ${plan.selectedClient.requiresLocalCommand}`);
-      writeLine(io.stdout, '  MCP template:');
-      writeLine(io.stdout, JSON.stringify(plan.selectedClient.template, null, 2));
-      writeLine(io.stdout, `  Next: add the template with Copilot CLI MCP management, then keep \`${plan.selectedClient.requiresLocalCommand}\` running while you use Copilot CLI.`);
+      if (plan.selectedClient.written) {
+        writeLine(io.stdout, `  Next: keep \`${plan.selectedClient.requiresLocalCommand}\` running while you use Copilot CLI.`);
+        writeLine(io.stdout, '  If Copilot CLI is already open, reload MCP config or restart Copilot CLI.');
+      } else {
+        writeLine(io.stdout, '  MCP template:');
+        writeLine(io.stdout, JSON.stringify(plan.selectedClient.template, null, 2));
+        writeLine(io.stdout, `  Next: ${COMMAND_NAME} setup copilot --url ${plan.baseUrl}`);
+      }
       return;
     }
     if (plan.selectedClient.codexProfile) {
@@ -1874,6 +1880,31 @@ async function mergeJsonMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
+async function mergeCopilotMcpConfig(configPath, proxyUrl) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`Copilot MCP JSON config must be an object: ${configPath}`);
+  }
+
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+
+  parsed.mcpServers['memory-os'] = copilotLocalProxyServerConfig(proxyUrl);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function copilotLocalProxyServerConfig(proxyUrl) {
+  return {
+    type: 'http',
+    url: proxyUrl
+  };
+}
+
 function cursorJsonConfig(mcpUrl, identity = envReferenceIdentity('cursor')) {
   return {
     mcpServers: {
@@ -1940,11 +1971,13 @@ function envReferenceIdentity(clientId) {
 }
 
 function supportedMcpClients() {
-  return Array.from(MCP_CLIENTS.entries()).map(([id, client]) => ({
+  const clients = Array.from(MCP_CLIENTS.entries()).map(([id, client]) => ({
     id,
     label: client.label,
     configKind: client.configKind
   }));
+  clients.push({ id: 'copilot-cli', label: 'Copilot CLI', configKind: 'local-proxy' });
+  return clients;
 }
 
 function supportedMcpClientIds() {
@@ -1988,6 +2021,11 @@ function defaultCodexConfigPath(env) {
 function defaultCursorConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
   return path.join(home, '.cursor', 'mcp.json');
+}
+
+function defaultCopilotConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(env.COPILOT_HOME ?? path.join(home, '.copilot'), 'mcp-config.json');
 }
 
 async function writePlaintextCredential(credentialPath, token, metadata = {}) {

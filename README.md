@@ -34,6 +34,7 @@ xmemo setup codex --dry-run
 xmemo setup cursor
 xmemo setup cursor --dry-run
 xmemo setup copilot
+xmemo setup copilot --dry-run
 xmemo doctor
 xmemo discovery show
 xmemo setup
@@ -173,24 +174,25 @@ Current write-capable clients:
 ```text
 codex   ~/.codex/config.toml
 cursor  ~/.cursor/mcp.json
+copilot ~/.copilot/mcp-config.json
 ```
 
 For clients without a verified user-scoped write path, generate a read-only
 template and apply it manually after review:
 
 ```bash
-xmemo mcp config --client copilot-cli
 xmemo mcp config --client generic --base-url "https://your-private-service.example" --json
 ```
 
-Only Codex and Cursor currently have write-capable helpers. Other client writes
-should only be added after their official user-scoped config format is verified.
+Codex, Cursor, and Copilot CLI have write-capable setup helpers. Other client
+writes should only be added after their official user-scoped config format is
+verified.
 
 ### Copilot CLI
 
-Copilot CLI has `/mcp` management, but it does not currently document a stable
-cross-platform user config file path/format for third-party tools to edit
-directly. The recommended personal-user path is therefore local proxy mode:
+Copilot CLI has `/mcp` management and reads user MCP configuration from
+`~/.copilot/mcp-config.json` (or `$COPILOT_HOME/mcp-config.json`). XMemo writes
+a local proxy server entry there:
 
 ```bash
 xmemo login
@@ -198,13 +200,13 @@ xmemo setup copilot
 xmemo mcp proxy
 ```
 
-The generated Copilot CLI template points at `http://127.0.0.1:8765/mcp` and
-does not include token or identity headers. `xmemo mcp proxy` reads the token
-saved by `xmemo login` or `xmemo token add --from-stdin`, adds the XMemo bearer
-token and local agent identity, then forwards requests to `https://xmemo.dev/mcp`.
-Copilot CLI does not currently document a stable cross-platform config file for
-third-party tools to edit, so `xmemo setup copilot` prints the template and next
-command instead of writing directly.
+`xmemo setup copilot` writes `memory-os` to Copilot CLI's user MCP config and
+does not include token or identity headers. Use `xmemo setup copilot --dry-run`
+to preview without writing. `xmemo mcp proxy` reads the token saved by
+`xmemo login` or `xmemo token add --from-stdin`, adds the XMemo bearer token and
+local agent identity, then forwards requests to `https://xmemo.dev/mcp`. If
+Copilot CLI is already open, reload MCP config or restart Copilot CLI after
+setup.
 If you specifically want the older environment-variable template, run:
 
 ```bash
