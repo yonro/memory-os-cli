@@ -370,7 +370,7 @@ test('mcp list exposes supported clients without token values', async () => {
 
   assert.equal(result.code, 0);
   const clients = JSON.parse(result.stdout);
-  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'copilot-cli']);
+  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'copilot-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -639,6 +639,46 @@ test('setup copilot dry-run previews without writing config', async () => {
   assert.equal(plan.selectedClient.writeSupported, true);
   assert.equal(plan.selectedClient.written, false);
   await assert.rejects(fs.readFile(path.join(tempDir, '.copilot', 'mcp-config.json'), 'utf8'), /ENOENT/);
+});
+
+test('setup gemini shorthand writes oauth httpUrl config without token', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-gemini-'));
+  const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'gemini-cli');
+  assert.equal(plan.selectedClient.written, true);
+
+  const configPath = path.join(tempDir, '.gemini', 'settings.json');
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.memory_os.httpUrl, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.memory_os.url, undefined);
+  assert.equal(config.mcpServers.memory_os.headers.Authorization, undefined);
+  assert.equal(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-ID'], 'gemini-cli');
+  assert.match(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-gemini-cli-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('setup gemini dry-run previews without writing config', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-gemini-preview-'));
+  const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--dry-run', '--json'], {
+    env: { HOME: tempDir },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'gemini-cli');
+  assert.equal(plan.selectedClient.written, false);
+  await assert.rejects(fs.readFile(path.join(tempDir, '.gemini', 'settings.json'), 'utf8'), /ENOENT/);
 });
 
 test('codex setup writes env-referenced config and smoke validates it', async () => {

@@ -35,6 +35,8 @@ xmemo setup cursor
 xmemo setup cursor --dry-run
 xmemo setup copilot
 xmemo setup copilot --dry-run
+xmemo setup gemini
+xmemo setup gemini --dry-run
 xmemo doctor
 xmemo discovery show
 xmemo setup
@@ -175,6 +177,7 @@ Current write-capable clients:
 codex   ~/.codex/config.toml
 cursor  ~/.cursor/mcp.json
 copilot ~/.copilot/mcp-config.json
+gemini  ~/.gemini/settings.json
 ```
 
 For clients without a verified user-scoped write path, generate a read-only
@@ -184,9 +187,9 @@ template and apply it manually after review:
 xmemo mcp config --client generic --base-url "https://your-private-service.example" --json
 ```
 
-Codex, Cursor, and Copilot CLI have write-capable setup helpers. Other client
-writes should only be added after their official user-scoped config format is
-verified.
+Codex, Cursor, Copilot CLI, and Gemini CLI have write-capable setup helpers.
+Other client writes should only be added after their official user-scoped config
+format is verified.
 
 ### Copilot CLI
 
@@ -290,6 +293,30 @@ The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
 config manually if you need to rotate the endpoint. Cursor configs include
 `X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`; the instance ID is
 non-secret and stored under the user's XMemo CLI config directory.
+
+### Gemini CLI
+
+Recommended Gemini CLI setup:
+
+```bash
+xmemo setup gemini
+```
+
+`setup gemini` merges an XMemo MCP server into Gemini CLI's user settings at
+`~/.gemini/settings.json`. It writes a remote HTTP server using Gemini's
+`httpUrl` key plus `X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`
+headers. Use `xmemo setup gemini --dry-run` to preview without writing.
+
+Unlike Codex/Cursor, the Gemini config carries **no token**: authentication uses
+Gemini CLI's built-in MCP OAuth flow (a one-time browser login on first use).
+This is deliberate — Gemini redacts environment variables matching
+`*KEY*`/`*TOKEN*`/`*AUTH*` during header expansion, so an `${XMEMO_KEY}`
+reference would not survive. OAuth avoids storing any secret in the config and
+still grants the full XMemo tool profile. After setup, restart Gemini CLI and
+run `/mcp` (or the first XMemo tool call) to complete the OAuth login.
+
+The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
+config manually if you need to rotate the endpoint.
 
 ## Release model
 

@@ -41,6 +41,13 @@ const MCP_CLIENTS = new Map([
     buildSnippet: cursorJsonSnippet,
     writeConfig: mergeJsonMcpConfig,
     configKind: 'json'
+  }],
+  ['gemini-cli', {
+    label: 'Gemini CLI',
+    defaultConfigPath: defaultGeminiConfigPath,
+    buildSnippet: geminiJsonSnippet,
+    writeConfig: mergeGeminiMcpConfig,
+    configKind: 'json'
   }]
 ]);
 
@@ -48,7 +55,9 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['codex', 'codex'],
   ['cursor', 'cursor'],
   ['copilot', 'copilot-cli'],
-  ['copilot-cli', 'copilot-cli']
+  ['copilot-cli', 'copilot-cli'],
+  ['gemini', 'gemini-cli'],
+  ['gemini-cli', 'gemini-cli']
 ]);
 
 class UsageError extends Error {
@@ -157,7 +166,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot> [--url <https://api.example.com>] [--dry-run] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot|gemini> [--url <https://api.example.com>] [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--timeout-ms <ms>] [--http-timeout-ms <ms>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
@@ -1880,6 +1889,28 @@ async function mergeJsonMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
+async function mergeGeminiMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+
+  if (parsed.mcpServers[MCP_SERVER_NAME]) {
+    throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+
+  parsed.mcpServers[MCP_SERVER_NAME] = geminiJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
 async function mergeCopilotMcpConfig(configPath, proxyUrl) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
@@ -1922,6 +1953,28 @@ function cursorJsonServerConfig(mcpUrl, identity = envReferenceIdentity('cursor'
       [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
     }
   };
+}
+
+function geminiJsonServerConfig(mcpUrl, identity = envReferenceIdentity('gemini-cli')) {
+  return {
+    httpUrl: mcpUrl,
+    headers: {
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function geminiJsonConfig(mcpUrl, identity = envReferenceIdentity('gemini-cli')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: geminiJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function geminiJsonSnippet(mcpUrl, identity = envReferenceIdentity('gemini-cli')) {
+  return `${JSON.stringify(geminiJsonConfig(mcpUrl, identity), null, 2)}\n`;
 }
 
 async function agentIdentity(clientId, env) {
@@ -1985,7 +2038,7 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot'];
+  return ['codex', 'cursor', 'copilot', 'gemini'];
 }
 
 function credentialsPath(env) {
@@ -2021,6 +2074,11 @@ function defaultCodexConfigPath(env) {
 function defaultCursorConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
   return path.join(home, '.cursor', 'mcp.json');
+}
+
+function defaultGeminiConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.gemini', 'settings.json');
 }
 
 function defaultCopilotConfigPath(env) {
