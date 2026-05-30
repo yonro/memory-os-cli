@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.135';
+const CLI_VERSION = '0.4.136';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -187,7 +187,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor|antigravity> [--url <https://api.example.com>] [--write] [--config <path>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] [--write] [--config <path>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} privacy`);
@@ -394,7 +394,7 @@ async function setupCommand(args, io) {
     && !hasFlag(optionArgs, '--no-profile');
 
   if (writeConfig && !clientId) {
-    throw new UsageError('Setup --write requires --client <codex|cursor> so the CLI never writes broad config implicitly.');
+    throw new UsageError(`Setup --write requires --client <${supportedSetupClientIds().join('|')}> so the CLI never writes broad config implicitly.`);
   }
 
   const discoveryUrl = endpointUrl(baseUrl, '/.well-known/memory-os.json');
@@ -704,8 +704,8 @@ async function mcpCommand(args, io) {
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor|antigravity> [--url <https://api.example.com>]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor|antigravity> [--url <https://api.example.com>] --write [--config <path>]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] --write [--config <path>]`);
     return 0;
   }
 
@@ -719,7 +719,7 @@ async function mcpCommand(args, io) {
     for (const client of supportedMcpClients()) {
       writeLine(io.stdout, `  ${client.id.padEnd(8)} ${client.label} (${client.configKind})`);
     }
-    writeLine(io.stdout, `All generated configs reference ${TOKEN_ENV_VAR}; token values are never embedded.`);
+    writeLine(io.stdout, `Generated configs never embed token values; OAuth clients do not require ${TOKEN_ENV_VAR} in their config.`);
     return 0;
   }
 
@@ -744,7 +744,11 @@ async function mcpCommand(args, io) {
       writeLine(io.stdout, `Requires credential: ${COMMAND_NAME} login or ${COMMAND_NAME} token add --from-stdin`);
       writeLine(io.stdout, `Run local proxy: ${template.requiresLocalCommand}`);
     } else {
-      writeLine(io.stdout, `Requires env: ${TOKEN_ENV_VAR}`);
+      if (template.requiresEnv?.length > 0) {
+        writeLine(io.stdout, `Requires env: ${template.requiresEnv.join(', ')}`);
+      } else if (template.authentication === 'oauth') {
+        writeLine(io.stdout, 'Requires auth: complete the client MCP OAuth flow after setup.');
+      }
     }
     if (typeof template.snippet === 'string') {
       writeLine(io.stdout, template.snippet.trimEnd());
@@ -788,6 +792,7 @@ async function mcpCommand(args, io) {
 
   if (hasFlag(args, '--json')) {
     const identity = envReferenceIdentity(target);
+    const oauthClient = usesClientOAuth(target);
     writeLine(io.stdout, JSON.stringify({
       client: target,
       label: client.label,
@@ -795,7 +800,8 @@ async function mcpCommand(args, io) {
       configPath,
       serverName: MCP_SERVER_NAME,
       url: mcpUrl,
-      tokenEnvVar: TOKEN_ENV_VAR,
+      tokenEnvVar: oauthClient ? null : TOKEN_ENV_VAR,
+      authentication: oauthClient ? 'oauth' : 'env-bearer',
       agentId: identity.agentId,
       agentInstanceId: identity.agentInstanceId,
       agentInstanceIdPath: identity.path,
@@ -808,7 +814,11 @@ async function mcpCommand(args, io) {
   if (hasFlag(args, '--write')) {
     await client.writeConfig(configPath, mcpUrl, identity);
     writeLine(io.stdout, `Updated ${client.label} MCP config: ${configPath}`);
-    writeLine(io.stdout, `Token value was not written. ${client.label} will read ${TOKEN_ENV_VAR} from the environment.`);
+    if (usesClientOAuth(target)) {
+      writeLine(io.stdout, `Token value was not written. ${client.label} will complete MCP OAuth on first use.`);
+    } else {
+      writeLine(io.stdout, `Token value was not written. ${client.label} will read ${TOKEN_ENV_VAR} from the environment.`);
+    }
     writeLine(io.stdout, `Agent instance ID stored outside git: ${identity.path}`);
     return 0;
   }
@@ -818,7 +828,11 @@ async function mcpCommand(args, io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, snippet.trimEnd());
   writeLine(io.stdout, '');
-  writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
+  if (usesClientOAuth(target)) {
+    writeLine(io.stdout, `Restart ${client.label} and complete its MCP OAuth flow. No token value is included here.`);
+  } else {
+    writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
+  }
   return 0;
 }
 
@@ -1355,6 +1369,14 @@ function mcpConfigTemplate(clientId, mcpUrl) {
     };
   }
 
+  if (clientId === 'gemini-cli') {
+    return oauthJsonMcpTemplate(clientId, mcpUrl, geminiJsonConfig(mcpUrl));
+  }
+
+  if (clientId === 'antigravity') {
+    return oauthJsonMcpTemplate(clientId, mcpUrl, antigravityJsonConfig(mcpUrl));
+  }
+
   const serverName = clientId === 'cursor' || clientId === 'gemini-cli' || clientId === 'antigravity' ? 'memory_os' : 'memory-os';
   return {
     client: clientId,
@@ -1381,6 +1403,26 @@ function mcpConfigTemplate(clientId, mcpUrl) {
       agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
       agentInstanceHeader: AGENT_INSTANCE_HEADER
     },
+    writesTokenValue: false
+  };
+}
+
+function oauthJsonMcpTemplate(clientId, mcpUrl, snippet) {
+  return {
+    client: clientId,
+    serverName: MCP_SERVER_NAME,
+    snippetFormat: 'json',
+    snippet,
+    requiresEnv: [],
+    optionalEnv: [AGENT_INSTANCE_ENV_VAR],
+    authentication: 'oauth',
+    agentIdentity: {
+      agentId: clientId,
+      agentIdHeader: AGENT_ID_HEADER,
+      agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
+      agentInstanceHeader: AGENT_INSTANCE_HEADER
+    },
+    mcpUrl,
     writesTokenValue: false
   };
 }
@@ -2091,7 +2133,11 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot', 'gemini'];
+  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity'];
+}
+
+function usesClientOAuth(clientId) {
+  return clientId === 'gemini-cli' || clientId === 'antigravity';
 }
 
 function credentialsPath(env) {
