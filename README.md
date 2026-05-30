@@ -53,6 +53,8 @@ xmemo mcp config --client generic
 xmemo mcp config --client antigravity
 xmemo mcp add antigravity --write
 xmemo profile status codex
+xmemo profile install gemini
+xmemo profile install antigravity
 xmemo smoke --client codex
 xmemo privacy
 ```
@@ -65,6 +67,9 @@ xmemo privacy
   MCP OAuth flow; it does not write token values into project files.
 - The CLI generates one stable non-secret `XMEMO_AGENT_INSTANCE_ID` per local
   client profile and stores it in user-scoped config outside git.
+- `xmemo setup <client>` can install a marker-scoped XMemo memory behavior
+  profile for the selected agent. The profile contains instructions only; it
+  never embeds token values.
 - `xmemo login` stores the issued credential in the user-scoped XMemo CLI
   config directory, shows the approved account when the server provides it,
   and does not require extra token configuration afterward.
@@ -166,10 +171,27 @@ also include stable non-secret agent identity headers where the client format
 supports them. `--yes` remains accepted for Codex and Cursor as a compatibility
 no-op.
 
-`xmemo setup codex` is the recommended Codex path. It writes the Codex MCP
-config and installs the profile into the current project's `AGENTS.md` marker
-block. Use `--dry-run` to preview, `--profile-target <path>` to choose a
-different project instruction file, or `--no-profile` to configure MCP only.
+After writing MCP config, `xmemo setup <client>` prompts:
+
+```text
+Write XMemo memory behavior profile to <path>? [Y/n]
+```
+
+The default is `Y`, so pressing Enter writes a marker-scoped profile that nudges
+the agent to recall/search XMemo at the start of non-trivial work and remember
+high-signal decisions after meaningful changes. Use `n` or `--no-profile` to
+configure MCP only. Use `--dry-run` to preview without writing config or profile
+files, and `--profile-target <path>` to choose a different behavior profile
+target.
+
+Default behavior profile targets:
+
+```text
+codex       ./AGENTS.md
+cursor      ~/.cursor/memory-profile.md
+gemini      ~/.gemini/GEMINI.md
+antigravity ~/.gemini/antigravity/MEMORY.md
+```
 
 ## MCP setup
 
@@ -235,9 +257,10 @@ xmemo setup codex
 xmemo smoke --client codex
 ```
 
-`setup codex` writes the MCP config to user-scoped Codex config and installs the
-XMemo Codex behavior profile into the current project's `AGENTS.md` between
-these markers. Use `xmemo setup codex --dry-run` to preview without writing.
+`setup codex` writes the MCP config to user-scoped Codex config and, by default,
+installs the XMemo Codex behavior profile into the current project's `AGENTS.md`
+between these markers. Use `xmemo setup codex --dry-run` to preview without
+writing or `xmemo setup codex --no-profile` to skip the behavior profile.
 
 ```html
 <!-- memory-os:codex-profile:start -->
@@ -302,7 +325,9 @@ xmemo mcp add cursor --url "$XMEMO_URL" --write
 The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
 config manually if you need to rotate the endpoint. Cursor configs include
 `X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`; the instance ID is
-non-secret and stored under the user's XMemo CLI config directory.
+non-secret and stored under the user's XMemo CLI config directory. By default,
+the setup prompt also installs a Cursor behavior profile at
+`~/.cursor/memory-profile.md`; answer `n` or pass `--no-profile` to skip it.
 
 ### Gemini CLI
 
@@ -323,7 +348,9 @@ This is deliberate — Gemini redacts environment variables matching
 `*KEY*`/`*TOKEN*`/`*AUTH*` during header expansion, so an `${XMEMO_KEY}`
 reference would not survive. OAuth avoids storing any secret in the config and
 still grants the full XMemo tool profile. After setup, restart Gemini CLI and
-run `/mcp` (or the first XMemo tool call) to complete the OAuth login.
+run `/mcp` (or the first XMemo tool call) to complete the OAuth login. By
+default, the setup prompt also installs a Gemini behavior profile at
+`~/.gemini/GEMINI.md`; answer `n` or pass `--no-profile` to skip it.
 
 The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
 config manually if you need to rotate the endpoint.
@@ -341,6 +368,8 @@ at `~/.gemini/antigravity/mcp_config.json`. It writes Antigravity's
 `serverUrl` shape plus `X-Memory-OS-Agent-ID` and
 `X-Memory-OS-Agent-Instance-ID` headers. Like Gemini CLI, the config carries
 **no token**: restart Antigravity and complete the MCP OAuth flow on first use.
+By default, the setup prompt also installs an Antigravity behavior profile at
+`~/.gemini/antigravity/MEMORY.md`; answer `n` or pass `--no-profile` to skip it.
 
 The lower-level equivalent is:
 

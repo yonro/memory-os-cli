@@ -390,7 +390,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.136');
+  assert.equal(report.cli.version, '0.4.137');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -639,10 +639,37 @@ test('setup cursor shorthand writes config by default', async () => {
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.id, 'cursor');
   assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(tempDir, '.cursor', 'memory-profile.md'));
+  assert.equal(plan.selectedClient.behaviorProfile.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.writesTokenValue, false);
 
   const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(config.mcpServers.memory_os.url, 'https://mcp.example.test/mcp');
   assert.equal(config.mcpServers.memory_os.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+
+  const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
+  assert.match(profile, /XMemo Cursor profile/);
+  assert.match(profile, /recall\/search/);
+  assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
+test('setup cursor prompt can skip behavior profile with n', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-no-profile-'));
+  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    stdin: 'n\n'
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Write XMemo memory behavior profile/);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.memory_os.url, 'https://mcp.example.test/mcp');
+  await assert.rejects(fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8'), /ENOENT/);
 });
 
 test('setup copilot writes user MCP config for local proxy by default', async () => {
@@ -703,6 +730,8 @@ test('setup gemini shorthand writes oauth httpUrl config without token', async (
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.id, 'gemini-cli');
   assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(tempDir, '.gemini', 'GEMINI.md'));
+  assert.equal(plan.selectedClient.behaviorProfile.written, true);
 
   const configPath = path.join(tempDir, '.gemini', 'settings.json');
   const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
@@ -712,6 +741,11 @@ test('setup gemini shorthand writes oauth httpUrl config without token', async (
   assert.equal(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-ID'], 'gemini-cli');
   assert.match(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-gemini-cli-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+
+  const profile = await fs.readFile(path.join(tempDir, '.gemini', 'GEMINI.md'), 'utf8');
+  assert.match(profile, /XMemo Gemini CLI profile/);
+  assert.match(profile, /client-managed MCP OAuth credential/);
+  assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
 test('setup gemini dry-run previews without writing config', async () => {
@@ -725,7 +759,26 @@ test('setup gemini dry-run previews without writing config', async () => {
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.id, 'gemini-cli');
   assert.equal(plan.selectedClient.written, false);
+  assert.equal(plan.selectedClient.behaviorProfile.written, false);
   await assert.rejects(fs.readFile(path.join(tempDir, '.gemini', 'settings.json'), 'utf8'), /ENOENT/);
+  await assert.rejects(fs.readFile(path.join(tempDir, '.gemini', 'GEMINI.md'), 'utf8'), /ENOENT/);
+});
+
+test('setup gemini no-profile writes config but skips behavior profile', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-gemini-no-profile-'));
+  const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--no-profile', '--json'], {
+    env: { HOME: tempDir },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.written, false);
+  assert.equal(plan.selectedClient.behaviorProfile.skipped, true);
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.gemini', 'settings.json'), 'utf8'));
+  assert.equal(config.mcpServers.memory_os.httpUrl, 'https://mcp.example.test/mcp');
+  await assert.rejects(fs.readFile(path.join(tempDir, '.gemini', 'GEMINI.md'), 'utf8'), /ENOENT/);
 });
 
 test('setup antigravity shorthand writes oauth serverUrl config without token', async () => {
@@ -744,6 +797,8 @@ test('setup antigravity shorthand writes oauth serverUrl config without token', 
   assert.equal(plan.selectedClient.id, 'antigravity');
   assert.equal(plan.selectedClient.written, true);
   assert.equal(plan.selectedClient.configPath, path.join(tempDir, '.gemini', 'antigravity', 'mcp_config.json'));
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(tempDir, '.gemini', 'antigravity', 'MEMORY.md'));
+  assert.equal(plan.selectedClient.behaviorProfile.written, true);
 
   const config = JSON.parse(await fs.readFile(plan.selectedClient.configPath, 'utf8'));
   assert.equal(config.mcpServers.memory_os.serverUrl, 'https://mcp.example.test/mcp');
@@ -752,6 +807,11 @@ test('setup antigravity shorthand writes oauth serverUrl config without token', 
   assert.equal(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-ID'], 'antigravity');
   assert.match(config.mcpServers.memory_os.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+
+  const profile = await fs.readFile(path.join(tempDir, '.gemini', 'antigravity', 'MEMORY.md'), 'utf8');
+  assert.match(profile, /XMemo Antigravity profile/);
+  assert.match(profile, /client-managed MCP OAuth credential/);
+  assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
 test('codex setup writes env-referenced config and smoke validates it', async () => {
@@ -806,6 +866,8 @@ test('setup codex shorthand previews project profile with dry-run', async () => 
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.id, 'codex');
   assert.equal(plan.selectedClient.written, false);
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, profilePath);
+  assert.equal(plan.selectedClient.behaviorProfile.written, false);
   assert.equal(plan.selectedClient.codexProfile.targetPath, profilePath);
   assert.equal(plan.selectedClient.codexProfile.written, false);
   assert.equal(plan.selectedClient.codexProfile.changed, true);
@@ -829,6 +891,7 @@ test('setup codex writes mcp config and marker-scoped project profile by default
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.written, true);
   assert.equal(plan.selectedClient.codexProfile.written, true);
   assert.equal(plan.selectedClient.codexProfile.writesTokenValue, false);
 
@@ -873,6 +936,27 @@ test('profile install, status, and uninstall preserve user AGENTS content', asyn
   const uninstalled = await fs.readFile(profilePath, 'utf8');
   assert.match(uninstalled, /Keep this line\./);
   assert.doesNotMatch(uninstalled, /memory-os:codex-profile:start/);
+});
+
+test('profile install supports Gemini behavior profile targets', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-profile-gemini-'));
+  const profilePath = path.join(tempDir, 'GEMINI.md');
+
+  const install = await invoke(['profile', 'install', 'gemini', '--target', profilePath, '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+  assert.equal(install.code, 0);
+  assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
+
+  const installed = await fs.readFile(profilePath, 'utf8');
+  assert.match(installed, /memory-os:memory-profile:gemini-cli:start/);
+  assert.match(installed, /XMemo Gemini CLI profile/);
+  assert.match(installed, /client-managed MCP OAuth credential/);
+  assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
+
+  const status = await invoke(['profile', 'status', 'gemini', '--target', profilePath, '--json']);
+  assert.equal(status.code, 0);
+  assert.equal(JSON.parse(status.stdout).installed, true);
 });
 
 test('profile install fails closed on incomplete marker block', async () => {

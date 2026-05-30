@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.136';
+const CLI_VERSION = '0.4.137';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -22,6 +22,14 @@ const MCP_SERVER_NAME = 'memory_os';
 const CODEX_PROFILE_TARGET = 'AGENTS.md';
 const CODEX_PROFILE_MARKER_START = '<!-- memory-os:codex-profile:start -->';
 const CODEX_PROFILE_MARKER_END = '<!-- memory-os:codex-profile:end -->';
+const CLIENT_PROFILE_TARGETS = {
+  cursor: '.cursor/rules/xmemo-memory.md',
+  'gemini-cli': 'GEMINI.md',
+  antigravity: 'GEMINI.md'
+};
+const CLIENT_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
+const CLIENT_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
+const PROFILE_MARKER_PREFIX = 'memory-os:memory-profile';
 const DEVICE_LOGIN_START_PATH = '/api/v1/auth/device/start';
 const DEVICE_LOGIN_TOKEN_PATH = '/api/v1/auth/device/token';
 const DEFAULT_PROXY_HOST = '127.0.0.1';
@@ -174,7 +182,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot|gemini|antigravity> [--url <https://api.example.com>] [--dry-run] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot|gemini|antigravity> [--url <https://api.example.com>] [--dry-run] [--no-profile] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--timeout-ms <ms>] [--http-timeout-ms <ms>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
@@ -185,8 +193,8 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity> [--target <path>] [--dry-run|--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity> [--target <path>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] [--write] [--config <path>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--json]`);
@@ -388,10 +396,6 @@ async function setupCommand(args, io) {
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
   const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup);
   const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
-  const installProfile = shortClientSetup
-    && clientId === 'codex'
-    && writeConfig
-    && !hasFlag(optionArgs, '--no-profile');
 
   if (writeConfig && !clientId) {
     throw new UsageError(`Setup --write requires --client <${supportedSetupClientIds().join('|')}> so the CLI never writes broad config implicitly.`);
@@ -428,12 +432,32 @@ async function setupCommand(args, io) {
         setupPlan.selectedClient.written = true;
       }
 
-      if (clientId === 'codex' && shortClientSetup) {
+      if (shortClientSetup && profileClientConfig(clientId)) {
         const profileTarget = optionValue(optionArgs, '--profile-target')
           ?? optionValue(optionArgs, '--target')
-          ?? defaultCodexProfileTarget();
-        const profileResult = await codexProfileInstallResult(profileTarget, { write: installProfile });
-        setupPlan.selectedClient.codexProfile = profileResult;
+          ?? defaultProfileTarget(clientId, io.env);
+        let installProfile = false;
+        let prompted = false;
+        let skipped = false;
+        if (hasFlag(optionArgs, '--no-profile')) {
+          skipped = true;
+        } else if (dryRun) {
+          installProfile = false;
+        } else if (writeConfig) {
+          installProfile = outputJson || hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
+          if (!installProfile && !outputJson) {
+            prompted = true;
+            installProfile = await confirmProfileInstall(clientId, profileTarget, io);
+          }
+        }
+        const profileResult = await profileInstallResult(clientId, profileTarget, { write: installProfile });
+        profileResult.prompted = prompted;
+        profileResult.accepted = installProfile;
+        profileResult.skipped = skipped;
+        setupPlan.selectedClient.behaviorProfile = profileResult;
+        if (clientId === 'codex') {
+          setupPlan.selectedClient.codexProfile = profileResult;
+        }
       }
     }
   }
@@ -451,30 +475,30 @@ async function profileCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Profile commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile status codex [--target AGENTS.md] [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity> [--target <path>] [--dry-run|--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
     return 0;
   }
 
-  const clientId = args[1];
-  if (clientId !== 'codex') {
-    throw new UsageError(`Unsupported profile client: ${clientId ?? 'missing'}. Supported clients: codex.`);
+  const clientId = normalizeSetupClientId(args[1]);
+  if (!profileClientConfig(clientId)) {
+    throw new UsageError(`Unsupported profile client: ${args[1] ?? 'missing'}. Supported clients: ${supportedProfileClientIds().join(', ')}.`);
   }
 
   const optionArgs = args.slice(2);
   const outputJson = hasFlag(optionArgs, '--json');
-  const targetPath = optionValue(optionArgs, '--target') ?? defaultCodexProfileTarget();
+  const targetPath = optionValue(optionArgs, '--target') ?? defaultProfileTarget(clientId, io.env);
   let result;
 
   if (subcommand === 'install') {
-    result = await codexProfileInstallResult(targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
+    result = await profileInstallResult(clientId, targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
   } else if (subcommand === 'status') {
-    result = await codexProfileStatusResult(targetPath);
+    result = await profileStatusResult(clientId, targetPath);
   } else if (subcommand === 'uninstall') {
-    result = await codexProfileUninstallResult(targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
+    result = await profileUninstallResult(clientId, targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
   } else {
     throw new UsageError(`Unknown profile command: ${subcommand}`);
   }
@@ -1549,13 +1573,15 @@ function writeSetupSummary(plan, io) {
       }
       return;
     }
-    if (plan.selectedClient.codexProfile) {
-      const profile = plan.selectedClient.codexProfile;
-      writeLine(io.stdout, `  Codex profile target: ${profile.targetPath}`);
-      writeLine(io.stdout, `  Codex profile installed: ${profile.written}`);
-      writeLine(io.stdout, `  Codex profile changed: ${profile.changed}`);
+    if (plan.selectedClient.behaviorProfile) {
+      const profile = plan.selectedClient.behaviorProfile;
+      const profileClient = profileClientConfig(profile.client);
+      writeLine(io.stdout, `  Behavior profile target: ${profile.targetPath}`);
+      writeLine(io.stdout, `  Behavior profile client: ${profileClient?.label ?? profile.client}`);
+      writeLine(io.stdout, `  Behavior profile installed: ${profile.written}`);
+      writeLine(io.stdout, `  Behavior profile changed: ${profile.changed}`);
       if (!profile.written) {
-        writeLine(io.stdout, `  Profile preview: ${COMMAND_NAME} profile install codex --target ${profile.targetPath}`);
+        writeLine(io.stdout, `  Profile preview: ${COMMAND_NAME} profile install ${profile.client} --target ${profile.targetPath}`);
       }
     }
     if (!plan.selectedClient.written) {
@@ -1618,23 +1644,7 @@ bearer_token_env_var = "${TOKEN_ENV_VAR}"
 }
 
 function codexMemoryProfile() {
-  return {
-    client: 'codex',
-    profileVersion: 'codex-mcp-depth-v1',
-    mcpServerName: MCP_SERVER_NAME,
-    requiredTokenEnv: TOKEN_ENV_VAR,
-    objective: 'Use XMemo deliberately through MCP for project context recall and high-signal write-back.',
-    instructions: [
-      'At the start of a non-trivial task, call XMemo recall/search for relevant project decisions, conventions, prior fixes, and active context unless the user explicitly asks not to use memory.',
-      'Use recalled memories as evidence, not as unquestioned truth. Prefer current repository files when memory conflicts with code.',
-      'After meaningful decisions, bug fixes, release steps, or durable conventions, write a concise XMemo memory with scope, source, and no secret values.',
-      'Never store tokens, API keys, cookies, private keys, raw credentials, or sensitive customer data in XMemo.',
-      'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
-      'Keep XMemo authentication through the XMEMO_KEY environment variable; do not paste token values into prompts, config files, or logs.'
-    ],
-    setupCommand: `${COMMAND_NAME} setup codex --url "$XMEMO_URL"`,
-    smokeCommand: `${COMMAND_NAME} smoke --client codex`
-  };
+  return memoryBehaviorProfile('codex');
 }
 
 function writeCodexMemoryProfile(profile, io) {
@@ -1653,22 +1663,278 @@ function writeCodexMemoryProfile(profile, io) {
 }
 
 function codexProfileInstructionText() {
-  const profile = codexMemoryProfile();
+  return profileInstructionText('codex');
+}
+
+function memoryBehaviorProfile(clientId) {
+  const config = profileClientConfig(clientId);
+  if (!config) {
+    throw new UsageError(`Unsupported profile client: ${clientId}`);
+  }
+  const instructions = [
+    'At the start of a non-trivial task, call XMemo recall/search for relevant project decisions, conventions, prior fixes, and active context unless the user explicitly asks not to use memory.',
+    'Use recalled memories as evidence, not as unquestioned truth. Prefer current repository files when memory conflicts with code.',
+    'After meaningful decisions, bug fixes, release steps, or durable conventions, write a concise XMemo memory with scope, source, and no secret values.',
+    'Never store tokens, API keys, cookies, private keys, raw credentials, or sensitive customer data in XMemo.',
+    'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
+    config.authInstruction
+  ];
+  return {
+    client: clientId,
+    label: config.label,
+    profileVersion: config.profileVersion,
+    mcpServerName: MCP_SERVER_NAME,
+    requiredTokenEnv: config.requiredTokenEnv ?? null,
+    objective: 'Use XMemo deliberately through MCP for project context recall and high-signal write-back.',
+    instructions,
+    setupCommand: `${COMMAND_NAME} setup ${config.setupAlias} --url "$XMEMO_URL"`,
+    smokeCommand: clientId === 'codex' ? `${COMMAND_NAME} smoke --client codex` : null
+  };
+}
+
+function profileInstructionText(clientId) {
+  const profile = memoryBehaviorProfile(clientId);
   const lines = [
-    '## XMemo Codex profile',
+    `## XMemo ${profile.label} profile`,
     '',
     `MCP server: \`${profile.mcpServerName}\``,
-    `Token env var: \`${profile.requiredTokenEnv}\``,
+  ];
+  if (profile.requiredTokenEnv) {
+    lines.push(`Token env var: \`${profile.requiredTokenEnv}\``);
+  }
+  lines.push(
     '',
     profile.objective,
     '',
-    'Recommended Codex behavior:'
-  ];
+    `Recommended ${profile.label} behavior:`
+  );
   for (const instruction of profile.instructions) {
     lines.push(`- ${instruction}`);
   }
   lines.push('');
   return `${lines.join('\n')}\n`;
+}
+
+function profileClientConfig(clientId) {
+  const profileConfigs = {
+    codex: {
+      label: 'Codex',
+      setupAlias: 'codex',
+      profileVersion: 'codex-mcp-depth-v1',
+      requiredTokenEnv: TOKEN_ENV_VAR,
+      markerStart: CODEX_PROFILE_MARKER_START,
+      markerEnd: CODEX_PROFILE_MARKER_END,
+      defaultTarget: (env) => defaultCodexProfileTarget(env),
+      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+    },
+    cursor: {
+      label: 'Cursor',
+      setupAlias: 'cursor',
+      profileVersion: 'cursor-mcp-depth-v1',
+      requiredTokenEnv: TOKEN_ENV_VAR,
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:cursor:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:cursor:end -->`,
+      defaultTarget: (env) => path.join(userHome(env), '.cursor', 'memory-profile.md'),
+      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+    },
+    'gemini-cli': {
+      label: 'Gemini CLI',
+      setupAlias: 'gemini',
+      profileVersion: 'gemini-cli-mcp-depth-v1',
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:gemini-cli:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:gemini-cli:end -->`,
+      defaultTarget: (env) => path.join(userHome(env), '.gemini', 'GEMINI.md'),
+      authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+    },
+    antigravity: {
+      label: 'Antigravity',
+      setupAlias: 'antigravity',
+      profileVersion: 'antigravity-mcp-depth-v1',
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:antigravity:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:antigravity:end -->`,
+      defaultTarget: (env) => path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md'),
+      authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+    }
+  };
+  return profileConfigs[clientId] ?? null;
+}
+
+function supportedProfileClientIds() {
+  return ['codex', 'cursor', 'gemini', 'antigravity'];
+}
+
+function defaultProfileTarget(clientId, env) {
+  const config = profileClientConfig(clientId);
+  if (!config) {
+    throw new UsageError(`Unsupported profile client: ${clientId}`);
+  }
+  return config.defaultTarget(env);
+}
+
+async function confirmProfileInstall(clientId, targetPath, io) {
+  const config = profileClientConfig(clientId);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `Write XMemo memory behavior profile to ${targetPath}? [Y/n]`);
+  const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
+  if (answer === '' || answer === 'y' || answer === 'yes') {
+    return true;
+  }
+  if (answer === 'n' || answer === 'no') {
+    return false;
+  }
+  throw new UsageError(`Unsupported response for ${config.label} profile prompt: ${answer}`);
+}
+
+async function readLineFromStdin(stdin) {
+  let input = '';
+  for await (const chunk of stdin) {
+    input += chunk;
+    if (input.includes('\n')) {
+      break;
+    }
+  }
+  return input.split(/\r?\n/, 1)[0] ?? '';
+}
+
+function genericProfileMarkerBlock(clientId) {
+  const config = profileClientConfig(clientId);
+  return `${config.markerStart}\n${profileInstructionText(clientId)}${config.markerEnd}\n`;
+}
+
+async function profileInstallResult(clientId, targetPath, options = {}) {
+  if (clientId === 'codex') {
+    return codexProfileInstallResult(targetPath, options);
+  }
+  const config = profileClientConfig(clientId);
+  const resolvedTarget = path.resolve(targetPath);
+  const existing = await readTextIfExists(resolvedTarget);
+  const marker = profileMarkerBounds(existing, config);
+  const block = genericProfileMarkerBlock(clientId);
+  let nextText;
+
+  if (marker.present) {
+    nextText = `${existing.slice(0, marker.start)}${block}${existing.slice(marker.end)}`;
+  } else if (existing.trim().length === 0) {
+    nextText = block;
+  } else {
+    const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+    nextText = `${existing}${separator}${block}`;
+  }
+
+  const changed = nextText !== existing;
+  const write = Boolean(options.write);
+  if (write && changed) {
+    await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
+    await fs.writeFile(resolvedTarget, nextText);
+  }
+
+  return {
+    client: clientId,
+    action: 'install',
+    targetPath: resolvedTarget,
+    markerStart: config.markerStart,
+    markerEnd: config.markerEnd,
+    installed: marker.present || (write && changed),
+    written: write,
+    changed,
+    markerPresent: marker.present,
+    writesTokenValue: false
+  };
+}
+
+async function profileStatusResult(clientId, targetPath) {
+  if (clientId === 'codex') {
+    return codexProfileStatusResult(targetPath);
+  }
+  const config = profileClientConfig(clientId);
+  const resolvedTarget = path.resolve(targetPath);
+  const existing = await readTextIfExists(resolvedTarget);
+  const marker = profileMarkerBounds(existing, config);
+  return {
+    client: clientId,
+    action: 'status',
+    targetPath: resolvedTarget,
+    installed: marker.present,
+    markerPresent: marker.present,
+    markerStart: config.markerStart,
+    markerEnd: config.markerEnd,
+    writesTokenValue: false
+  };
+}
+
+async function profileUninstallResult(clientId, targetPath, options = {}) {
+  if (clientId === 'codex') {
+    return codexProfileUninstallResult(targetPath, options);
+  }
+  const config = profileClientConfig(clientId);
+  const resolvedTarget = path.resolve(targetPath);
+  const existing = await readTextIfExists(resolvedTarget);
+  const marker = profileMarkerBounds(existing, config);
+  const write = Boolean(options.write);
+  let changed = false;
+
+  if (marker.present) {
+    let nextText = `${existing.slice(0, marker.start)}${existing.slice(marker.end)}`;
+    nextText = nextText.replace(/\n{3,}/g, '\n\n');
+    if (nextText.trim().length === 0) {
+      nextText = '';
+    } else if (!nextText.endsWith('\n')) {
+      nextText = `${nextText}\n`;
+    }
+    changed = nextText !== existing;
+    if (write && changed) {
+      await fs.writeFile(resolvedTarget, nextText);
+    }
+  }
+
+  return {
+    client: clientId,
+    action: 'uninstall',
+    targetPath: resolvedTarget,
+    installed: marker.present && !(write && changed),
+    written: write,
+    changed,
+    markerPresent: marker.present,
+    markerStart: config.markerStart,
+    markerEnd: config.markerEnd,
+    writesTokenValue: false
+  };
+}
+
+function profileMarkerBounds(content, config) {
+  const start = content.indexOf(config.markerStart);
+  const end = content.indexOf(config.markerEnd);
+  if (start === -1 && end === -1) {
+    return { present: false, start: -1, end: -1 };
+  }
+
+  if (start === -1 || end === -1 || end < start) {
+    throw new UsageError(`${config.label} profile markers are incomplete or out of order; edit the target file manually before retrying.`);
+  }
+
+  if (
+    content.indexOf(config.markerStart, start + config.markerStart.length) !== -1
+    || content.indexOf(config.markerEnd, end + config.markerEnd.length) !== -1
+  ) {
+    throw new UsageError(`${config.label} profile markers appear more than once; edit the target file manually before retrying.`);
+  }
+
+  const afterEnd = end + config.markerEnd.length;
+  const trailingNewlineLength = content.slice(afterEnd, afterEnd + 2) === '\r\n'
+    ? 2
+    : content.slice(afterEnd, afterEnd + 1) === '\n'
+      ? 1
+      : 0;
+
+  return {
+    present: true,
+    start,
+    end: afterEnd + trailingNewlineLength
+  };
+}
+
+function userHome(env) {
+  return env.USERPROFILE || env.HOME || os.homedir();
 }
 
 function codexProfileMarkerBlock() {
@@ -1800,7 +2066,8 @@ function markerBounds(content) {
 }
 
 function writeProfileResult(action, result, io) {
-  writeLine(io.stdout, `${PRODUCT_NAME} Codex profile ${action}`);
+  const config = profileClientConfig(result.client);
+  writeLine(io.stdout, `${PRODUCT_NAME} ${config?.label ?? result.client} profile ${action}`);
   writeLine(io.stdout, `  Target: ${result.targetPath}`);
   writeLine(io.stdout, `  Installed: ${result.installed}`);
   if ('written' in result) {
