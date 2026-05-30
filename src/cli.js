@@ -48,6 +48,13 @@ const MCP_CLIENTS = new Map([
     buildSnippet: geminiJsonSnippet,
     writeConfig: mergeGeminiMcpConfig,
     configKind: 'json'
+  }],
+  ['antigravity', {
+    label: 'Antigravity',
+    defaultConfigPath: defaultAntigravityConfigPath,
+    buildSnippet: antigravityJsonSnippet,
+    writeConfig: mergeAntigravityMcpConfig,
+    configKind: 'json'
   }]
 ]);
 
@@ -57,7 +64,8 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['copilot', 'copilot-cli'],
   ['copilot-cli', 'copilot-cli'],
   ['gemini', 'gemini-cli'],
-  ['gemini-cli', 'gemini-cli']
+  ['gemini-cli', 'gemini-cli'],
+  ['antigravity', 'antigravity']
 ]);
 
 class UsageError extends Error {
@@ -166,7 +174,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <https://api.example.com>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot|gemini> [--url <https://api.example.com>] [--dry-run] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <codex|cursor|copilot|gemini|antigravity> [--url <https://api.example.com>] [--dry-run] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>] [--timeout-ms <ms>] [--http-timeout-ms <ms>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <https://api.example.com>] [--json]`);
@@ -174,12 +182,12 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin`);
   writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile install codex [--target AGENTS.md] [--dry-run|--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall codex [--target AGENTS.md] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>] [--write] [--config <path>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor|antigravity> [--url <https://api.example.com>] [--write] [--config <path>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} privacy`);
@@ -693,11 +701,11 @@ async function mcpCommand(args, io) {
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|generic> [--base-url <url>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor> [--url <https://api.example.com>] --write [--config <path>]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor|antigravity> [--url <https://api.example.com>]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <codex|cursor|antigravity> [--url <https://api.example.com>] --write [--config <path>]`);
     return 0;
   }
 
@@ -1347,7 +1355,7 @@ function mcpConfigTemplate(clientId, mcpUrl) {
     };
   }
 
-  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' ? 'memory_os' : 'memory-os';
+  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' || clientId === 'antigravity' ? 'memory_os' : 'memory-os';
   return {
     client: clientId,
     serverName,
@@ -1378,7 +1386,7 @@ function mcpConfigTemplate(clientId, mcpUrl) {
 }
 
 function mcpLocalProxyTemplate(clientId, proxyUrl) {
-  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' ? 'memory_os' : 'memory-os';
+  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' || clientId === 'antigravity' ? 'memory_os' : 'memory-os';
   return {
     client: clientId,
     serverName,
@@ -1889,6 +1897,51 @@ async function mergeJsonMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
+function antigravityJsonServerConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return {
+    serverUrl: mcpUrl,
+    headers: {
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function antigravityJsonConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: antigravityJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function antigravityJsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return `${JSON.stringify(antigravityJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeAntigravityMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+
+  if (parsed.mcpServers[MCP_SERVER_NAME]) {
+    throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+
+  parsed.mcpServers[MCP_SERVER_NAME] = antigravityJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+
 async function mergeGeminiMcpConfig(configPath, mcpUrl, identity) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
@@ -2079,6 +2132,11 @@ function defaultCursorConfigPath(env) {
 function defaultGeminiConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
   return path.join(home, '.gemini', 'settings.json');
+}
+
+function defaultAntigravityConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.gemini', 'antigravity', 'mcp_config.json');
 }
 
 function defaultCopilotConfigPath(env) {

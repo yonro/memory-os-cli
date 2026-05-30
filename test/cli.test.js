@@ -370,7 +370,7 @@ test('mcp list exposes supported clients without token values', async () => {
 
   assert.equal(result.code, 0);
   const clients = JSON.parse(result.stdout);
-  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'copilot-cli']);
+  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'copilot-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
