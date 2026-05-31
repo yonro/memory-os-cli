@@ -1,5 +1,7 @@
 # XMemo CLI
 
+[![smithery badge](https://smithery.ai/badge/xmemo/xmemo)](https://smithery.ai/servers/xmemo/xmemo)
+
 `@xmemo/client` is the privacy-first command line entry point for XMemo client
 setup. It is intentionally small: the npm package contains only the CLI and
 setup helper code needed on a user's machine.
