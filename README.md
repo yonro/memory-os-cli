@@ -237,7 +237,7 @@ xmemo setup copilot
 xmemo mcp proxy
 ```
 
-`xmemo setup copilot` writes `memory-os` to Copilot CLI's user MCP config and
+`xmemo setup copilot` writes `XMemo` to Copilot CLI's user MCP config and
 does not include token or identity headers. Use `xmemo setup copilot --dry-run`
 to preview without writing. `xmemo mcp proxy` reads the token saved by
 `xmemo login` or `xmemo token add --from-stdin`, adds the XMemo bearer token and
@@ -287,9 +287,9 @@ Write it to the default Codex config path:
 xmemo mcp add codex --url "$XMEMO_URL" --write
 ```
 
-The generated config references `XMEMO_KEY` and does not include the token
-value. Codex custom identity headers are not written until the CLI format is
-verified to support them.
+The generated config references `XMEMO_KEY`, includes the non-secret
+`X-Memory-OS-Agent-ID` / `X-Memory-OS-Agent-Instance-ID` attribution headers,
+and does not include the token value.
 
 Codex MCP-depth checks:
 
@@ -304,7 +304,7 @@ xmemo smoke --client codex
 `xmemo mcp profile codex` prints the recommended memory behavior profile:
 recall/search at the start of non-trivial tasks, write back high-signal
 decisions and fixes, and never store secrets. `xmemo smoke --client codex`
-checks the local Codex TOML config for the `memory_os` MCP server,
+checks the local Codex TOML config for the `XMemo` MCP server,
 `bearer_token_env_var = "XMEMO_KEY"`, token presence in the environment, and
 absence of embedded token values.
 
@@ -324,8 +324,9 @@ lower-level equivalent remains:
 xmemo mcp add cursor --url "$XMEMO_URL" --write
 ```
 
-The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
-config manually if you need to rotate the endpoint. Cursor configs include
+The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
+MCP server entry. Edit the config manually if you need to rotate the endpoint.
+Cursor configs include
 `X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`; the instance ID is
 non-secret and stored under the user's XMemo CLI config directory. By default,
 the setup prompt also installs a Cursor behavior profile at
@@ -354,8 +355,8 @@ run `/mcp` (or the first XMemo tool call) to complete the OAuth login. By
 default, the setup prompt also installs a Gemini behavior profile at
 `~/.gemini/GEMINI.md`; answer `n` or pass `--no-profile` to skip it.
 
-The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
-config manually if you need to rotate the endpoint.
+The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
+MCP server entry. Edit the config manually if you need to rotate the endpoint.
 
 ### Antigravity
 
@@ -383,8 +384,8 @@ Use `xmemo setup antigravity` for normal installs because it performs discovery
 and chooses the recommended Antigravity path automatically. Use
 `xmemo mcp add antigravity --write` when you want the generic MCP writer
 directly, for example with `--url` or `--config` in advanced/multi-client setup.
-The CLI refuses to overwrite an existing `memory_os` MCP server entry. Edit the
-config manually if you need to rotate the endpoint.
+The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
+MCP server entry. Edit the config manually if you need to rotate the endpoint.
 
 ## Release model
 
