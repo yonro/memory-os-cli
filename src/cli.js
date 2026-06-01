@@ -120,6 +120,55 @@ const MCP_CLIENTS = new Map([
     buildSnippet: openclawJsonSnippet,
     writeConfig: mergeOpenclawMcpConfig,
     configKind: 'json'
+  }],
+  ['kiro', {
+    label: 'Kiro',
+    defaultConfigPath: defaultKiroConfigPath,
+    buildSnippet: kiroJsonSnippet,
+    writeConfig: mergeKiroMcpConfig,
+    configKind: 'json'
+  }],
+  ['zed', {
+    label: 'Zed',
+    defaultConfigPath: defaultZedConfigPath,
+    buildSnippet: zedJsonSnippet,
+    writeConfig: mergeZedMcpConfig,
+    configKind: 'json'
+  }],
+  ['jetbrains', {
+    label: 'JetBrains',
+    defaultConfigPath: defaultJetbrainsConfigPath,
+    buildSnippet: jetbrainsJsonSnippet,
+    writeConfig: mergeJetbrainsMcpConfig,
+    configKind: 'json'
+  }],
+  ['opencode', {
+    label: 'OpenCode',
+    defaultConfigPath: defaultOpencodeConfigPath,
+    buildSnippet: opencodeJsonSnippet,
+    writeConfig: mergeOpencodeMcpConfig,
+    configKind: 'json'
+  }],
+  ['hermes', {
+    label: 'Hermes',
+    defaultConfigPath: defaultHermesConfigPath,
+    buildSnippet: hermesYamlSnippet,
+    writeConfig: mergeHermesMcpConfig,
+    configKind: 'yaml'
+  }],
+  ['qwen', {
+    label: 'Qwen',
+    defaultConfigPath: defaultQwenConfigPath,
+    buildSnippet: qwenJsonSnippet,
+    writeConfig: mergeQwenMcpConfig,
+    configKind: 'json'
+  }],
+  ['trae', {
+    label: 'Trae',
+    defaultConfigPath: defaultTraeConfigPath,
+    buildSnippet: traeJsonSnippet,
+    writeConfig: mergeTraeMcpConfig,
+    configKind: 'json'
   }]
 ]);
 
@@ -139,7 +188,16 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['continue', 'continue'],
   ['claude', 'claude-desktop'],
   ['claude-desktop', 'claude-desktop'],
-  ['openclaw', 'openclaw']
+  ['openclaw', 'openclaw'],
+  ['kiro', 'kiro'],
+  ['zed', 'zed'],
+  ['jetbrains', 'jetbrains'],
+  ['opencode', 'opencode'],
+  ['hermes', 'hermes'],
+  ['qwen', 'qwen'],
+  ['qwencli', 'qwen'],
+  ['qwen-cli', 'qwen'],
+  ['trae', 'trae']
 ]);
 
 class UsageError extends Error {
@@ -3362,7 +3420,328 @@ async function mergeOpenclawMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
+function defaultKiroConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.kiro', 'settings', 'mcp.json');
+}
+
+function kiroJsonServerConfig(mcpUrl, identity = envReferenceIdentity('kiro')) {
+  return {
+    url: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function kiroJsonConfig(mcpUrl, identity = envReferenceIdentity('kiro')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: kiroJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function kiroJsonSnippet(mcpUrl, identity = envReferenceIdentity('kiro')) {
+  return `${JSON.stringify(kiroJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeKiroMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = kiroJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function defaultZedConfigPath(env) {
+  if (process.platform === 'win32' && env.APPDATA) {
+    return path.join(env.APPDATA, 'Zed', 'settings.json');
+  }
+  const home = env.HOME || env.USERPROFILE || os.homedir();
+  return path.join(home, '.config', 'zed', 'settings.json');
+}
+
+function zedJsonServerConfig(mcpUrl, identity = envReferenceIdentity('zed')) {
+  return {
+    command: 'npx',
+    args: [
+      '-y',
+      'mcp-remote',
+      mcpUrl
+    ],
+    env: {
+      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
+    }
+  };
+}
+
+function zedJsonConfig(mcpUrl, identity = envReferenceIdentity('zed')) {
+  return {
+    context_servers: {
+      [MCP_SERVER_NAME]: zedJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function zedJsonSnippet(mcpUrl, identity = envReferenceIdentity('zed')) {
+  return `${JSON.stringify(zedJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeZedMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.context_servers)) {
+    parsed.context_servers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.context_servers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains context_servers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.context_servers[MCP_SERVER_NAME] = zedJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function defaultJetbrainsConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.continue', 'config.json');
+}
+
+function jetbrainsJsonServerConfig(mcpUrl, identity = envReferenceIdentity('jetbrains')) {
+  return continueJsonServerConfig(mcpUrl, identity);
+}
+
+function jetbrainsJsonConfig(mcpUrl, identity = envReferenceIdentity('jetbrains')) {
+  return continueJsonConfig(mcpUrl, identity);
+}
+
+function jetbrainsJsonSnippet(mcpUrl, identity = envReferenceIdentity('jetbrains')) {
+  return continueJsonSnippet(mcpUrl, identity);
+}
+
+async function mergeJetbrainsMcpConfig(configPath, mcpUrl, identity) {
+  await mergeContinueMcpConfig(configPath, mcpUrl, identity);
+}
+
+function defaultOpencodeConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.config', 'opencode', 'opencode.json');
+}
+
+function opencodeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('opencode')) {
+  return {
+    type: 'local',
+    command: [
+      'npx',
+      '-y',
+      'mcp-remote',
+      mcpUrl
+    ],
+    environment: {
+      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
+    }
+  };
+}
+
+function opencodeJsonConfig(mcpUrl, identity = envReferenceIdentity('opencode')) {
+  return {
+    mcp: {
+      [MCP_SERVER_NAME]: opencodeJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function opencodeJsonSnippet(mcpUrl, identity = envReferenceIdentity('opencode')) {
+  return `${JSON.stringify(opencodeJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeOpencodeMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcp)) {
+    parsed.mcp = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcp);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcp.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcp[MCP_SERVER_NAME] = opencodeJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function defaultHermesConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.hermes', 'config.yaml');
+}
+
+function hermesYamlSnippet(mcpUrl, identity = envReferenceIdentity('hermes')) {
+  return `mcp_servers:
+  ${MCP_SERVER_NAME}:
+    command: npx
+    args:
+      - -y
+      - mcp-remote
+      - ${mcpUrl}
+    env:
+      ${TOKEN_ENV_VAR}: "\${env:${TOKEN_ENV_VAR}}"
+      ${AGENT_INSTANCE_ENV_VAR}: "${identity.agentInstanceId}"
+`;
+}
+
+async function mergeHermesMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  
+  if (existing.includes(`${MCP_SERVER_NAME}:`) || existing.includes('memory_os:') || existing.includes('memory-os:')) {
+    throw new UsageError(`MCP config already contains ${MCP_SERVER_NAME} in mcp_servers. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  
+  if (existing.trim().length === 0) {
+    await fs.writeFile(configPath, hermesYamlSnippet(mcpUrl, identity), { mode: 0o600 });
+  } else if (existing.includes('mcp_servers:')) {
+    const replacement = `mcp_servers:
+  ${MCP_SERVER_NAME}:
+    command: npx
+    args:
+      - -y
+      - mcp-remote
+      - ${mcpUrl}
+    env:
+      ${TOKEN_ENV_VAR}: "\${env:${TOKEN_ENV_VAR}}"
+      ${AGENT_INSTANCE_ENV_VAR}: "${identity.agentInstanceId}"`;
+    const updated = existing.replace('mcp_servers:', replacement);
+    await fs.writeFile(configPath, updated, { mode: 0o600 });
+  } else {
+    const prefix = existing.endsWith('\n') ? '' : '\n';
+    await fs.appendFile(configPath, `${prefix}${hermesYamlSnippet(mcpUrl, identity)}`, { mode: 0o600 });
+  }
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function defaultQwenConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.qwen', 'settings.json');
+}
+
+function qwenJsonServerConfig(mcpUrl, identity = envReferenceIdentity('qwen')) {
+  return {
+    url: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+// Reuse the trae config layout which uses mcpServers
+function qwenJsonConfig(mcpUrl, identity = envReferenceIdentity('qwen')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: qwenJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function qwenJsonSnippet(mcpUrl, identity = envReferenceIdentity('qwen')) {
+  return `${JSON.stringify(qwenJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeQwenMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = qwenJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function defaultTraeConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.trae', 'mcp.json');
+}
+
+function traeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('trae')) {
+  return {
+    url: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function traeJsonConfig(mcpUrl, identity = envReferenceIdentity('trae')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: traeJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+// Return Trae MCP config snippet
+function traeJsonSnippet(mcpUrl, identity = envReferenceIdentity('trae')) {
+  return `${JSON.stringify(traeJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeTraeMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = traeJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
 function writeLine(stream, line) {
   stream.write(`${line}\n`);
 }
+
 
