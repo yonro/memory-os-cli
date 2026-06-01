@@ -18,7 +18,8 @@ const AGENT_ID_ENV_VAR = 'XMEMO_AGENT_ID';
 const AGENT_INSTANCE_ENV_VAR = 'XMEMO_AGENT_INSTANCE_ID';
 const AGENT_ID_HEADER = 'X-Memory-OS-Agent-ID';
 const AGENT_INSTANCE_HEADER = 'X-Memory-OS-Agent-Instance-ID';
-const MCP_SERVER_NAME = 'memory_os';
+const MCP_SERVER_NAME = 'XMemo';
+const LEGACY_MCP_SERVER_NAMES = ['memory_os', 'memory-os'];
 const CODEX_PROFILE_TARGET = 'AGENTS.md';
 const CODEX_PROFILE_MARKER_START = '<!-- memory-os:codex-profile:start -->';
 const CODEX_PROFILE_MARKER_END = '<!-- memory-os:codex-profile:end -->';
@@ -190,7 +191,7 @@ function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin`);
   writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|gemini-cli|antigravity|generic> [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity> [--target <path>] [--dry-run|--json]`);
@@ -779,6 +780,15 @@ async function mcpCommand(args, io) {
     } else {
       writeLine(io.stdout, JSON.stringify(template.snippet, null, 2));
     }
+    if (template.optionalEnv?.includes(AGENT_INSTANCE_ENV_VAR)) {
+      writeLine(io.stdout, '');
+      writeLine(io.stdout, `${AGENT_INSTANCE_ENV_VAR} must be stable per local client install.`);
+      if (template.agentInstanceGeneration?.automaticCommand) {
+        writeLine(io.stdout, `Use ${template.agentInstanceGeneration.automaticCommand} to generate and persist it, or set it to a unique value such as xmemo-${clientId}-<uuid>.`);
+      } else {
+        writeLine(io.stdout, `Set it to a unique value such as xmemo-${clientId}-<uuid> and persist it outside git.`);
+      }
+    }
     writeLine(io.stdout, 'Review the template before applying it. Token values are not included.');
     return 0;
   }
@@ -829,6 +839,7 @@ async function mcpCommand(args, io) {
       agentId: identity.agentId,
       agentInstanceId: identity.agentInstanceId,
       agentInstanceIdPath: identity.path,
+      agentInstanceGeneration: agentInstanceGenerationPolicy(target),
       writesTokenValue: false
     }, null, 2));
     return 0;
@@ -857,6 +868,7 @@ async function mcpCommand(args, io) {
   } else {
     writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
   }
+  writeLine(io.stdout, `${AGENT_INSTANCE_ENV_VAR} must be stable per local ${client.label} install; run ${COMMAND_NAME} mcp add ${target} --write to generate it automatically.`);
   return 0;
 }
 
@@ -1389,8 +1401,13 @@ function mcpConfigTemplate(clientId, mcpUrl) {
         agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
         agentInstanceHeader: AGENT_INSTANCE_HEADER
       },
+      agentInstanceGeneration: agentInstanceGenerationPolicy(clientId),
       writesTokenValue: false
     };
+  }
+
+  if (clientId === 'cursor') {
+    return bearerJsonMcpTemplate(clientId, mcpUrl, cursorJsonConfig(mcpUrl));
   }
 
   if (clientId === 'gemini-cli') {
@@ -1401,14 +1418,13 @@ function mcpConfigTemplate(clientId, mcpUrl) {
     return oauthJsonMcpTemplate(clientId, mcpUrl, antigravityJsonConfig(mcpUrl));
   }
 
-  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' || clientId === 'antigravity' ? 'memory_os' : 'memory-os';
   return {
     client: clientId,
-    serverName,
+    serverName: MCP_SERVER_NAME,
     snippetFormat: 'json',
     snippet: {
       mcpServers: {
-        [serverName]: {
+        [MCP_SERVER_NAME]: {
           type: 'http',
           url: mcpUrl,
           headers: {
@@ -1427,6 +1443,28 @@ function mcpConfigTemplate(clientId, mcpUrl) {
       agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
       agentInstanceHeader: AGENT_INSTANCE_HEADER
     },
+    agentInstanceGeneration: agentInstanceGenerationPolicy(clientId),
+    writesTokenValue: false
+  };
+}
+
+function bearerJsonMcpTemplate(clientId, mcpUrl, snippet) {
+  return {
+    client: clientId,
+    serverName: MCP_SERVER_NAME,
+    snippetFormat: 'json',
+    snippet,
+    requiresEnv: [TOKEN_ENV_VAR],
+    optionalEnv: [AGENT_INSTANCE_ENV_VAR],
+    authentication: 'env-bearer',
+    agentIdentity: {
+      agentId: clientId,
+      agentIdHeader: AGENT_ID_HEADER,
+      agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
+      agentInstanceHeader: AGENT_INSTANCE_HEADER
+    },
+    agentInstanceGeneration: agentInstanceGenerationPolicy(clientId),
+    mcpUrl,
     writesTokenValue: false
   };
 }
@@ -1446,20 +1484,20 @@ function oauthJsonMcpTemplate(clientId, mcpUrl, snippet) {
       agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
       agentInstanceHeader: AGENT_INSTANCE_HEADER
     },
+    agentInstanceGeneration: agentInstanceGenerationPolicy(clientId),
     mcpUrl,
     writesTokenValue: false
   };
 }
 
 function mcpLocalProxyTemplate(clientId, proxyUrl) {
-  const serverName = clientId === 'cursor' || clientId === 'gemini-cli' || clientId === 'antigravity' ? 'memory_os' : 'memory-os';
   return {
     client: clientId,
-    serverName,
+    serverName: MCP_SERVER_NAME,
     snippetFormat: 'json',
     snippet: {
       mcpServers: {
-        [serverName]: {
+        [MCP_SERVER_NAME]: {
           type: 'http',
           url: proxyUrl
         }
@@ -1473,7 +1511,24 @@ function mcpLocalProxyTemplate(clientId, proxyUrl) {
       agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
       agentInstanceHeader: AGENT_INSTANCE_HEADER
     },
+    agentInstanceGeneration: agentInstanceGenerationPolicy(clientId),
     writesTokenValue: false
+  };
+}
+
+function agentInstanceGenerationPolicy(clientId) {
+  const automaticCommand = MCP_CLIENTS.has(clientId)
+    ? `${COMMAND_NAME} mcp add ${clientId} --write`
+    : clientId === 'copilot-cli'
+      ? `${COMMAND_NAME} setup copilot --write`
+      : null;
+  return {
+    requiredForHeaders: true,
+    stablePerInstall: true,
+    automaticCommand,
+    generatedPattern: `xmemo-${clientId}-<uuid>`,
+    storagePath: `~/.config/xmemo/agent-instances/${clientId}.json`,
+    manualEnvVar: AGENT_INSTANCE_ENV_VAR
   };
 }
 
@@ -2079,7 +2134,8 @@ function writeProfileResult(action, result, io) {
 
 async function codexSmokeReport(configPath, env) {
   const configText = await readTextIfExists(configPath);
-  const block = tomlServerBlock(configText, MCP_SERVER_NAME);
+  const serverBlock = findTomlServerBlock(configText);
+  const block = serverBlock.block;
   const mcpUrl = block ? tomlStringValue(block, 'url') : null;
   const bearerTokenEnvVar = block ? tomlStringValue(block, 'bearer_token_env_var') : null;
   const tokenValue = env[TOKEN_ENV_VAR] ?? '';
@@ -2096,7 +2152,7 @@ async function codexSmokeReport(configPath, env) {
       name: 'memory_os_server_present',
       ok: Boolean(block),
       required: true,
-      detail: block ? `[mcp_servers.${MCP_SERVER_NAME}]` : `missing [mcp_servers.${MCP_SERVER_NAME}]`
+      detail: block ? `[mcp_servers.${serverBlock.name}]` : `missing [mcp_servers.${MCP_SERVER_NAME}]`
     },
     {
       name: 'mcp_url_present',
@@ -2134,11 +2190,31 @@ async function codexSmokeReport(configPath, env) {
     ok: checks.every((check) => !check.required || check.ok),
     client: 'codex',
     configPath,
-    serverName: MCP_SERVER_NAME,
+    serverName: serverBlock.name ?? MCP_SERVER_NAME,
     mcpUrl,
     tokenEnvVar: TOKEN_ENV_VAR,
     agentInstanceIdPath: identityPath,
     checks
+  };
+}
+
+function knownMcpServerNames() {
+  return [MCP_SERVER_NAME, ...LEGACY_MCP_SERVER_NAMES];
+}
+
+function existingJsonMcpServerName(mcpServers) {
+  return knownMcpServerNames().find((name) => mcpServers[name]);
+}
+
+function existingTomlMcpServerName(content) {
+  return knownMcpServerNames().find((name) => content.includes(`[mcp_servers.${name}]`));
+}
+
+function findTomlServerBlock(content) {
+  const name = existingTomlMcpServerName(content);
+  return {
+    name: name ?? null,
+    block: name ? tomlServerBlock(content, name) : ''
   };
 }
 
@@ -2174,8 +2250,9 @@ function cursorJsonSnippet(mcpUrl, identity = envReferenceIdentity('cursor')) {
 async function appendTomlServerConfig(configPath, mcpUrl) {
   const snippet = codexTomlSnippet(mcpUrl);
   const existing = await readTextIfExists(configPath);
-  if (existing.includes(`[mcp_servers.${MCP_SERVER_NAME}]`)) {
-    throw new UsageError(`MCP config already contains [mcp_servers.${MCP_SERVER_NAME}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  const existingName = existingTomlMcpServerName(existing);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
@@ -2196,8 +2273,9 @@ async function mergeJsonMcpConfig(configPath, mcpUrl, identity) {
     parsed.mcpServers = {};
   }
 
-  if (parsed.mcpServers[MCP_SERVER_NAME]) {
-    throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
   parsed.mcpServers[MCP_SERVER_NAME] = cursorJsonServerConfig(mcpUrl, identity);
@@ -2240,8 +2318,9 @@ async function mergeAntigravityMcpConfig(configPath, mcpUrl, identity) {
     parsed.mcpServers = {};
   }
 
-  if (parsed.mcpServers[MCP_SERVER_NAME]) {
-    throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
   parsed.mcpServers[MCP_SERVER_NAME] = antigravityJsonServerConfig(mcpUrl, identity);
@@ -2263,8 +2342,9 @@ async function mergeGeminiMcpConfig(configPath, mcpUrl, identity) {
     parsed.mcpServers = {};
   }
 
-  if (parsed.mcpServers[MCP_SERVER_NAME]) {
-    throw new UsageError(`MCP config already contains mcpServers.${MCP_SERVER_NAME}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
   parsed.mcpServers[MCP_SERVER_NAME] = geminiJsonServerConfig(mcpUrl, identity);
@@ -2285,7 +2365,12 @@ async function mergeCopilotMcpConfig(configPath, proxyUrl) {
     parsed.mcpServers = {};
   }
 
-  parsed.mcpServers['memory-os'] = copilotLocalProxyServerConfig(proxyUrl);
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+
+  parsed.mcpServers[MCP_SERVER_NAME] = copilotLocalProxyServerConfig(proxyUrl);
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
