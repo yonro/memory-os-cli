@@ -780,6 +780,34 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.equal(continueConfig.mcpServers.XMemo.transport.url, 'https://mcp.example.test/mcp');
 });
 
+test('setup --all --profile writes behavior profiles for detected clients', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-all-profile-'));
+  
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  
+  const result = await invoke(['setup', '--all', '--write', '--profile', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
+  
+  assert.ok(cursorPlan);
+  assert.equal(cursorPlan.written, true);
+  assert.ok(cursorPlan.behaviorProfile);
+  assert.equal(cursorPlan.behaviorProfile.installed, true);
+
+  const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
+  assert.match(profile, /XMemo Cursor profile/);
+  assert.match(profile, /recall\/search/);
+});
+
 test('setup cursor prompt can skip behavior profile with n', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-no-profile-'));
   const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test'], {

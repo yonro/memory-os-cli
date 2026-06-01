@@ -583,6 +583,17 @@ async function setupCommand(args, io) {
           if (writeConfig) {
             await client.writeConfig(clientPlan.configPath, setupPlan.mcpUrl, identity);
             clientPlan.written = true;
+            if (profileClientConfig(scanId)) {
+              const installProfile = hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
+              if (installProfile) {
+                const profileTarget = defaultProfileTarget(scanId, io.env);
+                const profileResult = await profileInstallResult(scanId, profileTarget, { write: true });
+                clientPlan.behaviorProfile = profileResult;
+                if (scanId === 'codex') {
+                  clientPlan.codexProfile = profileResult;
+                }
+              }
+            }
           }
         }
         setupPlan.detectedClients.push(clientPlan);
