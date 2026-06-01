@@ -113,6 +113,13 @@ const MCP_CLIENTS = new Map([
     buildSnippet: claudeJsonSnippet,
     writeConfig: mergeClaudeMcpConfig,
     configKind: 'json'
+  }],
+  ['openclaw', {
+    label: 'OpenClaw',
+    defaultConfigPath: defaultOpenclawConfigPath,
+    buildSnippet: openclawJsonSnippet,
+    writeConfig: mergeOpenclawMcpConfig,
+    configKind: 'json'
   }]
 ]);
 
@@ -131,7 +138,8 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['cline', 'cline'],
   ['continue', 'continue'],
   ['claude', 'claude-desktop'],
-  ['claude-desktop', 'claude-desktop']
+  ['claude-desktop', 'claude-desktop'],
+  ['openclaw', 'openclaw']
 ]);
 
 class UsageError extends Error {
@@ -3307,6 +3315,54 @@ async function mergeClaudeMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
+function defaultOpenclawConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.openclaw', 'openclaw.json');
+}
+
+function openclawJsonServerConfig(mcpUrl, identity = envReferenceIdentity('openclaw')) {
+  return {
+    url: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function openclawJsonConfig(mcpUrl, identity = envReferenceIdentity('openclaw')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: openclawJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function openclawJsonSnippet(mcpUrl, identity = envReferenceIdentity('openclaw')) {
+  return `${JSON.stringify(openclawJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeOpenclawMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = openclawJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
 function writeLine(stream, line) {
   stream.write(`${line}\n`);
 }
+
