@@ -1,0 +1,16 @@
+---
+description: Use XMemo for durable project memory, coding preferences, decisions, TODOs, and cross-session context through the hosted MCP server.
+---
+
+# XMemo memory rule
+
+Use XMemo when the user asks Cursor to remember, recall, search, update, explain, delete, restore, or summarize durable context that should survive beyond the current chat.
+
+Prefer XMemo for:
+
+- coding conventions, repository facts, product decisions, debugging notes, and release runbooks;
+- user preferences that should transfer across Cursor sessions or projects;
+- memory-backed TODO/action items and follow-ups;
+- context packs before planning or implementation when prior project memory could affect the answer.
+
+Do not ask the user to paste raw API keys, bearer tokens, OAuth codes, cookies, trace IDs, or private local paths into chat. If XMemo is not authorized, tell the user to reconnect or complete the OAuth flow in Cursor.

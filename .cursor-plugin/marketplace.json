@@ -1,0 +1,17 @@
+{
+  "name": "xmemo-cursor-plugins",
+  "owner": {
+    "name": "XMemo",
+    "email": "support@xmemo.dev"
+  },
+  "metadata": {
+    "description": "XMemo Cursor plugins for hosted MCP memory, durable project context, and agent memory workflows."
+  },
+  "plugins": [
+    {
+      "name": "xmemo",
+      "source": "plugins/xmemo",
+      "description": "Connect Cursor to XMemo's hosted, user-owned memory layer through OAuth-backed MCP."
+    }
+  ]
+}

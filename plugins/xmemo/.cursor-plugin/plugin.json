@@ -1,0 +1,38 @@
+{
+  "name": "xmemo",
+  "displayName": "XMemo",
+  "version": "0.1.0",
+  "description": "Connect Cursor to XMemo's hosted, user-owned memory layer for durable project context, coding preferences, decisions, and reusable agent knowledge.",
+  "author": {
+    "name": "XMemo",
+    "email": "support@xmemo.dev"
+  },
+  "publisher": "XMemo",
+  "homepage": "https://xmemo.dev",
+  "repository": "https://github.com/yonro/memory-os-cli",
+  "license": "UNLICENSED",
+  "logo": "assets/logo.svg",
+  "keywords": [
+    "cursor",
+    "plugin",
+    "mcp",
+    "memory",
+    "agent-memory",
+    "developer-tools",
+    "oauth"
+  ],
+  "category": "Developer Tools",
+  "tags": [
+    "mcp",
+    "memory",
+    "oauth",
+    "developer-tools"
+  ],
+  "rules": [
+    "rules/xmemo-memory.mdc"
+  ],
+  "skills": [
+    "skills/xmemo-memory/SKILL.md"
+  ],
+  "mcpServers": "mcp.json"
+}

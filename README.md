@@ -310,6 +310,11 @@ absence of embedded token values.
 
 ### Cursor
 
+Cursor marketplace plugin assets live in `.cursor-plugin/marketplace.json` and
+`plugins/xmemo/`. The marketplace plugin is OAuth-first and its `mcp.json` stores
+only `https://xmemo.dev/mcp`; it must not contain `Authorization`, `Bearer`, or
+`XMEMO_KEY`.
+
 Recommended Cursor setup:
 
 ```bash
@@ -331,6 +336,8 @@ Cursor configs include
 non-secret and stored under the user's XMemo CLI config directory. By default,
 the setup prompt also installs a Cursor behavior profile at
 `~/.cursor/memory-profile.md`; answer `n` or pass `--no-profile` to skip it.
+Use this direct-key setup only for local/manual installs where Cursor OAuth is
+unavailable; public plugin submission should use the OAuth-first plugin config.
 
 ### Gemini CLI
 

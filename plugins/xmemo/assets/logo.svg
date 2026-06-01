@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">XMemo</title>
+  <desc id="desc">XMemo memory node logo</desc>
+  <defs>
+    <linearGradient id="bg" x1="56" x2="456" y1="42" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="0.52" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="132" x2="380" y1="132" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#05070a"/>
+  <rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)" opacity="0.18"/>
+  <rect x="46" y="46" width="420" height="420" rx="82" fill="none" stroke="url(#bg)" stroke-width="18"/>
+  <path fill="url(#mark)" d="M134 148c0-13 10-23 23-23h198c13 0 23 10 23 23v168c0 13-10 23-23 23h-97l-58 49c-15 13-38 2-38-18v-31h-5c-13 0-23-10-23-23V148Zm55 32v104h33v-53l35 48 35-48v53h33V180h-32l-36 50-36-50h-32Z"/>
+  <circle cx="144" cy="372" r="17" fill="#34d399"/>
+  <circle cx="256" cy="408" r="17" fill="#38bdf8"/>
+  <circle cx="368" cy="372" r="17" fill="#a78bfa"/>
+</svg>
