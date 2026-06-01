@@ -13,13 +13,12 @@ test('help documents privacy defaults', async () => {
   assert.equal(result.code, 0);
   assert.match(result.stdout, /XMemo CLI/);
   assert.match(result.stdout, /@xmemo\/client/);
-  assert.match(result.stdout, /@yonro\/xmemo-client/);
-  assert.match(result.stdout, /legacy command alias: memory-os/);
-  assert.match(result.stdout, /xmemo update/);
-  assert.doesNotMatch(result.stdout, /xmemo --update/);
-  assert.match(result.stdout, /xmemo auth status/);
-  assert.match(result.stdout, /no telemetry/i);
-  assert.match(result.stdout, /no token in project files/i);
+  assert.match(result.stdout, /Legacy command: memory-os/);
+  assert.match(result.stdout, /xmemo setup/);
+  assert.match(result.stdout, /xmemo login/);
+  assert.match(result.stdout, /xmemo doctor/);
+  assert.match(result.stdout, /ZERO Telemetry/i);
+  assert.match(result.stdout, /never written to project configs/i);
 });
 
 test('update dry-run documents npm global install command', async () => {
