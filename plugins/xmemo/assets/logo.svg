@@ -1,22 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">XMemo</title>
-  <desc id="desc">XMemo memory node logo</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="XMemo Claude connector icon">
   <defs>
-    <linearGradient id="bg" x1="56" x2="456" y1="42" y2="470" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#34d399"/>
-      <stop offset="0.52" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#a78bfa"/>
+    <radialGradient id="halo" cx="28%" cy="18%" r="78%">
+      <stop offset="0" stop-color="#8df7d5"/>
+      <stop offset="0.36" stop-color="#22d3ee"/>
+      <stop offset="0.74" stop-color="#102033"/>
+      <stop offset="1" stop-color="#070b18"/>
+    </radialGradient>
+    <linearGradient id="mark" x1="180" x2="844" y1="238" y2="786" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f2fff9"/>
+      <stop offset="0.42" stop-color="#8df7d5"/>
+      <stop offset="1" stop-color="#22d3ee"/>
     </linearGradient>
-    <linearGradient id="mark" x1="132" x2="380" y1="132" y2="380" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f8fafc"/>
-      <stop offset="1" stop-color="#dbeafe"/>
-    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="46" flood-color="#22d3ee" flood-opacity="0.36"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#8df7d5" flood-opacity="0.46"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="112" fill="#05070a"/>
-  <rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)" opacity="0.18"/>
-  <rect x="46" y="46" width="420" height="420" rx="82" fill="none" stroke="url(#bg)" stroke-width="18"/>
-  <path fill="url(#mark)" d="M134 148c0-13 10-23 23-23h198c13 0 23 10 23 23v168c0 13-10 23-23 23h-97l-58 49c-15 13-38 2-38-18v-31h-5c-13 0-23-10-23-23V148Zm55 32v104h33v-53l35 48 35-48v53h33V180h-32l-36 50-36-50h-32Z"/>
-  <circle cx="144" cy="372" r="17" fill="#34d399"/>
-  <circle cx="256" cy="408" r="17" fill="#38bdf8"/>
-  <circle cx="368" cy="372" r="17" fill="#a78bfa"/>
+  <rect width="1024" height="1024" rx="220" fill="#070b18"/>
+  <circle cx="272" cy="214" r="440" fill="url(#halo)" opacity="0.64"/>
+  <circle cx="842" cy="820" r="420" fill="#14b8a6" opacity="0.18"/>
+  <path fill="#ffffff" opacity="0.08" d="M126 746c160 70 310 88 448 56 138-31 246-110 324-235v235c-88 78-197 125-326 141-156 19-304-7-446-79Z"/>
+  <g filter="url(#glow)">
+    <path fill="url(#mark)" d="M224 724V300h118l170 230 170-230h118v424H672V502L552 670h-80L352 502v222Z"/>
+    <path fill="#e6fff8" opacity="0.92" d="M382 300h96l34 48 34-48h96L512 486Z"/>
+  </g>
 </svg>
