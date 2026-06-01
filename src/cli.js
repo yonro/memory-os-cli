@@ -169,6 +169,13 @@ const MCP_CLIENTS = new Map([
     buildSnippet: traeJsonSnippet,
     writeConfig: mergeTraeMcpConfig,
     configKind: 'json'
+  }],
+  ['claude-code', {
+    label: 'Claude Code',
+    defaultConfigPath: defaultClaudecodeConfigPath,
+    buildSnippet: claudecodeJsonSnippet,
+    writeConfig: mergeClaudecodeMcpConfig,
+    configKind: 'json'
   }]
 ]);
 
@@ -197,7 +204,11 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['qwen', 'qwen'],
   ['qwencli', 'qwen'],
   ['qwen-cli', 'qwen'],
-  ['trae', 'trae']
+  ['trae', 'trae'],
+  ['claude-code', 'claude-code'],
+  ['claudecode', 'claude-code'],
+  ['claude-cli', 'claude-code'],
+  ['claudecode-cli', 'claude-code']
 ]);
 
 class UsageError extends Error {
@@ -3740,8 +3751,60 @@ async function mergeTraeMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
+function defaultClaudecodeConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.claude.json');
+}
+
+function claudecodeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('claude-code')) {
+  return {
+    command: 'npx',
+    args: [
+      '-y',
+      'mcp-remote',
+      mcpUrl
+    ],
+    env: {
+      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
+    }
+  };
+}
+
+function claudecodeJsonConfig(mcpUrl, identity = envReferenceIdentity('claude-code')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: claudecodeJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function claudecodeJsonSnippet(mcpUrl, identity = envReferenceIdentity('claude-code')) {
+  return `${JSON.stringify(claudecodeJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeClaudecodeMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = claudecodeJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
 function writeLine(stream, line) {
   stream.write(`${line}\n`);
 }
+
 
 
