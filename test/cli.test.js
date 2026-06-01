@@ -370,7 +370,7 @@ test('mcp list exposes supported clients without token values', async () => {
 
   assert.equal(result.code, 0);
   const clients = JSON.parse(result.stdout);
-  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'copilot-cli']);
+  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'copilot-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -390,7 +390,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.138');
+  assert.equal(report.cli.version, '0.4.139');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -560,6 +560,80 @@ test('mcp antigravity config can be merged into a user-scoped json file', async 
 
   const identity = JSON.parse(await fs.readFile(path.join(tempDir, 'agent-instances', 'antigravity.json'), 'utf8'));
   assert.equal(identity.agentInstanceId, config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID']);
+});
+
+test('mcp antigravity-ide config can be merged into a user-scoped json file', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-antigravity-ide-'));
+  const configPath = path.join(tempDir, 'mcp.json');
+  await fs.writeFile(configPath, `${JSON.stringify({ mcpServers: { existing: { url: 'https://existing.example/mcp' } } }, null, 2)}\n`);
+
+  const result = await invoke(['mcp', 'add', 'antigravity-ide', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  assert.match(result.stdout, /will complete MCP OAuth on first use/);
+
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.existing.url, 'https://existing.example/mcp');
+  assert.equal(config.mcpServers.XMemo.type, 'http');
+  assert.equal(config.mcpServers.XMemo.url, 'https://api.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.headers, undefined);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('mcp antigravity2 config can be merged into a user-scoped json file', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-antigravity2-'));
+  const configPath = path.join(tempDir, 'mcp.json');
+  await fs.writeFile(configPath, `${JSON.stringify({ mcpServers: { existing: { url: 'https://existing.example/mcp' } } }, null, 2)}\n`);
+
+  const result = await invoke(['mcp', 'add', 'antigravity2', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  assert.match(result.stdout, /will complete MCP OAuth on first use/);
+
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.existing.url, 'https://existing.example/mcp');
+  assert.equal(config.mcpServers.XMemo.type, 'http');
+  assert.equal(config.mcpServers.XMemo.url, 'https://api.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.headers, undefined);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('mcp antigravity-cli config can be merged into a user-scoped json file', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-antigravity-cli-'));
+  const configPath = path.join(tempDir, 'settings.json');
+  await fs.writeFile(configPath, `${JSON.stringify({ mcpServers: { existing: { url: 'https://existing.example/mcp' } } }, null, 2)}\n`);
+
+  const result = await invoke(['mcp', 'add', 'antigravity-cli', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  assert.match(result.stdout, /will complete MCP OAuth on first use/);
+
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.existing.url, 'https://existing.example/mcp');
+  assert.equal(config.mcpServers.XMemo.httpUrl, 'https://api.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.url, undefined);
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
+  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity-cli');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-cli-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
 test('setup discovers hosted service without sending token values', async () => {
@@ -829,6 +903,78 @@ test('setup antigravity shorthand writes oauth serverUrl config without token', 
   assert.match(profile, /XMemo Antigravity profile/);
   assert.match(profile, /client-managed MCP OAuth credential/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
+test('setup antigravity-ide shorthand writes oauth config without token', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-antigravity-ide-'));
+  const result = await invoke(['setup', 'antigravity-ide', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'antigravity-ide');
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.configPath, path.join(tempDir, '.antigravity-ide', 'mcp.json'));
+
+  const config = JSON.parse(await fs.readFile(plan.selectedClient.configPath, 'utf8'));
+  assert.equal(config.mcpServers.XMemo.type, 'http');
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('setup antigravity2 shorthand writes oauth config without token', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-antigravity2-'));
+  const result = await invoke(['setup', 'antigravity2', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'antigravity2');
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.configPath, path.join(tempDir, '.antigravity2', 'mcp.json'));
+
+  const config = JSON.parse(await fs.readFile(plan.selectedClient.configPath, 'utf8'));
+  assert.equal(config.mcpServers.XMemo.type, 'http');
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('setup antigravity-cli shorthand writes oauth config without token', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-antigravity-cli-'));
+  const result = await invoke(['setup', 'antigravity-cli', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'antigravity-cli');
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.configPath, path.join(tempDir, '.antigravity', 'settings.json'));
+
+  const config = JSON.parse(await fs.readFile(plan.selectedClient.configPath, 'utf8'));
+  assert.equal(config.mcpServers.XMemo.httpUrl, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.url, undefined);
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
+  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity-cli');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-cli-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
 test('codex setup writes env-referenced config and smoke validates it', async () => {
