@@ -85,6 +85,34 @@ const MCP_CLIENTS = new Map([
     buildSnippet: antigravityCliJsonSnippet,
     writeConfig: mergeAntigravityCliMcpConfig,
     configKind: 'json'
+  }],
+  ['windsurf', {
+    label: 'Windsurf',
+    defaultConfigPath: defaultWindsurfConfigPath,
+    buildSnippet: windsurfJsonSnippet,
+    writeConfig: mergeWindsurfMcpConfig,
+    configKind: 'json'
+  }],
+  ['cline', {
+    label: 'Cline',
+    defaultConfigPath: defaultClineConfigPath,
+    buildSnippet: clineJsonSnippet,
+    writeConfig: mergeClineMcpConfig,
+    configKind: 'json'
+  }],
+  ['continue', {
+    label: 'Continue',
+    defaultConfigPath: defaultContinueConfigPath,
+    buildSnippet: continueJsonSnippet,
+    writeConfig: mergeContinueMcpConfig,
+    configKind: 'json'
+  }],
+  ['claude-desktop', {
+    label: 'Claude Desktop',
+    defaultConfigPath: defaultClaudeConfigPath,
+    buildSnippet: claudeJsonSnippet,
+    writeConfig: mergeClaudeMcpConfig,
+    configKind: 'json'
   }]
 ]);
 
@@ -98,7 +126,12 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['antigravity', 'antigravity'],
   ['antigravity-ide', 'antigravity-ide'],
   ['antigravity2', 'antigravity2'],
-  ['antigravity-cli', 'antigravity-cli']
+  ['antigravity-cli', 'antigravity-cli'],
+  ['windsurf', 'windsurf'],
+  ['cline', 'cline'],
+  ['continue', 'continue'],
+  ['claude', 'claude-desktop'],
+  ['claude-desktop', 'claude-desktop']
 ]);
 
 class UsageError extends Error {
@@ -417,13 +450,27 @@ async function setupCommand(args, io) {
   const baseUrl = normalizeBaseUrl(baseUrlOption(optionArgs, io.env));
   const outputJson = hasFlag(optionArgs, '--json');
   const shortClientSetup = Boolean(positionalClientId);
-  const clientId = normalizeSetupClientId(positionalClientId ?? optionValue(optionArgs, '--client'));
+  const setupAll = hasFlag(optionArgs, '--all');
+  
+  let clientId = null;
+  try {
+    clientId = normalizeSetupClientId(positionalClientId ?? optionValue(optionArgs, '--client'));
+  } catch (error) {
+    if (!setupAll) {
+      throw error;
+    }
+  }
+
+  if (setupAll && clientId) {
+    throw new UsageError('Cannot specify both --all and a specific client.');
+  }
+
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
-  const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup);
+  const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup || (setupAll && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes'))));
   const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
 
-  if (writeConfig && !clientId) {
-    throw new UsageError(`Setup --write requires --client <${supportedSetupClientIds().join('|')}> so the CLI never writes broad config implicitly.`);
+  if (writeConfig && !clientId && !setupAll) {
+    throw new UsageError(`Setup --write requires --client <${supportedSetupClientIds().join('|')}> or --all so the CLI never writes broad config implicitly.`);
   }
 
   const discoveryUrl = endpointUrl(baseUrl, '/.well-known/memory-os.json');
@@ -436,7 +483,35 @@ async function setupCommand(args, io) {
   const status = await fetchJson(statusUrl, timeoutMs, io);
   const setupPlan = buildSetupPlan({ baseUrl, discoveryUrl, statusUrl, discovery, status });
 
-  if (clientId) {
+  if (setupAll) {
+    setupPlan.detectedClients = [];
+    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop'];
+    for (const scanId of scanIds) {
+      const detection = await detectClient(scanId, io.env);
+      if (detection.detected) {
+        let clientPlan;
+        if (scanId === 'copilot-cli') {
+          const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
+          clientPlan = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
+          clientPlan.configPath = detection.path;
+          if (writeConfig) {
+            await mergeCopilotMcpConfig(clientPlan.configPath, clientPlan.proxyUrl);
+            clientPlan.written = true;
+          }
+        } else {
+          const client = MCP_CLIENTS.get(scanId);
+          const identity = writeConfig ? await agentIdentity(scanId, io.env) : envReferenceIdentity(scanId);
+          clientPlan = clientSetupPlan(scanId, client, setupPlan.mcpUrl, io.env, identity);
+          clientPlan.configPath = detection.path;
+          if (writeConfig) {
+            await client.writeConfig(clientPlan.configPath, setupPlan.mcpUrl, identity);
+            clientPlan.written = true;
+          }
+        }
+        setupPlan.detectedClients.push(clientPlan);
+      }
+    }
+  } else if (clientId) {
     if (clientId === 'copilot-cli') {
       const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
       setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
@@ -1454,6 +1529,22 @@ function mcpConfigTemplate(clientId, mcpUrl) {
     return oauthJsonMcpTemplate(clientId, mcpUrl, antigravityCliJsonConfig(mcpUrl));
   }
 
+  if (clientId === 'windsurf') {
+    return bearerJsonMcpTemplate(clientId, mcpUrl, windsurfJsonConfig(mcpUrl));
+  }
+
+  if (clientId === 'cline') {
+    return bearerJsonMcpTemplate(clientId, mcpUrl, clineJsonConfig(mcpUrl));
+  }
+
+  if (clientId === 'continue') {
+    return bearerJsonMcpTemplate(clientId, mcpUrl, continueJsonConfig(mcpUrl));
+  }
+
+  if (clientId === 'claude-desktop') {
+    return bearerJsonMcpTemplate(clientId, mcpUrl, claudeJsonConfig(mcpUrl));
+  }
+
   return {
     client: clientId,
     serverName: MCP_SERVER_NAME,
@@ -1640,6 +1731,30 @@ function writeSetupSummary(plan, io) {
 
   if (plan.boundaries.adminRequired.length > 0) {
     writeLine(io.stdout, `Admin-only actions: ${plan.boundaries.adminRequired.join(', ')}`);
+  }
+
+  if (plan.detectedClients) {
+    writeLine(io.stdout, '');
+    if (plan.detectedClients.length === 0) {
+      writeLine(io.stdout, 'No local IDE or CLI client configurations were detected.');
+      writeLine(io.stdout, `Run \`${COMMAND_NAME} setup <client>\` to configure a client manually.`);
+    } else {
+      writeLine(io.stdout, `Auto-detected ${plan.detectedClients.length} client(s):`);
+      for (const client of plan.detectedClients) {
+        writeLine(io.stdout, `  [${client.written ? '✔' : ' '}] ${client.label}`);
+        writeLine(io.stdout, `      Config: ${client.configPath}`);
+        writeLine(io.stdout, `      Agent ID: ${client.agentId}`);
+      }
+      if (plan.detectedClients.some(c => c.written)) {
+        writeLine(io.stdout, '');
+        writeLine(io.stdout, 'Successfully applied XMemo MCP configuration to all detected clients!');
+        writeLine(io.stdout, 'Restart your IDEs or reload their MCP configurations to apply the changes.');
+      } else {
+        writeLine(io.stdout, '');
+        writeLine(io.stdout, `Run \`${COMMAND_NAME} setup --all --write\` to write configurations for all detected clients.`);
+      }
+    }
+    return;
   }
 
   if (plan.selectedClient) {
@@ -2650,7 +2765,7 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli'];
+  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude'];
 }
 
 function usesClientOAuth(clientId) {
@@ -2846,6 +2961,51 @@ async function sleep(ms) {
 }
 
 
+async function detectClient(clientId, env) {
+  let filePaths = [];
+  if (clientId === 'copilot-cli' || clientId === 'copilot') {
+    if (process.platform === 'win32' && env.APPDATA) {
+      filePaths.push(path.join(env.APPDATA, 'Code', 'User', 'mcp.json'));
+    } else {
+      const home = env.HOME || os.homedir();
+      if (process.platform === 'darwin') {
+        filePaths.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'mcp.json'));
+      }
+      filePaths.push(path.join(home, '.config', 'Code', 'User', 'mcp.json'));
+    }
+    filePaths.push(defaultCopilotConfigPath(env));
+  } else {
+    const client = MCP_CLIENTS.get(clientId);
+    if (client) {
+      filePaths.push(client.defaultConfigPath(env));
+    }
+  }
+
+  if (clientId === 'cline') {
+    if (process.platform === 'win32' && env.APPDATA) {
+      filePaths.push(path.join(env.APPDATA, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+    } else {
+      const home = env.HOME || os.homedir();
+      if (process.platform === 'darwin') {
+        filePaths.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+      }
+      filePaths.push(path.join(home, '.config', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+    }
+  }
+
+  for (const filePath of filePaths) {
+    if (await fileExists(filePath)) {
+      return { detected: true, path: filePath };
+    }
+    const parentDir = path.dirname(filePath);
+    if (await fileExists(parentDir)) {
+      return { detected: true, path: filePath };
+    }
+  }
+
+  return { detected: false };
+}
+
 function npmExecutable() {
   return os.platform() === 'win32' ? 'npm.cmd' : 'npm';
 }
@@ -2931,6 +3091,220 @@ function unescapeTomlString(value) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function defaultWindsurfConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.codeium', 'windsurf', 'mcp_config.json');
+}
+
+function defaultClineConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, 'Documents', 'Cline', 'MCP', 'cline_mcp_settings.json');
+}
+
+function defaultContinueConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.continue', 'config.json');
+}
+
+function defaultClaudeConfigPath(env) {
+  if (process.platform === 'win32' && env.APPDATA) {
+    return path.join(env.APPDATA, 'Claude', 'claude_desktop_config.json');
+  }
+  const home = env.HOME || os.homedir();
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  }
+  return path.join(home, '.config', 'Claude', 'claude_desktop_config.json');
+}
+
+function windsurfJsonServerConfig(mcpUrl, identity = envReferenceIdentity('windsurf')) {
+  return {
+    serverUrl: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function windsurfJsonConfig(mcpUrl, identity = envReferenceIdentity('windsurf')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: windsurfJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function windsurfJsonSnippet(mcpUrl, identity = envReferenceIdentity('windsurf')) {
+  return `${JSON.stringify(windsurfJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeWindsurfMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = windsurfJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function clineJsonServerConfig(mcpUrl, identity = envReferenceIdentity('cline')) {
+  return {
+    httpUrl: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function clineJsonConfig(mcpUrl, identity = envReferenceIdentity('cline')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: clineJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function clineJsonSnippet(mcpUrl, identity = envReferenceIdentity('cline')) {
+  return `${JSON.stringify(clineJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeClineMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = clineJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function continueJsonServerConfig(mcpUrl, identity = envReferenceIdentity('continue')) {
+  return {
+    transport: {
+      type: 'streamable-http',
+      url: mcpUrl,
+      headers: {
+        Authorization: `Bearer \${${TOKEN_ENV_VAR}}`,
+        [AGENT_ID_HEADER]: identity.agentId,
+        [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+      }
+    }
+  };
+}
+
+function continueJsonConfig(mcpUrl, identity = envReferenceIdentity('continue')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: continueJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function continueJsonSnippet(mcpUrl, identity = envReferenceIdentity('continue')) {
+  return `${JSON.stringify(continueJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeContinueMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = continueJsonServerConfig(mcpUrl, identity);
+  
+  if (isPlainObject(parsed.experimental)) {
+    if (!Array.isArray(parsed.experimental.modelContextProtocolServers)) {
+      parsed.experimental.modelContextProtocolServers = [];
+    }
+    const hasXMemo = parsed.experimental.modelContextProtocolServers.some(
+      (srv) => srv.transport && srv.transport.url === mcpUrl
+    );
+    if (!hasXMemo) {
+      parsed.experimental.modelContextProtocolServers.push(continueJsonServerConfig(mcpUrl, identity));
+    }
+  }
+
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function claudeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('claude-desktop')) {
+  return {
+    command: 'npx',
+    args: [
+      '-y',
+      'mcp-remote',
+      mcpUrl
+    ],
+    env: {
+      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
+    }
+  };
+}
+
+function claudeJsonConfig(mcpUrl, identity = envReferenceIdentity('claude-desktop')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: claudeJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function claudeJsonSnippet(mcpUrl, identity = envReferenceIdentity('claude-desktop')) {
+  return `${JSON.stringify(claudeJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeClaudeMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = claudeJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
 }
 
 function writeLine(stream, line) {

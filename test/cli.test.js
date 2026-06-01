@@ -370,7 +370,7 @@ test('mcp list exposes supported clients without token values', async () => {
 
   assert.equal(result.code, 0);
   const clients = JSON.parse(result.stdout);
-  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'copilot-cli']);
+  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'copilot-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -390,7 +390,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.139');
+  assert.equal(report.cli.version, '0.4.140');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -742,6 +742,42 @@ test('setup cursor shorthand writes config by default', async () => {
   assert.match(profile, /XMemo Cursor profile/);
   assert.match(profile, /recall\/search/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
+test('setup --all auto-detects and configures all local clients', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-all-'));
+  
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
+  
+  const result = await invoke(['setup', '--all', '--write', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.detectedClients.length, 2);
+  
+  const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
+  const continuePlan = plan.detectedClients.find(c => c.id === 'continue');
+  
+  assert.ok(cursorPlan);
+  assert.ok(continuePlan);
+  assert.equal(cursorPlan.written, true);
+  assert.equal(continuePlan.written, true);
+
+  const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(cursorConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+
+  const continueConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.continue', 'config.json'), 'utf8'));
+  assert.equal(continueConfig.mcpServers.XMemo.transport.url, 'https://mcp.example.test/mcp');
 });
 
 test('setup cursor prompt can skip behavior profile with n', async () => {
