@@ -10,7 +10,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.139';
+const CLI_VERSION = '0.4.140';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -2704,7 +2704,7 @@ function defaultAntigravityConfigPath(env) {
 
 function defaultAntigravityIdeConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
-  return path.join(home, '.antigravity-ide', 'mcp.json');
+  return path.join(home, '.gemini', 'config', 'mcp_config.json');
 }
 
 function defaultAntigravity2ConfigPath(env) {

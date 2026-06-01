@@ -920,7 +920,7 @@ test('setup antigravity-ide shorthand writes oauth config without token', async 
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.id, 'antigravity-ide');
   assert.equal(plan.selectedClient.written, true);
-  assert.equal(plan.selectedClient.configPath, path.join(tempDir, '.antigravity-ide', 'mcp.json'));
+  assert.equal(plan.selectedClient.configPath, path.join(tempDir, '.gemini', 'config', 'mcp_config.json'));
 
   const config = JSON.parse(await fs.readFile(plan.selectedClient.configPath, 'utf8'));
   assert.equal(config.mcpServers.XMemo.type, 'http');
