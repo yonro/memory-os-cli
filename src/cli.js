@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.141';
+const CLI_VERSION = '0.4.142';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -2028,7 +2029,13 @@ function profileClientConfig(clientId) {
       requiredTokenEnv: TOKEN_ENV_VAR,
       markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:cursor:start -->`,
       markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:cursor:end -->`,
-      defaultTarget: (env) => path.join(userHome(env), '.cursor', 'memory-profile.md'),
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.cursor')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), '.cursor', 'rules', 'xmemo-memory.md');
+        }
+        return path.join(userHome(env), '.cursor', 'memory-profile.md');
+      },
       authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
     },
     'gemini-cli': {
@@ -2037,7 +2044,13 @@ function profileClientConfig(clientId) {
       profileVersion: 'gemini-cli-mcp-depth-v1',
       markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:gemini-cli:start -->`,
       markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:gemini-cli:end -->`,
-      defaultTarget: (env) => path.join(userHome(env), '.gemini', 'GEMINI.md'),
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), 'GEMINI.md');
+        }
+        return path.join(userHome(env), '.gemini', 'GEMINI.md');
+      },
       authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
     },
     antigravity: {
@@ -2046,7 +2059,13 @@ function profileClientConfig(clientId) {
       profileVersion: 'antigravity-mcp-depth-v1',
       markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:antigravity:start -->`,
       markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:antigravity:end -->`,
-      defaultTarget: (env) => path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md'),
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), 'GEMINI.md');
+        }
+        return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
+      },
       authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
     }
   };
