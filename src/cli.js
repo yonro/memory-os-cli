@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.151';
+const CLI_VERSION = '0.4.152';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -583,7 +583,7 @@ async function setupCommand(args, io) {
 
   if (setupAll) {
     setupPlan.detectedClients = [];
-    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen', 'opencode'];
+    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen', 'opencode', 'trae'];
     for (const scanId of scanIds) {
       const detection = await detectClient(scanId, io.env);
       if (detection.detected) {
@@ -1921,6 +1921,13 @@ function writeSetupSummary(plan, io) {
         writeLine(io.stdout, '  1. Open or restart Qwen.');
         writeLine(io.stdout, '  2. When Qwen connects to XMemo MCP, a browser window will automatically pop up requesting OAuth authorization.');
         writeLine(io.stdout, '  3. Follow the page prompts to sign in and click "Authorize" to link Qwen.');
+      } else if (cid === 'trae') {
+        writeLine(io.stdout, '💡 Next steps for Trae:');
+        writeLine(io.stdout, '  1. Restart Trae to load the new MCP configuration.');
+        writeLine(io.stdout, `  2. Make sure the ${TOKEN_ENV_VAR} environment variable is set in your user environment.`);
+        if (plan.tokenPortalUrl) {
+          writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
+        }
       } else if (usesClientOAuth(cid)) {
         writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
         writeLine(io.stdout, '  1. When the agent starts or first makes an XMemo tool call, a browser window will automatically pop up requesting OAuth authorization.');
@@ -2966,7 +2973,7 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen', 'opencode'];
+  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen', 'opencode', 'trae'];
 }
 
 function usesClientOAuth(clientId) {

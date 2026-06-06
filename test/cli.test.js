@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.151');
+  assert.equal(report.cli.version, '0.4.152');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -803,6 +803,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
   await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.qwen'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.config', 'opencode'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.trae'), { recursive: true });
   
   const result = await invoke(['setup', '--all', '--write', '--url', 'https://api.example.test', '--json'], {
     env: {
@@ -817,21 +818,24 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
   
   const plan = JSON.parse(result.stdout);
-  assert.equal(plan.detectedClients.length, 4);
+  assert.equal(plan.detectedClients.length, 5);
   
   const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
   const continuePlan = plan.detectedClients.find(c => c.id === 'continue');
   const qwenPlan = plan.detectedClients.find(c => c.id === 'qwen');
   const opencodePlan = plan.detectedClients.find(c => c.id === 'opencode');
+  const traePlan = plan.detectedClients.find(c => c.id === 'trae');
   
   assert.ok(cursorPlan);
   assert.ok(continuePlan);
   assert.ok(qwenPlan);
   assert.ok(opencodePlan);
+  assert.ok(traePlan);
   assert.equal(cursorPlan.written, true);
   assert.equal(continuePlan.written, true);
   assert.equal(qwenPlan.written, true);
   assert.equal(opencodePlan.written, true);
+  assert.equal(traePlan.written, true);
 
   const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(cursorConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
@@ -852,6 +856,12 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.equal(opencodeConfig.mcp.XMemo.headers.Authorization, undefined);
   assert.equal(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
   assert.match(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
+
+  const traeConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.trae', 'mcp.json'), 'utf8'));
+  assert.equal(traeConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(traeConfig.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(traeConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae');
+  assert.match(traeConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-/);
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {
@@ -1116,6 +1126,31 @@ test('setup antigravity-cli shorthand writes oauth config without token', async 
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
   assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('setup trae shorthand writes config by default', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-trae-'));
+  const result = await invoke(['setup', 'trae', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'trae');
+  assert.equal(plan.selectedClient.written, true);
+
+  const configPath = path.join(tempDir, '.trae', 'mcp.json');
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
