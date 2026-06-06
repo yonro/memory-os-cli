@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.154';
+const CLI_VERSION = '0.4.155';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -27,7 +27,9 @@ const CODEX_PROFILE_MARKER_END = '<!-- memory-os:codex-profile:end -->';
 const CLIENT_PROFILE_TARGETS = {
   cursor: '.cursor/rules/xmemo-memory.md',
   'gemini-cli': 'GEMINI.md',
-  antigravity: 'GEMINI.md'
+  antigravity: 'GEMINI.md',
+  trae: '.trae/rules/xmemo-memory.md',
+  'trae-solo': '.trae/rules/xmemo-memory.md'
 };
 const CLIENT_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
 const CLIENT_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
@@ -2167,13 +2169,45 @@ function profileClientConfig(clientId) {
         return path.join(userHome(env), '.config', 'opencode', 'AGENTS.md');
       },
       authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+    },
+    trae: {
+      label: 'Trae',
+      setupAlias: 'trae',
+      profileVersion: 'trae-mcp-depth-v1',
+      requiredTokenEnv: TOKEN_ENV_VAR,
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:trae:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:trae:end -->`,
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), '.trae', 'rules', 'xmemo-memory.md');
+        }
+        return path.join(userHome(env), '.trae', 'memory-profile.md');
+      },
+      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+    },
+    'trae-solo': {
+      label: 'Trae Solo',
+      setupAlias: 'trae-solo',
+      profileVersion: 'trae-solo-mcp-depth-v1',
+      requiredTokenEnv: TOKEN_ENV_VAR,
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:trae-solo:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:trae-solo:end -->`,
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), '.trae', 'rules', 'xmemo-memory.md');
+        }
+        return path.join(userHome(env), '.trae', 'memory-profile.md');
+      },
+      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
     }
   };
   return profileConfigs[clientId] ?? null;
 }
 
 function supportedProfileClientIds() {
-  return ['codex', 'cursor', 'gemini', 'antigravity', 'qwen', 'opencode'];
+  return ['codex', 'cursor', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
 }
 
 function defaultProfileTarget(clientId, env) {

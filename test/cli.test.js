@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.154');
+  assert.equal(report.cli.version, '0.4.155');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -911,11 +911,20 @@ test('setup --all --profile writes behavior profiles for detected clients', asyn
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-all-profile-'));
   
   await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.trae'), { recursive: true });
   
+  const traeConfigDir = process.platform === 'win32'
+    ? path.join(tempDir, 'AppData', 'Roaming', 'Trae', 'User')
+    : process.platform === 'darwin'
+      ? path.join(tempDir, 'Library', 'Application Support', 'Trae', 'User')
+      : path.join(tempDir, '.config', 'Trae', 'User');
+  await fs.mkdir(traeConfigDir, { recursive: true });
+
   const result = await invoke(['setup', '--all', '--write', '--profile', '--url', 'https://api.example.test', '--json'], {
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
+      APPDATA: path.join(tempDir, 'AppData', 'Roaming'),
       XMEMO_KEY: 'secret-token-that-must-not-leak'
     },
     fetch: discoveryFetch()
@@ -924,15 +933,25 @@ test('setup --all --profile writes behavior profiles for detected clients', asyn
   assert.equal(result.code, 0);
   const plan = JSON.parse(result.stdout);
   const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
+  const traePlan = plan.detectedClients.find(c => c.id === 'trae');
   
   assert.ok(cursorPlan);
   assert.equal(cursorPlan.written, true);
   assert.ok(cursorPlan.behaviorProfile);
   assert.equal(cursorPlan.behaviorProfile.installed, true);
 
+  assert.ok(traePlan);
+  assert.equal(traePlan.written, true);
+  assert.ok(traePlan.behaviorProfile);
+  assert.equal(traePlan.behaviorProfile.installed, true);
+
   const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
   assert.match(profile, /XMemo Cursor profile/);
   assert.match(profile, /recall\/search/);
+
+  const traeProfile = await fs.readFile(path.join(tempDir, '.trae', 'memory-profile.md'), 'utf8');
+  assert.match(traeProfile, /XMemo Trae profile/);
+  assert.match(traeProfile, /recall\/search/);
 });
 
 test('setup cursor prompt can skip behavior profile with n', async () => {
