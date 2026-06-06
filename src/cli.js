@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.148';
+const CLI_VERSION = '0.4.149';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -1655,7 +1655,7 @@ function mcpConfigTemplate(clientId, mcpUrl) {
   }
 
   if (clientId === 'qwen') {
-    return bearerJsonMcpTemplate(clientId, mcpUrl, qwenJsonConfig(mcpUrl));
+    return oauthJsonMcpTemplate(clientId, mcpUrl, qwenJsonConfig(mcpUrl));
   }
 
   return {
@@ -2925,7 +2925,7 @@ function supportedSetupClientIds() {
 }
 
 function usesClientOAuth(clientId) {
-  return clientId === 'gemini-cli' || clientId === 'antigravity' || clientId === 'antigravity-ide' || clientId === 'antigravity2' || clientId === 'antigravity-cli';
+  return clientId === 'gemini-cli' || clientId === 'antigravity' || clientId === 'antigravity-ide' || clientId === 'antigravity2' || clientId === 'antigravity-cli' || clientId === 'qwen';
 }
 
 function credentialsPath(env) {
@@ -3744,7 +3744,6 @@ function qwenJsonServerConfig(mcpUrl, identity = envReferenceIdentity('qwen')) {
   return {
     httpUrl: mcpUrl,
     headers: {
-      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
       [AGENT_ID_HEADER]: identity.agentId,
       [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
     }
