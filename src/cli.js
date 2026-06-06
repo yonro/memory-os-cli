@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.150';
+const CLI_VERSION = '0.4.151';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -1907,7 +1907,33 @@ function writeSetupSummary(plan, io) {
         writeLine(io.stdout, `  Profile preview: ${COMMAND_NAME} profile install ${profile.client} --target ${profile.targetPath}`);
       }
     }
-    if (!plan.selectedClient.written) {
+    if (plan.selectedClient.written) {
+      writeLine(io.stdout, '');
+      const cid = plan.selectedClient.id;
+      if (cid === 'opencode') {
+        writeLine(io.stdout, '💡 Next steps for OpenCode:');
+        writeLine(io.stdout, '  1. Open or restart OpenCode.');
+        writeLine(io.stdout, '  2. Trigger any XMemo tool call, or manually run `opencode mcp auth XMemo` in your terminal.');
+        writeLine(io.stdout, '  3. A browser window will automatically pop up requesting XMemo OAuth authorization.');
+        writeLine(io.stdout, '  4. Log in or register on the webpage, then click "Authorize" to link OpenCode.');
+      } else if (cid === 'qwen') {
+        writeLine(io.stdout, '💡 Next steps for Qwen:');
+        writeLine(io.stdout, '  1. Open or restart Qwen.');
+        writeLine(io.stdout, '  2. When Qwen connects to XMemo MCP, a browser window will automatically pop up requesting OAuth authorization.');
+        writeLine(io.stdout, '  3. Follow the page prompts to sign in and click "Authorize" to link Qwen.');
+      } else if (usesClientOAuth(cid)) {
+        writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
+        writeLine(io.stdout, '  1. When the agent starts or first makes an XMemo tool call, a browser window will automatically pop up requesting OAuth authorization.');
+        writeLine(io.stdout, '  2. Follow the page prompts to sign in and click "Authorize".');
+      } else {
+        writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
+        writeLine(io.stdout, '  1. Restart your editor/client to load the new MCP configuration.');
+        writeLine(io.stdout, `  2. Make sure the ${TOKEN_ENV_VAR} environment variable is set in your user environment.`);
+        if (plan.tokenPortalUrl) {
+          writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
+        }
+      }
+    } else {
       writeLine(io.stdout, `  Next: ${COMMAND_NAME} setup ${plan.selectedClient.id} --url ${plan.baseUrl}`);
     }
     return;
