@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.147';
+const CLI_VERSION = '0.4.148';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -684,9 +684,9 @@ async function profileCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Profile commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity> [--target <path>] [--dry-run|--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity> [--target <path>] [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen> [--target <path>] [--dry-run|--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
     return 0;
@@ -2091,13 +2091,28 @@ function profileClientConfig(clientId) {
         return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
       },
       authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+    },
+    qwen: {
+      label: 'Qwen',
+      setupAlias: 'qwen',
+      profileVersion: 'qwen-mcp-depth-v1',
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:qwen:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:qwen:end -->`,
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), 'QWEN.md');
+        }
+        return path.join(userHome(env), '.qwen', 'QWEN.md');
+      },
+      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
     }
   };
   return profileConfigs[clientId] ?? null;
 }
 
 function supportedProfileClientIds() {
-  return ['codex', 'cursor', 'gemini', 'antigravity'];
+  return ['codex', 'cursor', 'gemini', 'antigravity', 'qwen'];
 }
 
 function defaultProfileTarget(clientId, env) {

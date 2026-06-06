@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.147');
+  assert.equal(report.cli.version, '0.4.148');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -1222,6 +1222,27 @@ test('profile install supports Gemini behavior profile targets', async () => {
   assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
 
   const status = await invoke(['profile', 'status', 'gemini', '--target', profilePath, '--json']);
+  assert.equal(status.code, 0);
+  assert.equal(JSON.parse(status.stdout).installed, true);
+});
+
+test('profile install supports Qwen behavior profile targets', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-profile-qwen-'));
+  const profilePath = path.join(tempDir, 'QWEN.md');
+
+  const install = await invoke(['profile', 'install', 'qwen', '--target', profilePath, '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+  assert.equal(install.code, 0);
+  assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
+
+  const installed = await fs.readFile(profilePath, 'utf8');
+  assert.match(installed, /memory-os:memory-profile:qwen:start/);
+  assert.match(installed, /XMemo Qwen profile/);
+  assert.match(installed, /Keep XMemo authentication through the XMEMO_KEY environment variable/);
+  assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
+
+  const status = await invoke(['profile', 'status', 'qwen', '--target', profilePath, '--json']);
   assert.equal(status.code, 0);
   assert.equal(JSON.parse(status.stdout).installed, true);
 });
