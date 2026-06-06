@@ -369,7 +369,7 @@ test('mcp list exposes supported clients without token values', async () => {
 
   assert.equal(result.code, 0);
   const clients = JSON.parse(result.stdout);
-  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'openclaw', 'kiro', 'zed', 'jetbrains', 'opencode', 'hermes', 'qwen', 'trae', 'claude-code', 'copilot-cli']);
+  assert.deepEqual(clients.map((client) => client.id), ['codex', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'openclaw', 'kiro', 'zed', 'jetbrains', 'opencode', 'hermes', 'qwen', 'trae', 'trae-solo', 'claude-code', 'copilot-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.152');
+  assert.equal(report.cli.version, '0.4.153');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -803,12 +803,26 @@ test('setup --all auto-detects and configures all local clients', async () => {
   await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.qwen'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.config', 'opencode'), { recursive: true });
-  await fs.mkdir(path.join(tempDir, '.trae'), { recursive: true });
+  
+  const traeConfigDir = process.platform === 'win32'
+    ? path.join(tempDir, 'AppData', 'Roaming', 'Trae', 'User')
+    : process.platform === 'darwin'
+      ? path.join(tempDir, 'Library', 'Application Support', 'Trae', 'User')
+      : path.join(tempDir, '.config', 'Trae', 'User');
+  await fs.mkdir(traeConfigDir, { recursive: true });
+
+  const traeSoloConfigDir = process.platform === 'win32'
+    ? path.join(tempDir, 'AppData', 'Roaming', 'TRAE SOLO', 'User')
+    : process.platform === 'darwin'
+      ? path.join(tempDir, 'Library', 'Application Support', 'TRAE SOLO', 'User')
+      : path.join(tempDir, '.config', 'TRAE SOLO', 'User');
+  await fs.mkdir(traeSoloConfigDir, { recursive: true });
   
   const result = await invoke(['setup', '--all', '--write', '--url', 'https://api.example.test', '--json'], {
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
+      APPDATA: path.join(tempDir, 'AppData', 'Roaming'),
       XMEMO_KEY: 'secret-token-that-must-not-leak'
     },
     fetch: discoveryFetch()
@@ -818,24 +832,27 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
   
   const plan = JSON.parse(result.stdout);
-  assert.equal(plan.detectedClients.length, 5);
+  assert.equal(plan.detectedClients.length, 6);
   
   const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
   const continuePlan = plan.detectedClients.find(c => c.id === 'continue');
   const qwenPlan = plan.detectedClients.find(c => c.id === 'qwen');
   const opencodePlan = plan.detectedClients.find(c => c.id === 'opencode');
   const traePlan = plan.detectedClients.find(c => c.id === 'trae');
+  const traeSoloPlan = plan.detectedClients.find(c => c.id === 'trae-solo');
   
   assert.ok(cursorPlan);
   assert.ok(continuePlan);
   assert.ok(qwenPlan);
   assert.ok(opencodePlan);
   assert.ok(traePlan);
+  assert.ok(traeSoloPlan);
   assert.equal(cursorPlan.written, true);
   assert.equal(continuePlan.written, true);
   assert.equal(qwenPlan.written, true);
   assert.equal(opencodePlan.written, true);
   assert.equal(traePlan.written, true);
+  assert.equal(traeSoloPlan.written, true);
 
   const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(cursorConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
@@ -857,11 +874,17 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.equal(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
   assert.match(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
 
-  const traeConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.trae', 'mcp.json'), 'utf8'));
+  const traeConfig = JSON.parse(await fs.readFile(path.join(traeConfigDir, 'mcp.json'), 'utf8'));
   assert.equal(traeConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
   assert.equal(traeConfig.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
   assert.equal(traeConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae');
   assert.match(traeConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-/);
+
+  const traeSoloConfig = JSON.parse(await fs.readFile(path.join(traeSoloConfigDir, 'mcp.json'), 'utf8'));
+  assert.equal(traeSoloConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(traeSoloConfig.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(traeSoloConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae-solo');
+  assert.match(traeSoloConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-solo-/);
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {
@@ -1134,6 +1157,8 @@ test('setup trae shorthand writes config by default', async () => {
   const result = await invoke(['setup', 'trae', '--url', 'https://api.example.test', '--json'], {
     env: {
       HOME: tempDir,
+      USERPROFILE: tempDir,
+      APPDATA: path.join(tempDir, 'AppData', 'Roaming'),
       XMEMO_KEY: 'secret-token-that-must-not-leak'
     },
     fetch: discoveryFetch()
@@ -1145,12 +1170,47 @@ test('setup trae shorthand writes config by default', async () => {
   assert.equal(plan.selectedClient.id, 'trae');
   assert.equal(plan.selectedClient.written, true);
 
-  const configPath = path.join(tempDir, '.trae', 'mcp.json');
+  const configPath = process.platform === 'win32'
+    ? path.join(tempDir, 'AppData', 'Roaming', 'Trae', 'User', 'mcp.json')
+    : process.platform === 'darwin'
+      ? path.join(tempDir, 'Library', 'Application Support', 'Trae', 'User', 'mcp.json')
+      : path.join(tempDir, '.config', 'Trae', 'User', 'mcp.json');
   const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
   assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae');
   assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('setup trae-solo shorthand writes config by default', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-traesolo-'));
+  const result = await invoke(['setup', 'trae-solo', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      APPDATA: path.join(tempDir, 'AppData', 'Roaming'),
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'trae-solo');
+  assert.equal(plan.selectedClient.written, true);
+
+  const configPath = process.platform === 'win32'
+    ? path.join(tempDir, 'AppData', 'Roaming', 'TRAE SOLO', 'User', 'mcp.json')
+    : process.platform === 'darwin'
+      ? path.join(tempDir, 'Library', 'Application Support', 'TRAE SOLO', 'User', 'mcp.json')
+      : path.join(tempDir, '.config', 'TRAE SOLO', 'User', 'mcp.json');
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae-solo');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-solo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 

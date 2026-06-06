@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.152';
+const CLI_VERSION = '0.4.153';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -171,6 +171,13 @@ const MCP_CLIENTS = new Map([
     writeConfig: mergeTraeMcpConfig,
     configKind: 'json'
   }],
+  ['trae-solo', {
+    label: 'Trae Solo',
+    defaultConfigPath: defaultTraeSoloConfigPath,
+    buildSnippet: traeSoloJsonSnippet,
+    writeConfig: mergeTraeSoloMcpConfig,
+    configKind: 'json'
+  }],
   ['claude-code', {
     label: 'Claude Code',
     defaultConfigPath: defaultClaudecodeConfigPath,
@@ -206,6 +213,8 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['qwencli', 'qwen'],
   ['qwen-cli', 'qwen'],
   ['trae', 'trae'],
+  ['traesolo', 'trae-solo'],
+  ['trae-solo', 'trae-solo'],
   ['claude-code', 'claude-code'],
   ['claudecode', 'claude-code'],
   ['claude-cli', 'claude-code'],
@@ -583,7 +592,7 @@ async function setupCommand(args, io) {
 
   if (setupAll) {
     setupPlan.detectedClients = [];
-    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen', 'opencode', 'trae'];
+    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen', 'opencode', 'trae', 'trae-solo'];
     for (const scanId of scanIds) {
       const detection = await detectClient(scanId, io.env);
       if (detection.detected) {
@@ -1921,9 +1930,9 @@ function writeSetupSummary(plan, io) {
         writeLine(io.stdout, '  1. Open or restart Qwen.');
         writeLine(io.stdout, '  2. When Qwen connects to XMemo MCP, a browser window will automatically pop up requesting OAuth authorization.');
         writeLine(io.stdout, '  3. Follow the page prompts to sign in and click "Authorize" to link Qwen.');
-      } else if (cid === 'trae') {
-        writeLine(io.stdout, '💡 Next steps for Trae:');
-        writeLine(io.stdout, '  1. Restart Trae to load the new MCP configuration.');
+      } else if (cid === 'trae' || cid === 'trae-solo') {
+        writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
+        writeLine(io.stdout, `  1. Restart ${plan.selectedClient.label} to load the new MCP configuration.`);
         writeLine(io.stdout, `  2. Make sure the ${TOKEN_ENV_VAR} environment variable is set in your user environment.`);
         if (plan.tokenPortalUrl) {
           writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
@@ -2973,7 +2982,7 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen', 'opencode', 'trae'];
+  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen', 'opencode', 'trae', 'trae-solo'];
 }
 
 function usesClientOAuth(clientId) {
@@ -3831,8 +3840,14 @@ async function mergeQwenMcpConfig(configPath, mcpUrl, identity) {
 }
 
 function defaultTraeConfigPath(env) {
+  if (process.platform === 'win32' && env.APPDATA) {
+    return path.join(env.APPDATA, 'Trae', 'User', 'mcp.json');
+  }
   const home = env.USERPROFILE || env.HOME || os.homedir();
-  return path.join(home, '.trae', 'mcp.json');
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'Trae', 'User', 'mcp.json');
+  }
+  return path.join(home, '.config', 'Trae', 'User', 'mcp.json');
 }
 
 function traeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('trae')) {
@@ -3873,6 +3888,59 @@ async function mergeTraeMcpConfig(configPath, mcpUrl, identity) {
     throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
   parsed.mcpServers[MCP_SERVER_NAME] = traeJsonServerConfig(mcpUrl, identity);
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
+}
+
+function defaultTraeSoloConfigPath(env) {
+  if (process.platform === 'win32' && env.APPDATA) {
+    return path.join(env.APPDATA, 'TRAE SOLO', 'User', 'mcp.json');
+  }
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'TRAE SOLO', 'User', 'mcp.json');
+  }
+  return path.join(home, '.config', 'TRAE SOLO', 'User', 'mcp.json');
+}
+
+function traeSoloJsonServerConfig(mcpUrl, identity = envReferenceIdentity('trae-solo')) {
+  return {
+    url: mcpUrl,
+    headers: {
+      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    }
+  };
+}
+
+function traeSoloJsonConfig(mcpUrl, identity = envReferenceIdentity('trae-solo')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: traeSoloJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function traeSoloJsonSnippet(mcpUrl, identity = envReferenceIdentity('trae-solo')) {
+  return `${JSON.stringify(traeSoloJsonConfig(mcpUrl, identity), null, 2)}\n`;
+}
+
+async function mergeTraeSoloMcpConfig(configPath, mcpUrl, identity) {
+  const existing = await readTextIfExists(configPath);
+  const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  if (!isPlainObject(parsed.mcpServers)) {
+    parsed.mcpServers = {};
+  }
+  const existingName = existingJsonMcpServerName(parsed.mcpServers);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+  parsed.mcpServers[MCP_SERVER_NAME] = traeSoloJsonServerConfig(mcpUrl, identity);
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
