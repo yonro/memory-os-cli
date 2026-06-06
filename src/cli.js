@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.142';
+const CLI_VERSION = '0.4.143';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -3139,7 +3139,8 @@ async function runProcess(command, args, io, { stream = true } = {}) {
   const spawnFn = io.spawn ?? spawn;
   return await new Promise((resolve, reject) => {
     const child = spawnFn(command, args, {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: os.platform() === 'win32'
     });
     let stdout = '';
     let stderr = '';

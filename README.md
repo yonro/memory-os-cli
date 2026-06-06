@@ -41,6 +41,8 @@ xmemo setup gemini
 xmemo setup gemini --dry-run
 xmemo setup antigravity
 xmemo setup antigravity --dry-run
+xmemo mcp add antigravity2
+xmemo mcp add antigravity2 --write
 xmemo doctor
 xmemo discovery show
 xmemo setup
@@ -195,6 +197,25 @@ gemini      ~/.gemini/GEMINI.md
 antigravity ~/.gemini/antigravity/MEMORY.md
 ```
 
+Antigravity 2.0 currently uses the lower-level MCP writer because its stable
+user config path is separate from the original Antigravity profile. Preview the
+generated OAuth-first config with:
+
+```bash
+xmemo mcp add antigravity2 --url https://xmemo.dev
+```
+
+Write it to the default Antigravity 2.0 config path with:
+
+```bash
+xmemo mcp add antigravity2 --url https://xmemo.dev --write
+```
+
+The generated config uses `https://xmemo.dev/mcp`, contains no bearer token, and
+expects Antigravity 2.0 to complete MCP OAuth in the browser on first use.
+`XMEMO_AGENT_INSTANCE_ID` is generated and stored as a stable non-secret local
+installation identifier when `--write` is used.
+
 ## MCP setup
 
 List supported client generators:
@@ -211,6 +232,7 @@ cursor      ~/.cursor/mcp.json
 copilot     ~/.copilot/mcp-config.json
 gemini      ~/.gemini/settings.json
 antigravity ~/.gemini/antigravity/mcp_config.json
+antigravity2 ~/.antigravity2/mcp.json
 ```
 
 For clients without a verified user-scoped write path, generate a read-only
@@ -221,7 +243,8 @@ xmemo mcp config --client generic --base-url "https://your-private-service.examp
 ```
 
 Codex, Cursor, Copilot CLI, Gemini CLI, and Antigravity have write-capable setup
-helpers.
+helpers. Antigravity 2.0 is write-capable through `xmemo mcp add antigravity2
+--write`.
 Other client writes should only be added after their official user-scoped config
 format is verified.
 
@@ -393,6 +416,44 @@ and chooses the recommended Antigravity path automatically. Use
 directly, for example with `--url` or `--config` in advanced/multi-client setup.
 The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
 MCP server entry. Edit the config manually if you need to rotate the endpoint.
+
+### Antigravity 2.0
+
+Recommended Antigravity 2.0 setup:
+
+```bash
+xmemo mcp add antigravity2 --write
+```
+
+Use a dry preview first if you want to inspect the exact JSON before writing:
+
+```bash
+xmemo mcp add antigravity2
+```
+
+Antigravity 2.0 uses a separate config path from the original Antigravity
+profile. The default write target is `~/.antigravity2/mcp.json`; on Windows the
+server-side config contract also documents `%APPDATA%\\Antigravity 2.0\\mcp.json`
+as the Antigravity 2.0 user config location. Pass `--config <path>` when you
+want to write to a specific file.
+
+The generated `XMemo` entry uses hosted HTTP MCP:
+
+```json
+{
+  "mcpServers": {
+    "XMemo": {
+      "type": "http",
+      "url": "https://xmemo.dev/mcp"
+    }
+  }
+}
+```
+
+No token value is written. Restart Antigravity 2.0 after setup and complete the
+MCP OAuth browser flow on first use. If you use `--write`, the CLI also prepares
+a stable non-secret `XMEMO_AGENT_INSTANCE_ID` for this local Antigravity 2.0
+install so XMemo can attribute activity consistently without embedding secrets.
 
 ## Release model
 
