@@ -2604,23 +2604,27 @@ async function mergeAntigravityMcpConfig(configPath, mcpUrl, identity) {
   await bestEffortChmod(configPath, 0o600);
 }
 
-function antigravityIdeJsonServerConfig(mcpUrl) {
+function antigravityIdeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
   return {
     type: 'http',
-    url: mcpUrl
-  };
-}
-
-function antigravityIdeJsonConfig(mcpUrl) {
-  return {
-    mcpServers: {
-      [MCP_SERVER_NAME]: antigravityIdeJsonServerConfig(mcpUrl)
+    url: mcpUrl,
+    headers: {
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
     }
   };
 }
 
-function antigravityIdeJsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity-ide')) {
-  return `${JSON.stringify(antigravityIdeJsonConfig(mcpUrl), null, 2)}\n`;
+function antigravityIdeJsonConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: antigravityIdeJsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function antigravityIdeJsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return `${JSON.stringify(antigravityIdeJsonConfig(mcpUrl, identity), null, 2)}\n`;
 }
 
 async function mergeAntigravityIdeMcpConfig(configPath, mcpUrl, identity) {
@@ -2640,29 +2644,33 @@ async function mergeAntigravityIdeMcpConfig(configPath, mcpUrl, identity) {
     throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
-  parsed.mcpServers[MCP_SERVER_NAME] = antigravityIdeJsonServerConfig(mcpUrl);
+  parsed.mcpServers[MCP_SERVER_NAME] = antigravityIdeJsonServerConfig(mcpUrl, identity);
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
 }
 
-function antigravity2JsonServerConfig(mcpUrl) {
+function antigravity2JsonServerConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
   return {
     type: 'http',
-    url: mcpUrl
-  };
-}
-
-function antigravity2JsonConfig(mcpUrl) {
-  return {
-    mcpServers: {
-      [MCP_SERVER_NAME]: antigravity2JsonServerConfig(mcpUrl)
+    url: mcpUrl,
+    headers: {
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
     }
   };
 }
 
-function antigravity2JsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity2')) {
-  return `${JSON.stringify(antigravity2JsonConfig(mcpUrl), null, 2)}\n`;
+function antigravity2JsonConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return {
+    mcpServers: {
+      [MCP_SERVER_NAME]: antigravity2JsonServerConfig(mcpUrl, identity)
+    }
+  };
+}
+
+function antigravity2JsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity')) {
+  return `${JSON.stringify(antigravity2JsonConfig(mcpUrl, identity), null, 2)}\n`;
 }
 
 async function mergeAntigravity2McpConfig(configPath, mcpUrl, identity) {
@@ -2682,13 +2690,13 @@ async function mergeAntigravity2McpConfig(configPath, mcpUrl, identity) {
     throw new UsageError(`MCP config already contains mcpServers.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
   }
 
-  parsed.mcpServers[MCP_SERVER_NAME] = antigravity2JsonServerConfig(mcpUrl);
+  parsed.mcpServers[MCP_SERVER_NAME] = antigravity2JsonServerConfig(mcpUrl, identity);
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
 }
 
-function antigravityCliJsonServerConfig(mcpUrl, identity = envReferenceIdentity('antigravity-cli')) {
+function antigravityCliJsonServerConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
   return {
     httpUrl: mcpUrl,
     headers: {
@@ -2698,7 +2706,7 @@ function antigravityCliJsonServerConfig(mcpUrl, identity = envReferenceIdentity(
   };
 }
 
-function antigravityCliJsonConfig(mcpUrl, identity = envReferenceIdentity('antigravity-cli')) {
+function antigravityCliJsonConfig(mcpUrl, identity = envReferenceIdentity('antigravity')) {
   return {
     mcpServers: {
       [MCP_SERVER_NAME]: antigravityCliJsonServerConfig(mcpUrl, identity)
@@ -2706,7 +2714,7 @@ function antigravityCliJsonConfig(mcpUrl, identity = envReferenceIdentity('antig
   };
 }
 
-function antigravityCliJsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity-cli')) {
+function antigravityCliJsonSnippet(mcpUrl, identity = envReferenceIdentity('antigravity')) {
   return `${JSON.stringify(antigravityCliJsonConfig(mcpUrl, identity), null, 2)}\n`;
 }
 
@@ -2829,27 +2837,28 @@ function geminiJsonSnippet(mcpUrl, identity = envReferenceIdentity('gemini-cli')
 }
 
 async function agentIdentity(clientId, env) {
+  const targetClientId = (clientId === 'antigravity-ide' || clientId === 'antigravity2' || clientId === 'antigravity-cli') ? 'antigravity' : clientId;
   const configuredInstanceId = env[AGENT_INSTANCE_ENV_VAR];
   if (configuredInstanceId) {
     return {
-      agentId: clientId,
+      agentId: targetClientId,
       agentInstanceId: configuredInstanceId,
       path: `${AGENT_INSTANCE_ENV_VAR} environment variable`
     };
   }
 
-  const identityPath = agentInstanceIdentityPath(env, clientId);
+  const identityPath = agentInstanceIdentityPath(env, targetClientId);
   const existing = await readAgentInstanceIdentity(identityPath);
   if (existing) {
-    return { agentId: clientId, agentInstanceId: existing, path: identityPath };
+    return { agentId: targetClientId, agentInstanceId: existing, path: identityPath };
   }
 
-  const generated = `xmemo-${clientId}-${randomUUID()}`;
+  const generated = `xmemo-${targetClientId}-${randomUUID()}`;
   await fs.mkdir(path.dirname(identityPath), { recursive: true, mode: 0o700 });
   await bestEffortChmod(path.dirname(identityPath), 0o700);
-  await fs.writeFile(identityPath, `${JSON.stringify({ version: 1, agentId: clientId, agentInstanceId: generated }, null, 2)}\n`, { mode: 0o600 });
+  await fs.writeFile(identityPath, `${JSON.stringify({ version: 1, agentId: targetClientId, agentInstanceId: generated }, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(identityPath, 0o600);
-  return { agentId: clientId, agentInstanceId: generated, path: identityPath };
+  return { agentId: targetClientId, agentInstanceId: generated, path: identityPath };
 }
 
 async function readAgentInstanceIdentity(identityPath) {
@@ -2867,8 +2876,9 @@ function agentInstanceIdentityPath(env, clientId) {
 }
 
 function envReferenceIdentity(clientId) {
+  const targetClientId = (clientId === 'antigravity-ide' || clientId === 'antigravity2' || clientId === 'antigravity-cli') ? 'antigravity' : clientId;
   return {
-    agentId: clientId,
+    agentId: targetClientId,
     agentInstanceId: `\${${AGENT_INSTANCE_ENV_VAR}}`,
     path: `${AGENT_INSTANCE_ENV_VAR} environment variable`
   };
@@ -2938,7 +2948,7 @@ function defaultGeminiConfigPath(env) {
 
 function defaultAntigravityConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
-  return path.join(home, '.gemini', 'antigravity', 'mcp_config.json');
+  return path.join(home, '.gemini', 'config', 'mcp_config.json');
 }
 
 function defaultAntigravityIdeConfigPath(env) {
@@ -2948,12 +2958,12 @@ function defaultAntigravityIdeConfigPath(env) {
 
 function defaultAntigravity2ConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
-  return path.join(home, '.antigravity2', 'mcp.json');
+  return path.join(home, '.gemini', 'config', 'mcp_config.json');
 }
 
 function defaultAntigravityCliConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
-  return path.join(home, '.antigravity', 'settings.json');
+  return path.join(home, '.gemini', 'config', 'mcp_config.json');
 }
 
 function defaultCopilotConfigPath(env) {
