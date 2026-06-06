@@ -1,6 +1,6 @@
 {
   "name": "@xmemo/client",
-  "version": "0.4.145",
+  "version": "0.4.146",
   "description": "Privacy-first CLI and MCP setup helper for XMemo.",
   "type": "module",
   "bin": {

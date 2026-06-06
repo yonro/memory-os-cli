@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.145';
+const CLI_VERSION = '0.4.146';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -373,18 +373,21 @@ async function updateCommand(args, io) {
     projectFilesModified: false
   };
 
+  const commandToDisplay = report.command.map(c => c === 'npm.cmd' ? 'npm' : c).join(' ');
+
   if (dryRun) {
     if (outputJson) {
       writeLine(io.stdout, JSON.stringify(report, null, 2));
     } else {
-      writeLine(io.stdout, `Update command: ${report.command.join(' ')}`);
+      writeLine(io.stdout, `Update command: ${commandToDisplay}`);
       writeLine(io.stdout, 'Dry run only; no changes made.');
     }
     return 0;
   }
 
   if (!outputJson) {
-    writeLine(io.stdout, `Updating ${PACKAGE_NAME} with: ${report.command.join(' ')}`);
+    writeLine(io.stdout, `Updating ${PACKAGE_NAME} to the latest version...`);
+    writeLine(io.stdout, `Running: ${commandToDisplay}`);
   }
   const result = await runProcess(npmCommand, npmArgs, io, { stream: !outputJson });
   report.exitCode = result.code;
