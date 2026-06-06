@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.146');
+  assert.equal(report.cli.version, '0.4.147');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -637,6 +637,31 @@ test('mcp antigravity-cli config can be merged into a user-scoped json file', as
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
+test('mcp qwen config can be merged into a user-scoped json file', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-qwen-'));
+  const configPath = path.join(tempDir, 'settings.json');
+  await fs.writeFile(configPath, `${JSON.stringify({ mcpServers: { existing: { url: 'https://existing.example/mcp' } } }, null, 2)}\n`);
+
+  const result = await invoke(['mcp', 'add', 'qwen', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcpServers.existing.url, 'https://existing.example/mcp');
+  assert.equal(config.mcpServers.XMemo.httpUrl, 'https://api.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.url, undefined);
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'qwen');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-qwen-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
 test('setup discovers hosted service without sending token values', async () => {
   const requests = [];
   const result = await invoke(['setup', '--url', 'https://api.example.test', '--json'], {
@@ -750,6 +775,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
   
   await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.qwen'), { recursive: true });
   
   const result = await invoke(['setup', '--all', '--write', '--url', 'https://api.example.test', '--json'], {
     env: {
@@ -764,21 +790,30 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
   
   const plan = JSON.parse(result.stdout);
-  assert.equal(plan.detectedClients.length, 2);
+  assert.equal(plan.detectedClients.length, 3);
   
   const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
   const continuePlan = plan.detectedClients.find(c => c.id === 'continue');
+  const qwenPlan = plan.detectedClients.find(c => c.id === 'qwen');
   
   assert.ok(cursorPlan);
   assert.ok(continuePlan);
+  assert.ok(qwenPlan);
   assert.equal(cursorPlan.written, true);
   assert.equal(continuePlan.written, true);
+  assert.equal(qwenPlan.written, true);
 
   const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(cursorConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
 
   const continueConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.continue', 'config.json'), 'utf8'));
   assert.equal(continueConfig.mcpServers.XMemo.transport.url, 'https://mcp.example.test/mcp');
+
+  const qwenConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.qwen', 'settings.json'), 'utf8'));
+  assert.equal(qwenConfig.mcpServers.XMemo.httpUrl, 'https://mcp.example.test/mcp');
+  assert.equal(qwenConfig.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'qwen');
+  assert.match(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-qwen-/);
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {

@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.146';
+const CLI_VERSION = '0.4.147';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -583,7 +583,7 @@ async function setupCommand(args, io) {
 
   if (setupAll) {
     setupPlan.detectedClients = [];
-    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop'];
+    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen'];
     for (const scanId of scanIds) {
       const detection = await detectClient(scanId, io.env);
       if (detection.detected) {
@@ -1652,6 +1652,10 @@ function mcpConfigTemplate(clientId, mcpUrl) {
 
   if (clientId === 'claude-desktop') {
     return bearerJsonMcpTemplate(clientId, mcpUrl, claudeJsonConfig(mcpUrl));
+  }
+
+  if (clientId === 'qwen') {
+    return bearerJsonMcpTemplate(clientId, mcpUrl, qwenJsonConfig(mcpUrl));
   }
 
   return {
@@ -2902,7 +2906,7 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude'];
+  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen'];
 }
 
 function usesClientOAuth(clientId) {
@@ -3723,7 +3727,7 @@ function defaultQwenConfigPath(env) {
 
 function qwenJsonServerConfig(mcpUrl, identity = envReferenceIdentity('qwen')) {
   return {
-    url: mcpUrl,
+    httpUrl: mcpUrl,
     headers: {
       Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
       [AGENT_ID_HEADER]: identity.agentId,
