@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.149');
+  assert.equal(report.cli.version, '0.4.150');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -662,6 +662,32 @@ test('mcp qwen config can be merged into a user-scoped json file', async () => {
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
+test('mcp opencode config can be merged into a user-scoped json file', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-opencode-'));
+  const configPath = path.join(tempDir, 'opencode.json');
+  await fs.writeFile(configPath, `${JSON.stringify({ mcp: { existing: { type: 'remote', url: 'https://existing.example/mcp' } } }, null, 2)}\n`);
+
+  const result = await invoke(['mcp', 'add', 'opencode', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(config.mcp.existing.url, 'https://existing.example/mcp');
+  assert.equal(config.mcp.XMemo.type, 'remote');
+  assert.equal(config.mcp.XMemo.url, 'https://api.example.test/mcp');
+  assert.equal(config.mcp.XMemo.enabled, true);
+  assert.equal(config.mcp.XMemo.headers.Authorization, undefined);
+  assert.equal(config.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
+  assert.match(config.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
 test('setup discovers hosted service without sending token values', async () => {
   const requests = [];
   const result = await invoke(['setup', '--url', 'https://api.example.test', '--json'], {
@@ -776,6 +802,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
   await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
   await fs.mkdir(path.join(tempDir, '.qwen'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.config', 'opencode'), { recursive: true });
   
   const result = await invoke(['setup', '--all', '--write', '--url', 'https://api.example.test', '--json'], {
     env: {
@@ -790,18 +817,21 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
   
   const plan = JSON.parse(result.stdout);
-  assert.equal(plan.detectedClients.length, 3);
+  assert.equal(plan.detectedClients.length, 4);
   
   const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
   const continuePlan = plan.detectedClients.find(c => c.id === 'continue');
   const qwenPlan = plan.detectedClients.find(c => c.id === 'qwen');
+  const opencodePlan = plan.detectedClients.find(c => c.id === 'opencode');
   
   assert.ok(cursorPlan);
   assert.ok(continuePlan);
   assert.ok(qwenPlan);
+  assert.ok(opencodePlan);
   assert.equal(cursorPlan.written, true);
   assert.equal(continuePlan.written, true);
   assert.equal(qwenPlan.written, true);
+  assert.equal(opencodePlan.written, true);
 
   const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(cursorConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
@@ -814,6 +844,14 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.equal(qwenConfig.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'qwen');
   assert.match(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-qwen-/);
+
+  const opencodeConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.config', 'opencode', 'opencode.json'), 'utf8'));
+  assert.equal(opencodeConfig.mcp.XMemo.type, 'remote');
+  assert.equal(opencodeConfig.mcp.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(opencodeConfig.mcp.XMemo.enabled, true);
+  assert.equal(opencodeConfig.mcp.XMemo.headers.Authorization, undefined);
+  assert.equal(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
+  assert.match(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {
@@ -1243,6 +1281,27 @@ test('profile install supports Qwen behavior profile targets', async () => {
   assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
 
   const status = await invoke(['profile', 'status', 'qwen', '--target', profilePath, '--json']);
+  assert.equal(status.code, 0);
+  assert.equal(JSON.parse(status.stdout).installed, true);
+});
+
+test('profile install supports OpenCode behavior profile targets', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-profile-opencode-'));
+  const profilePath = path.join(tempDir, 'AGENTS.md');
+
+  const install = await invoke(['profile', 'install', 'opencode', '--target', profilePath, '--json'], {
+    env: { XMEMO_KEY: 'secret-token-that-must-not-leak' }
+  });
+  assert.equal(install.code, 0);
+  assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
+
+  const installed = await fs.readFile(profilePath, 'utf8');
+  assert.match(installed, /memory-os:memory-profile:opencode:start/);
+  assert.match(installed, /XMemo OpenCode profile/);
+  assert.match(installed, /Use the client-managed MCP OAuth credential/);
+  assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
+
+  const status = await invoke(['profile', 'status', 'opencode', '--target', profilePath, '--json']);
   assert.equal(status.code, 0);
   assert.equal(JSON.parse(status.stdout).installed, true);
 });

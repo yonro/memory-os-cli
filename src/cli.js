@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.149';
+const CLI_VERSION = '0.4.150';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -583,7 +583,7 @@ async function setupCommand(args, io) {
 
   if (setupAll) {
     setupPlan.detectedClients = [];
-    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen'];
+    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen', 'opencode'];
     for (const scanId of scanIds) {
       const detection = await detectClient(scanId, io.env);
       if (detection.detected) {
@@ -684,9 +684,9 @@ async function profileCommand(args, io) {
   const subcommand = args[0] ?? 'help';
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Profile commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen> [--target <path>] [--dry-run|--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen> [--target <path>] [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--dry-run|--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
     return 0;
@@ -1658,6 +1658,10 @@ function mcpConfigTemplate(clientId, mcpUrl) {
     return oauthJsonMcpTemplate(clientId, mcpUrl, qwenJsonConfig(mcpUrl));
   }
 
+  if (clientId === 'opencode') {
+    return oauthJsonMcpTemplate(clientId, mcpUrl, opencodeJsonConfig(mcpUrl));
+  }
+
   return {
     client: clientId,
     serverName: MCP_SERVER_NAME,
@@ -2106,13 +2110,28 @@ function profileClientConfig(clientId) {
         return path.join(userHome(env), '.qwen', 'QWEN.md');
       },
       authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+    },
+    opencode: {
+      label: 'OpenCode',
+      setupAlias: 'opencode',
+      profileVersion: 'opencode-mcp-depth-v1',
+      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:opencode:start -->`,
+      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:opencode:end -->`,
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), 'AGENTS.md');
+        }
+        return path.join(userHome(env), '.config', 'opencode', 'AGENTS.md');
+      },
+      authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
     }
   };
   return profileConfigs[clientId] ?? null;
 }
 
 function supportedProfileClientIds() {
-  return ['codex', 'cursor', 'gemini', 'antigravity', 'qwen'];
+  return ['codex', 'cursor', 'gemini', 'antigravity', 'qwen', 'opencode'];
 }
 
 function defaultProfileTarget(clientId, env) {
@@ -2921,11 +2940,11 @@ function supportedMcpClientIds() {
 }
 
 function supportedSetupClientIds() {
-  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen'];
+  return ['codex', 'cursor', 'copilot', 'gemini', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude', 'qwen', 'opencode'];
 }
 
 function usesClientOAuth(clientId) {
-  return clientId === 'gemini-cli' || clientId === 'antigravity' || clientId === 'antigravity-ide' || clientId === 'antigravity2' || clientId === 'antigravity-cli' || clientId === 'qwen';
+  return clientId === 'gemini-cli' || clientId === 'antigravity' || clientId === 'antigravity-ide' || clientId === 'antigravity2' || clientId === 'antigravity-cli' || clientId === 'qwen' || clientId === 'opencode';
 }
 
 function credentialsPath(env) {
@@ -3640,16 +3659,12 @@ function defaultOpencodeConfigPath(env) {
 
 function opencodeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('opencode')) {
   return {
-    type: 'local',
-    command: [
-      'npx',
-      '-y',
-      'mcp-remote',
-      mcpUrl
-    ],
-    environment: {
-      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
-      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
+    type: 'remote',
+    url: mcpUrl,
+    enabled: true,
+    headers: {
+      [AGENT_ID_HEADER]: identity.agentId,
+      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
     }
   };
 }
