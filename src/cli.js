@@ -11,7 +11,7 @@ const PACKAGE_NAME = '@xmemo/client';
 const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 const COMMAND_NAME = 'xmemo';
 const LEGACY_COMMAND_NAME = 'memory-os';
-const CLI_VERSION = '0.4.153';
+const CLI_VERSION = '0.4.154';
 const DEFAULT_SERVICE_URL = 'https://xmemo.dev';
 const TOKEN_ENV_VAR = 'XMEMO_KEY';
 const LEGACY_TOKEN_ENV_VAR = 'MEMORY_OS_MCP_TOKEN';
@@ -3485,7 +3485,13 @@ function claudeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('claude-
     args: [
       '-y',
       'mcp-remote',
-      mcpUrl
+      mcpUrl,
+      '--header',
+      `Authorization:Bearer \${${TOKEN_ENV_VAR}}`,
+      '--header',
+      `X-Memory-OS-Agent-ID:${identity.agentId}`,
+      '--header',
+      `X-Memory-OS-Agent-Instance-ID:\${${AGENT_INSTANCE_ENV_VAR}}`
     ],
     env: {
       [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
@@ -3633,7 +3639,13 @@ function zedJsonServerConfig(mcpUrl, identity = envReferenceIdentity('zed')) {
     args: [
       '-y',
       'mcp-remote',
-      mcpUrl
+      mcpUrl,
+      '--header',
+      `Authorization:Bearer \${${TOKEN_ENV_VAR}}`,
+      '--header',
+      `X-Memory-OS-Agent-ID:${identity.agentId}`,
+      '--header',
+      `X-Memory-OS-Agent-Instance-ID:\${${AGENT_INSTANCE_ENV_VAR}}`
     ],
     env: {
       [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
@@ -3755,6 +3767,12 @@ function hermesYamlSnippet(mcpUrl, identity = envReferenceIdentity('hermes')) {
       - -y
       - mcp-remote
       - ${mcpUrl}
+      - --header
+      - "Authorization:Bearer \${${TOKEN_ENV_VAR}}"
+      - --header
+      - "X-Memory-OS-Agent-ID:${identity.agentId}"
+      - --header
+      - "X-Memory-OS-Agent-Instance-ID:\${${AGENT_INSTANCE_ENV_VAR}}"
     env:
       ${TOKEN_ENV_VAR}: "\${env:${TOKEN_ENV_VAR}}"
       ${AGENT_INSTANCE_ENV_VAR}: "${identity.agentInstanceId}"
@@ -3852,11 +3870,21 @@ function defaultTraeConfigPath(env) {
 
 function traeJsonServerConfig(mcpUrl, identity = envReferenceIdentity('trae')) {
   return {
-    url: mcpUrl,
-    headers: {
-      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
-      [AGENT_ID_HEADER]: identity.agentId,
-      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    command: 'npx',
+    args: [
+      '-y',
+      'mcp-remote',
+      mcpUrl,
+      '--header',
+      `Authorization:Bearer \${${TOKEN_ENV_VAR}}`,
+      '--header',
+      `X-Memory-OS-Agent-ID:${identity.agentId}`,
+      '--header',
+      `X-Memory-OS-Agent-Instance-ID:\${${AGENT_INSTANCE_ENV_VAR}}`
+    ],
+    env: {
+      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
     }
   };
 }
@@ -3906,11 +3934,21 @@ function defaultTraeSoloConfigPath(env) {
 
 function traeSoloJsonServerConfig(mcpUrl, identity = envReferenceIdentity('trae-solo')) {
   return {
-    url: mcpUrl,
-    headers: {
-      Authorization: `Bearer \${env:${TOKEN_ENV_VAR}}`,
-      [AGENT_ID_HEADER]: identity.agentId,
-      [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
+    command: 'npx',
+    args: [
+      '-y',
+      'mcp-remote',
+      mcpUrl,
+      '--header',
+      `Authorization:Bearer \${${TOKEN_ENV_VAR}}`,
+      '--header',
+      `X-Memory-OS-Agent-ID:${identity.agentId}`,
+      '--header',
+      `X-Memory-OS-Agent-Instance-ID:\${${AGENT_INSTANCE_ENV_VAR}}`
+    ],
+    env: {
+      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
+      [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
     }
   };
 }

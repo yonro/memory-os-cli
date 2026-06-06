@@ -389,7 +389,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.153');
+  assert.equal(report.cli.version, '0.4.154');
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
@@ -875,16 +875,36 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.match(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
 
   const traeConfig = JSON.parse(await fs.readFile(path.join(traeConfigDir, 'mcp.json'), 'utf8'));
-  assert.equal(traeConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
-  assert.equal(traeConfig.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
-  assert.equal(traeConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae');
-  assert.match(traeConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-/);
+  assert.equal(traeConfig.mcpServers.XMemo.command, 'npx');
+  assert.deepEqual(traeConfig.mcpServers.XMemo.args, [
+    '-y',
+    'mcp-remote',
+    'https://mcp.example.test/mcp',
+    '--header',
+    'Authorization:Bearer ${XMEMO_KEY}',
+    '--header',
+    'X-Memory-OS-Agent-ID:trae',
+    '--header',
+    'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
+  ]);
+  assert.equal(traeConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.match(traeConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-/);
 
   const traeSoloConfig = JSON.parse(await fs.readFile(path.join(traeSoloConfigDir, 'mcp.json'), 'utf8'));
-  assert.equal(traeSoloConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
-  assert.equal(traeSoloConfig.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
-  assert.equal(traeSoloConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae-solo');
-  assert.match(traeSoloConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-solo-/);
+  assert.equal(traeSoloConfig.mcpServers.XMemo.command, 'npx');
+  assert.deepEqual(traeSoloConfig.mcpServers.XMemo.args, [
+    '-y',
+    'mcp-remote',
+    'https://mcp.example.test/mcp',
+    '--header',
+    'Authorization:Bearer ${XMEMO_KEY}',
+    '--header',
+    'X-Memory-OS-Agent-ID:trae-solo',
+    '--header',
+    'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
+  ]);
+  assert.equal(traeSoloConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.match(traeSoloConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-solo-/);
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {
@@ -1176,10 +1196,20 @@ test('setup trae shorthand writes config by default', async () => {
       ? path.join(tempDir, 'Library', 'Application Support', 'Trae', 'User', 'mcp.json')
       : path.join(tempDir, '.config', 'Trae', 'User', 'mcp.json');
   const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
-  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
-  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
-  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-/);
+  assert.equal(config.mcpServers.XMemo.command, 'npx');
+  assert.deepEqual(config.mcpServers.XMemo.args, [
+    '-y',
+    'mcp-remote',
+    'https://mcp.example.test/mcp',
+    '--header',
+    'Authorization:Bearer ${XMEMO_KEY}',
+    '--header',
+    'X-Memory-OS-Agent-ID:trae',
+    '--header',
+    'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
+  ]);
+  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -1207,10 +1237,20 @@ test('setup trae-solo shorthand writes config by default', async () => {
       ? path.join(tempDir, 'Library', 'Application Support', 'TRAE SOLO', 'User', 'mcp.json')
       : path.join(tempDir, '.config', 'TRAE SOLO', 'User', 'mcp.json');
   const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
-  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
-  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
-  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'trae-solo');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-trae-solo-/);
+  assert.equal(config.mcpServers.XMemo.command, 'npx');
+  assert.deepEqual(config.mcpServers.XMemo.args, [
+    '-y',
+    'mcp-remote',
+    'https://mcp.example.test/mcp',
+    '--header',
+    'Authorization:Bearer ${XMEMO_KEY}',
+    '--header',
+    'X-Memory-OS-Agent-ID:trae-solo',
+    '--header',
+    'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
+  ]);
+  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-solo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
