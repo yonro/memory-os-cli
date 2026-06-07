@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "lint": "node --check bin/memory-os.js && node --check src/cli.js && node --check test/cli.test.js",
+    "lint": "node scripts/check-js.mjs",
     "test": "node --test",
     "pack:dry-run": "npm pack --dry-run",
     "prepublishOnly": "npm run lint && npm test && npm run pack:dry-run"

@@ -377,7 +377,8 @@ test('doctor validates agent discovery without sending token values', async () =
   const requests = [];
   const result = await invoke(['doctor', '--base-url', 'https://api.example.test', '--json'], {
     env: { XMEMO_KEY: 'secret-token-that-must-not-leak' },
-    fetch: agentDiscoveryFetch(requests)
+    fetch: agentDiscoveryFetch(requests),
+    nodeVersion: '22.0.0'
   });
 
   assert.equal(result.code, 0);
@@ -686,6 +687,60 @@ test('mcp opencode config can be merged into a user-scoped json file', async () 
   assert.equal(config.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
   assert.match(config.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('mcp claude-code config passes token and agent headers to mcp-remote', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-claude-code-'));
+  const configPath = path.join(tempDir, '.claude.json');
+  await fs.writeFile(configPath, `${JSON.stringify({ mcpServers: { existing: { command: 'node' } } }, null, 2)}\n`);
+
+  const result = await invoke(['mcp', 'add', 'claude-code', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.deepEqual(config.mcpServers.XMemo.args, [
+    '-y',
+    'mcp-remote',
+    'https://api.example.test/mcp',
+    '--header',
+    'Authorization:Bearer ${XMEMO_KEY}',
+    '--header',
+    'X-Memory-OS-Agent-ID:claude-code',
+    '--header',
+    'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
+  ]);
+  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-claude-code-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+});
+
+test('mcp hermes merge into existing yaml preserves auth and agent headers', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-hermes-'));
+  const configPath = path.join(tempDir, 'config.yaml');
+  await fs.writeFile(configPath, 'theme: dark\nmcp_servers:\n  existing:\n    command: node\n');
+
+  const result = await invoke(['mcp', 'add', 'hermes', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    env: {
+      MEMORY_OS_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const config = await fs.readFile(configPath, 'utf8');
+  assert.match(config, /theme: dark/);
+  assert.match(config, /Authorization:Bearer \$\{XMEMO_KEY\}/);
+  assert.match(config, /X-Memory-OS-Agent-ID:hermes/);
+  assert.match(config, /X-Memory-OS-Agent-Instance-ID:\$\{XMEMO_AGENT_INSTANCE_ID\}/);
+  assert.match(config, /XMEMO_AGENT_INSTANCE_ID: "xmemo-hermes-/);
+  assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
 });
 
 test('setup discovers hosted service without sending token values', async () => {
@@ -1496,7 +1551,8 @@ async function invoke(args, options = {}) {
     stderr: { write: (chunk) => { stderr += chunk; } },
     fetch: options.fetch,
     spawn: options.spawn,
-    sleep: options.sleep
+    sleep: options.sleep,
+    nodeVersion: options.nodeVersion
   });
 
   return { code, stdout, stderr };
@@ -1598,7 +1654,7 @@ function agentDiscoveryFetch(requests) {
     if (url.endsWith('/.well-known/memory-os.json')) {
       return jsonResponse({
         service: 'memory-os',
-        version: '0.4.124'
+        version: '0.4.155'
       });
     }
 
