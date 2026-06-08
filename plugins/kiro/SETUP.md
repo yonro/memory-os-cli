@@ -15,6 +15,8 @@ This will:
 2. Configure authentication via `XMEMO_KEY` environment variable
 3. Set up agent identity headers for attribution
 
+**Note**: Kiro uses environment variable authentication (`XMEMO_KEY`) as the recommended method. Make sure to set the environment variable before using XMemo.
+
 ## Step-by-Step Setup
 
 ### 1. Install XMemo CLI
@@ -25,7 +27,7 @@ npm install -g @xmemo/client
 
 ### 2. Authenticate with XMemo
 
-Choose one of these methods:
+Kiro requires the `XMEMO_KEY` environment variable to be set. Choose one of these methods:
 
 #### Option A: OAuth Login (Recommended)
 
@@ -33,27 +35,35 @@ Choose one of these methods:
 xmemo login
 ```
 
-This opens your browser for secure OAuth authentication.
+This opens your browser for secure OAuth authentication and automatically stores your token.
 
 #### Option B: Direct Token
 
-If you already have a token:
+If you already have a token, add it to the token store:
 
 ```bash
 printf '%s\n' 'your-token' | xmemo token add --from-stdin
 ```
 
-Set the environment variable:
+After authentication, export your token to the environment variable:
 
-**PowerShell:**
+**PowerShell (User-level, persistent):**
 ```powershell
-[Environment]::SetEnvironmentVariable("XMEMO_KEY", "your-token", "User")
+$token = xmemo token show --format raw
+[Environment]::SetEnvironmentVariable("XMEMO_KEY", $token, "User")
+```
+
+**PowerShell (Session-only):**
+```powershell
+$env:XMEMO_KEY = xmemo token show --format raw
 ```
 
 **Bash/Zsh:**
 ```bash
-export XMEMO_KEY="your-token"
+export XMEMO_KEY=$(xmemo token show --format raw)
 ```
+
+**Note**: The environment variable must be set before starting Kiro for the MCP server to authenticate successfully.
 
 ### 3. Configure Kiro
 
@@ -162,7 +172,7 @@ xmemo auth status
 xmemo token status --verify
 ```
 
-**Verify environment variable:**
+**Verify environment variable is set:**
 
 PowerShell:
 ```powershell
@@ -173,6 +183,16 @@ Bash/Zsh:
 ```bash
 echo $XMEMO_KEY
 ```
+
+**If the environment variable is not set, set it:**
+
+PowerShell (User-level, persistent):
+```powershell
+$token = xmemo token show --format raw
+[Environment]::SetEnvironmentVariable("XMEMO_KEY", $token, "User")
+```
+
+**Then restart Kiro** for the environment variable to be loaded.
 
 **Re-authenticate if needed:**
 ```bash

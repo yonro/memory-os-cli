@@ -16,7 +16,7 @@ Use XMemo when the task may depend on prior memory, durable project context, cod
 2. **Save only durable information** that the user asks to remember or that is clearly useful across future Kiro sessions.
 3. **Keep memory content concise, scoped, and useful**. Prefer concrete facts, decisions, links to public docs, and action items over chat transcripts.
 4. **For destructive memory actions**, confirm the exact target before deleting, forgetting, or overwriting.
-5. **If authorization is missing or expired**, ask the user to reconnect XMemo through Kiro's OAuth flow. Do not request raw bearer tokens in chat.
+5. **If authorization errors occur**, ask the user to verify the `XMEMO_KEY` environment variable is set and to restart Kiro.
 
 ## Good Memory Candidates
 

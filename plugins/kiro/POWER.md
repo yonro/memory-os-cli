@@ -27,33 +27,35 @@ This command:
 
 ## Authentication
 
-### OAuth (Recommended)
+### Environment Variable (Required)
 
-The power uses OAuth by default. On first use, Kiro will open a browser window for you to authorize XMemo access.
+Kiro requires the `XMEMO_KEY` environment variable to be set for authentication. 
 
-### Environment Variable (Alternative)
-
-If OAuth is unavailable, you can use an environment variable:
+First, authenticate with XMemo:
 
 ```bash
 xmemo login
 ```
 
-Or manually set your token:
-
-```bash
-printf '%s\n' 'your-token' | xmemo token add --from-stdin
-```
-
 Then set the environment variable:
 
 ```bash
-# PowerShell
-[Environment]::SetEnvironmentVariable("XMEMO_KEY", "your-token", "User")
+# PowerShell (User-level, persistent)
+$token = xmemo token show --format raw
+[Environment]::SetEnvironmentVariable("XMEMO_KEY", $token, "User")
+
+# PowerShell (Session-only)
+$env:XMEMO_KEY = xmemo token show --format raw
 
 # Bash/Zsh
-export XMEMO_KEY="your-token"
+export XMEMO_KEY=$(xmemo token show --format raw)
 ```
+
+**Important**: Restart Kiro after setting the environment variable for the first time.
+
+### Why Environment Variable?
+
+Kiro currently has a known issue with OAuth token persistence. Using an environment variable ensures reliable authentication across all sessions.
 
 ## Usage
 
@@ -134,7 +136,7 @@ To remove XMemo from Kiro, manually edit `~/.kiro/settings/mcp.json` and remove 
 ## Privacy & Security
 
 - No telemetry or analytics
-- OAuth tokens are stored securely by Kiro
+- Tokens are managed by XMemo CLI and referenced via environment variable
 - Agent identity headers are non-secret attribution IDs
 - Environment variable approach keeps tokens out of config files
 - All memory content is user-owned and controlled through your XMemo account

@@ -10,15 +10,29 @@ XMemo gives Kiro a hosted, user-owned memory layer for durable project context, 
 
 ## Authentication
 
-The Kiro Power is OAuth-first. The power metadata stores only the hosted MCP URL; the first XMemo tool use should open the browser-based OAuth flow. Do not add `Authorization`, `Bearer`, or `XMEMO_KEY` to the power's `mcp.json`.
+The Kiro Power uses environment variable authentication due to a known Kiro IDE OAuth token persistence issue. The power metadata stores only the hosted MCP URL plus the `XMEMO_KEY` environment variable reference.
 
-Manual direct-key fallback remains available through:
+Users should authenticate with:
+
+```bash
+xmemo login
+```
+
+Then set the environment variable:
+
+```bash
+# PowerShell (persistent)
+$token = xmemo token show --format raw
+[Environment]::SetEnvironmentVariable("XMEMO_KEY", $token, "User")
+```
+
+Then restart Kiro for the environment variable to take effect.
+
+Manual configuration is available through:
 
 ```bash
 xmemo mcp config --client kiro --json
 ```
-
-Use that fallback only for local/manual installs where Kiro OAuth is unavailable.
 
 ## Reviewer smoke prompts
 
