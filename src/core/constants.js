@@ -14,12 +14,12 @@ export const AGENT_INSTANCE_HEADER = 'X-Memory-OS-Agent-Instance-ID';
 export const MCP_SERVER_NAME = 'XMemo';
 export const LEGACY_MCP_SERVER_NAMES = ['memory_os', 'memory-os'];
 export const CODEX_PROFILE_TARGET = 'AGENTS.md';
-export const CODEX_PROFILE_MARKER_START = '<!-- memory-os:codex-profile:start -->';
-export const CODEX_PROFILE_MARKER_END = '<!-- memory-os:codex-profile:end -->';
+export const CODEX_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
+export const CODEX_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
 export const CLIENT_PROFILE_TARGETS = {
   cursor: '.cursor/rules/xmemo-memory.md',
-  'gemini-cli': 'GEMINI.md',
-  antigravity: 'GEMINI.md',
+  'gemini-cli': 'AGENTS.md',
+  antigravity: 'AGENTS.md',
   trae: '.trae/rules/xmemo-memory.md',
   'trae-solo': '.trae/rules/xmemo-memory.md'
 };

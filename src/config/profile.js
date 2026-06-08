@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  CLIENT_PROFILE_MARKER_END,
+  CLIENT_PROFILE_MARKER_START,
   CODEX_PROFILE_MARKER_END,
   CODEX_PROFILE_MARKER_START,
   CODEX_PROFILE_TARGET,
@@ -51,7 +53,7 @@ function memoryBehaviorProfile(clientId) {
     'After meaningful decisions, bug fixes, release steps, or durable conventions, write a concise XMemo memory with scope, source, and no secret values.',
     'Never store tokens, API keys, cookies, private keys, raw credentials, or sensitive customer data in XMemo.',
     'For routine or low-signal output, skip durable writes. Prefer summarized procedural or semantic memories over verbose logs.',
-    config.authInstruction
+    'Keep XMemo authentication secure (using the XMEMO_KEY environment variable or client-managed OAuth); do not paste token values into prompts, config files, or logs.'
   ];
   return {
     client: clientId,
@@ -69,7 +71,7 @@ function memoryBehaviorProfile(clientId) {
 function profileInstructionText(clientId) {
   const profile = memoryBehaviorProfile(clientId);
   const lines = [
-    `## XMemo ${profile.label} profile`,
+    '## XMemo Agent profile',
     '',
     `MCP server: \`${profile.mcpServerName}\``,
   ];
@@ -80,7 +82,7 @@ function profileInstructionText(clientId) {
     '',
     profile.objective,
     '',
-    `Recommended ${profile.label} behavior:`
+    'Recommended Agent behavior:'
   );
   for (const instruction of profile.instructions) {
     lines.push(`- ${instruction}`);
@@ -96,118 +98,110 @@ export function profileClientConfig(clientId) {
       setupAlias: 'codex',
       profileVersion: 'codex-mcp-depth-v1',
       requiredTokenEnv: TOKEN_ENV_VAR,
-      markerStart: CODEX_PROFILE_MARKER_START,
-      markerEnd: CODEX_PROFILE_MARKER_END,
-      defaultTarget: () => defaultCodexProfileTarget(),
-      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
+      defaultTarget: () => defaultCodexProfileTarget()
     },
     cursor: {
       label: 'Cursor',
       setupAlias: 'cursor',
       profileVersion: 'cursor-mcp-depth-v1',
       requiredTokenEnv: TOKEN_ENV_VAR,
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:cursor:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:cursor:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.cursor')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
           return path.join(process.cwd(), '.cursor', 'rules', 'xmemo-memory.md');
         }
         return path.join(userHome(env), '.cursor', 'memory-profile.md');
-      },
-      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+      }
     },
     'gemini-cli': {
       label: 'Gemini CLI',
       setupAlias: 'gemini',
       profileVersion: 'gemini-cli-mcp-depth-v1',
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:gemini-cli:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:gemini-cli:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'GEMINI.md');
+          return path.join(process.cwd(), 'AGENTS.md');
         }
         return path.join(userHome(env), '.gemini', 'GEMINI.md');
-      },
-      authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+      }
     },
     antigravity: {
       label: 'Antigravity',
       setupAlias: 'antigravity',
       profileVersion: 'antigravity-mcp-depth-v1',
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:antigravity:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:antigravity:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'GEMINI.md');
+          return path.join(process.cwd(), 'AGENTS.md');
         }
         return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
-      },
-      authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+      }
     },
     qwen: {
       label: 'Qwen',
       setupAlias: 'qwen',
       profileVersion: 'qwen-mcp-depth-v1',
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:qwen:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:qwen:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'QWEN.md');
+          return path.join(process.cwd(), 'AGENTS.md');
         }
         return path.join(userHome(env), '.qwen', 'QWEN.md');
-      },
-      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+      }
     },
     opencode: {
       label: 'OpenCode',
       setupAlias: 'opencode',
       profileVersion: 'opencode-mcp-depth-v1',
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:opencode:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:opencode:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
           return path.join(process.cwd(), 'AGENTS.md');
         }
         return path.join(userHome(env), '.config', 'opencode', 'AGENTS.md');
-      },
-      authInstruction: 'Use the client-managed MCP OAuth credential; do not paste token values into prompts, config files, or logs.'
+      }
     },
     trae: {
       label: 'Trae',
       setupAlias: 'trae',
       profileVersion: 'trae-mcp-depth-v1',
       requiredTokenEnv: TOKEN_ENV_VAR,
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:trae:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:trae:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
           return path.join(process.cwd(), '.trae', 'rules', 'xmemo-memory.md');
         }
         return path.join(userHome(env), '.trae', 'memory-profile.md');
-      },
-      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+      }
     },
     'trae-solo': {
       label: 'Trae Solo',
       setupAlias: 'trae-solo',
       profileVersion: 'trae-solo-mcp-depth-v1',
       requiredTokenEnv: TOKEN_ENV_VAR,
-      markerStart: `<!-- ${PROFILE_MARKER_PREFIX}:trae-solo:start -->`,
-      markerEnd: `<!-- ${PROFILE_MARKER_PREFIX}:trae-solo:end -->`,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
           return path.join(process.cwd(), '.trae', 'rules', 'xmemo-memory.md');
         }
         return path.join(userHome(env), '.trae', 'memory-profile.md');
-      },
-      authInstruction: `Keep XMemo authentication through the ${TOKEN_ENV_VAR} environment variable; do not paste token values into prompts, config files, or logs.`
+      }
     }
   };
   return profileConfigs[clientId] ?? null;
