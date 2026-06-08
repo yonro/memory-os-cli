@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "dev.xmemo/mcp",
+  "name": "io.github.yonro/xmemo",
   "title": "XMemo",
   "description": "User-owned memory for AI agents, Copilot, Claude, IDEs, CLIs, and chat apps over remote MCP.",
   "websiteUrl": "https://xmemo.dev/product/mcp",
@@ -8,7 +8,7 @@
     "url": "https://github.com/yonro/memory-os-cli",
     "source": "github"
   },
-  "version": "0.4.215",
+  "version": "0.4.163",
   "remotes": [
     {
       "type": "streamable-http",
@@ -39,7 +39,7 @@
     {
       "registryType": "npm",
       "identifier": "@xmemo/client",
-      "version": "0.4.215",
+      "version": "0.4.163",
       "transport": {
         "type": "stdio"
       }
