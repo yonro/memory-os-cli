@@ -117,6 +117,20 @@ export function profileClientConfig(clientId) {
         return path.join(userHome(env), '.cursor', 'memory-profile.md');
       }
     },
+    kiro: {
+      label: 'Kiro',
+      setupAlias: 'kiro',
+      profileVersion: 'kiro-mcp-depth-v1',
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.kiro')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), '.kiro', 'steering', 'AGENTS.md');
+        }
+        return path.join(userHome(env), '.kiro', 'steering', 'AGENTS.md');
+      }
+    },
     'gemini-cli': {
       label: 'Gemini CLI',
       setupAlias: 'gemini',
@@ -208,7 +222,7 @@ export function profileClientConfig(clientId) {
 }
 
 export function supportedProfileClientIds() {
-  return ['codex', 'cursor', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
+  return ['codex', 'cursor', 'kiro', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
 }
 
 export function defaultProfileTarget(clientId, env) {
