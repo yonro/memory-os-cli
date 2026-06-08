@@ -1,0 +1,16 @@
+{
+  "identifier": "xmemo",
+  "name": "XMemo",
+  "description": "User-owned memory for AI agents over remote MCP. Save, search, recall, update, forget, redact, and explain memories across Copilot, Claude, ChatGPT, IDEs, CLIs, and other MCP-compatible agents.",
+  "author": "yonro",
+  "homepage": "https://xmemo.dev/product/mcp",
+  "repository": "https://github.com/yonro/memory-os-cli",
+  "version": "0.4.163",
+  "category": "productivity",
+  "tags": ["mcp", "memory", "ai-agents", "knowledge-management", "streamable-http", "oauth"],
+  "locale": "en-US",
+  "server": {
+    "type": "streamable-http",
+    "url": "https://xmemo.dev/mcp"
+  }
+}
