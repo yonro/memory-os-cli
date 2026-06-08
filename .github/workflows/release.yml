@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: main
       
       - name: Extract version from tag
         id: version
@@ -45,7 +47,7 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
-            git push
+            git push origin main
           fi
       
       - name: Run tests
