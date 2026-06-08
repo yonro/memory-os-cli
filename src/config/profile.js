@@ -112,7 +112,7 @@ export function profileClientConfig(clientId) {
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.cursor')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.cursor', 'rules', 'xmemo-memory.md');
+          return path.join(process.cwd(), '.cursor', 'rules', 'AGENTS.md');
         }
         return path.join(userHome(env), '.cursor', 'memory-profile.md');
       }
@@ -183,7 +183,7 @@ export function profileClientConfig(clientId) {
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.trae', 'rules', 'xmemo-memory.md');
+          return path.join(process.cwd(), '.trae', 'rules', 'AGENTS.md');
         }
         return path.join(userHome(env), '.trae', 'memory-profile.md');
       }
@@ -198,7 +198,7 @@ export function profileClientConfig(clientId) {
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.trae', 'rules', 'xmemo-memory.md');
+          return path.join(process.cwd(), '.trae', 'rules', 'AGENTS.md');
         }
         return path.join(userHome(env), '.trae', 'memory-profile.md');
       }

@@ -17,11 +17,11 @@ export const CODEX_PROFILE_TARGET = 'AGENTS.md';
 export const CODEX_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
 export const CODEX_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
 export const CLIENT_PROFILE_TARGETS = {
-  cursor: '.cursor/rules/xmemo-memory.md',
+  cursor: '.cursor/rules/AGENTS.md',
   'gemini-cli': 'GEMINI.md',
   antigravity: 'GEMINI.md',
-  trae: '.trae/rules/xmemo-memory.md',
-  'trae-solo': '.trae/rules/xmemo-memory.md'
+  trae: '.trae/rules/AGENTS.md',
+  'trae-solo': '.trae/rules/AGENTS.md'
 };
 export const CLIENT_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
 export const CLIENT_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
