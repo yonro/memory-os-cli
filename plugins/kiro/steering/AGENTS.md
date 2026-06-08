@@ -6,6 +6,30 @@ inclusion: auto
 
 Use XMemo's hosted MCP memory tools for durable context, project preferences, decisions, reminders, and cross-session recall in Kiro.
 
+## Setup
+
+XMemo requires the `XMEMO_KEY` environment variable. One-time setup:
+
+```bash
+npm install -g @xmemo/client
+xmemo login
+```
+
+Then export the token (PowerShell persistent):
+
+```powershell
+$token = xmemo token show --format raw
+[Environment]::SetEnvironmentVariable("XMEMO_KEY", $token, "User")
+```
+
+Or Bash/Zsh:
+
+```bash
+export XMEMO_KEY=$(xmemo token show --format raw)
+```
+
+Restart Kiro after setting the variable for the first time.
+
 ## When to Use
 
 Use XMemo when the task may depend on prior memory, durable project context, coding preferences, decisions, or follow-up actions.

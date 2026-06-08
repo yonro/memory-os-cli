@@ -7,6 +7,19 @@ description: Use XMemo's hosted MCP memory tools for durable context, project pr
 
 Use this skill when the task may depend on prior memory, durable project context, coding preferences, decisions, or follow-up actions.
 
+## Setup
+
+XMemo connects through Cursor's MCP OAuth flow. On first use, a browser window opens for one-time authorization — no manual token configuration needed.
+
+If OAuth is unavailable, the fallback is:
+
+```bash
+npm install -g @xmemo/client
+xmemo login
+```
+
+This stores a credential locally. Cursor reads it via `XMEMO_KEY` environment variable. Never paste raw tokens into chat.
+
 ## Workflow
 
 1. Recall first when prior context could change the answer. Use XMemo search/recall/context tools before making assumptions about preferences or past decisions.
