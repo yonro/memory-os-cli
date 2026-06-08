@@ -1348,6 +1348,39 @@ test('setup trae-solo shorthand writes config by default', async () => {
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
+test('setup kiro shorthand writes config by default', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kiro-'));
+  const result = await invoke(['setup', 'kiro', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'kiro');
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'));
+  assert.equal(plan.selectedClient.behaviorProfile.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.writesTokenValue, false);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.kiro', 'settings', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'kiro');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+
+  const profile = await fs.readFile(path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'), 'utf8');
+  assert.match(profile, /XMemo Agent profile/);
+  assert.match(profile, /recall\/search/);
+  assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
 test('codex setup writes env-referenced config and smoke validates it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-'));
   const env = {
