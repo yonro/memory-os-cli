@@ -140,15 +140,9 @@ To remove XMemo from Kiro, manually edit `~/.kiro/settings/mcp.json` and remove 
 - Agent identity headers are non-secret attribution IDs
 - Environment variable approach keeps tokens out of config files
 - All memory content is user-owned and controlled through your XMemo account
-- **Privacy Policy**: [https://xmemo.dev/privacy](https://xmemo.dev/privacy)
+## License and support
 
-## License
-
-- **License**: Proprietary (All rights reserved). See [LICENSE](file:///h:/repos/memory-os-cli/plugins/kiro/LICENSE) for details.
-
-## Support
-
-- **Documentation**: https://xmemo.dev
-- **CLI Help**: `xmemo --help`
-- **Issues**: https://github.com/yonro/memory-os-cli/issues
-- **Email**: support@xmemo.dev
+This power is licensed under [LicenseRef-Proprietary](file:///h:/repos/memory-os-cli/plugins/kiro/LICENSE).
+This power integrates with XMemo MCP Server (LicenseRef-Proprietary).
+- [Privacy Policy](https://xmemo.dev/privacy)
+- [Support](mailto:support@xmemo.dev)
