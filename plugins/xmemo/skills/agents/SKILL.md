@@ -9,16 +9,16 @@ Use this skill when the task may depend on prior memory, durable project context
 
 ## Setup
 
-XMemo connects through Cursor's MCP OAuth flow. On first use, a browser window opens for one-time authorization — no manual token configuration needed.
+XMemo connects through Cursor's MCP OAuth flow. On first use, a browser window opens for one-time authorization — no installation or manual token configuration needed.
 
-If OAuth is unavailable, the fallback is:
+If OAuth is unavailable:
 
-```bash
-npm install -g @xmemo/client
-xmemo login
-```
+1. Go to https://xmemo.dev, sign in, and copy your API token from the account page.
+2. Set environment variable `XMEMO_KEY` with the token value.
 
-This stores a credential locally. Cursor reads it via `XMEMO_KEY` environment variable. Never paste raw tokens into chat.
+Or use the CLI helper: `npm install -g @xmemo/client && xmemo login`
+
+Never paste raw tokens into chat.
 
 ## Workflow
 

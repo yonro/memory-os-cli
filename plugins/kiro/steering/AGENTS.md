@@ -8,23 +8,26 @@ Use XMemo's hosted MCP memory tools for durable context, project preferences, de
 
 ## Setup
 
-XMemo requires the `XMEMO_KEY` environment variable. One-time setup:
+XMemo requires the `XMEMO_KEY` environment variable. Choose one:
 
+**Option A: Website (no install needed)**
+1. Go to https://xmemo.dev, sign in, and copy your API token from the account page.
+2. Set the environment variable:
+
+PowerShell (persistent):
+```powershell
+[Environment]::SetEnvironmentVariable("XMEMO_KEY", "your-token", "User")
+```
+
+Bash/Zsh:
+```bash
+export XMEMO_KEY="your-token"
+```
+
+**Option B: CLI helper**
 ```bash
 npm install -g @xmemo/client
 xmemo login
-```
-
-Then export the token (PowerShell persistent):
-
-```powershell
-$token = xmemo token show --format raw
-[Environment]::SetEnvironmentVariable("XMEMO_KEY", $token, "User")
-```
-
-Or Bash/Zsh:
-
-```bash
 export XMEMO_KEY=$(xmemo token show --format raw)
 ```
 
