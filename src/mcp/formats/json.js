@@ -7,16 +7,16 @@ import {
   AGENT_INSTANCE_HEADER,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { UsageError } from '../errors.js';
+} from '../../core/constants.js';
+import { UsageError } from '../../core/errors.js';
 import {
   bestEffortChmod,
   isPlainObject,
   parseJsonConfig,
   readTextIfExists
-} from '../runtime.js';
-import { envReferenceIdentity } from './identity.js';
-import { existingJsonMcpServerName } from './names.js';
+} from '../../core/runtime.js';
+import { envReferenceIdentity } from '../identity/device.js';
+import { existingJsonMcpServerName } from '../core/names.js';
 
 export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   httpClientDefinition('cursor', 'Cursor', 'defaultCursorConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
@@ -352,3 +352,4 @@ export const claudecodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('cl
 export const claudecodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('claude-code')) => jsonClientSnippet('claude-code', mcpUrl, identity);
 export const claudecodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('claude-code')) => jsonClientServerConfig('claude-code', mcpUrl, identity);
 export const mergeClaudecodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('claude-code', configPath, mcpUrl, identity);
+

@@ -1,15 +1,15 @@
-import { hasFlag, optionValue } from './args.js';
-import { baseUrlOption } from './base-url.js';
+import { hasFlag, optionValue } from '../core/args.js';
+import { baseUrlOption } from '../network/base-url.js';
 import {
   AGENT_ID_ENV_VAR,
   AGENT_INSTANCE_ENV_VAR,
   COMMAND_NAME,
   PRODUCT_NAME,
   TOKEN_ENV_VAR
-} from './constants.js';
-import { UsageError } from './errors.js';
-import { normalizeBaseUrl } from './http.js';
-import { writeLine } from './io.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { normalizeBaseUrl } from '../network/http.js';
+import { writeLine } from '../core/io.js';
 
 export function envCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -79,3 +79,4 @@ export function writePrivacy(io) {
   writeLine(io.stdout, '- Legacy `token set` plaintext storage requires explicit --allow-plaintext.');
   writeLine(io.stdout, '- npm publishing is restricted by package.json files whitelist.');
 }
+

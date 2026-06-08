@@ -4,8 +4,8 @@ import {
   LEGACY_COMMAND_NAME,
   PACKAGE_NAME,
   PRODUCT_NAME
-} from './constants.js';
-import { writeLine } from './io.js';
+} from '../core/constants.js';
+import { writeLine } from '../core/io.js';
 
 export function writeHelp(io) {
   writeLine(io.stdout, `======================================================================`);
@@ -56,3 +56,4 @@ export function writeHelp(io) {
   writeLine(io.stdout, '  - AST Merge Safety: Config writes only touch and append the XMemo keys, preserving all other servers.');
   writeLine(io.stdout, '======================================================================');
 }
+

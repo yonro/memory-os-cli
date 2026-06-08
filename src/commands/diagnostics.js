@@ -5,30 +5,30 @@ import {
   parsePositiveInteger,
   sameMajorMinor,
   stringValue
-} from '../args.js';
-import { baseUrlOption } from '../base-url.js';
+} from '../core/args.js';
+import { baseUrlOption } from '../network/base-url.js';
 import {
   CLI_VERSION,
   COMMAND_NAME,
   PACKAGE_NAME,
   PRODUCT_NAME
-} from '../constants.js';
-import { UsageError } from '../errors.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
 import {
   agentDiscoveryClientIds,
   bestEffortRootVersion,
   discoveryMcpUrl,
   ensureDiscoveryService
-} from '../discovery.js';
+} from '../network/discovery.js';
 import {
   endpointUrl,
   fetchJson,
   normalizeBaseUrl,
   probe
-} from '../http.js';
-import { writeLine } from '../io.js';
-import { codexSmokeReport } from '../mcp/codex.js';
-import { defaultCodexConfigPath } from '../path-config.js';
+} from '../network/http.js';
+import { writeLine } from '../core/io.js';
+import { codexSmokeReport } from '../mcp/formats/toml.js';
+import { defaultCodexConfigPath } from '../config/paths.js';
 
 export async function doctorCommand(args, io) {
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
@@ -194,3 +194,4 @@ export async function smokeCommand(args, io) {
   }
   return report.ok ? 0 : 1;
 }
+

@@ -1,4 +1,4 @@
-import { hasFlag, optionValue, parsePositiveInteger } from '../args.js';
+import { hasFlag, optionValue, parsePositiveInteger } from '../core/args.js';
 import {
   formatAccount,
   pollDeviceLogin,
@@ -8,18 +8,18 @@ import {
   storeTokenFromStdin,
   storeTokenValue,
   validateToken
-} from '../auth.js';
-import { baseUrlOption } from '../base-url.js';
+} from '../network/auth.js';
+import { baseUrlOption } from '../network/base-url.js';
 import {
   COMMAND_NAME,
   LEGACY_TOKEN_ENV_VAR,
   PRODUCT_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { UsageError } from '../errors.js';
-import { normalizeBaseUrl, verifyTokenWithMcp } from '../http.js';
-import { writeLine } from '../io.js';
-import { readAll } from '../runtime.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { normalizeBaseUrl, verifyTokenWithMcp } from '../network/http.js';
+import { writeLine } from '../core/io.js';
+import { readAll } from '../core/runtime.js';
 
 export async function loginCommand(args, io) {
   const outputJson = hasFlag(args, '--json');
@@ -227,3 +227,4 @@ function writeCredentialStatus(report, io, { mode }) {
   }
   writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${COMMAND_NAME} login\` to sign in.`);
 }
+

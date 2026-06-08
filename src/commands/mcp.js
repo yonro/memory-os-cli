@@ -1,5 +1,5 @@
-import { hasFlag, optionValue, parsePositiveInteger } from '../args.js';
-import { baseUrlOption } from '../base-url.js';
+import { hasFlag, optionValue, parsePositiveInteger } from '../core/args.js';
+import { baseUrlOption } from '../network/base-url.js';
 import {
   AGENT_INSTANCE_ENV_VAR,
   COMMAND_NAME,
@@ -8,30 +8,30 @@ import {
   MCP_SERVER_NAME,
   PRODUCT_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { UsageError } from '../errors.js';
-import { endpointUrl, normalizeBaseUrl } from '../http.js';
-import { writeLine } from '../io.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { endpointUrl, normalizeBaseUrl } from '../network/http.js';
+import { writeLine } from '../core/io.js';
 import {
   MCP_CLIENTS,
   supportedMcpClientIds,
   supportedMcpClients
 } from '../mcp/clients.js';
-import { mcpProxyCommand } from '../mcp/copilot-proxy.js';
+import { mcpProxyCommand } from '../mcp/proxy/copilot.js';
 import {
   agentIdentity,
   envReferenceIdentity
-} from '../mcp/identity.js';
+} from '../mcp/identity/device.js';
 import {
   agentInstanceGenerationPolicy,
   mcpConfigTemplate,
   mcpLocalProxyTemplate
-} from '../mcp/templates.js';
-import { usesClientOAuth } from '../mcp/registry.js';
+} from '../mcp/core/templates.js';
+import { usesClientOAuth } from '../mcp/clients/registry.js';
 import {
   codexMemoryProfile,
   writeCodexMemoryProfile
-} from '../profile.js';
+} from '../config/profile.js';
 
 export async function mcpCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -185,3 +185,4 @@ export async function mcpCommand(args, io) {
   writeLine(io.stdout, `${AGENT_INSTANCE_ENV_VAR} must be stable per local ${client.label} install; run ${COMMAND_NAME} mcp add ${target} --write to generate it automatically.`);
   return 0;
 }
+

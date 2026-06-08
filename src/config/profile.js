@@ -12,10 +12,10 @@ import {
   PRODUCT_NAME,
   PROFILE_MARKER_PREFIX,
   TOKEN_ENV_VAR
-} from './constants.js';
-import { UsageError } from './errors.js';
-import { writeLine } from './io.js';
-import { readTextIfExists } from './runtime.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { writeLine } from '../core/io.js';
+import { readTextIfExists } from '../core/runtime.js';
 
 export function codexMemoryProfile() {
   return memoryBehaviorProfile('codex');
@@ -530,3 +530,4 @@ export function writeProfileResult(action, result, io) {
   }
   writeLine(io.stdout, '  Token value embedded: false');
 }
+

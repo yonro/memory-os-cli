@@ -1,14 +1,14 @@
-import { hasFlag } from '../args.js';
+import { hasFlag } from '../core/args.js';
 import {
   COMMAND_NAME,
   PACKAGE_NAME
-} from '../constants.js';
-import { UsageError } from '../errors.js';
-import { writeLine } from '../io.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { writeLine } from '../core/io.js';
 import {
   npmExecutable,
   runProcess
-} from '../runtime.js';
+} from '../core/runtime.js';
 
 export async function updateCommand(args, io) {
   const outputJson = hasFlag(args, '--json');
@@ -55,3 +55,4 @@ export async function updateCommand(args, io) {
   }
   return 0;
 }
+

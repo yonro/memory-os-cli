@@ -1,7 +1,7 @@
 import {
   CLI_VERSION,
   COMMAND_NAME
-} from './constants.js';
+} from './core/constants.js';
 import {
   authCommand,
   loginCommand,
@@ -17,10 +17,10 @@ import { mcpCommand } from './commands/mcp.js';
 import { profileCommand } from './commands/profile.js';
 import { setupCommand } from './commands/setup.js';
 import { updateCommand } from './commands/update.js';
-import { envCommand, writePrivacy } from './env.js';
-import { UsageError } from './errors.js';
-import { writeHelp } from './help.js';
-import { defaultIo, writeLine } from './io.js';
+import { envCommand, writePrivacy } from './config/env.js';
+import { UsageError } from './core/errors.js';
+import { writeHelp } from './ui/help.js';
+import { defaultIo, writeLine } from './core/io.js';
 
 export async function run(args, io = defaultIo()) {
   try {

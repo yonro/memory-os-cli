@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { stringValue } from './args.js';
+import { stringValue } from '../core/args.js';
 import {
   CLI_VERSION,
   DEVICE_LOGIN_START_PATH,
@@ -10,16 +10,16 @@ import {
   LEGACY_TOKEN_ENV_VAR,
   PACKAGE_NAME,
   TOKEN_ENV_VAR
-} from './constants.js';
+} from '../core/constants.js';
 import { endpointUrl, postJson } from './http.js';
-import { UsageError } from './errors.js';
+import { UsageError } from '../core/errors.js';
 import {
   bestEffortChmod,
   parseJsonConfig,
   readAll,
   readTextIfExists,
   sleep
-} from './runtime.js';
+} from '../core/runtime.js';
 
 export async function startDeviceLogin(baseUrl, timeoutMs, io) {
   const payload = await postJson(endpointUrl(baseUrl, DEVICE_LOGIN_START_PATH), {
@@ -197,3 +197,4 @@ export function validateToken(token) {
     throw new UsageError('Token is too short to be a production credential.');
   }
 }
+

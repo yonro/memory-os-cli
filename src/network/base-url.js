@@ -1,5 +1,5 @@
-import { optionValue } from './args.js';
-import { DEFAULT_SERVICE_URL } from './constants.js';
+import { optionValue } from '../core/args.js';
+import { DEFAULT_SERVICE_URL } from '../core/constants.js';
 
 export function baseUrlOption(args, env) {
   return optionValue(args, '--base-url')
@@ -10,3 +10,4 @@ export function baseUrlOption(args, env) {
     ?? env.MEMORY_OS_URL
     ?? DEFAULT_SERVICE_URL;
 }
+

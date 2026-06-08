@@ -1,6 +1,6 @@
 import http from 'node:http';
 
-import { optionValue, parsePositiveInteger } from '../args.js';
+import { optionValue, parsePositiveInteger } from '../../core/args.js';
 import {
   AGENT_ID_HEADER,
   AGENT_INSTANCE_HEADER,
@@ -11,12 +11,12 @@ import {
   DEFAULT_PROXY_PORT,
   PRODUCT_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { credentialsPath, resolveCredentialToken, validateToken } from '../auth.js';
-import { endpointUrl, normalizeBaseUrl } from '../http.js';
-import { UsageError } from '../errors.js';
-import { writeLine } from '../io.js';
-import { closeServer, readAll, waitForShutdown } from '../runtime.js';
+} from '../../core/constants.js';
+import { credentialsPath, resolveCredentialToken, validateToken } from '../../network/auth.js';
+import { endpointUrl, normalizeBaseUrl } from '../../network/http.js';
+import { UsageError } from '../../core/errors.js';
+import { writeLine } from '../../core/io.js';
+import { closeServer, readAll, waitForShutdown } from '../../core/runtime.js';
 
 export async function mcpProxyCommand(args, io, { agentIdentity }) {
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
@@ -109,3 +109,4 @@ function baseUrlOption(args, env) {
     ?? env.MEMORY_OS_BASE_URL
     ?? DEFAULT_SERVICE_URL;
 }
+

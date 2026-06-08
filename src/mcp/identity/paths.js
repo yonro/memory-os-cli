@@ -152,3 +152,4 @@ export function defaultClaudecodeConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
   return path.join(home, '.claude.json');
 }
+

@@ -1,8 +1,8 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import { fileExists } from '../runtime.js';
-import { defaultCopilotConfigPath } from './paths.js';
+import { fileExists } from '../../core/runtime.js';
+import { defaultCopilotConfigPath } from '../identity/paths.js';
 
 export async function detectClient(clientId, env, mcpClients) {
   let filePaths = [];
@@ -48,3 +48,4 @@ export async function detectClient(clientId, env, mcpClients) {
 
   return { detected: false };
 }
+

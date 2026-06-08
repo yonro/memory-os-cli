@@ -6,8 +6,8 @@ import {
   LEGACY_MCP_SERVER_NAMES,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { UsageError } from '../errors.js';
+} from '../../core/constants.js';
+import { UsageError } from '../../core/errors.js';
 import {
   bestEffortChmod,
   escapeRegExp,
@@ -15,8 +15,8 @@ import {
   fileExists,
   readTextIfExists,
   unescapeTomlString
-} from '../runtime.js';
-import { agentInstanceIdentityPath } from './identity.js';
+} from '../../core/runtime.js';
+import { agentInstanceIdentityPath } from '../identity/device.js';
 
 export function codexTomlSnippet(mcpUrl) {
   return `[mcp_servers.${MCP_SERVER_NAME}]
@@ -145,3 +145,4 @@ function tomlStringValue(block, key) {
   const match = block.match(pattern);
   return match ? unescapeTomlString(match[1]) : null;
 }
+

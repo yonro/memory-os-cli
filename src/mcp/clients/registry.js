@@ -1,4 +1,4 @@
-import { JSON_MCP_CLIENT_DEFINITIONS } from './json-clients.js';
+import { JSON_MCP_CLIENT_DEFINITIONS } from '../formats/json.js';
 
 export function createMcpClients(deps) {
   const clients = new Map();
@@ -65,3 +65,4 @@ export function usesClientOAuth(clientId) {
     (definition) => definition.id === clientId && definition.authentication === 'oauth'
   );
 }
+

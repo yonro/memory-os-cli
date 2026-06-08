@@ -1,17 +1,17 @@
-import { optionValue } from './args.js';
+import { optionValue } from '../core/args.js';
 import {
   COMMAND_NAME,
   DEFAULT_PROXY_HOST,
   MCP_SERVER_NAME,
   PRODUCT_NAME,
   TOKEN_ENV_VAR
-} from './constants.js';
-import { UsageError } from './errors.js';
-import { writeLine } from './io.js';
-import { supportedMcpClientIds, usesClientOAuth } from './mcp/registry.js';
-import { mcpLocalProxyTemplate } from './mcp/templates.js';
-import { defaultCopilotConfigPath } from './path-config.js';
-import { profileClientConfig } from './profile.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { writeLine } from '../core/io.js';
+import { supportedMcpClientIds, usesClientOAuth } from '../mcp/clients/registry.js';
+import { mcpLocalProxyTemplate } from '../mcp/core/templates.js';
+import { defaultCopilotConfigPath } from '../mcp/identity/paths.js';
+import { profileClientConfig } from '../config/profile.js';
 
 const SETUP_CLIENT_ALIASES = new Map([
   ['codex', 'codex'],
@@ -241,3 +241,4 @@ export function writeSetupSummary(plan, io) {
   writeLine(io.stdout, `  2. Configure a client, for example: ${COMMAND_NAME} setup codex --url ${plan.baseUrl}`);
   writeLine(io.stdout, `  3. Run ${COMMAND_NAME} status to smoke-test the service without sending the token.`);
 }
+

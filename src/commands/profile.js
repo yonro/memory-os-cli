@@ -1,7 +1,7 @@
-import { hasFlag, optionValue } from '../args.js';
-import { COMMAND_NAME } from '../constants.js';
-import { UsageError } from '../errors.js';
-import { writeLine } from '../io.js';
+import { hasFlag, optionValue } from '../core/args.js';
+import { COMMAND_NAME } from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
+import { writeLine } from '../core/io.js';
 import { MCP_CLIENTS } from '../mcp/clients.js';
 import {
   defaultProfileTarget,
@@ -11,8 +11,8 @@ import {
   profileUninstallResult,
   supportedProfileClientIds,
   writeProfileResult
-} from '../profile.js';
-import { normalizeSetupClientId } from '../setup.js';
+} from '../config/profile.js';
+import { normalizeSetupClientId } from '../ui/setup.js';
 
 export async function profileCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -54,3 +54,4 @@ export async function profileCommand(args, io) {
   writeProfileResult(subcommand, result, io);
   return 0;
 }
+

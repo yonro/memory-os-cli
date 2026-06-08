@@ -3,38 +3,38 @@ import {
   optionValue,
   parsePositiveInteger,
   stringValue
-} from '../args.js';
-import { baseUrlOption } from '../base-url.js';
+} from '../core/args.js';
+import { baseUrlOption } from '../network/base-url.js';
 import {
   DEFAULT_PROXY_PORT
-} from '../constants.js';
+} from '../core/constants.js';
 import {
   buildSetupPlan,
   ensureDiscoveryService
-} from '../discovery.js';
-import { UsageError } from '../errors.js';
+} from '../network/discovery.js';
+import { UsageError } from '../core/errors.js';
 import {
   endpointUrl,
   fetchJson,
   normalizeBaseUrl
-} from '../http.js';
-import { writeLine } from '../io.js';
+} from '../network/http.js';
+import { writeLine } from '../core/io.js';
 import {
   MCP_CLIENTS,
   supportedMcpClients
 } from '../mcp/clients.js';
-import { mergeCopilotMcpConfig } from '../mcp/copilot-proxy.js';
-import { detectClient } from '../mcp/detect.js';
+import { mergeCopilotMcpConfig } from '../mcp/proxy/copilot.js';
+import { detectClient } from '../mcp/clients/detect.js';
 import {
   agentIdentity,
   envReferenceIdentity
-} from '../mcp/identity.js';
+} from '../mcp/identity/device.js';
 import {
   confirmProfileInstall,
   defaultProfileTarget,
   profileClientConfig,
   profileInstallResult
-} from '../profile.js';
+} from '../config/profile.js';
 import {
   clientSetupPlan,
   copilotSetupPlan,
@@ -42,7 +42,7 @@ import {
   positionalClientArg,
   supportedSetupClientIds,
   writeSetupSummary
-} from '../setup.js';
+} from '../ui/setup.js';
 
 export async function setupCommand(args, io) {
   const positionalClientId = positionalClientArg(args, MCP_CLIENTS);
@@ -188,3 +188,4 @@ export async function setupCommand(args, io) {
   writeSetupSummary(setupPlan, io);
   return 0;
 }
+

@@ -6,12 +6,12 @@ import {
   DEFAULT_PROXY_PORT,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { codexTomlSnippet } from './codex.js';
+} from '../../core/constants.js';
+import { codexTomlSnippet } from '../formats/toml.js';
 import {
   jsonClientConfig,
   jsonMcpClientDefinition
-} from './json-clients.js';
+} from '../formats/json.js';
 
 export function mcpConfigTemplate(clientId, mcpUrl, options = {}) {
   if (clientId === 'codex') {
@@ -153,3 +153,4 @@ function oauthJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
     writesTokenValue: false
   };
 }
+

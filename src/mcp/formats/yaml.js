@@ -5,13 +5,13 @@ import {
   AGENT_INSTANCE_ENV_VAR,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
-} from '../constants.js';
-import { UsageError } from '../errors.js';
+} from '../../core/constants.js';
+import { UsageError } from '../../core/errors.js';
 import {
   bestEffortChmod,
   readTextIfExists
-} from '../runtime.js';
-import { envReferenceIdentity } from './identity.js';
+} from '../../core/runtime.js';
+import { envReferenceIdentity } from '../identity/device.js';
 
 export function hermesYamlSnippet(mcpUrl, identity = envReferenceIdentity('hermes')) {
   return `mcp_servers:
@@ -69,3 +69,4 @@ export async function mergeHermesMcpConfig(configPath, mcpUrl, identity) {
   }
   await bestEffortChmod(configPath, 0o600);
 }
+

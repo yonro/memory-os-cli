@@ -1,6 +1,6 @@
 {
   "name": "@xmemo/client",
-  "version": "0.4.156",
+  "version": "0.4.157",
   "description": "Privacy-first CLI and MCP setup helper for XMemo.",
   "type": "module",
   "bin": {
@@ -10,6 +10,7 @@
   "files": [
     "bin",
     "src",
+    "plugins/kiro",
     "README.md",
     "LICENSE"
   ],

@@ -1,16 +1,16 @@
 import {
   appendTomlServerConfig,
   codexTomlSnippet
-} from './codex.js';
+} from './formats/toml.js';
 import {
   hermesYamlSnippet,
   mergeHermesMcpConfig
-} from './hermes.js';
+} from './formats/yaml.js';
 import {
   JSON_MCP_CLIENT_DEFINITIONS,
   jsonClientSnippet,
   mergeJsonClientMcpConfig
-} from './json-clients.js';
+} from './formats/json.js';
 import {
   defaultAntigravity2ConfigPath,
   defaultAntigravityCliConfigPath,
@@ -33,12 +33,12 @@ import {
   defaultTraeSoloConfigPath,
   defaultWindsurfConfigPath,
   defaultZedConfigPath
-} from '../path-config.js';
+} from '../config/paths.js';
 import {
   createMcpClients,
   supportedMcpClientIds as registrySupportedMcpClientIds,
   supportedMcpClients as registrySupportedMcpClients
-} from './registry.js';
+} from './clients/registry.js';
 
 export const MCP_CLIENTS = createMcpClients({
   JSON_MCP_CLIENT_DEFINITIONS,
@@ -78,3 +78,4 @@ export function supportedMcpClients() {
 export function supportedMcpClientIds() {
   return registrySupportedMcpClientIds(MCP_CLIENTS);
 }
+

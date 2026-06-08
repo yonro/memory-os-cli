@@ -1,8 +1,8 @@
 import {
   CLI_VERSION,
   COMMAND_NAME
-} from './constants.js';
-import { UsageError } from './errors.js';
+} from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
 
 export async function verifyTokenWithMcp(baseUrl, token, timeoutMs, io) {
   const url = endpointUrl(baseUrl, '/mcp');
@@ -158,3 +158,4 @@ export function endpointUrl(baseUrl, pathname) {
   url.search = '';
   return url.toString();
 }
+

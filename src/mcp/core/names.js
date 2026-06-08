@@ -1,7 +1,7 @@
 import {
   LEGACY_MCP_SERVER_NAMES,
   MCP_SERVER_NAME
-} from '../constants.js';
+} from '../../core/constants.js';
 
 export function knownMcpServerNames() {
   return [MCP_SERVER_NAME, ...LEGACY_MCP_SERVER_NAMES];
@@ -10,3 +10,4 @@ export function knownMcpServerNames() {
 export function existingJsonMcpServerName(mcpServers) {
   return knownMcpServerNames().find((name) => mcpServers[name]);
 }
+

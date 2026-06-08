@@ -22,4 +22,5 @@ export {
   defaultTraeSoloConfigPath,
   defaultWindsurfConfigPath,
   defaultZedConfigPath
-} from './mcp/paths.js';
+} from '../mcp/identity/paths.js';
+

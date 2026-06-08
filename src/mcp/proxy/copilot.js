@@ -1,16 +1,16 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { MCP_SERVER_NAME } from '../constants.js';
-import { UsageError } from '../errors.js';
+import { MCP_SERVER_NAME } from '../../core/constants.js';
+import { UsageError } from '../../core/errors.js';
 import {
   bestEffortChmod,
   isPlainObject,
   parseJsonConfig,
   readTextIfExists
-} from '../runtime.js';
-import { existingJsonMcpServerName } from './names.js';
-export { mcpProxyCommand } from './proxy.js';
+} from '../../core/runtime.js';
+import { existingJsonMcpServerName } from '../core/names.js';
+export { mcpProxyCommand } from './server.js';
 
 export async function mergeCopilotMcpConfig(configPath, proxyUrl) {
   const existing = await readTextIfExists(configPath);
@@ -41,3 +41,4 @@ export function copilotLocalProxyServerConfig(proxyUrl) {
     url: proxyUrl
   };
 }
+

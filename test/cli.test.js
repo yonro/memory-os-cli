@@ -526,11 +526,11 @@ test('mcp cursor config can be merged into a user-scoped json file', async () =>
   assert.equal(config.mcpServers.XMemo.url, 'https://api.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'cursor');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-cursor-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
-  const identity = JSON.parse(await fs.readFile(path.join(tempDir, 'agent-instances', 'cursor.json'), 'utf8'));
-  assert.equal(identity.agentInstanceId, config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID']);
+  const identity = JSON.parse(await fs.readFile(path.join(tempDir, 'device-instance.json'), 'utf8'));
+  assert.equal(identity.deviceInstanceId, config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID']);
 });
 
 test('mcp antigravity config can be merged into a user-scoped json file', async () => {
@@ -555,11 +555,11 @@ test('mcp antigravity config can be merged into a user-scoped json file', async 
   assert.equal(config.mcpServers.XMemo.url, undefined);
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
-  const identity = JSON.parse(await fs.readFile(path.join(tempDir, 'agent-instances', 'antigravity.json'), 'utf8'));
-  assert.equal(identity.agentInstanceId, config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID']);
+  const identity = JSON.parse(await fs.readFile(path.join(tempDir, 'device-instance.json'), 'utf8'));
+  assert.equal(identity.deviceInstanceId, config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID']);
 });
 
 test('mcp antigravity-ide config can be merged into a user-scoped json file', async () => {
@@ -583,7 +583,7 @@ test('mcp antigravity-ide config can be merged into a user-scoped json file', as
   assert.equal(config.mcpServers.XMemo.type, 'http');
   assert.equal(config.mcpServers.XMemo.url, 'https://api.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -608,7 +608,7 @@ test('mcp antigravity2 config can be merged into a user-scoped json file', async
   assert.equal(config.mcpServers.XMemo.type, 'http');
   assert.equal(config.mcpServers.XMemo.url, 'https://api.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -634,7 +634,7 @@ test('mcp antigravity-cli config can be merged into a user-scoped json file', as
   assert.equal(config.mcpServers.XMemo.url, undefined);
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -659,7 +659,7 @@ test('mcp qwen config can be merged into a user-scoped json file', async () => {
   assert.equal(config.mcpServers.XMemo.url, undefined);
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'qwen');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-qwen-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -685,7 +685,7 @@ test('mcp opencode config can be merged into a user-scoped json file', async () 
   assert.equal(config.mcp.XMemo.enabled, true);
   assert.equal(config.mcp.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
-  assert.match(config.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
+  assert.match(config.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -716,7 +716,7 @@ test('mcp claude-code config passes token and agent headers to mcp-remote', asyn
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
   assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
-  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-claude-code-/);
+  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -739,7 +739,7 @@ test('mcp hermes merge into existing yaml preserves auth and agent headers', asy
   assert.match(config, /Authorization:Bearer \$\{XMEMO_KEY\}/);
   assert.match(config, /X-Memory-OS-Agent-ID:hermes/);
   assert.match(config, /X-Memory-OS-Agent-Instance-ID:\$\{XMEMO_AGENT_INSTANCE_ID\}/);
-  assert.match(config, /XMEMO_AGENT_INSTANCE_ID: "xmemo-hermes-/);
+  assert.match(config, /XMEMO_AGENT_INSTANCE_ID: "xmemo-/);
   assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
 });
 
@@ -818,7 +818,7 @@ test('setup writes cursor config from discovered mcp url without token value', a
   assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'cursor');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-cursor-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -919,7 +919,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.equal(qwenConfig.mcpServers.XMemo.httpUrl, 'https://mcp.example.test/mcp');
   assert.equal(qwenConfig.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'qwen');
-  assert.match(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-qwen-/);
+  assert.match(qwenConfig.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
 
   const opencodeConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.config', 'opencode', 'opencode.json'), 'utf8'));
   assert.equal(opencodeConfig.mcp.XMemo.type, 'remote');
@@ -927,7 +927,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.equal(opencodeConfig.mcp.XMemo.enabled, true);
   assert.equal(opencodeConfig.mcp.XMemo.headers.Authorization, undefined);
   assert.equal(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-ID'], 'opencode');
-  assert.match(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-opencode-/);
+  assert.match(opencodeConfig.mcp.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
 
   const traeConfig = JSON.parse(await fs.readFile(path.join(traeConfigDir, 'mcp.json'), 'utf8'));
   assert.equal(traeConfig.mcpServers.XMemo.command, 'npx');
@@ -943,7 +943,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
   assert.equal(traeConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
-  assert.match(traeConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-/);
+  assert.match(traeConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
 
   const traeSoloConfig = JSON.parse(await fs.readFile(path.join(traeSoloConfigDir, 'mcp.json'), 'utf8'));
   assert.equal(traeSoloConfig.mcpServers.XMemo.command, 'npx');
@@ -959,7 +959,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
   assert.equal(traeSoloConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
-  assert.match(traeSoloConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-solo-/);
+  assert.match(traeSoloConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {
@@ -1095,7 +1095,7 @@ test('setup gemini shorthand writes oauth httpUrl config without token', async (
   assert.equal(config.mcpServers.XMemo.url, undefined);
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'gemini-cli');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-gemini-cli-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.gemini', 'GEMINI.md'), 'utf8');
@@ -1161,7 +1161,7 @@ test('setup antigravity shorthand writes oauth serverUrl config without token', 
   assert.equal(config.mcpServers.XMemo.url, undefined);
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.gemini', 'antigravity', 'MEMORY.md'), 'utf8');
@@ -1191,7 +1191,7 @@ test('setup antigravity-ide shorthand writes oauth config without token', async 
   assert.equal(config.mcpServers.XMemo.type, 'http');
   assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -1216,7 +1216,7 @@ test('setup antigravity2 shorthand writes oauth config without token', async () 
   assert.equal(config.mcpServers.XMemo.type, 'http');
   assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -1242,7 +1242,7 @@ test('setup antigravity-cli shorthand writes oauth config without token', async 
   assert.equal(config.mcpServers.XMemo.url, undefined);
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'antigravity');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-antigravity-/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -1283,7 +1283,7 @@ test('setup trae shorthand writes config by default', async () => {
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
   assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
-  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-/);
+  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -1324,7 +1324,7 @@ test('setup trae-solo shorthand writes config by default', async () => {
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
   assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
-  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-trae-solo-/);
+  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
@@ -1661,3 +1661,4 @@ function agentDiscoveryFetch(requests) {
     return { ok: false, status: 404 };
   };
 }
+

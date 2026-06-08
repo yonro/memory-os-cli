@@ -1,8 +1,8 @@
-import { arrayValue, booleanValue, stringValue } from './args.js';
-import { TOKEN_ENV_VAR } from './constants.js';
-import { UsageError } from './errors.js';
+import { arrayValue, booleanValue, stringValue } from '../core/args.js';
+import { TOKEN_ENV_VAR } from '../core/constants.js';
+import { UsageError } from '../core/errors.js';
 import { endpointUrl, fetchJson } from './http.js';
-import { isPlainObject } from './runtime.js';
+import { isPlainObject } from '../core/runtime.js';
 
 export function ensureDiscoveryService(discovery, discoveryUrl) {
   const service = stringValue(discovery, ['service']);
@@ -99,4 +99,5 @@ export function discoveryMcpClients(discovery) {
       configEndpoint: typeof client.config_endpoint === 'string' ? client.config_endpoint : null
     }));
 }
+
 
