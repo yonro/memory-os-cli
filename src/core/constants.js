@@ -18,8 +18,8 @@ export const CODEX_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
 export const CODEX_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
 export const CLIENT_PROFILE_TARGETS = {
   cursor: '.cursor/rules/xmemo-memory.md',
-  'gemini-cli': 'AGENTS.md',
-  antigravity: 'AGENTS.md',
+  'gemini-cli': 'GEMINI.md',
+  antigravity: 'GEMINI.md',
   trae: '.trae/rules/xmemo-memory.md',
   'trae-solo': '.trae/rules/xmemo-memory.md'
 };

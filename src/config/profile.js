@@ -126,7 +126,7 @@ export function profileClientConfig(clientId) {
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'AGENTS.md');
+          return path.join(process.cwd(), 'GEMINI.md');
         }
         return path.join(userHome(env), '.gemini', 'GEMINI.md');
       }
@@ -140,7 +140,7 @@ export function profileClientConfig(clientId) {
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'AGENTS.md');
+          return path.join(process.cwd(), 'GEMINI.md');
         }
         return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
       }
@@ -154,7 +154,7 @@ export function profileClientConfig(clientId) {
       defaultTarget: (env) => {
         const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
         if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'AGENTS.md');
+          return path.join(process.cwd(), 'QWEN.md');
         }
         return path.join(userHome(env), '.qwen', 'QWEN.md');
       }

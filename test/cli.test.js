@@ -1137,7 +1137,7 @@ test('setup gemini no-profile writes config but skips behavior profile', async (
   await assert.rejects(fs.readFile(path.join(tempDir, '.gemini', 'GEMINI.md'), 'utf8'), /ENOENT/);
 });
 
-test('setup gemini in project context targets AGENTS.md', async () => {
+test('setup gemini in project context targets GEMINI.md', async () => {
   const mockHome = path.join(os.tmpdir(), 'gemini-unified-home-path');
   await fs.mkdir(mockHome, { recursive: true });
   
@@ -1152,7 +1152,7 @@ test('setup gemini in project context targets AGENTS.md', async () => {
 
   assert.equal(result.code, 0);
   const plan = JSON.parse(result.stdout);
-  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(process.cwd(), 'AGENTS.md'));
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(process.cwd(), 'GEMINI.md'));
   
   await fs.rm(mockHome, { recursive: true, force: true });
 });
