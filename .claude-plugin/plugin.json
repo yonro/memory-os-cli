@@ -1,0 +1,14 @@
+{
+  "name": "xmemo",
+  "displayName": "XMemo",
+  "version": "1.0.0",
+  "description": "Persistent, user-owned memory for AI agents over hosted MCP. Remember decisions, recall project context, manage TODOs, and govern memory lifecycle across sessions.",
+  "author": {
+    "name": "XMemo",
+    "email": "support@xmemo.dev"
+  },
+  "homepage": "https://xmemo.dev",
+  "repository": "https://github.com/yonro/memory-os-cli",
+  "license": "UNLICENSED",
+  "keywords": ["memory", "mcp", "ai-agents", "knowledge-management", "oauth"]
+}
