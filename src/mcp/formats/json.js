@@ -30,7 +30,7 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   nestedTransportClientDefinition('continue', 'Continue', 'defaultContinueConfigPath'),
   commandClientDefinition('claude-desktop', 'Claude Desktop', 'defaultClaudeConfigPath'),
   httpClientDefinition('openclaw', 'OpenClaw', 'defaultOpenclawConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
-  httpClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath', { urlKey: 'url', section: 'powers.mcpServers', authentication: 'oauth' }),
+  httpClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
   commandClientDefinition('zed', 'Zed', 'defaultZedConfigPath', { section: 'context_servers' }),
   nestedTransportClientDefinition('jetbrains', 'JetBrains', 'defaultJetbrainsConfigPath'),
   remoteClientDefinition('opencode', 'OpenCode', 'defaultOpencodeConfigPath'),
