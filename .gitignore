@@ -10,3 +10,10 @@ dist/
 credentials.json
 .DS_Store
 Thumbs.db
+
+# Local client behavioral profiles and rules generated during test/setup
+.cursor/
+.trae/
+.agents/
+GEMINI.md
+QWEN.md

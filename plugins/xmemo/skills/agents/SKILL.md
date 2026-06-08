@@ -1,5 +1,5 @@
 ---
-name: xmemo-memory
+name: agents
 description: Use XMemo's hosted MCP memory tools for durable context, project preferences, decisions, reminders, and cross-session recall in Cursor.
 ---
 

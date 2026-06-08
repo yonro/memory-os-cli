@@ -29,10 +29,10 @@
     "developer-tools"
   ],
   "rules": [
-    "rules/xmemo-memory.mdc"
+    "rules/AGENTS.mdc"
   ],
   "skills": [
-    "skills/xmemo-memory/SKILL.md"
+    "skills/agents/SKILL.md"
   ],
   "mcpServers": "mcp.json"
 }

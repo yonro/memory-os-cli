@@ -35,8 +35,8 @@ test('Cursor plugin manifest references committed assets', async () => {
   assert.equal(manifest.author.email, 'support@xmemo.dev');
   assert.equal(manifest.repository, 'https://github.com/yonro/memory-os-cli');
   assert.equal(manifest.mcpServers, 'mcp.json');
-  assert.deepEqual(manifest.rules, ['rules/xmemo-memory.mdc']);
-  assert.deepEqual(manifest.skills, ['skills/xmemo-memory/SKILL.md']);
+  assert.deepEqual(manifest.rules, ['rules/AGENTS.mdc']);
+  assert.deepEqual(manifest.skills, ['skills/agents/SKILL.md']);
 
   for (const assetPath of [manifest.logo, manifest.mcpServers, ...manifest.rules, ...manifest.skills]) {
     const content = await readText(path.join('plugins/xmemo', assetPath));
@@ -55,9 +55,9 @@ test('Cursor plugin MCP config is OAuth-first and secret-free', async () => {
 });
 
 test('Cursor plugin rule and skill include required frontmatter', async () => {
-  const rule = (await readText('plugins/xmemo/rules/xmemo-memory.mdc')).replace(/\r\n/g, '\n');
+  const rule = (await readText('plugins/xmemo/rules/AGENTS.mdc')).replace(/\r\n/g, '\n');
   assert.match(rule, /^---\ndescription: .+\n---\n/);
 
-  const skill = (await readText('plugins/xmemo/skills/xmemo-memory/SKILL.md')).replace(/\r\n/g, '\n');
-  assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
+  const skill = (await readText('plugins/xmemo/skills/agents/SKILL.md')).replace(/\r\n/g, '\n');
+  assert.match(skill, /^---\nname: agents\ndescription: .+\n---\n/);
 });

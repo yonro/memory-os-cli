@@ -29,7 +29,7 @@
     "developer-tools"
   ],
   "steering": [
-    "steering/xmemo-memory.md"
+    "steering/AGENTS.md"
   ],
   "mcpServers": "mcp.json"
 }
