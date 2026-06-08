@@ -6,33 +6,6 @@ inclusion: auto
 
 Use XMemo's hosted MCP memory tools for durable context, project preferences, decisions, reminders, and cross-session recall in Kiro.
 
-## Setup
-
-XMemo requires the `XMEMO_KEY` environment variable. Choose one:
-
-**Option A: Website (no install needed)**
-1. Go to https://xmemo.dev, sign in, and copy your API token from the account page.
-2. Set the environment variable:
-
-PowerShell (persistent):
-```powershell
-[Environment]::SetEnvironmentVariable("XMEMO_KEY", "your-token", "User")
-```
-
-Bash/Zsh:
-```bash
-export XMEMO_KEY="your-token"
-```
-
-**Option B: CLI helper**
-```bash
-npm install -g @xmemo/client
-xmemo login
-export XMEMO_KEY=$(xmemo token show --format raw)
-```
-
-Restart Kiro after setting the variable for the first time.
-
 ## When to Use
 
 Use XMemo when the task may depend on prior memory, durable project context, coding preferences, decisions, or follow-up actions.
@@ -40,10 +13,10 @@ Use XMemo when the task may depend on prior memory, durable project context, cod
 ## Workflow
 
 1. **Recall first** when prior context could change the answer. Use XMemo search/recall/context tools before making assumptions about preferences or past decisions.
-2. **Save only durable information** that the user asks to remember or that is clearly useful across future Kiro sessions.
+2. **Save only durable information** that the user asks to remember or that is clearly useful across future sessions.
 3. **Keep memory content concise, scoped, and useful**. Prefer concrete facts, decisions, links to public docs, and action items over chat transcripts.
 4. **For destructive memory actions**, confirm the exact target before deleting, forgetting, or overwriting.
-5. **If authorization errors occur**, ask the user to verify the `XMEMO_KEY` environment variable is set and to restart Kiro.
+5. **If authorization errors occur**, tell the user: "Run `xmemo login` or visit https://xmemo.dev to get your token, then set the `XMEMO_KEY` environment variable and restart Kiro."
 
 ## Good Memory Candidates
 

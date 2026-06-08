@@ -7,26 +7,13 @@ description: Use XMemo's hosted MCP memory tools for durable context, project pr
 
 Use this skill when the task may depend on prior memory, durable project context, coding preferences, decisions, or follow-up actions.
 
-## Setup
-
-XMemo connects through Cursor's MCP OAuth flow. On first use, a browser window opens for one-time authorization — no installation or manual token configuration needed.
-
-If OAuth is unavailable:
-
-1. Go to https://xmemo.dev, sign in, and copy your API token from the account page.
-2. Set environment variable `XMEMO_KEY` with the token value.
-
-Or use the CLI helper: `npm install -g @xmemo/client && xmemo login`
-
-Never paste raw tokens into chat.
-
 ## Workflow
 
 1. Recall first when prior context could change the answer. Use XMemo search/recall/context tools before making assumptions about preferences or past decisions.
-2. Save only durable information that the user asks to remember or that is clearly useful across future Cursor sessions.
+2. Save only durable information that the user asks to remember or that is clearly useful across future sessions.
 3. Keep memory content concise, scoped, and useful. Prefer concrete facts, decisions, links to public docs, and action items over chat transcripts.
 4. For destructive memory actions, confirm the exact target before deleting, forgetting, or overwriting.
-5. If authorization is missing or expired, ask the user to reconnect XMemo through Cursor's OAuth flow. Do not request raw bearer tokens in chat.
+5. If authorization fails, tell the user: "Reconnect XMemo through OAuth, or run `xmemo login`, or visit https://xmemo.dev to set up your token." Do not request raw tokens in chat.
 
 ## Good memory candidates
 
