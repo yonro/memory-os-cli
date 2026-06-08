@@ -6,6 +6,12 @@ import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { run } from '../src/cli.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const CURRENT_VERSION = packageJson.version;
 
 test('help documents privacy defaults', async () => {
   const result = await invoke(['help']);
@@ -390,7 +396,7 @@ test('doctor validates agent discovery without sending token values', async () =
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
   assert.equal(report.cli.package, '@xmemo/client');
-  assert.equal(report.cli.version, '0.4.159');
+  assert.equal(report.cli.version, CURRENT_VERSION);
   assert.equal(report.discovery.mcpUrl, 'https://api.example.test/mcp');
   assert.deepEqual(report.discovery.supportedClients, ['codex', 'copilot-cli', 'gemini-cli']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
