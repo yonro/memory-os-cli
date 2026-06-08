@@ -7,10 +7,12 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: npm
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,6 +26,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
       
       - name: Update package.json version
         run: |
@@ -43,6 +47,17 @@ jobs:
             git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
             git push
           fi
+      
+      - name: Run tests
+        run: |
+          npm ci
+          npm run lint
+          npm test
+      
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       
       - name: Create GitHub Release
         run: |
