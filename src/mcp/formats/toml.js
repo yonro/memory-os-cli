@@ -21,10 +21,16 @@ import {
 } from '../../core/runtime.js';
 import { agentInstanceIdentityPath } from '../identity/device.js';
 
-export function codexTomlSnippet(mcpUrl) {
+export function codexTomlSnippet(mcpUrl, identity) {
+  const agentId = identity?.agentId ?? 'codex';
+  const agentInstanceId = identity?.agentInstanceId ?? `\${${AGENT_INSTANCE_ENV_VAR}}`;
   return `[mcp_servers.${MCP_SERVER_NAME}]
 url = "${escapeTomlString(mcpUrl)}"
 bearer_token_env_var = "${TOKEN_ENV_VAR}"
+
+[mcp_servers.${MCP_SERVER_NAME}.http_headers]
+${AGENT_ID_HEADER} = "${escapeTomlString(agentId)}"
+${AGENT_INSTANCE_HEADER} = "${escapeTomlString(agentInstanceId)}"
 `;
 }
 
@@ -121,8 +127,8 @@ export async function codexSmokeReport(configPath, env) {
   };
 }
 
-export async function appendTomlServerConfig(configPath, mcpUrl) {
-  const snippet = codexTomlSnippet(mcpUrl);
+export async function appendTomlServerConfig(configPath, mcpUrl, identity) {
+  const snippet = codexTomlSnippet(mcpUrl, identity);
   const existing = await readTextIfExists(configPath);
   const existingName = existingTomlMcpServerName(existing);
   if (existingName) {
