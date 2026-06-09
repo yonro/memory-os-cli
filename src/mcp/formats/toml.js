@@ -4,6 +4,8 @@ import path from 'node:path';
 import {
   COMMAND_NAME,
   AGENT_ID_HEADER,
+  AGENT_INSTANCE_ENV_VAR,
+  AGENT_INSTANCE_HEADER,
   LEGACY_MCP_SERVER_NAMES,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
@@ -28,12 +30,14 @@ bearer_token_env_var = "${TOKEN_ENV_VAR}"
 
 export function grokTomlSnippet(mcpUrl, identity) {
   const agentId = identity?.agentId ?? 'grok';
+  const agentInstanceId = identity?.agentInstanceId ?? `\${${AGENT_INSTANCE_ENV_VAR}}`;
   return `[mcp_servers.${MCP_SERVER_NAME}]
 url = "${escapeTomlString(mcpUrl)}"
 bearer_token_env_var = "${TOKEN_ENV_VAR}"
 
 [mcp_servers.${MCP_SERVER_NAME}.http_headers]
 ${AGENT_ID_HEADER} = "${escapeTomlString(agentId)}"
+${AGENT_INSTANCE_HEADER} = "${escapeTomlString(agentInstanceId)}"
 `;
 }
 
