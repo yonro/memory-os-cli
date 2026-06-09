@@ -44,5 +44,8 @@
     "cli",
     "privacy"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "optionalDependencies": {
+    "mcp-remote": "^0.1.0"
+  }
 }
