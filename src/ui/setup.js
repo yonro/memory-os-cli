@@ -15,6 +15,9 @@ import { profileClientConfig } from '../config/profile.js';
 
 const SETUP_CLIENT_ALIASES = new Map([
   ['codex', 'codex'],
+  ['grok', 'grok'],
+  ['grok-cli', 'grok'],
+  ['grok-build', 'grok'],
   ['cursor', 'cursor'],
   ['copilot', 'copilot-cli'],
   ['copilot-cli', 'copilot-cli'],

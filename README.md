@@ -43,6 +43,8 @@ xmemo setup antigravity
 xmemo setup antigravity --dry-run
 xmemo setup kiro
 xmemo setup kiro --dry-run
+xmemo setup grok
+xmemo setup grok --dry-run
 xmemo mcp add antigravity2
 xmemo mcp add antigravity2 --write
 xmemo doctor
@@ -446,6 +448,38 @@ printf '%s\n' 'your-token' | xmemo token add --from-stdin
 After setup, restart Kiro or reload MCP servers for the changes to take effect.
 The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
 MCP server entry. Edit the config manually if you need to rotate the endpoint.
+
+### Grok (xAI)
+
+Recommended Grok setup:
+
+```bash
+xmemo setup grok
+```
+
+`setup grok` appends an XMemo MCP server to Grok's user config at
+`~/.grok/config.toml` using Grok's TOML `[mcp_servers.XMemo]` format with `url`,
+`bearer_token_env_var = "XMEMO_KEY"`, and an `[mcp_servers.XMemo.http_headers]`
+table carrying `X-Memory-OS-Agent-ID`. Use `xmemo setup grok --dry-run` to
+preview without writing.
+
+Set your XMemo token with:
+
+```bash
+xmemo login
+# or
+printf '%s\n' 'your-token' | xmemo token add --from-stdin
+```
+
+Grok is also fully compatible with Claude Code: it automatically reads Claude
+Code marketplaces, plugins, skills, and MCP servers. So `xmemo setup claude-code`
+plus the repo's `.claude-plugin/`, `.mcp.json`, and `skills/` are discovered by
+Grok with zero extra configuration. Use `xmemo setup grok` when you want the
+server written directly into Grok's own `~/.grok/config.toml`.
+
+After setup, restart Grok or run `/mcps` to reload MCP servers. The CLI refuses
+to overwrite an existing `XMemo` MCP server entry; edit the config manually if
+you need to rotate the endpoint.
 
 ### Antigravity 2.0
 

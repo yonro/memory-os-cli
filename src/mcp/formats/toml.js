@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   COMMAND_NAME,
+  AGENT_ID_HEADER,
   LEGACY_MCP_SERVER_NAMES,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
@@ -23,6 +24,31 @@ export function codexTomlSnippet(mcpUrl) {
 url = "${escapeTomlString(mcpUrl)}"
 bearer_token_env_var = "${TOKEN_ENV_VAR}"
 `;
+}
+
+export function grokTomlSnippet(mcpUrl, identity) {
+  const agentId = identity?.agentId ?? 'grok';
+  return `[mcp_servers.${MCP_SERVER_NAME}]
+url = "${escapeTomlString(mcpUrl)}"
+bearer_token_env_var = "${TOKEN_ENV_VAR}"
+
+[mcp_servers.${MCP_SERVER_NAME}.http_headers]
+${AGENT_ID_HEADER} = "${escapeTomlString(agentId)}"
+`;
+}
+
+export async function appendGrokServerConfig(configPath, mcpUrl, identity) {
+  const snippet = grokTomlSnippet(mcpUrl, identity);
+  const existing = await readTextIfExists(configPath);
+  const existingName = existingTomlMcpServerName(existing);
+  if (existingName) {
+    throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  }
+
+  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  const prefix = existing.trim().length === 0 ? '' : '\n\n';
+  await fs.appendFile(configPath, `${prefix}${snippet}`, { mode: 0o600 });
+  await bestEffortChmod(configPath, 0o600);
 }
 
 export async function codexSmokeReport(configPath, env) {

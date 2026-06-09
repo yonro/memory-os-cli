@@ -12,6 +12,7 @@ export {
   defaultCopilotConfigPath,
   defaultCursorConfigPath,
   defaultGeminiConfigPath,
+  defaultGrokConfigPath,
   defaultHermesConfigPath,
   defaultJetbrainsConfigPath,
   defaultKiroConfigPath,

@@ -11,6 +11,14 @@ export function createMcpClients(deps) {
     configKind: 'toml'
   });
 
+  clients.set('grok', {
+    label: 'Grok',
+    defaultConfigPath: deps.defaultGrokConfigPath,
+    buildSnippet: deps.grokTomlSnippet,
+    writeConfig: deps.appendGrokServerConfig,
+    configKind: 'toml'
+  });
+
   for (const definition of deps.JSON_MCP_CLIENT_DEFINITIONS) {
     if (definition.id === 'qwen') {
       clients.set('hermes', hermesClient(deps));

@@ -153,3 +153,8 @@ export function defaultClaudecodeConfigPath(env) {
   return path.join(home, '.claude.json');
 }
 
+export function defaultGrokConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.grok', 'config.toml');
+}
+

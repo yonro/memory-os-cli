@@ -1,6 +1,8 @@
 import {
   appendTomlServerConfig,
-  codexTomlSnippet
+  appendGrokServerConfig,
+  codexTomlSnippet,
+  grokTomlSnippet
 } from './formats/toml.js';
 import {
   hermesYamlSnippet,
@@ -23,6 +25,7 @@ import {
   defaultContinueConfigPath,
   defaultCursorConfigPath,
   defaultGeminiConfigPath,
+  defaultGrokConfigPath,
   defaultHermesConfigPath,
   defaultJetbrainsConfigPath,
   defaultKiroConfigPath,
@@ -45,6 +48,9 @@ export const MCP_CLIENTS = createMcpClients({
   defaultCodexConfigPath,
   codexTomlSnippet,
   appendTomlServerConfig,
+  defaultGrokConfigPath,
+  grokTomlSnippet,
+  appendGrokServerConfig,
   defaultHermesConfigPath,
   hermesYamlSnippet,
   mergeHermesMcpConfig,
