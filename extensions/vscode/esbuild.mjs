@@ -1,4 +1,6 @@
 import esbuild from 'esbuild';
+import fs from 'fs';
+import path from 'path';
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -23,4 +25,13 @@ if (watch) {
   console.log('[esbuild] watching…');
 } else {
   await esbuild.build(options);
+  // Avoid shipping stale source maps when sourcemap is disabled in production.
+  if (production) {
+    const mapFile = path.join(path.dirname(options.outfile), `${path.basename(options.outfile)}.map`);
+    try {
+      fs.unlinkSync(mapFile);
+    } catch {
+      /* ignore if absent */
+    }
+  }
 }

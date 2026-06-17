@@ -9,6 +9,7 @@ tsconfig.json
 **/*.map
 **/*.ts
 !dist/**
+dist/**/*.map
 submission-note.md
 out-test/**
 src/test/**
