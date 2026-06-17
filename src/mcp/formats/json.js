@@ -31,7 +31,7 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   commandClientDefinition('claude-desktop', 'Claude Desktop', 'defaultClaudeConfigPath'),
   httpClientDefinition('openclaw', 'OpenClaw', 'defaultOpenclawConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
   commandClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath'),
-  httpClientDefinition('kimi-code', 'Kimi Code', 'defaultKimiCodeConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
+  httpClientDefinition('kimi-code', 'Kimi Code', 'defaultKimiCodeConfigPath', { urlKey: 'url', authentication: 'bearer-token-env-var', bearerTokenEnvVar: 'XMEMO_KEY' }),
   commandClientDefinition('zed', 'Zed', 'defaultZedConfigPath', { section: 'context_servers' }),
   nestedTransportClientDefinition('jetbrains', 'JetBrains', 'defaultJetbrainsConfigPath'),
   remoteClientDefinition('opencode', 'OpenCode', 'defaultOpencodeConfigPath'),
@@ -164,6 +164,15 @@ function serverConfigFromDefinition(definition, mcpUrl, identity) {
       type: 'remote',
       url: mcpUrl,
       enabled: true,
+      headers: headersForDefinition(definition, identity)
+    };
+  }
+
+  if (definition.authentication === 'bearer-token-env-var') {
+    return {
+      ...(definition.extra ?? {}),
+      [definition.urlKey]: mcpUrl,
+      bearerTokenEnvVar: definition.bearerTokenEnvVar,
       headers: headersForDefinition(definition, identity)
     };
   }

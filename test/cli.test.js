@@ -1419,7 +1419,8 @@ test('setup kimi-code shorthand writes config by default', async () => {
 
   const config = JSON.parse(await fs.readFile(path.join(tempDir, '.kimi-code', 'mcp.json'), 'utf8'));
   assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
-  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.bearerTokenEnvVar, 'XMEMO_KEY');
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'kimi-code');
   assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-|\\\$\\\{env:XMEMO_AGENT_INSTANCE_ID\\\}$/);
 
