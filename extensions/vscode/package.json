@@ -37,6 +37,12 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "authentication": [
+      {
+        "id": "xmemo",
+        "label": "XMemo"
+      }
+    ],
     "mcpServerDefinitionProviders": [
       {
         "id": "xmemo.mcp",
