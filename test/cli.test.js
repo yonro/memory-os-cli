@@ -1478,6 +1478,24 @@ test('setup kimi-code --force overwrites existing config', async () => {
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
 });
 
+test('setup kimi-code prints bearerTokenEnvVar guidance without leaking token', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kimi-code-text-'));
+  const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  assert.match(result.stdout, /bearerTokenEnvVar/);
+  assert.match(result.stdout, /process\.env\['XMEMO_KEY'\]/);
+  assert.match(result.stdout, /SAME environment/);
+});
+
 test('codex setup writes env-referenced config and smoke validates it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-'));
   const env = {

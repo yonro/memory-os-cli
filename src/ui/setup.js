@@ -223,6 +223,16 @@ export function writeSetupSummary(plan, io) {
         if (plan.tokenPortalUrl) {
           writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
         }
+      } else if (cid === 'kimi-code') {
+        writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
+        writeLine(io.stdout, '  1. Restart Kimi Code to load the new MCP configuration.');
+        writeLine(io.stdout, `  2. Make sure ${TOKEN_ENV_VAR} is exported in the SAME environment that starts Kimi Code.`);
+        writeLine(io.stdout, `     Kimi Code reads the token from process.env['${TOKEN_ENV_VAR}'] via bearerTokenEnvVar.`);
+        writeLine(io.stdout, `     Example (PowerShell): $env:${TOKEN_ENV_VAR}='<your-token>'; kimi`);
+        writeLine(io.stdout, `     Example (bash):       export ${TOKEN_ENV_VAR}=<your-token> && kimi`);
+        if (plan.tokenPortalUrl) {
+          writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
+        }
       } else if (usesClientOAuth(cid)) {
         writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
         writeLine(io.stdout, '  1. When the agent starts or first makes an XMemo tool call, a browser window will automatically pop up requesting OAuth authorization.');
