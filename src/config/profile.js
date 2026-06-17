@@ -131,6 +131,21 @@ export function profileClientConfig(clientId) {
         return path.join(userHome(env), '.kiro', 'steering', 'AGENTS.md');
       }
     },
+    'kimi-code': {
+      label: 'Kimi Code',
+      setupAlias: 'kimi',
+      profileVersion: 'kimi-code-mcp-depth-v1',
+      requiredTokenEnv: TOKEN_ENV_VAR,
+      markerStart: CLIENT_PROFILE_MARKER_START,
+      markerEnd: CLIENT_PROFILE_MARKER_END,
+      defaultTarget: (env) => {
+        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
+        if (!isTest && (existsSync(path.join(process.cwd(), '.kimi-code')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
+          return path.join(process.cwd(), '.kimi-code', 'AGENTS.md');
+        }
+        return path.join(userHome(env), '.kimi-code', 'AGENTS.md');
+      }
+    },
     'gemini-cli': {
       label: 'Gemini CLI',
       setupAlias: 'gemini',
@@ -222,7 +237,7 @@ export function profileClientConfig(clientId) {
 }
 
 export function supportedProfileClientIds() {
-  return ['codex', 'cursor', 'kiro', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
+  return ['codex', 'cursor', 'kiro', 'kimi-code', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
 }
 
 export function defaultProfileTarget(clientId, env) {

@@ -15,6 +15,7 @@ export {
   defaultGrokConfigPath,
   defaultHermesConfigPath,
   defaultJetbrainsConfigPath,
+  defaultKimiCodeConfigPath,
   defaultKiroConfigPath,
   defaultOpencodeConfigPath,
   defaultOpenclawConfigPath,

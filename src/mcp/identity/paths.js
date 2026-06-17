@@ -158,3 +158,8 @@ export function defaultGrokConfigPath(env) {
   return path.join(home, '.grok', 'config.toml');
 }
 
+export function defaultKimiCodeConfigPath(env) {
+  const home = env.USERPROFILE || env.HOME || os.homedir();
+  return path.join(home, '.kimi-code', 'mcp.json');
+}
+

@@ -31,6 +31,7 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   commandClientDefinition('claude-desktop', 'Claude Desktop', 'defaultClaudeConfigPath'),
   httpClientDefinition('openclaw', 'OpenClaw', 'defaultOpenclawConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
   commandClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath'),
+  httpClientDefinition('kimi-code', 'Kimi Code', 'defaultKimiCodeConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
   commandClientDefinition('zed', 'Zed', 'defaultZedConfigPath', { section: 'context_servers' }),
   nestedTransportClientDefinition('jetbrains', 'JetBrains', 'defaultJetbrainsConfigPath'),
   remoteClientDefinition('opencode', 'OpenCode', 'defaultOpencodeConfigPath'),
@@ -352,4 +353,9 @@ export const claudecodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('cl
 export const claudecodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('claude-code')) => jsonClientSnippet('claude-code', mcpUrl, identity);
 export const claudecodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('claude-code')) => jsonClientServerConfig('claude-code', mcpUrl, identity);
 export const mergeClaudecodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('claude-code', configPath, mcpUrl, identity);
+
+export const kimiCodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientConfig('kimi-code', mcpUrl, identity);
+export const kimiCodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientSnippet('kimi-code', mcpUrl, identity);
+export const kimiCodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientServerConfig('kimi-code', mcpUrl, identity);
+export const mergeKimiCodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('kimi-code', configPath, mcpUrl, identity);
 
