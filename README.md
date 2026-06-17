@@ -193,6 +193,27 @@ configure MCP only. Use `--dry-run` to preview without writing config or profile
 files, and `--profile-target <path>` to choose a different behavior profile
 target.
 
+### Uninstall
+
+Remove the XMemo MCP server entry from one or all detected client configs:
+
+```bash
+xmemo uninstall --all --dry-run
+xmemo uninstall --all --yes
+xmemo uninstall cursor --yes
+xmemo uninstall --all --yes --profiles
+```
+
+`xmemo uninstall --all` scans the same clients as `setup --all` and removes only
+the `XMemo` entry (and legacy names such as `memory_os`) from each detected
+config file. Other MCP servers are preserved. By default it shows a summary and
+asks for confirmation; pass `--yes` (or `-y`) to skip the prompt, or `--dry-run`
+to preview without modifying files.
+
+Pass `--profiles` to also remove installed behavior profiles (Codex `AGENTS.md`,
+Cursor memory profile, etc.). Identity files and credentials are not removed, so
+a later `xmemo setup --all` can re-enable XMemo with the same agent instance ID.
+
 Default behavior profile targets:
 
 ```text

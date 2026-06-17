@@ -2,16 +2,19 @@ import {
   appendTomlServerConfig,
   appendGrokServerConfig,
   codexTomlSnippet,
-  grokTomlSnippet
+  grokTomlSnippet,
+  removeTomlServerConfig
 } from './formats/toml.js';
 import {
   hermesYamlSnippet,
-  mergeHermesMcpConfig
+  mergeHermesMcpConfig,
+  removeHermesMcpConfig
 } from './formats/yaml.js';
 import {
   JSON_MCP_CLIENT_DEFINITIONS,
   jsonClientSnippet,
-  mergeJsonClientMcpConfig
+  mergeJsonClientMcpConfig,
+  removeJsonClientMcpConfig
 } from './formats/json.js';
 import {
   defaultAntigravity2ConfigPath,
@@ -49,14 +52,17 @@ export const MCP_CLIENTS = createMcpClients({
   defaultCodexConfigPath,
   codexTomlSnippet,
   appendTomlServerConfig,
+  removeTomlServerConfig,
   defaultGrokConfigPath,
   grokTomlSnippet,
   appendGrokServerConfig,
   defaultHermesConfigPath,
   hermesYamlSnippet,
   mergeHermesMcpConfig,
+  removeHermesMcpConfig,
   jsonClientSnippet,
   mergeJsonClientMcpConfig,
+  removeJsonClientMcpConfig,
   defaultCursorConfigPath,
   defaultGeminiConfigPath,
   defaultAntigravityConfigPath,

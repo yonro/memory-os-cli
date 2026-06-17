@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import {
   AGENT_INSTANCE_ENV_VAR,
+  LEGACY_MCP_SERVER_NAMES,
   MCP_SERVER_NAME,
   TOKEN_ENV_VAR
 } from '../../core/constants.js';
@@ -31,6 +32,79 @@ export function hermesYamlSnippet(mcpUrl, identity = envReferenceIdentity('herme
       ${TOKEN_ENV_VAR}: "\${env:${TOKEN_ENV_VAR}}"
       ${AGENT_INSTANCE_ENV_VAR}: "${identity.agentInstanceId}"
 `;
+}
+
+export async function removeHermesMcpConfig(configPath, options = {}) {
+  const existing = await readTextIfExists(configPath);
+  if (existing.trim().length === 0) {
+    return { removed: false, reason: 'missing' };
+  }
+
+  const names = [MCP_SERVER_NAME, ...LEGACY_MCP_SERVER_NAMES];
+  const lines = existing.split(/\r?\n/);
+  const mcpIndex = lines.findIndex((line) => line.trim().startsWith('mcp_servers:'));
+  if (mcpIndex === -1) {
+    return { removed: false, reason: 'not-found' };
+  }
+
+  const serverBaseIndent = indentOf(lines[mcpIndex + 1]);
+  if (serverBaseIndent === null) {
+    return { removed: false, reason: 'not-found' };
+  }
+
+  let removed = false;
+  let index = mcpIndex + 1;
+  while (index < lines.length) {
+    const line = lines[index];
+    const lineIndent = indentOf(line);
+    if (lineIndent === null) {
+      index += 1;
+      continue;
+    }
+    if (lineIndent < serverBaseIndent) {
+      break;
+    }
+    if (lineIndent === serverBaseIndent) {
+      const match = names.find((name) => line.trim() === `${name}:` || line.trim().startsWith(`${name}:`));
+      if (match) {
+        const start = index;
+        let end = index + 1;
+        for (; end < lines.length; end += 1) {
+          const nextIndent = indentOf(lines[end]);
+          if (nextIndent === null) {
+            continue;
+          }
+          if (nextIndent <= serverBaseIndent) {
+            break;
+          }
+        }
+        lines.splice(start, end - start);
+        removed = true;
+        index = start;
+        continue;
+      }
+    }
+    index += 1;
+  }
+
+  if (!removed) {
+    return { removed: false, reason: 'not-found' };
+  }
+
+  if (!options.preview) {
+    const updated = lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+    await fs.writeFile(configPath, updated ? `${updated}\n` : '', { mode: 0o600 });
+    await bestEffortChmod(configPath, 0o600);
+  }
+  return { removed: true };
+}
+
+function indentOf(line) {
+  const match = line.match(/^(\s*)\S/);
+  if (!match) {
+    return null;
+  }
+  return match[1].length;
 }
 
 export async function mergeHermesMcpConfig(configPath, mcpUrl, identity, force = false) {

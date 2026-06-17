@@ -55,7 +55,7 @@ export async function appendGrokServerConfig(configPath, mcpUrl, identity, force
     if (!force) {
       throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
     }
-    existing = removeTomlServerBlock(existing, existingName);
+    existing = removeTomlServerBlocks(existing, knownMcpServerNames());
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
@@ -130,6 +130,26 @@ export async function codexSmokeReport(configPath, env) {
   };
 }
 
+export async function removeTomlServerConfig(configPath, options = {}) {
+  const existing = await readTextIfExists(configPath);
+  if (existing.trim().length === 0) {
+    return { removed: false, reason: 'missing' };
+  }
+
+  const names = knownMcpServerNames();
+  const hasAny = names.some((name) => existing.includes(`[mcp_servers.${name}]`));
+  if (!hasAny) {
+    return { removed: false, reason: 'not-found' };
+  }
+
+  if (!options.preview) {
+    const updated = removeTomlServerBlocks(existing, names);
+    await fs.writeFile(configPath, updated ? `${updated.trimEnd()}\n` : '', { mode: 0o600 });
+    await bestEffortChmod(configPath, 0o600);
+  }
+  return { removed: true };
+}
+
 export async function appendTomlServerConfig(configPath, mcpUrl, identity, force = false) {
   const snippet = codexTomlSnippet(mcpUrl, identity);
   let existing = await readTextIfExists(configPath);
@@ -138,7 +158,7 @@ export async function appendTomlServerConfig(configPath, mcpUrl, identity, force
     if (!force) {
       throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
     }
-    existing = removeTomlServerBlock(existing, existingName);
+    existing = removeTomlServerBlocks(existing, knownMcpServerNames());
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
@@ -182,25 +202,26 @@ function tomlServerBlock(content, serverName) {
   return block.join('\n');
 }
 
-function removeTomlServerBlock(content, serverName) {
-  const header = `[mcp_servers.${serverName}]`;
+function removeTomlServerBlocks(content, names) {
   const lines = content.split(/\r?\n/);
-  const start = lines.findIndex((line) => line.trim() === header);
-  if (start === -1) {
-    return content;
-  }
+  const result = [];
+  let skipping = false;
 
-  let end = start + 1;
-  for (; end < lines.length; end += 1) {
-    const line = lines[end];
-    if (/^\s*\[/.test(line)) {
-      break;
+  for (const line of lines) {
+    const tableMatch = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (tableMatch) {
+      const tableName = tableMatch[1].trim();
+      skipping = names.some((name) => {
+        const prefix = `mcp_servers.${name}`;
+        return tableName === prefix || tableName.startsWith(`${prefix}.`);
+      });
+    }
+    if (!skipping) {
+      result.push(line);
     }
   }
 
-  const before = lines.slice(0, start).join('\n');
-  const after = lines.slice(end).join('\n');
-  return `${before}\n${after}`.trim();
+  return result.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
 }
 
 function tomlStringValue(block, key) {

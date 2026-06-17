@@ -25,6 +25,14 @@ export function writeHelp(io) {
   writeLine(io.stdout, `      Detects active workspace to auto-inject project-scoped instruction rules.`);
   writeLine(io.stdout, `      Pass --force to overwrite an existing mcpServers.XMemo entry.`);
   writeLine(io.stdout, '');
+  writeLine(io.stdout, `  ${COMMAND_NAME} uninstall --all [--yes] [--profiles] [--dry-run]`);
+  writeLine(io.stdout, `      Removes the XMemo MCP server entry from every detected client config.`);
+  writeLine(io.stdout, `      Use --profiles to also remove installed behavior profiles.`);
+  writeLine(io.stdout, `      Dry-run by default unless --yes (or -y) is specified.`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `  ${COMMAND_NAME} uninstall <client-id> [--yes] [--profiles] [--dry-run]`);
+  writeLine(io.stdout, `      Removes the XMemo MCP server entry from a single client config.`);
+  writeLine(io.stdout, '');
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>]`);
   writeLine(io.stdout, `      Starts secure OAuth2 browser-based device login flow to register the CLI.`);
   writeLine(io.stdout, '');

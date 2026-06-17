@@ -8,6 +8,7 @@ export function createMcpClients(deps) {
     defaultConfigPath: deps.defaultCodexConfigPath,
     buildSnippet: deps.codexTomlSnippet,
     writeConfig: (configPath, mcpUrl, identity, options = {}) => deps.appendTomlServerConfig(configPath, mcpUrl, identity, options.force),
+    removeConfig: (configPath, options = {}) => deps.removeTomlServerConfig(configPath, options),
     configKind: 'toml'
   });
 
@@ -16,6 +17,7 @@ export function createMcpClients(deps) {
     defaultConfigPath: deps.defaultGrokConfigPath,
     buildSnippet: deps.grokTomlSnippet,
     writeConfig: (configPath, mcpUrl, identity, options = {}) => deps.appendGrokServerConfig(configPath, mcpUrl, identity, options.force),
+    removeConfig: (configPath, options = {}) => deps.removeTomlServerConfig(configPath, options),
     configKind: 'toml'
   });
 
@@ -39,6 +41,7 @@ function jsonClient(definition, deps) {
     defaultConfigPath: deps[definition.defaultConfigPath],
     buildSnippet: (mcpUrl, identity) => deps.jsonClientSnippet(definition.id, mcpUrl, identity),
     writeConfig: (configPath, mcpUrl, identity, options = {}) => deps.mergeJsonClientMcpConfig(definition.id, configPath, mcpUrl, identity, options.force),
+    removeConfig: (configPath, options = {}) => deps.removeJsonClientMcpConfig(definition.id, configPath, options),
     configKind: definition.configKind,
     authentication: definition.authentication
   };
@@ -50,6 +53,7 @@ function hermesClient(deps) {
     defaultConfigPath: deps.defaultHermesConfigPath,
     buildSnippet: deps.hermesYamlSnippet,
     writeConfig: (configPath, mcpUrl, identity, options = {}) => deps.mergeHermesMcpConfig(configPath, mcpUrl, identity, options.force),
+    removeConfig: (configPath, options = {}) => deps.removeHermesMcpConfig(configPath, options),
     configKind: 'yaml'
   };
 }

@@ -8,7 +8,7 @@
     "url": "https://github.com/yonro/memory-os-cli",
     "source": "github"
   },
-  "version": "0.4.163",
+  "version": "0.4.168",
   "remotes": [
     {
       "type": "streamable-http",
@@ -39,10 +39,24 @@
     {
       "registryType": "npm",
       "identifier": "@xmemo/client",
-      "version": "0.4.163",
+      "version": "0.4.168",
       "transport": {
         "type": "stdio"
-      }
+      },
+      "environmentVariables": [
+        {
+          "name": "XMEMO_KEY",
+          "description": "Bearer token issued by XMemo for the stdio proxy.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "XMEMO_URL",
+          "description": "Optional XMemo service base URL. Defaults to https://xmemo.dev.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
     }
   ]
 }

@@ -2,6 +2,7 @@
 ## XMemo Agent profile
 
 MCP server: `XMemo`
+Token env var: `XMEMO_KEY`
 
 Use XMemo deliberately through MCP for project context recall and high-signal write-back.
 

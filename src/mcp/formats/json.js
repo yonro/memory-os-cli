@@ -16,7 +16,7 @@ import {
   readTextIfExists
 } from '../../core/runtime.js';
 import { envReferenceIdentity } from '../identity/device.js';
-import { existingJsonMcpServerName } from '../core/names.js';
+import { existingJsonMcpServerName, knownMcpServerNames } from '../core/names.js';
 
 export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   httpClientDefinition('cursor', 'Cursor', 'defaultCursorConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
@@ -234,6 +234,72 @@ function mcpRemoteCommandJsonServerConfig(mcpUrl, identity) {
       [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
     }
   };
+}
+
+export async function removeJsonClientMcpConfig(clientId, configPath, options = {}) {
+  const definition = requireJsonMcpClientDefinition(clientId);
+  const existing = await readTextIfExists(configPath);
+  if (existing.trim().length === 0) {
+    return { removed: false, reason: 'missing' };
+  }
+
+  const parsed = parseJsonConfig(existing, configPath);
+  if (!isPlainObject(parsed)) {
+    throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+
+  let removed = false;
+
+  const section = parsed[definition.section];
+  if (isPlainObject(section)) {
+    for (const name of knownMcpServerNames()) {
+      if (name in section) {
+        delete section[name];
+        removed = true;
+      }
+    }
+  }
+
+  if (definition.mergeExperimentalModelContextProtocolServers && isPlainObject(parsed.experimental)) {
+    const servers = parsed.experimental.modelContextProtocolServers;
+    if (Array.isArray(servers)) {
+      const originalLength = servers.length;
+      parsed.experimental.modelContextProtocolServers = servers.filter((entry) => !isXMemoExperimentalEntry(entry));
+      if (parsed.experimental.modelContextProtocolServers.length !== originalLength) {
+        removed = true;
+      }
+    }
+  }
+
+  if (!removed) {
+    return { removed: false, reason: 'not-found' };
+  }
+
+  if (!options.preview) {
+    await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+    await bestEffortChmod(configPath, 0o600);
+  }
+  return { removed: true };
+}
+
+function isXMemoExperimentalEntry(entry) {
+  if (!isPlainObject(entry)) {
+    return false;
+  }
+  const transport = entry.transport;
+  if (!isPlainObject(transport)) {
+    return false;
+  }
+  if (typeof transport.url === 'string' && transport.url.includes('xmemo.dev')) {
+    return true;
+  }
+  const headers = transport.headers;
+  if (isPlainObject(headers)) {
+    if (headers[AGENT_ID_HEADER] || headers[AGENT_INSTANCE_HEADER]) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false) {

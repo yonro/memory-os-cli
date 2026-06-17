@@ -893,27 +893,30 @@ test('setup --all auto-detects and configures all local clients', async () => {
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
   
   const plan = JSON.parse(result.stdout);
-  assert.equal(plan.detectedClients.length, 6);
-  
+  assert.equal(plan.detectedClients.length, 7);
+
   const cursorPlan = plan.detectedClients.find(c => c.id === 'cursor');
   const continuePlan = plan.detectedClients.find(c => c.id === 'continue');
   const qwenPlan = plan.detectedClients.find(c => c.id === 'qwen');
   const opencodePlan = plan.detectedClients.find(c => c.id === 'opencode');
   const traePlan = plan.detectedClients.find(c => c.id === 'trae');
   const traeSoloPlan = plan.detectedClients.find(c => c.id === 'trae-solo');
-  
+  const claudeCodePlan = plan.detectedClients.find(c => c.id === 'claude-code');
+
   assert.ok(cursorPlan);
   assert.ok(continuePlan);
   assert.ok(qwenPlan);
   assert.ok(opencodePlan);
   assert.ok(traePlan);
   assert.ok(traeSoloPlan);
+  assert.ok(claudeCodePlan);
   assert.equal(cursorPlan.written, true);
   assert.equal(continuePlan.written, true);
   assert.equal(qwenPlan.written, true);
   assert.equal(opencodePlan.written, true);
   assert.equal(traePlan.written, true);
   assert.equal(traeSoloPlan.written, true);
+  assert.equal(claudeCodePlan.written, true);
 
   const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(cursorConfig.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
@@ -966,6 +969,9 @@ test('setup --all auto-detects and configures all local clients', async () => {
   ]);
   assert.equal(traeSoloConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
   assert.match(traeSoloConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
+
+  const claudeCodeConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.claude.json'), 'utf8'));
+  assert.equal(claudeCodeConfig.mcpServers.XMemo.command, 'npx');
 });
 
 test('setup --all --profile writes behavior profiles for detected clients', async () => {
@@ -1013,6 +1019,321 @@ test('setup --all --profile writes behavior profiles for detected clients', asyn
   const traeProfile = await fs.readFile(path.join(tempDir, '.trae', 'memory-profile.md'), 'utf8');
   assert.match(traeProfile, /XMemo Agent profile/);
   assert.match(traeProfile, /recall\/search/);
+});
+
+test('uninstall cursor --yes removes XMemo but preserves other servers', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-cursor-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  const cursorConfigPath = path.join(tempDir, '.cursor', 'mcp.json');
+  await fs.writeFile(cursorConfigPath, JSON.stringify({
+    mcpServers: {
+      XMemo: { url: 'https://mcp.example.test/mcp' },
+      OtherServer: { url: 'https://other.example.test/mcp' }
+    }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', 'cursor', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Removed/);
+  assert.match(result.stdout, /Cursor/);
+
+  const config = JSON.parse(await fs.readFile(cursorConfigPath, 'utf8'));
+  assert.equal(config.mcpServers.XMemo, undefined);
+  assert.equal(config.mcpServers.OtherServer.url, 'https://other.example.test/mcp');
+});
+
+test('uninstall --all --dry-run previews removals without writing', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-all-dry-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' } }
+  }, null, 2));
+  await fs.writeFile(path.join(tempDir, '.continue', 'config.json'), JSON.stringify({
+    mcpServers: { XMemo: { transport: { url: 'https://mcp.example.test/mcp' } } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all', '--dry-run'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /dry run/);
+  assert.match(result.stdout, /Cursor/);
+  assert.match(result.stdout, /Continue/);
+
+  const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.ok(cursorConfig.mcpServers.XMemo);
+  const continueConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.continue', 'config.json'), 'utf8'));
+  assert.ok(continueConfig.mcpServers.XMemo);
+});
+
+test('uninstall --all --yes removes XMemo from all detected clients', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-all-yes-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' }, OtherServer: { url: 'https://other.test/mcp' } }
+  }, null, 2));
+  await fs.writeFile(path.join(tempDir, '.continue', 'config.json'), JSON.stringify({
+    mcpServers: { XMemo: { transport: { url: 'https://mcp.example.test/mcp' } } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Removed/);
+
+  const cursorConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(cursorConfig.mcpServers.XMemo, undefined);
+  assert.equal(cursorConfig.mcpServers.OtherServer.url, 'https://other.test/mcp');
+  const continueConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.continue', 'config.json'), 'utf8'));
+  assert.equal(continueConfig.mcpServers.XMemo, undefined);
+});
+
+test('uninstall --all --yes --profiles removes behavior profiles too', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-all-profiles-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' } }
+  }, null, 2));
+  await fs.writeFile(path.join(tempDir, '.cursor', 'memory-profile.md'), '## User content\n\n<!-- xmemo:profile:start -->\nXMemo profile\n<!-- xmemo:profile:end -->\n');
+
+  const result = await invoke(['uninstall', '--all', '--yes', '--profiles'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Removed/);
+  assert.match(result.stdout, /Profile:.*\(removed\)/);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.XMemo, undefined);
+  const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
+  assert.doesNotMatch(profile, /XMemo profile/);
+  assert.match(profile, /User content/);
+});
+
+test('uninstall --all without confirmation cancels', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-cancel-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir },
+    stdin: 'n\n'
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Uninstall cancelled/);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.ok(config.mcpServers.XMemo);
+});
+
+test('uninstall --all --json emits dry-run plan without prompting or writing', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-json-dry-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all', '--json'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.dryRun, true);
+  assert.equal(plan.write, false);
+  assert.equal(plan.removed.length, 1);
+  assert.equal(plan.removed[0].id, 'cursor');
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.ok(config.mcpServers.XMemo);
+});
+
+test('uninstall --all --json --yes writes and emits result', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-json-yes-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all', '--json', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.dryRun, false);
+  assert.equal(plan.write, true);
+  assert.equal(plan.removed.length, 1);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.XMemo, undefined);
+});
+
+test('uninstall --all continues after invalid config and exits 1', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-errors-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, '.continue'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), 'not valid json');
+  await fs.writeFile(path.join(tempDir, '.continue', 'config.json'), JSON.stringify({
+    mcpServers: { XMemo: { transport: { url: 'https://mcp.example.test/mcp' } } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all', '--yes', '--json'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 1);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.errors.length, 1);
+  assert.equal(plan.errors[0].id, 'cursor');
+  assert.equal(plan.removed.length, 1);
+  assert.equal(plan.removed[0].id, 'continue');
+
+  const continueConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.continue', 'config.json'), 'utf8'));
+  assert.equal(continueConfig.mcpServers.XMemo, undefined);
+});
+
+test('uninstall cursor --profiles --yes removes profile even when config entry is absent', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-profile-only-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { OtherServer: { url: 'https://other.test/mcp' } }
+  }, null, 2));
+  await fs.writeFile(path.join(tempDir, '.cursor', 'memory-profile.md'), '## User content\n\n<!-- xmemo:profile:start -->\nXMemo profile\n<!-- xmemo:profile:end -->\n');
+
+  const result = await invoke(['uninstall', 'cursor', '--profiles', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Removed/);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.ok(config.mcpServers.OtherServer);
+  const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
+  assert.doesNotMatch(profile, /XMemo profile/);
+});
+
+test('uninstall cursor --profiles --target custom.md --yes removes marker block from target', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-profile-target-'));
+  const customPath = path.join(tempDir, 'custom.md');
+  await fs.writeFile(customPath, '## User content\n\n<!-- xmemo:profile:start -->\nXMemo profile\n<!-- xmemo:profile:end -->\n');
+
+  const result = await invoke(['uninstall', 'cursor', '--profiles', '--target', customPath, '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Removed/);
+
+  const profile = await fs.readFile(customPath, 'utf8');
+  assert.doesNotMatch(profile, /XMemo profile/);
+  assert.match(profile, /User content/);
+});
+
+test('uninstall --all requires --yes or --dry-run when stdin is not interactive', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-noninteractive-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: { XMemo: { url: 'https://mcp.example.test/mcp' } }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', '--all'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir },
+    isTTY: false
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /--yes|--dry-run/);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.ok(config.mcpServers.XMemo);
+});
+
+test('uninstall cursor removes legacy XMemo names', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-legacy-'));
+  await fs.mkdir(path.join(tempDir, '.cursor'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, '.cursor', 'mcp.json'), JSON.stringify({
+    mcpServers: {
+      memory_os: { url: 'https://mcp.example.test/mcp' },
+      OtherServer: { url: 'https://other.test/mcp' }
+    }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', 'cursor', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.memory_os, undefined);
+  assert.equal(config.mcpServers.XMemo, undefined);
+  assert.ok(config.mcpServers.OtherServer);
+});
+
+test('setup codex --force overwrites without leaving orphan child tables', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-codex-force-'));
+  const codexPath = path.join(tempDir, '.codex', 'config.toml');
+  await fs.mkdir(path.dirname(codexPath), { recursive: true });
+  await fs.writeFile(codexPath, `[mcp_servers.XMemo]
+url = "https://old.example.test/mcp"
+bearer_token_env_var = "OLD_TOKEN"
+
+[mcp_servers.XMemo.http_headers]
+X-Memory-OS-Agent-ID = "old"
+
+[mcp_servers.Other]
+url = "https://other.test/mcp"
+`);
+
+  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--yes', '--force'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token-that-must-not-leak' },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  const updated = await fs.readFile(codexPath, 'utf8');
+  assert.doesNotMatch(updated, /OLD_TOKEN/);
+  assert.doesNotMatch(updated, /X-Memory-OS-Agent-ID = "old"/);
+  assert.match(updated, /\[mcp_servers\.Other\]/);
+  assert.match(updated, /X-Memory-OS-Agent-ID = "codex"/);
+});
+
+test('uninstall codex removes root and child TOML tables', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-codex-toml-'));
+  const codexPath = path.join(tempDir, '.codex', 'config.toml');
+  await fs.mkdir(path.dirname(codexPath), { recursive: true });
+  await fs.writeFile(codexPath, `[mcp_servers.XMemo]
+url = "https://mcp.example.test/mcp"
+
+[mcp_servers.XMemo.http_headers]
+X-Memory-OS-Agent-ID = "codex"
+
+[mcp_servers.Other]
+url = "https://other.test/mcp"
+`);
+
+  const result = await invoke(['uninstall', 'codex', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  const updated = await fs.readFile(codexPath, 'utf8');
+  assert.doesNotMatch(updated, /\[mcp_servers\.XMemo\]/);
+  assert.doesNotMatch(updated, /\[mcp_servers\.XMemo\.http_headers\]/);
+  assert.match(updated, /\[mcp_servers\.Other\]/);
 });
 
 test('setup cursor prompt can skip behavior profile with n', async () => {
@@ -1422,7 +1743,7 @@ test('setup kimi-code shorthand writes config by default', async () => {
   assert.equal(config.mcpServers.XMemo.bearerTokenEnvVar, 'XMEMO_KEY');
   assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
   assert.equal(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'kimi-code');
-  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-|\\\$\\\{env:XMEMO_AGENT_INSTANCE_ID\\\}$/);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
 
   const profile = await fs.readFile(path.join(tempDir, '.kimi-code', 'AGENTS.md'), 'utf8');
   assert.match(profile, /XMemo Agent profile/);
@@ -1711,10 +2032,14 @@ test('codex memory behavior profile documents recall and write-back', async () =
 async function invoke(args, options = {}) {
   let stdout = '';
   let stderr = '';
+  const stdin = Readable.from([options.stdin ?? '']);
+  if (options.isTTY !== undefined) {
+    stdin.isTTY = options.isTTY;
+  }
 
   const code = await run(args, {
     env: options.env ?? {},
-    stdin: Readable.from([options.stdin ?? '']),
+    stdin,
     stdout: { write: (chunk) => { stdout += chunk; } },
     stderr: { write: (chunk) => { stderr += chunk; } },
     fetch: options.fetch,

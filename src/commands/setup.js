@@ -9,6 +9,10 @@ import {
   DEFAULT_PROXY_PORT
 } from '../core/constants.js';
 import {
+  autoScanClientIds,
+  detectedSetupTargets
+} from '../mcp/clients/scan.js';
+import {
   buildSetupPlan,
   ensureDiscoveryService
 } from '../network/discovery.js';
@@ -24,7 +28,7 @@ import {
   supportedMcpClients
 } from '../mcp/clients.js';
 import { mergeCopilotMcpConfig } from '../mcp/proxy/copilot.js';
-import { detectClient } from '../mcp/clients/detect.js';
+
 import {
   agentIdentity,
   envReferenceIdentity
@@ -93,42 +97,41 @@ export async function setupCommand(args, io) {
 
   if (setupAll) {
     setupPlan.detectedClients = [];
-    const scanIds = ['codex', 'cursor', 'copilot-cli', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'qwen', 'opencode', 'trae', 'trae-solo'];
-    for (const scanId of scanIds) {
-      const detection = await detectClient(scanId, io.env, MCP_CLIENTS);
-      if (detection.detected) {
-        let clientPlan;
-        if (scanId === 'copilot-cli') {
-          const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
-          clientPlan = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
-          clientPlan.configPath = detection.path;
-          if (writeConfig) {
-            await mergeCopilotMcpConfig(clientPlan.configPath, clientPlan.proxyUrl, force);
-            clientPlan.written = true;
-          }
-        } else {
-          const client = MCP_CLIENTS.get(scanId);
-          const identity = writeConfig ? await agentIdentity(scanId, io.env) : envReferenceIdentity(scanId);
-          clientPlan = clientSetupPlan(scanId, client, setupPlan.mcpUrl, io.env, identity);
-          clientPlan.configPath = detection.path;
-          if (writeConfig) {
-            await client.writeConfig(clientPlan.configPath, setupPlan.mcpUrl, identity, { force });
-            clientPlan.written = true;
-            if (profileClientConfig(scanId)) {
-              const installProfile = hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
-              if (installProfile) {
-                const profileTarget = defaultProfileTarget(scanId, io.env);
-                const profileResult = await profileInstallResult(scanId, profileTarget, { write: true });
-                clientPlan.behaviorProfile = profileResult;
-                if (scanId === 'codex') {
-                  clientPlan.codexProfile = profileResult;
-                }
+    const scanIds = autoScanClientIds(MCP_CLIENTS);
+    const targets = await detectedSetupTargets(scanIds, io.env, MCP_CLIENTS);
+    for (const target of targets) {
+      const scanId = target.clientId;
+      let clientPlan;
+      if (scanId === 'copilot-cli') {
+        const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
+        clientPlan = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
+        clientPlan.configPath = target.configPath;
+        if (writeConfig) {
+          await mergeCopilotMcpConfig(clientPlan.configPath, clientPlan.proxyUrl, force);
+          clientPlan.written = true;
+        }
+      } else {
+        const client = MCP_CLIENTS.get(scanId);
+        const identity = writeConfig ? await agentIdentity(scanId, io.env) : envReferenceIdentity(scanId);
+        clientPlan = clientSetupPlan(scanId, client, setupPlan.mcpUrl, io.env, identity);
+        clientPlan.configPath = target.configPath;
+        if (writeConfig) {
+          await client.writeConfig(clientPlan.configPath, setupPlan.mcpUrl, identity, { force });
+          clientPlan.written = true;
+          if (profileClientConfig(scanId)) {
+            const installProfile = hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
+            if (installProfile) {
+              const profileTarget = defaultProfileTarget(scanId, io.env);
+              const profileResult = await profileInstallResult(scanId, profileTarget, { write: true });
+              clientPlan.behaviorProfile = profileResult;
+              if (scanId === 'codex') {
+                clientPlan.codexProfile = profileResult;
               }
             }
           }
         }
-        setupPlan.detectedClients.push(clientPlan);
       }
+      setupPlan.detectedClients.push(clientPlan);
     }
   } else if (clientId) {
     if (clientId === 'copilot-cli') {

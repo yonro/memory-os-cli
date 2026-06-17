@@ -16,6 +16,7 @@ import {
 import { mcpCommand } from './commands/mcp.js';
 import { profileCommand } from './commands/profile.js';
 import { setupCommand } from './commands/setup.js';
+import { uninstallCommand } from './commands/uninstall.js';
 import { updateCommand } from './commands/update.js';
 import { envCommand, writePrivacy } from './config/env.js';
 import { UsageError } from './core/errors.js';
@@ -54,6 +55,10 @@ export async function run(args, io = defaultIo()) {
 
     if (command === 'setup') {
       return await setupCommand(args.slice(1), io);
+    }
+
+    if (command === 'uninstall') {
+      return await uninstallCommand(args.slice(1), io);
     }
 
     if (command === 'login') {
