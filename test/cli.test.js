@@ -1430,6 +1430,54 @@ test('setup kimi-code shorthand writes config by default', async () => {
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
+test('setup kimi-code --force overwrites existing config', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kimi-code-force-'));
+  const kimicodeDir = path.join(tempDir, '.kimi-code');
+  await fs.mkdir(kimicodeDir, { recursive: true });
+  await fs.writeFile(
+    path.join(kimicodeDir, 'mcp.json'),
+    JSON.stringify({
+      mcpServers: {
+        XMemo: {
+          url: 'https://old.example.test/mcp',
+          headers: { Authorization: 'Bearer old-token' }
+        }
+      }
+    }, null, 2)
+  );
+
+  const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /already contains/);
+
+  const forceResult = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--json', '--force'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(forceResult.code, 0);
+  const plan = JSON.parse(forceResult.stdout);
+  assert.equal(plan.selectedClient.id, 'kimi-code');
+  assert.equal(plan.selectedClient.written, true);
+
+  const config = JSON.parse(await fs.readFile(path.join(kimicodeDir, 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.bearerTokenEnvVar, 'XMEMO_KEY');
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
+});
+
 test('codex setup writes env-referenced config and smoke validates it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-'));
   const env = {

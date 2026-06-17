@@ -118,14 +118,14 @@ export function jsonClientServerConfig(clientId, mcpUrl, identity) {
   return serverConfigFromDefinition(definition, mcpUrl, resolvedIdentity);
 }
 
-export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, identity) {
+export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, identity, force = false) {
   const definition = requireJsonMcpClientDefinition(clientId);
   const serverConfig = serverConfigFromDefinition(definition, mcpUrl, identity);
   await mergeJsonSectionConfig(configPath, definition.section, serverConfig, definition.section, (parsed) => {
     if (definition.mergeExperimentalModelContextProtocolServers && isPlainObject(parsed.experimental)) {
       mergeExperimentalModelContextProtocolServers(parsed, serverConfig, mcpUrl);
     }
-  });
+  }, force);
 }
 
 function requireJsonMcpClientDefinition(clientId) {
@@ -236,7 +236,7 @@ function mcpRemoteCommandJsonServerConfig(mcpUrl, identity) {
   };
 }
 
-async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge) {
+async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
   if (!isPlainObject(parsed)) {
@@ -246,8 +246,8 @@ async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, dup
     parsed[sectionName] = {};
   }
   const existingName = existingJsonMcpServerName(parsed[sectionName]);
-  if (existingName) {
-    throw new UsageError(`MCP config already contains ${duplicatePath}.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions.`);
+  if (existingName && !force) {
+    throw new UsageError(`MCP config already contains ${duplicatePath}.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
   }
   parsed[sectionName][MCP_SERVER_NAME] = serverConfig;
   afterMerge?.(parsed);

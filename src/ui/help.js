@@ -14,14 +14,16 @@ export function writeHelp(io) {
   writeLine(io.stdout, `Official package: ${PACKAGE_NAME} | Legacy command: ${LEGACY_COMMAND_NAME}`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, '💡 CORE ONBOARDING & SETUP COMMANDS:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup --all [--write] [--profile]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup --all [--write] [--profile] [--force]`);
   writeLine(io.stdout, `      Auto-detects all local client installations (Cursor, VS Code, Continue, Trae, etc.).`);
   writeLine(io.stdout, `      Merges XMemo MCP configs. Pass --profile to auto-inject workspace prompt rules.`);
   writeLine(io.stdout, `      *Dry-run by default unless --write (or --yes/-y) is specified for safety.*`);
+  writeLine(io.stdout, `      Pass --force to overwrite an existing mcpServers.XMemo entry.`);
   writeLine(io.stdout, '');
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup <client-id> [--url <url>] [--no-profile] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <client-id> [--url <url>] [--no-profile] [--json] [--force]`);
   writeLine(io.stdout, `      Runs interactive setup wizard for a single client (e.g. cursor, gemini, antigravity).`);
   writeLine(io.stdout, `      Detects active workspace to auto-inject project-scoped instruction rules.`);
+  writeLine(io.stdout, `      Pass --force to overwrite an existing mcpServers.XMemo entry.`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>]`);
   writeLine(io.stdout, `      Starts secure OAuth2 browser-based device login flow to register the CLI.`);

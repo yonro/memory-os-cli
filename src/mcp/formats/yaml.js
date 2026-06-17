@@ -33,11 +33,14 @@ export function hermesYamlSnippet(mcpUrl, identity = envReferenceIdentity('herme
 `;
 }
 
-export async function mergeHermesMcpConfig(configPath, mcpUrl, identity) {
+export async function mergeHermesMcpConfig(configPath, mcpUrl, identity, force = false) {
   const existing = await readTextIfExists(configPath);
 
   if (existing.includes(`${MCP_SERVER_NAME}:`) || existing.includes('memory_os:') || existing.includes('memory-os:')) {
-    throw new UsageError(`MCP config already contains ${MCP_SERVER_NAME} in mcp_servers. Edit ${configPath} manually to avoid duplicate server definitions.`);
+    if (!force) {
+      throw new UsageError(`MCP config already contains ${MCP_SERVER_NAME} in mcp_servers. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+    }
+    throw new UsageError(`--force overwrite is not yet supported for Hermes YAML configs. Edit ${configPath} manually.`);
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });

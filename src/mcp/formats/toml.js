@@ -47,17 +47,20 @@ ${AGENT_INSTANCE_HEADER} = "${escapeTomlString(agentInstanceId)}"
 `;
 }
 
-export async function appendGrokServerConfig(configPath, mcpUrl, identity) {
+export async function appendGrokServerConfig(configPath, mcpUrl, identity, force = false) {
   const snippet = grokTomlSnippet(mcpUrl, identity);
-  const existing = await readTextIfExists(configPath);
+  let existing = await readTextIfExists(configPath);
   const existingName = existingTomlMcpServerName(existing);
   if (existingName) {
-    throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
+    if (!force) {
+      throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+    }
+    existing = removeTomlServerBlock(existing, existingName);
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   const prefix = existing.trim().length === 0 ? '' : '\n\n';
-  await fs.appendFile(configPath, `${prefix}${snippet}`, { mode: 0o600 });
+  await fs.writeFile(configPath, `${existing.trimEnd()}${prefix}${snippet}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
 }
 
@@ -127,17 +130,20 @@ export async function codexSmokeReport(configPath, env) {
   };
 }
 
-export async function appendTomlServerConfig(configPath, mcpUrl, identity) {
+export async function appendTomlServerConfig(configPath, mcpUrl, identity, force = false) {
   const snippet = codexTomlSnippet(mcpUrl, identity);
-  const existing = await readTextIfExists(configPath);
+  let existing = await readTextIfExists(configPath);
   const existingName = existingTomlMcpServerName(existing);
   if (existingName) {
-    throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions.`);
+    if (!force) {
+      throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+    }
+    existing = removeTomlServerBlock(existing, existingName);
   }
 
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   const prefix = existing.trim().length === 0 ? '' : '\n\n';
-  await fs.appendFile(configPath, `${prefix}${snippet}`, { mode: 0o600 });
+  await fs.writeFile(configPath, `${existing.trimEnd()}${prefix}${snippet}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
 }
 
@@ -174,6 +180,27 @@ function tomlServerBlock(content, serverName) {
     block.push(line);
   }
   return block.join('\n');
+}
+
+function removeTomlServerBlock(content, serverName) {
+  const header = `[mcp_servers.${serverName}]`;
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === header);
+  if (start === -1) {
+    return content;
+  }
+
+  let end = start + 1;
+  for (; end < lines.length; end += 1) {
+    const line = lines[end];
+    if (/^\s*\[/.test(line)) {
+      break;
+    }
+  }
+
+  const before = lines.slice(0, start).join('\n');
+  const after = lines.slice(end).join('\n');
+  return `${before}\n${after}`.trim();
 }
 
 function tomlStringValue(block, key) {

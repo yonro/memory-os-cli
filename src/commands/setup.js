@@ -66,6 +66,7 @@ export async function setupCommand(args, io) {
   }
 
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
+  const force = hasFlag(optionArgs, '--force');
   const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup || (setupAll && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes'))));
   const timeoutMs = parsePositiveInteger(optionValue(optionArgs, '--timeout-ms') ?? '5000', '--timeout-ms');
 
@@ -102,7 +103,7 @@ export async function setupCommand(args, io) {
           clientPlan = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
           clientPlan.configPath = detection.path;
           if (writeConfig) {
-            await mergeCopilotMcpConfig(clientPlan.configPath, clientPlan.proxyUrl);
+            await mergeCopilotMcpConfig(clientPlan.configPath, clientPlan.proxyUrl, force);
             clientPlan.written = true;
           }
         } else {
@@ -111,7 +112,7 @@ export async function setupCommand(args, io) {
           clientPlan = clientSetupPlan(scanId, client, setupPlan.mcpUrl, io.env, identity);
           clientPlan.configPath = detection.path;
           if (writeConfig) {
-            await client.writeConfig(clientPlan.configPath, setupPlan.mcpUrl, identity);
+            await client.writeConfig(clientPlan.configPath, setupPlan.mcpUrl, identity, { force });
             clientPlan.written = true;
             if (profileClientConfig(scanId)) {
               const installProfile = hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
@@ -134,7 +135,7 @@ export async function setupCommand(args, io) {
       const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
       setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
       if (writeConfig) {
-        await mergeCopilotMcpConfig(setupPlan.selectedClient.configPath, setupPlan.selectedClient.proxyUrl);
+        await mergeCopilotMcpConfig(setupPlan.selectedClient.configPath, setupPlan.selectedClient.proxyUrl, force);
         setupPlan.selectedClient.written = true;
       }
     } else {
@@ -146,7 +147,7 @@ export async function setupCommand(args, io) {
       const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
       setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity);
       if (writeConfig) {
-        await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity);
+        await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity, { force });
         setupPlan.selectedClient.written = true;
       }
 
