@@ -1,0 +1,156 @@
+{
+  "name": "xmemo-vscode",
+  "displayName": "XMemo — Cross-Agent Cloud Memory",
+  "description": "User-owned, identity-aware cloud memory for your editor. Recall project context, save decisions, and share memory across Cursor, Claude, Codex, and your CLI.",
+  "version": "0.1.0",
+  "publisher": "xmemo",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "categories": [
+    "AI",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "xmemo",
+    "memory",
+    "mcp",
+    "agent-memory",
+    "cursor",
+    "developer-tools",
+    "oauth"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yonro/memory-os-cli.git",
+    "directory": "extensions/vscode"
+  },
+  "homepage": "https://xmemo.dev/product/mcp",
+  "bugs": {
+    "url": "https://github.com/yonro/memory-os-cli/issues"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "xmemo.mcp",
+        "label": "XMemo"
+      }
+    ],
+    "commands": [
+      {
+        "command": "xmemo.signIn",
+        "title": "XMemo: Sign In"
+      },
+      {
+        "command": "xmemo.signOut",
+        "title": "XMemo: Sign Out"
+      },
+      {
+        "command": "xmemo.remember",
+        "title": "XMemo: Remember…"
+      },
+      {
+        "command": "xmemo.recall",
+        "title": "XMemo: Recall…"
+      },
+      {
+        "command": "xmemo.searchMemory",
+        "title": "XMemo: Search Memory"
+      },
+      {
+        "command": "xmemo.saveSelection",
+        "title": "XMemo: Save Selection as Memory"
+      },
+      {
+        "command": "xmemo.refreshMemories",
+        "title": "XMemo: Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "xmemo.saveSelection",
+          "when": "editorHasSelection",
+          "group": "9_xmemo"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "xmemo.refreshMemories",
+          "when": "view == xmemo.memories",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xmemo",
+          "title": "XMemo",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "xmemo": [
+        {
+          "id": "xmemo.memories",
+          "name": "Recent Memories"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "XMemo",
+      "properties": {
+        "xmemo.apiBaseUrl": {
+          "type": "string",
+          "default": "https://xmemo.dev",
+          "description": "Base URL of the XMemo service. The MCP endpoint is <baseUrl>/mcp."
+        },
+        "xmemo.agentId": {
+          "type": "string",
+          "default": "vscode",
+          "description": "Agent ID used for attribution (X-Memory-OS-Agent-ID header)."
+        },
+        "xmemo.autoCapture": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reserved for v1.1: suggest saving on save/test (opt-in, always confirms). Not yet implemented."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "vscode:prepublish": "npm run typecheck && node esbuild.mjs --production",
+    "package": "npx --yes @vscode/vsce package --no-dependencies",
+    "publish:vsce": "npx --yes @vscode/vsce publish --no-dependencies",
+    "publish:ovsx": "npx --yes ovsx publish",
+    "test": "node ./out-test/runTest.js",
+    "pretest": "npm run build && tsc -p ./tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.101.0",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.6.3",
+    "@vscode/test-electron": "^2.4.1",
+    "mocha": "^10.7.0",
+    "@types/mocha": "^10.0.7",
+    "glob": "^11.0.0",
+    "@types/glob": "^8.1.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5"
+  }
+}

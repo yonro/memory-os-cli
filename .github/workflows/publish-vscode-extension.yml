@@ -1,0 +1,67 @@
+name: Publish VS Code Extension
+
+# Tag the commit to release, e.g.:
+#   git tag vscode-v0.1.0 && git push origin vscode-v0.1.0
+on:
+  push:
+    tags:
+      - 'vscode-v*'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Clean, reproducible install from the committed lockfile.
+      - name: Install (clean)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Bundle
+        run: npm run build
+
+      - name: Package VSIX
+        run: npx --yes @vscode/vsce package --no-dependencies -o xmemo-vscode.vsix
+
+      # Audit the actual packaged artifact, not just source.
+      - name: Audit VSIX contents
+        run: |
+          npx --yes @vscode/vsce ls --no-dependencies
+          mkdir -p _vsix_audit && (cd _vsix_audit && unzip -o ../xmemo-vscode.vsix >/dev/null)
+          echo "Scanning packaged files for secret-like values..."
+          if grep -RniE '(xmemo_[a-z0-9]{12,}|bearer [a-z0-9._-]{20,}|-----BEGIN|\.env$)' _vsix_audit/extension; then
+            echo "::error::Potential secret or disallowed file found in VSIX"; exit 1
+          fi
+          echo "VSIX audit passed."
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xmemo-vscode-vsix
+          path: extensions/vscode/xmemo-vscode.vsix
+
+      # --- Publish the SAME .vsix to both registries ---
+      - name: Publish to Visual Studio Marketplace
+        uses: HaaLeo/publish-vscode-extension@v1
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          extensionFile: extensions/vscode/xmemo-vscode.vsix
+          registryUrl: https://marketplace.visualstudio.com
+
+      - name: Publish to Open VSX
+        uses: HaaLeo/publish-vscode-extension@v1
+        with:
+          pat: ${{ secrets.OVSX_PAT }}
+          extensionFile: extensions/vscode/xmemo-vscode.vsix
+          registryUrl: https://open-vsx.org
