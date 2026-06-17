@@ -1336,6 +1336,55 @@ url = "https://other.test/mcp"
   assert.match(updated, /\[mcp_servers\.Other\]/);
 });
 
+test('uninstall continue removes experimental entries matching removed top-level URL', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-continue-experimental-'));
+  const configPath = path.join(tempDir, '.continue', 'config.json');
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify({
+    mcpServers: {
+      XMemo: {
+        transport: { url: 'https://private.example/mcp' }
+      }
+    },
+    experimental: {
+      modelContextProtocolServers: [
+        { transport: { url: 'https://private.example/mcp' } },
+        { transport: { url: 'https://other.example/mcp' } }
+      ]
+    }
+  }, null, 2));
+
+  const result = await invoke(['uninstall', 'continue', '--yes'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  const updated = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(updated.mcpServers.XMemo, undefined);
+  assert.equal(updated.experimental.modelContextProtocolServers.length, 1);
+  assert.equal(updated.experimental.modelContextProtocolServers[0].transport.url, 'https://other.example/mcp');
+});
+
+test('uninstall hermes reports manual-edit-required for flow-style YAML', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-uninstall-hermes-flow-'));
+  const configPath = path.join(tempDir, '.hermes', 'config.yaml');
+  await fs.mkdir(path.dirname(configPath), { recursive: true });
+  await fs.writeFile(configPath, 'mcp_servers: { XMemo: { command: npx }, OtherServer: { command: echo } }\n');
+
+  const result = await invoke(['uninstall', 'hermes', '--yes', '--json'], {
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 1);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.errors.length, 1);
+  assert.equal(plan.errors[0].id, 'hermes');
+  assert.match(plan.errors[0].error, /manual edit/i);
+
+  const unchanged = await fs.readFile(configPath, 'utf8');
+  assert.match(unchanged, /XMemo/);
+});
+
 test('setup cursor prompt can skip behavior profile with n', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-no-profile-'));
   const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test'], {

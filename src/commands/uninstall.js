@@ -207,6 +207,9 @@ async function removeConfigForTarget(target, preview) {
     if (result.removed) {
       return { status: 'removed', removedNames: result.removedNames ?? [MCP_SERVER_NAME] };
     }
+    if (result.reason === 'manual-edit-required') {
+      return { status: 'error', error: 'Config shape requires manual edit to remove XMemo safely.' };
+    }
     return { status: result.reason ?? 'not_found' };
   } catch (error) {
     return { status: 'error', error: error.message };

@@ -47,6 +47,10 @@ export async function removeHermesMcpConfig(configPath, options = {}) {
     return { removed: false, reason: 'not-found' };
   }
 
+  if (isFlowStyleMcpServersLine(lines[mcpIndex])) {
+    return { removed: false, reason: 'manual-edit-required' };
+  }
+
   const serverBaseIndent = indentOf(lines[mcpIndex + 1]);
   if (serverBaseIndent === null) {
     return { removed: false, reason: 'not-found' };
@@ -67,6 +71,9 @@ export async function removeHermesMcpConfig(configPath, options = {}) {
     if (lineIndent === serverBaseIndent) {
       const match = names.find((name) => line.trim() === `${name}:` || line.trim().startsWith(`${name}:`));
       if (match) {
+        if (hasUnbalancedFlow(line)) {
+          return { removed: false, reason: 'manual-edit-required' };
+        }
         const start = index;
         let end = index + 1;
         for (; end < lines.length; end += 1) {
@@ -97,6 +104,28 @@ export async function removeHermesMcpConfig(configPath, options = {}) {
     await bestEffortChmod(configPath, 0o600);
   }
   return { removed: true };
+}
+
+function isFlowStyleMcpServersLine(line) {
+  const afterKey = line.split('mcp_servers:')[1] ?? '';
+  return /[\{\[]/.test(afterKey);
+}
+
+function hasUnbalancedFlow(line) {
+  const flowChars = line.replace(/[^\{\}\[\]\(\)]/g, '');
+  const pairs = { ')': '(', '}': '{', ']': '[' };
+  let depth = 0;
+  for (const char of flowChars) {
+    if (Object.values(pairs).includes(char)) {
+      depth += 1;
+    } else if (pairs[char]) {
+      depth -= 1;
+      if (depth < 0) {
+        return true;
+      }
+    }
+  }
+  return depth !== 0;
 }
 
 function indentOf(line) {

@@ -249,11 +249,16 @@ export async function removeJsonClientMcpConfig(clientId, configPath, options = 
   }
 
   let removed = false;
+  const removedUrls = [];
 
   const section = parsed[definition.section];
   if (isPlainObject(section)) {
     for (const name of knownMcpServerNames()) {
       if (name in section) {
+        const entryUrl = xMemoEntryUrl(section[name]);
+        if (entryUrl) {
+          removedUrls.push(entryUrl);
+        }
         delete section[name];
         removed = true;
       }
@@ -264,7 +269,7 @@ export async function removeJsonClientMcpConfig(clientId, configPath, options = 
     const servers = parsed.experimental.modelContextProtocolServers;
     if (Array.isArray(servers)) {
       const originalLength = servers.length;
-      parsed.experimental.modelContextProtocolServers = servers.filter((entry) => !isXMemoExperimentalEntry(entry));
+      parsed.experimental.modelContextProtocolServers = servers.filter((entry) => !isXMemoExperimentalEntry(entry, removedUrls));
       if (parsed.experimental.modelContextProtocolServers.length !== originalLength) {
         removed = true;
       }
@@ -282,7 +287,20 @@ export async function removeJsonClientMcpConfig(clientId, configPath, options = 
   return { removed: true };
 }
 
-function isXMemoExperimentalEntry(entry) {
+function xMemoEntryUrl(entry) {
+  if (!isPlainObject(entry)) {
+    return null;
+  }
+  if (isPlainObject(entry.transport) && typeof entry.transport.url === 'string') {
+    return entry.transport.url;
+  }
+  if (typeof entry.url === 'string') {
+    return entry.url;
+  }
+  return null;
+}
+
+function isXMemoExperimentalEntry(entry, removedUrls = []) {
   if (!isPlainObject(entry)) {
     return false;
   }
@@ -290,8 +308,13 @@ function isXMemoExperimentalEntry(entry) {
   if (!isPlainObject(transport)) {
     return false;
   }
-  if (typeof transport.url === 'string' && transport.url.includes('xmemo.dev')) {
-    return true;
+  if (typeof transport.url === 'string') {
+    if (transport.url.includes('xmemo.dev')) {
+      return true;
+    }
+    if (removedUrls.includes(transport.url)) {
+      return true;
+    }
   }
   const headers = transport.headers;
   if (isPlainObject(headers)) {
