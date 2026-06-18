@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "lint": "node scripts/check-js.mjs",
-    "test": "node --test",
+    "test": "node --test \"test/**/*.test.js\"",
     "pack:dry-run": "npm pack --dry-run",
     "prepublishOnly": "npm run lint && npm test && npm run pack:dry-run"
   },
