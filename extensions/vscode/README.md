@@ -2,15 +2,18 @@
 
 Your editor executes. XMemo lets it remember the project.
 
-XMemo is a user-owned, identity-aware cloud memory layer. Save engineering decisions, project conventions, and context once — recall them in Cursor, Claude, Codex, Copilot, your CLI, and back here in VS Code.
+XMemo is a user-owned, identity-aware cloud memory layer. Save engineering decisions, project conventions, and context once — recall them in VS Code, Copilot, Cursor, Claude, Codex, your CLI, and any other agent that is connected to the XMemo MCP server.
 
 ## What this extension does
 
-- **One-click install** — no terminal, no manual config. Install from the Marketplace or Open VSX (Cursor / Windsurf / VSCodium).
+- **One-click VS Code install** — no terminal for the native extension. Marketplace and Open VSX distribution make the extension available in VS Code-compatible hosts.
 - **In-editor sign-in** — OAuth 2.0 (PKCE) through the VS Code Accounts UI; token-paste is an automatic fallback.
 - **Native commands** — `XMemo: Remember…`, `Recall…`, `Search Memory`, and `Save Selection as Memory` (right-click).
 - **Results sidebar** — an XMemo panel showing your latest recall/search results.
-- **Agent memory (MCP)** — contributes the XMemo MCP server to your editor's AI agent so the agent itself can recall and save memory. Requires a host with the MCP API (VS Code 1.101+); degrades gracefully where unavailable.
+- **VS Code agent memory (MCP)** — contributes the XMemo MCP server to VS Code's native MCP/agent-mode surface. Requires a host with the MCP API (VS Code 1.101+); degrades gracefully where unavailable.
+- **Language Model Tools** — VS Code agent mode can invoke `xmemo_recall`, `xmemo_search_memory`, `xmemo_context_pack`, `xmemo_remember`, and `xmemo_explain_memory`.
+- **@xmemo chat participant** — quick diagnostics and commands inside VS Code Chat (`/status`, `/recall`, `/remember`, `/explain`, `/agents`).
+- **Agent Integrations panel** — detect adjacent agents (Claude Code, Codex, Cursor, Windsurf, Cline, Continue) and connect them to XMemo via their own MCP configs with preview and approval.
 - **Secure by default** — credentials live in the OS keychain (`SecretStorage`), never in settings or files. Attribution via `X-Memory-OS-Agent-ID = vscode`.
 
 ## Quick start
@@ -18,6 +21,8 @@ XMemo is a user-owned, identity-aware cloud memory layer. Save engineering decis
 1. Install the extension.
 2. Run **XMemo: Sign In** → a browser opens for OAuth. (If OAuth is unavailable, you'll be offered token paste.)
 3. Run **XMemo: Recall…** / **Search Memory**, or select code → right-click → **Save Selection as Memory**.
+4. Open the **XMemo: Agent Integrations** panel to detect and connect Claude Code, Codex, Cursor, Windsurf, Cline, and Continue via their own MCP configs.
+5. In VS Code Chat / agent mode, invoke XMemo tools directly or type `@xmemo /status`.
 
 > Need an account? Get one at [xmemo.dev](https://xmemo.dev).
 

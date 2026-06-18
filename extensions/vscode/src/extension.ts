@@ -6,6 +6,9 @@ import { searchCommand } from './commands/search';
 import { saveSelectionCommand } from './commands/saveSelection';
 import { MemoriesTreeProvider } from './views/memoriesTree';
 import { registerMcpServerProvider } from './mcp/serverProvider';
+import { registerLanguageModelTools } from './tools/register';
+import { registerXMemoChatParticipant } from './chat/participant';
+import { registerAgentIntegrationsView } from './agent/agentIntegrationsTree';
 
 export function activate(context: vscode.ExtensionContext): void {
   const auth = new XMemoAuth(context);
@@ -28,6 +31,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // MCP server contribution (agent gains memory). Feature-detected.
   registerMcpServerProvider(context, auth);
+
+  // Language Model Tools for VS Code-native agent mode.
+  registerLanguageModelTools(context, auth);
+
+  // @xmemo chat participant for diagnostics and quick commands.
+  registerXMemoChatParticipant(context, auth, tree);
+
+  // Agent Integrations panel for detecting and connecting adjacent agents.
+  registerAgentIntegrationsView(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('xmemo.signIn', () => auth.signIn()),

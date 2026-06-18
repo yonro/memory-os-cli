@@ -28,6 +28,7 @@ interface OAuthMeta {
   registration_endpoint?: string;
   client_id: string;
   scope: string;
+  resource: string;
 }
 
 interface DiscoveryDoc {
@@ -35,6 +36,9 @@ interface DiscoveryDoc {
   token_endpoint?: string;
   registration_endpoint?: string;
   scopes_supported?: string[];
+  resource?: string;
+  mcp_endpoint?: string;
+  protected_resource_metadata_endpoint?: string;
 }
 
 function base64url(buf: Buffer): string {
@@ -140,6 +144,11 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
 
   async getToken(): Promise<string | undefined> {
     const session = await vscode.authentication.getSession(AUTH_ID, AUTH_SCOPES, { createIfNone: false });
+    return session?.accessToken;
+  }
+
+  async getTokenOrSignIn(): Promise<string | undefined> {
+    const session = await vscode.authentication.getSession(AUTH_ID, AUTH_SCOPES, { createIfNone: true });
     return session?.accessToken;
   }
 
@@ -251,6 +260,9 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
     authUrl.searchParams.set('code_challenge', challenge);
     authUrl.searchParams.set('code_challenge_method', 'S256');
     authUrl.searchParams.set('state', state);
+    if (meta.resource) {
+      authUrl.searchParams.set('resource', meta.resource);
+    }
     if (meta.scope) {
       authUrl.searchParams.set('scope', meta.scope);
     }
@@ -295,13 +307,18 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
     const external = await vscode.env.asExternalUri(
       vscode.Uri.parse(`${vscode.env.uriScheme}://${PUBLISHER}.${EXT_NAME}/auth-callback`)
     );
-    return external.toString(true);
+    const callback = external.toString(true);
+    try {
+      return decodeURIComponent(callback);
+    } catch {
+      return callback;
+    }
   }
 
   private async ensureOAuthMeta(): Promise<OAuthMeta> {
     const { baseUrl } = this.config();
     const cached = this.context.globalState.get<OAuthMeta>(OAUTH_META_KEY);
-    if (cached && cached.authorization_endpoint.startsWith(baseUrl)) {
+    if (cached && cached.authorization_endpoint.startsWith(baseUrl) && cached.resource) {
       return cached;
     }
     const discovery = await this.discover(baseUrl);
@@ -310,7 +327,8 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
       token_endpoint: discovery.token_endpoint ?? `${baseUrl}/oauth/token`,
       registration_endpoint: discovery.registration_endpoint ?? `${baseUrl}/oauth/register`,
       client_id: '',
-      scope: (discovery.scopes_supported && discovery.scopes_supported.join(' ')) || DEFAULT_SCOPE
+      scope: (discovery.scopes_supported && discovery.scopes_supported.join(' ')) || DEFAULT_SCOPE,
+      resource: discovery.resource || discovery.mcp_endpoint || `${baseUrl}/mcp`
     };
     meta.client_id = await this.registerClient(meta.registration_endpoint!);
     await this.context.globalState.update(OAUTH_META_KEY, meta);
@@ -322,7 +340,7 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
       headers: { accept: 'application/json' }
     });
     if (!res.ok) {
-      throw new Error(`discovery failed (HTTP ${res.status})`);
+      throw new Error(await this.httpError(res, 'discovery failed'));
     }
     return (await res.json()) as DiscoveryDoc;
   }
@@ -333,7 +351,7 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
       body: JSON.stringify({
-        client_name: 'XMemo for VS Code',
+        client_name: 'XMemo VSCode',
         redirect_uris: [redirectUri],
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
@@ -342,7 +360,7 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
       })
     });
     if (!res.ok) {
-      throw new Error(`client registration failed (HTTP ${res.status})`);
+      throw new Error(await this.httpError(res, 'client registration failed'));
     }
     const data = (await res.json()) as { client_id?: string };
     if (!data.client_id) {
@@ -360,11 +378,12 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
         code,
         redirect_uri: redirectUri,
         client_id: meta.client_id,
-        code_verifier: verifier
+        code_verifier: verifier,
+        resource: meta.resource
       })
     });
     if (!res.ok) {
-      throw new Error(`token exchange failed (HTTP ${res.status})`);
+      throw new Error(await this.httpError(res, 'token exchange failed'));
     }
     return this.toRecord((await res.json()) as Record<string, any>);
   }
@@ -387,6 +406,21 @@ export class XMemoAuth implements vscode.AuthenticationProvider {
       return undefined;
     }
     return this.toRecord((await res.json()) as Record<string, any>, refreshToken);
+  }
+
+  private async httpError(res: Response, prefix: string): Promise<string> {
+    let detail = '';
+    try {
+      const body = (await res.clone().json()) as Record<string, any>;
+      detail = String(body.error_description || body.detail || body.error || '').trim();
+    } catch {
+      try {
+        detail = (await res.text()).trim().slice(0, 300);
+      } catch {
+        detail = '';
+      }
+    }
+    return detail ? `${prefix} (HTTP ${res.status}: ${detail})` : `${prefix} (HTTP ${res.status})`;
   }
 
   private toRecord(data: Record<string, any>, fallbackRefresh?: string): TokenRecord {

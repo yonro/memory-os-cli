@@ -49,6 +49,107 @@
         "label": "XMemo"
       }
     ],
+    "languageModelTools": [
+      {
+        "id": "xmemo_recall",
+        "name": "xmemo_recall",
+        "toolReferenceName": "xmemo_recall",
+        "displayName": "Recall XMemo memory",
+        "modelDescription": "Retrieve the most relevant XMemo memory for the current task or question.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string", "description": "A concise natural-language query describing what you are trying to recall." },
+            "limit": { "type": "number", "description": "Maximum number of memories to return.", "default": 3 }
+          },
+          "required": ["query"]
+        },
+        "canBeReferencedInPrompt": true,
+        "tags": ["xmemo", "memory"]
+      },
+      {
+        "id": "xmemo_search_memory",
+        "name": "xmemo_search_memory",
+        "toolReferenceName": "xmemo_search_memory",
+        "displayName": "Search XMemo memory",
+        "modelDescription": "Search XMemo memories with filters and return compact, cited snippets.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": { "type": "string", "description": "Search query." },
+            "limit": { "type": "number", "description": "Maximum number of results.", "default": 5 }
+          },
+          "required": ["query"]
+        },
+        "canBeReferencedInPrompt": true,
+        "tags": ["xmemo", "memory"]
+      },
+      {
+        "id": "xmemo_context_pack",
+        "name": "xmemo_context_pack",
+        "toolReferenceName": "xmemo_context_pack",
+        "displayName": "Build XMemo context pack",
+        "modelDescription": "Build a task-scoped context pack from XMemo memory plus current workspace hints.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task": { "type": "string", "description": "A one-sentence description of the task." },
+            "limit": { "type": "number", "description": "Maximum number of memory entries.", "default": 5 }
+          },
+          "required": ["task"]
+        },
+        "canBeReferencedInPrompt": true,
+        "tags": ["xmemo", "memory"]
+      },
+      {
+        "id": "xmemo_remember",
+        "name": "xmemo_remember",
+        "toolReferenceName": "xmemo_remember",
+        "displayName": "Remember in XMemo",
+        "modelDescription": "Save an explicit user-approved decision, fact, or context into XMemo.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "content": { "type": "string", "description": "The exact content to remember." },
+            "path": { "type": "string", "description": "A file path or location to associate with the memory.", "default": "" }
+          },
+          "required": ["content"]
+        },
+        "canBeReferencedInPrompt": true,
+        "tags": ["xmemo", "memory"]
+      },
+      {
+        "id": "xmemo_explain_memory",
+        "name": "xmemo_explain_memory",
+        "toolReferenceName": "xmemo_explain_memory",
+        "displayName": "Explain XMemo memory",
+        "modelDescription": "Explain why a memory matched or exists in XMemo.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "reference": { "type": "string", "description": "A memory ID, path, or query identifying the memory." }
+          },
+          "required": ["reference"]
+        },
+        "canBeReferencedInPrompt": true,
+        "tags": ["xmemo", "memory"]
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "xmemo",
+        "name": "xmemo",
+        "description": "XMemo agent memory: status, recall, remember, and agent integrations.",
+        "isSticky": true,
+        "commands": [
+          { "name": "status", "description": "Show XMemo sign-in, MCP, and integration state" },
+          { "name": "recall", "description": "Recall relevant XMemo memories" },
+          { "name": "remember", "description": "Save a memory to XMemo" },
+          { "name": "explain", "description": "Explain why a memory matched" },
+          { "name": "agents", "description": "Open the Agent Integrations panel" }
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "xmemo.signIn",
@@ -78,6 +179,31 @@
         "command": "xmemo.refreshMemories",
         "title": "XMemo: Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "xmemo.showAgentIntegrations",
+        "title": "XMemo: Show Agent Integrations"
+      },
+      {
+        "command": "xmemo.refreshAgentIntegrations",
+        "title": "XMemo: Refresh Agent Integrations",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "xmemo.connectAgent",
+        "title": "XMemo: Connect Agent"
+      },
+      {
+        "command": "xmemo.disconnectAgent",
+        "title": "XMemo: Disconnect Agent"
+      },
+      {
+        "command": "xmemo.connectAllAgents",
+        "title": "XMemo: Connect All Detected Agents"
+      },
+      {
+        "command": "xmemo.openAgentConfig",
+        "title": "XMemo: Open Agent Config"
       }
     ],
     "menus": {
@@ -93,6 +219,33 @@
           "command": "xmemo.refreshMemories",
           "when": "view == xmemo.memories",
           "group": "navigation"
+        },
+        {
+          "command": "xmemo.refreshAgentIntegrations",
+          "when": "view == xmemo.agentIntegrations",
+          "group": "navigation"
+        },
+        {
+          "command": "xmemo.connectAllAgents",
+          "when": "view == xmemo.agentIntegrations",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "xmemo.connectAgent",
+          "when": "view == xmemo.agentIntegrations && viewItem =~ /agent\\.(config-found|config-missing)/",
+          "group": "xmemo@1"
+        },
+        {
+          "command": "xmemo.disconnectAgent",
+          "when": "view == xmemo.agentIntegrations && viewItem == agent.connected",
+          "group": "xmemo@2"
+        },
+        {
+          "command": "xmemo.openAgentConfig",
+          "when": "view == xmemo.agentIntegrations",
+          "group": "xmemo@3"
         }
       ]
     },
@@ -110,6 +263,10 @@
         {
           "id": "xmemo.memories",
           "name": "Recent Memories"
+        },
+        {
+          "id": "xmemo.agentIntegrations",
+          "name": "Agent Integrations"
         }
       ]
     },
