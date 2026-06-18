@@ -299,8 +299,8 @@
     "package": "npx --yes @vscode/vsce package --no-dependencies",
     "publish:vsce": "npx --yes @vscode/vsce publish --no-dependencies",
     "publish:ovsx": "npx --yes ovsx publish",
-    "test": "node ./out-test/runTest.js",
-    "pretest": "npm run build && tsc -p ./tsconfig.test.json"
+    "test": "node ./out-test/test/runTest.js",
+    "pretest": "node -e \"require('fs').rmSync('out-test', { recursive: true, force: true })\" && npm run build && tsc -p ./tsconfig.test.json"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

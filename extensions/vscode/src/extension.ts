@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext): void {
   registerXMemoChatParticipant(context, auth, tree);
 
   // Agent Integrations panel for detecting and connecting adjacent agents.
-  registerAgentIntegrationsView(context);
+  registerAgentIntegrationsView(context, auth);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('xmemo.signIn', () => auth.signIn()),

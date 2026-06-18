@@ -19,21 +19,23 @@ const PROVIDER_ID = 'xmemo.mcp';
  * and injects the bearer header in memory. The token is not written to settings,
  * mcp.json, or logs.
  */
-export function registerMcpServerProvider(context: vscode.ExtensionContext, auth: XMemoAuth): void {
-  const lm: any = (vscode as any).lm;
-  if (!lm || typeof lm.registerMcpServerDefinitionProvider !== 'function') {
-    return;
-  }
+export interface McpServerProvider {
+  onDidChangeMcpServerDefinitions: vscode.Event<void>;
+  provideMcpServerDefinitions(): Promise<any[]>;
+  resolveMcpServerDefinition(server: any): Promise<any | undefined>;
+  dispose(): void;
+}
 
+export function createMcpServerProvider(auth: XMemoAuth): McpServerProvider {
   const didChange = new vscode.EventEmitter<void>();
-  context.subscriptions.push(didChange, auth.onDidChange(() => didChange.fire()));
-  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((event) => {
+  const authDisposable = auth.onDidChange(() => didChange.fire());
+  const configDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
     if (event.affectsConfiguration('xmemo.apiBaseUrl') || event.affectsConfiguration('xmemo.agentId')) {
       didChange.fire();
     }
-  }));
+  });
 
-  const provider = {
+  return {
     onDidChangeMcpServerDefinitions: didChange.event,
     provideMcpServerDefinitions: async () => {
       return [definition()];
@@ -49,8 +51,23 @@ export function registerMcpServerProvider(context: vscode.ExtensionContext, auth
         [AGENT_INSTANCE_HEADER]: await auth.agentInstanceId()
       };
       return definition(headers);
+    },
+    dispose: () => {
+      authDisposable.dispose();
+      configDisposable.dispose();
+      didChange.dispose();
     }
   };
+}
+
+export function registerMcpServerProvider(context: vscode.ExtensionContext, auth: XMemoAuth): void {
+  const lm: any = (vscode as any).lm;
+  if (!lm || typeof lm.registerMcpServerDefinitionProvider !== 'function') {
+    return;
+  }
+
+  const provider = createMcpServerProvider(auth);
+  context.subscriptions.push(provider);
 
   try {
     context.subscriptions.push(lm.registerMcpServerDefinitionProvider(PROVIDER_ID, provider));
@@ -75,5 +92,9 @@ function definition(headers?: Record<string, string>): any {
   if (typeof Http === 'function') {
     return new Http('XMemo', mcpUri(), headers);
   }
-  return { label: 'XMemo', uri: mcpUri(), headers };
+  const def: any = { label: 'XMemo', uri: mcpUri() };
+  if (headers) {
+    def.headers = headers;
+  }
+  return def;
 }
