@@ -12,6 +12,33 @@ setup helper code needed on a user's machine.
 The XMemo server, database, token registry, deployment files, logs, and
 internal scripts are not part of this npm package.
 
+> 🧠 **XMemo is also an MCP Server** — give your AI agents persistent memory across sessions. See [MCP Setup](#mcp-setup) below.
+
+## MCP Server Overview
+
+**XMemo** is a user-owned, hosted MCP memory service that lets AI agents persistently store, search, recall, update, and manage notes and memory fragments across sessions, projects, and tools.
+
+- **MCP Endpoint**: `https://xmemo.dev/mcp` (Streamable HTTP)
+- **Auth**: Bearer Token (`XMEMO_KEY`) or MCP OAuth
+- **Tools**: `remember`, `recall`, `search_memory`, `update_memory`, `forget`, `redact_memory`, `explain_memory`, `create_memory_todo`, `list_memory_todos`, `complete_memory_todo`, `record_event`, `get_timeline`, `add_expense`
+- **Clients**: Kimi, Claude, Cursor, Copilot, Gemini, Grok, Windsurf, Cline, Trae, Zed, Qwen, and more
+
+```json
+{
+  "mcpServers": {
+    "XMemo": {
+      "type": "streamable-http",
+      "url": "https://xmemo.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer ${XMEMO_KEY}"
+      }
+    }
+  }
+}
+```
+
+See [MCP Setup](#mcp-setup) for detailed client configuration.
+
 ## Install
 
 ```bash

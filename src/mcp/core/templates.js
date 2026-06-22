@@ -35,9 +35,10 @@ export function mcpConfigTemplate(clientId, mcpUrl, options = {}) {
 
   const jsonDefinition = jsonMcpClientDefinition(clientId);
   if (jsonDefinition) {
+    const identityClientId = jsonDefinition.defaultIdentityId ?? clientId;
     return jsonDefinition.authentication === 'oauth'
-      ? oauthJsonMcpTemplate(clientId, mcpUrl, jsonClientConfig(clientId, mcpUrl), options)
-      : bearerJsonMcpTemplate(clientId, mcpUrl, jsonClientConfig(clientId, mcpUrl), options);
+      ? oauthJsonMcpTemplate(clientId, identityClientId, mcpUrl, jsonClientConfig(clientId, mcpUrl), options)
+      : bearerJsonMcpTemplate(clientId, identityClientId, mcpUrl, jsonClientConfig(clientId, mcpUrl), options);
   }
 
   return {
@@ -112,7 +113,7 @@ export function agentInstanceGenerationPolicy(clientId, options = {}) {
   };
 }
 
-function bearerJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
+function bearerJsonMcpTemplate(clientId, identityClientId, mcpUrl, snippet, options) {
   return {
     client: clientId,
     serverName: MCP_SERVER_NAME,
@@ -122,7 +123,7 @@ function bearerJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
     optionalEnv: [AGENT_INSTANCE_ENV_VAR],
     authentication: 'env-bearer',
     agentIdentity: {
-      agentId: clientId,
+      agentId: identityClientId,
       agentIdHeader: AGENT_ID_HEADER,
       agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
       agentInstanceHeader: AGENT_INSTANCE_HEADER
@@ -133,7 +134,7 @@ function bearerJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
   };
 }
 
-function oauthJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
+function oauthJsonMcpTemplate(clientId, identityClientId, mcpUrl, snippet, options) {
   return {
     client: clientId,
     serverName: MCP_SERVER_NAME,
@@ -143,7 +144,7 @@ function oauthJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
     optionalEnv: [AGENT_INSTANCE_ENV_VAR],
     authentication: 'oauth',
     agentIdentity: {
-      agentId: clientId,
+      agentId: identityClientId,
       agentIdHeader: AGENT_ID_HEADER,
       agentInstanceEnvVar: AGENT_INSTANCE_ENV_VAR,
       agentInstanceHeader: AGENT_INSTANCE_HEADER
@@ -153,4 +154,3 @@ function oauthJsonMcpTemplate(clientId, mcpUrl, snippet, options) {
     writesTokenValue: false
   };
 }
-
