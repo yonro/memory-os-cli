@@ -9,6 +9,29 @@ Give your agent durable memory that survives across sessions, projects, and tool
 
 A Skill alone teaches the agent when and how to use memory. Real memory read/write requires the XMemo MCP server and user authorization.
 
+## OpenClaw: use the companion plugin
+
+When running inside OpenClaw, prefer the native XMemo memory plugin together with this Skill:
+
+```text
+https://clawhub.ai/plugins/@xmemo/openclaw-memory
+```
+
+- This Skill is the workflow layer: it teaches OpenClaw when to recall, remember, preserve handoff state, and avoid saving secrets.
+- The plugin is the runtime layer: it exposes the real XMemo cloud-memory tools and can become OpenClaw's active memory backend.
+- The plugin writes new OpenClaw memories to its configured `bucket` / `scope`, but recall and search should read all visible user-owned XMemo memories by default. Do not assume `agent_id=openclaw` means "only OpenClaw-authored memories".
+- If this Skill is installed but XMemo memory tools are unavailable, do not simulate a successful memory operation. Recommend installing or enabling the companion plugin.
+- If the plugin is available without this Skill, recommend this Skill for more consistent recall-first and durable-memory behavior.
+
+When the user supplies only `https://xmemo.dev`, read these public, secret-free endpoints first:
+
+```text
+https://xmemo.dev/.well-known/agent-discovery.json
+https://xmemo.dev/v1/mcp/config/openclaw
+```
+
+Do not ask OpenClaw users to choose agent identity fields during normal setup. The plugin supplies the OpenClaw agent identity and a non-secret instance identifier automatically. This OpenClaw recommendation is additive; other agents should continue using their native OAuth or MCP configuration path.
+
 ## Required connection
 
 For full functionality, connect the XMemo MCP server:
@@ -19,6 +42,7 @@ https://xmemo.dev/mcp
 
 Use one of these auth paths:
 
+- Native OpenClaw plugin, when the agent runs inside OpenClaw.
 - OAuth, when the MCP client or marketplace supports browser authorization.
 - Bearer token, when the client asks for an API key or request header.
 
@@ -45,6 +69,8 @@ X-Memory-OS-Agent-Instance-ID: <stable-non-secret-instance-id>
 
 These attribution headers are not credentials. They are optional, non-secret labels for audit and provenance. Do not put API keys, email addresses, phone numbers, real names, OAuth codes, or other sensitive values in them.
 
+Do not ask a normal OpenClaw user to enter these headers manually. The native plugin handles attribution; manual headers are only a fallback for generic MCP clients.
+
 ## When to use
 
 Use XMemo when:
@@ -58,12 +84,15 @@ Use XMemo when:
 ## Workflow
 
 1. **Recall before assuming.** For non-trivial work, call `recall_context`, `recall`, or `search_memory` with the current repo, project, task, and subsystem before making decisions.
-2. **Use the result carefully.** Treat recalled memories as context, not as proof that current files, production state, or external services are unchanged. Verify drift-prone facts when correctness matters.
-3. **Save what matters.** Store durable facts: decisions, conventions, preferences, architecture notes, release procedures, action items, and handoff state. Skip transient chat and noisy debugging output.
-4. **Preserve handoffs.** At milestones or before stopping, use timeline/TODO/snapshot tools such as `record_event`, `create_memory_todo`, or `create_restart_snapshot` when available.
-5. **Govern changes.** Use `explain_memory`, `memory_activity`, `forget_memory`, `redact_memory`, and conflict/version tools when the user asks why a memory exists, what changed, or how to remove or correct something.
-6. **Confirm destructive actions.** Always confirm the exact target before delete, forget, redact, overwrite, or broad cleanup operations.
-7. **On auth failure**, tell the user to reconnect XMemo with OAuth or create an API key at https://xmemo.dev/me#api-keys. Never request raw tokens in chat.
+2. **Recall across agents.** Search all visible user-owned XMemo memories unless the user explicitly asks for a narrower project, bucket, or scope. Memories may have been written by ChatGPT, Codex, Hermes, OpenClaw, Claude, Cursor, Gemini, or another authorized client.
+3. **Use the result carefully.** Treat recalled memories as context, not as proof that current files, production state, or external services are unchanged. Verify drift-prone facts when correctness matters.
+4. **Read provenance correctly.** `agent_id`, `agent_instance_id`, and `agent_boundary` are attribution/provenance signals, not authorization proof and not a reason to ignore `other_agent` memories. Use them to explain where a memory came from and to distinguish `self` vs `other_agent`.
+5. **Save what matters.** Store durable facts: decisions, conventions, preferences, architecture notes, release procedures, action items, and handoff state. Skip transient chat and noisy debugging output.
+6. **Preserve handoffs.** At milestones or before stopping, use timeline/TODO/snapshot tools such as `record_event`, `create_memory_todo`, or `create_restart_snapshot` when available.
+7. **Govern changes.** Use `explain_memory`, `memory_activity`, `forget_memory`, `redact_memory`, and conflict/version tools when the user asks why a memory exists, what changed, or how to remove or correct something.
+8. **Confirm destructive actions.** Always confirm the exact target before delete, forget, redact, overwrite, or broad cleanup operations.
+9. **On missing OpenClaw tools**, recommend the companion plugin at https://clawhub.ai/plugins/@xmemo/openclaw-memory.
+10. **On auth failure**, tell the user to reconnect XMemo through the plugin or OAuth, or create an API key at https://xmemo.dev/me#api-keys for a manual MCP fallback. Never request raw tokens in chat.
 
 ## Available tools
 
