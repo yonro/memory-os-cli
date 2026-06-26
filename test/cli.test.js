@@ -796,6 +796,133 @@ test('mcp hermes merge into existing yaml preserves auth and agent headers', asy
   assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
 });
 
+test('setup hermes installs native plugin and syncs shared credential without MCP by default', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-hermes-'));
+  const hermesHome = path.join(tempDir, '.hermes');
+  const token = 'shared-login-token-that-must-not-leak';
+  const calls = [];
+  await fs.mkdir(tempDir, { recursive: true });
+  await fs.writeFile(
+    path.join(tempDir, 'credentials.json'),
+    `${JSON.stringify({ version: 1, token, storage: 'user-scoped-credential-file' }, null, 2)}\n`
+  );
+
+  const result = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome, '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_CONFIG_HOME: tempDir
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls)
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, new RegExp(token));
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'hermes');
+  assert.equal(plan.selectedClient.credential.source, 'shared-credential');
+  assert.equal(plan.selectedClient.credential.hermesEnvSynced, true);
+  assert.equal(plan.selectedClient.nativePlugin.installed, true);
+  assert.equal(plan.selectedClient.mcp.enabled, false);
+  assert.equal(plan.selectedClient.mcp.written, false);
+  assert.deepEqual(calls.map((call) => call.args), [
+    ['-m', 'pip', 'install', '-U', 'hermes-xmemo'],
+    ['install', '--hermes-home', hermesHome]
+  ]);
+
+  const envFile = await fs.readFile(path.join(hermesHome, '.env'), 'utf8');
+  assert.match(envFile, new RegExp(`XMEMO_KEY=${token}`));
+
+  await assert.rejects(fs.readFile(path.join(hermesHome, 'config.yaml'), 'utf8'), /ENOENT/);
+});
+
+test('setup hermes --with-mcp writes hosted MCP fallback', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-hermes-mcp-'));
+  const hermesHome = path.join(tempDir, '.hermes');
+  const calls = [];
+  const result = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome, '--with-mcp', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls)
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.nativePlugin.installed, true);
+  assert.equal(plan.selectedClient.mcp.enabled, true);
+  assert.equal(plan.selectedClient.mcp.written, true);
+
+  const config = await fs.readFile(path.join(hermesHome, 'config.yaml'), 'utf8');
+  assert.match(config, /Authorization:Bearer \$\{XMEMO_KEY\}/);
+  assert.match(config, /X-Memory-OS-Agent-ID:hermes/);
+  assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
+});
+
+test('setup hermes --mcp-only writes only hosted MCP fallback', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-hermes-mcp-only-'));
+  const hermesHome = path.join(tempDir, '.hermes');
+  const calls = [];
+  const result = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome, '--mcp-only', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls)
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.setupMode, 'mcp-only');
+  assert.equal(plan.selectedClient.nativePlugin.installed, false);
+  assert.equal(plan.selectedClient.nativePlugin.skipped, true);
+  assert.equal(plan.selectedClient.credential.hermesEnvSynced, false);
+  assert.equal(plan.selectedClient.mcp.enabled, true);
+  assert.equal(plan.selectedClient.mcp.written, true);
+  assert.equal(calls.length, 0);
+
+  const config = await fs.readFile(path.join(hermesHome, 'config.yaml'), 'utf8');
+  assert.match(config, /Authorization:Bearer \$\{XMEMO_KEY\}/);
+  assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
+  await assert.rejects(fs.readFile(path.join(hermesHome, '.env'), 'utf8'), /ENOENT/);
+});
+
+test('setup hermes backfills shared credential from existing Hermes env', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-hermes-backfill-'));
+  const hermesHome = path.join(tempDir, '.hermes');
+  const token = 'hermes-env-token-that-must-not-leak';
+  await fs.mkdir(hermesHome, { recursive: true });
+  await fs.writeFile(path.join(hermesHome, '.env'), `XMEMO_KEY=${token}\n`);
+
+  const result = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome, '--no-plugin', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_CONFIG_HOME: tempDir
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, new RegExp(token));
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.credential.source, 'hermes-env');
+  assert.equal(plan.selectedClient.credential.sharedCredentialBackfilled, true);
+  assert.equal(plan.selectedClient.nativePlugin.skipped, true);
+
+  const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
+  assert.equal(credential.token, token);
+  assert.equal(credential.metadata.source, 'hermes-env-sync');
+});
+
 test('setup discovers hosted service without sending token values', async () => {
   const requests = [];
   const result = await invoke(['setup', '--url', 'https://api.example.test', '--json'], {
@@ -1492,6 +1619,142 @@ test('setup copilot dry-run previews without writing config', async () => {
   assert.equal(plan.selectedClient.writeSupported, true);
   assert.equal(plan.selectedClient.written, false);
   await assert.rejects(fs.readFile(path.join(tempDir, '.copilot', 'mcp-config.json'), 'utf8'), /ENOENT/);
+});
+
+test('setup openclaw installs native plugin and skill without hosted MCP by default', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-openclaw-'));
+  const calls = [];
+  const result = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls, {
+      stdout: JSON.stringify({
+        configured: true,
+        connected: true,
+        credentialSource: 'env'
+      })
+    })
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'openclaw');
+  assert.equal(plan.selectedClient.configKind, 'native-plugin');
+  assert.equal(plan.selectedClient.nativePlugin.installed, true);
+  assert.equal(plan.selectedClient.skill.installed, true);
+  assert.equal(plan.selectedClient.mcp.enabled, false);
+  assert.equal(plan.selectedClient.mcp.written, false);
+  assert.equal(plan.selectedClient.status.connected, true);
+  assert.deepEqual(calls.map((call) => call.args), [
+    ['plugins', 'install', '@xmemo/openclaw-memory', '--force'],
+    ['skills', 'install', 'xmemo', '--force'],
+    ['xmemo', 'status', '--json']
+  ]);
+});
+
+test('setup openclaw --with-mcp adds explicit hosted MCP fallback', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-openclaw-mcp-'));
+  const calls = [];
+  const result = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test', '--with-mcp', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls, {
+      stdout: JSON.stringify({
+        configured: true,
+        connected: true,
+        credentialSource: 'env'
+      })
+    })
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.mcp.enabled, true);
+  assert.equal(plan.selectedClient.mcp.written, true);
+  const mcpCall = calls.find((call) => call.args[0] === 'mcp');
+  assert.ok(mcpCall);
+  assert.deepEqual(mcpCall.args, [
+    'mcp',
+    'add',
+    'xmemo',
+    '--url',
+    'https://mcp.example.test/mcp',
+    '--transport',
+    'streamable-http',
+    '--header',
+    'Authorization=Bearer ${XMEMO_KEY}',
+    '--no-probe'
+  ]);
+});
+
+test('setup openclaw --mcp-only adds only hosted MCP fallback', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-openclaw-mcp-only-'));
+  const calls = [];
+  const result = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test', '--mcp-only', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_CONFIG_HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls)
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.setupMode, 'mcp-only');
+  assert.equal(plan.selectedClient.nativePlugin.installed, false);
+  assert.equal(plan.selectedClient.nativePlugin.skipped, true);
+  assert.equal(plan.selectedClient.skill.installed, false);
+  assert.equal(plan.selectedClient.skill.skipped, true);
+  assert.equal(plan.selectedClient.mcp.enabled, true);
+  assert.equal(plan.selectedClient.mcp.written, true);
+  assert.equal(plan.selectedClient.status, null);
+  assert.deepEqual(calls.map((call) => call.args), [[
+    'mcp',
+    'add',
+    'xmemo',
+    '--url',
+    'https://mcp.example.test/mcp',
+    '--transport',
+    'streamable-http',
+    '--header',
+    'Authorization=Bearer ${XMEMO_KEY}',
+    '--no-probe'
+  ]]);
+});
+
+test('setup openclaw dry-run emits commands without spawning openclaw', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-openclaw-preview-'));
+  const calls = [];
+  const result = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test', '--dry-run', '--json'], {
+    env: {
+      HOME: tempDir,
+      XMEMO_CONFIG_HOME: tempDir
+    },
+    fetch: discoveryFetch(),
+    spawn: spawnStub(calls)
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'openclaw');
+  assert.equal(plan.selectedClient.dryRun, true);
+  assert.equal(plan.selectedClient.nativePlugin.installed, false);
+  assert.equal(plan.selectedClient.skill.installed, false);
+  assert.equal(plan.selectedClient.credential.ready, false);
+  assert.equal(calls.length, 0);
 });
 
 test('setup gemini shorthand writes oauth httpUrl config without token', async () => {

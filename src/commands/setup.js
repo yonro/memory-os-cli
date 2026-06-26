@@ -28,6 +28,8 @@ import {
   supportedMcpClients
 } from '../mcp/clients.js';
 import { mergeCopilotMcpConfig } from '../mcp/proxy/copilot.js';
+import { hermesSetupPlan } from './hermes.js';
+import { openclawSetupPlan } from './openclaw.js';
 
 import {
   agentIdentity,
@@ -134,7 +136,26 @@ export async function setupCommand(args, io) {
       setupPlan.detectedClients.push(clientPlan);
     }
   } else if (clientId) {
-    if (clientId === 'copilot-cli') {
+    if (clientId === 'hermes') {
+      const client = MCP_CLIENTS.get(clientId);
+      const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
+      setupPlan.selectedClient = await hermesSetupPlan({
+        setupPlan,
+        optionArgs,
+        io,
+        dryRun,
+        identity,
+        client,
+        force
+      });
+    } else if (clientId === 'openclaw') {
+      setupPlan.selectedClient = await openclawSetupPlan({
+        setupPlan,
+        optionArgs,
+        io,
+        dryRun
+      });
+    } else if (clientId === 'copilot-cli') {
       const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
       setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
       if (writeConfig) {

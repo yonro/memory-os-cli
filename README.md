@@ -64,6 +64,13 @@ xmemo setup cursor
 xmemo setup cursor --dry-run
 xmemo setup copilot
 xmemo setup copilot --dry-run
+xmemo setup openclaw
+xmemo setup openclaw --dry-run
+xmemo setup openclaw --with-mcp
+xmemo setup openclaw --mcp-only
+xmemo setup hermes
+xmemo setup hermes --with-mcp
+xmemo setup hermes --mcp-only
 xmemo setup gemini
 xmemo setup gemini --dry-run
 xmemo setup antigravity
@@ -194,6 +201,8 @@ xmemo setup codex
 xmemo setup codex --url "https://your-private-service.example"
 xmemo setup cursor
 xmemo setup copilot
+xmemo setup openclaw
+xmemo setup hermes
 xmemo setup gemini
 xmemo setup antigravity
 ```
@@ -202,10 +211,12 @@ xmemo setup antigravity
 clients, it applies the user-scoped config directly; use `--dry-run` to preview
 without writing. Codex/Cursor configs reference `XMEMO_KEY`; OAuth-native
 clients such as Gemini CLI and Antigravity use the client's MCP OAuth flow
-instead. No generated config embeds a token value. Write-capable client configs
-also include stable non-secret agent identity headers where the client format
-supports them. `--yes` remains accepted for Codex and Cursor as a compatibility
-no-op.
+instead. `xmemo setup openclaw` is a custom OpenClaw installer: it installs or
+updates the native `@xmemo/openclaw-memory` plugin and the XMemo Skill, and does
+not add the hosted MCP server unless `--with-mcp` is passed. No generated config
+embeds a token value. Write-capable client configs also include stable
+non-secret agent identity headers where the client format supports them.
+`--yes` remains accepted for Codex and Cursor as a compatibility no-op.
 
 After writing MCP config, `xmemo setup <client>` prompts:
 
@@ -296,11 +307,99 @@ template and apply it manually after review:
 xmemo mcp config --client generic --base-url "https://your-private-service.example" --json
 ```
 
-Codex, Cursor, Copilot CLI, Gemini CLI, Antigravity, and Kiro have write-capable setup
-helpers. Antigravity 2.0 is write-capable through `xmemo mcp add antigravity2
---write`.
+Codex, Cursor, Copilot CLI, Gemini CLI, Antigravity, OpenClaw, Hermes, and Kiro
+have write-capable setup helpers. Antigravity 2.0 is write-capable through
+`xmemo mcp add antigravity2 --write`.
 Other client writes should only be added after their official user-scoped config
 format is verified.
+
+OpenClaw and Hermes use the same setup modes:
+
+| Command | Result |
+|---------|--------|
+| `xmemo setup <openclaw|hermes>` | Install/update the native integration and sync credentials. MCP is not installed. |
+| `xmemo setup <openclaw|hermes> --with-mcp` | Install/update the native integration, sync credentials, and add hosted MCP fallback. |
+| `xmemo setup <openclaw|hermes> --mcp-only` | Add hosted MCP fallback only. Native plugin/Skill install and native credential sync are skipped. |
+
+### OpenClaw
+
+Recommended OpenClaw setup:
+
+```bash
+xmemo login
+xmemo setup openclaw
+openclaw xmemo status
+```
+
+`xmemo setup openclaw` installs or updates OpenClaw's native XMemo memory plugin
+from `@xmemo/openclaw-memory`, installs the XMemo Skill with `openclaw skills
+install xmemo --force`, and then runs `openclaw xmemo status --json` so the user
+can see whether credentials are available. The native plugin reads the same
+user-scoped XMemo credential used by `xmemo login` and `xmemo token add
+--from-stdin`, so normal users do not need to separately configure an OpenClaw
+API key.
+
+Hosted MCP is not installed by default because it creates a second XMemo tool
+surface beside the native memory plugin. If you intentionally want that fallback
+too, run:
+
+```bash
+xmemo setup openclaw --with-mcp
+```
+
+The fallback MCP entry references `Authorization: Bearer ${XMEMO_KEY}` and does
+not embed the token value. To install only the hosted MCP fallback without the
+native plugin or Skill, run:
+
+```bash
+xmemo setup openclaw --mcp-only
+```
+
+Use `--no-skill` only when the XMemo Skill is managed by another deployment
+path. Use `--openclaw-bin <path>` for custom OpenClaw binary locations.
+
+### Hermes
+
+Recommended Hermes setup:
+
+```bash
+xmemo login
+xmemo setup hermes
+```
+
+`xmemo setup hermes` is Hermes-aware rather than a raw MCP writer. It installs
+or updates the native `hermes-xmemo` package with `python -m pip install -U
+hermes-xmemo`, runs `hermes-xmemo install`, then resolves the XMemo token from,
+in order, process environment (`XMEMO_KEY`, `MEMORY_OS_API_KEY`, or
+`MEMORY_OS_MCP_TOKEN`), the shared `@xmemo/client` credential written by
+`xmemo login` / `xmemo token add --from-stdin`, and an existing
+`$HERMES_HOME/.env`. It syncs the token to Hermes' `$HERMES_HOME/.env` as
+`XMEMO_KEY`, which keeps the native `hermes-xmemo` plugin and any optional
+Hermes MCP fallback on the same credential.
+
+Hosted MCP is not installed by default because it creates a second XMemo tool
+surface beside the native memory provider. If you intentionally want that
+fallback too, run:
+
+```bash
+xmemo setup hermes --with-mcp
+```
+
+The fallback MCP entry references `Authorization:Bearer ${XMEMO_KEY}` and does
+not embed the token value. To install only the hosted MCP fallback without the
+native plugin or native credential sync, run:
+
+```bash
+xmemo setup hermes --mcp-only
+```
+
+If an older Hermes plugin setup already created `$HERMES_HOME/.env`,
+`xmemo setup hermes` can backfill the same token into the shared `@xmemo/client`
+credential file so future XMemo CLI and MCP flows reuse it. Use `--no-plugin`
+only when the native Hermes plugin is managed by another deployment path. Use
+`--hermes-home <path>` for non-default Hermes homes. The legacy
+`hermes memory setup xmemo` flow remains supported by the plugin and can reuse
+the shared credential when present.
 
 ### Copilot CLI
 

@@ -25,6 +25,15 @@ export function writeHelp(io) {
   writeLine(io.stdout, `      Detects active workspace to auto-inject project-scoped instruction rules.`);
   writeLine(io.stdout, `      Pass --force to overwrite an existing mcpServers.XMemo entry.`);
   writeLine(io.stdout, '');
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup openclaw [--with-mcp|--mcp-only] [--no-skill] [--dry-run] [--json]`);
+  writeLine(io.stdout, `      Installs/updates the native OpenClaw memory plugin and XMemo Skill.`);
+  writeLine(io.stdout, `      Use --with-mcp for native+MCP, or --mcp-only for MCP without native plugin/Skill.`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup hermes [--with-mcp|--mcp-only] [--no-plugin] [--hermes-home <path>] [--dry-run] [--json]`);
+  writeLine(io.stdout, `      Installs/updates the native Hermes plugin and syncs the shared XMemo credential.`);
+  writeLine(io.stdout, `      Use --with-mcp for native+MCP, or --mcp-only for MCP without native plugin.`);
+  writeLine(io.stdout, `      Compatible with existing hermes-xmemo plugin .env setup.`);
+  writeLine(io.stdout, '');
   writeLine(io.stdout, `  ${COMMAND_NAME} uninstall --all [--yes] [--profiles] [--dry-run]`);
   writeLine(io.stdout, `      Removes the XMemo MCP server entry from every detected client config.`);
   writeLine(io.stdout, `      Use --profiles to also remove installed behavior profiles.`);
