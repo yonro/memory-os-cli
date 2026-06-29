@@ -213,8 +213,61 @@ const SERVER_INFO = {
   version: CLI_VERSION
 };
 
+const STATIC_PROMPTS = [
+  {
+    name: 'remember',
+    description: 'Save a memory to XMemo for future recall across sessions.',
+    arguments: [
+      { name: 'content', description: 'The text to remember.', required: true },
+      { name: 'path', description: 'Category path, e.g. preferences, projects/myapp.', required: false }
+    ]
+  },
+  {
+    name: 'recall',
+    description: 'Recall relevant memories from XMemo before answering a question.',
+    arguments: [
+      { name: 'query', description: 'What to search for in memory.', required: true }
+    ]
+  },
+  {
+    name: 'project-context',
+    description: 'Build a context pack from XMemo for the current project or task.',
+    arguments: [
+      { name: 'query', description: 'Describe the project or task context needed.', required: true }
+    ]
+  }
+];
+
+function handlePromptsGet(id, params, ctx) {
+  const name = params?.name;
+  const prompt = STATIC_PROMPTS.find(p => p.name === name);
+  if (!prompt) {
+    return makeError(id, -32602, `Prompt not found: ${name}`);
+  }
+  const args = params?.arguments || {};
+  const messages = [];
+  if (name === 'remember') {
+    messages.push({
+      role: 'user',
+      content: { type: 'text', text: `Remember this: ${args.content || '(no content provided)'}${args.path ? ` [path: ${args.path}]` : ''}` }
+    });
+  } else if (name === 'recall') {
+    messages.push({
+      role: 'user',
+      content: { type: 'text', text: `Recall memories related to: ${args.query || '(no query provided)'}` }
+    });
+  } else if (name === 'project-context') {
+    messages.push({
+      role: 'user',
+      content: { type: 'text', text: `Build XMemo context for: ${args.query || '(no query provided)'}` }
+    });
+  }
+  return makeResult(id, { description: prompt.description, messages });
+}
+
 const SERVER_CAPABILITIES = {
-  tools: {}
+  tools: {},
+  prompts: {}
 };
 
 // ---------------------------------------------------------------------------
@@ -297,7 +350,9 @@ async function handleRequest(request, ctx) {
     case 'tools/call':
       return handleToolsCall(id, params, ctx);
     case 'prompts/list':
-      return makeResult(id, { prompts: [] });
+      return makeResult(id, { prompts: STATIC_PROMPTS });
+    case 'prompts/get':
+      return handlePromptsGet(id, params, ctx);
     case 'resources/list':
       return makeResult(id, { resources: [] });
     case 'ping':
