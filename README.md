@@ -1,10 +1,12 @@
 # XMemo CLI
 
 [![smithery badge](https://smithery.ai/badge/xmemo/xmemo)](https://smithery.ai/servers/xmemo/xmemo)
+[![MCP Badge](https://lobehub.com/badge/mcp/yonro-memory-os-cli)](https://lobehub.com/mcp/yonro-memory-os-cli)
 
 `@xmemo/client` is the privacy-first command line entry point for XMemo client
 setup. It is intentionally small: the npm package contains only the CLI and
-setup helper code needed on a user's machine.
+setup/helper assets needed on a user's machine: the CLI runtime, client setup
+profiles, XMemo skills, and marketplace plugin metadata.
 
 `@yonro/xmemo-client` is reserved as a Yonro fallback package. The CLI exposes
 `xmemo` as the primary command and keeps `memory-os` as a compatibility alias.
@@ -12,12 +14,14 @@ setup helper code needed on a user's machine.
 The XMemo server, database, token registry, deployment files, logs, and
 internal scripts are not part of this npm package.
 
-> 🧠 **XMemo is also an MCP Server** — give your AI agents persistent memory across sessions. See [MCP Setup](#mcp-setup) below.
+> **XMemo CLI is the top-level control plane** — use `xmemo login`, `xmemo doctor`, `xmemo setup <client>`, and smoke checks before hand-editing MCP config. Hosted MCP remains the universal runtime path for clients that do not have a native integration.
 
-## MCP Server Overview
+## XMemo Runtime Overview
 
-**XMemo** is a user-owned, hosted MCP memory service that lets AI agents persistently store, search, recall, update, and manage notes and memory fragments across sessions, projects, and tools.
+**XMemo** is a user-owned memory system that lets AI agents persistently store, search, recall, update, and manage notes and memory fragments across sessions, projects, and tools.
 
+- **Top-level CLI**: `xmemo` from `@xmemo/client`
+- **Native integrations**: OpenClaw XMemo memory plugin and Hermes `hermes-xmemo` provider
 - **MCP Endpoint**: `https://xmemo.dev/mcp` (Streamable HTTP)
 - **Auth**: Bearer Token (`XMEMO_KEY`) or MCP OAuth
 - **Tools**: `remember`, `recall`, `search_memory`, `update_memory`, `forget`, `redact_memory`, `explain_memory`, `create_memory_todo`, `list_memory_todos`, `complete_memory_todo`, `record_event`, `get_timeline`, `add_expense`
@@ -120,8 +124,8 @@ xmemo privacy
   project files, shell history, and printed token values.
 - Legacy `xmemo token set` refuses plaintext credential storage unless
   `--allow-plaintext` is explicitly provided.
-- The npm package uses a `files` whitelist so only `bin`, `src`, `README.md`,
-  and `LICENSE` are published.
+- The npm package uses a `files` whitelist so only `bin`, `src`, `skills`,
+  published plugin metadata/assets, `README.md`, and `LICENSE` are published.
 
 ## Token flow
 

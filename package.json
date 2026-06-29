@@ -6,12 +6,15 @@
   "type": "module",
   "bin": {
     "xmemo": "bin/memory-os.js",
-    "memory-os": "bin/memory-os.js"
+    "memory-os": "bin/memory-os.js",
+    "xmemo-mcp": "bin/mcp-stdio.js"
   },
   "files": [
     "bin",
     "src",
+    "skills",
     "plugins/kiro",
+    "plugins/xmemo",
     "README.md",
     "LICENSE"
   ],

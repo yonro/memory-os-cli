@@ -32,18 +32,25 @@ import {
   codexMemoryProfile,
   writeCodexMemoryProfile
 } from '../config/profile.js';
+import { startStdioServer } from '../mcp/stdio-server.js';
 
 export async function mcpCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp serve`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] --write [--config <path>]`);
+    return 0;
+  }
+
+  if (subcommand === 'serve' || subcommand === 'stdio') {
+    await startStdioServer(io.env);
     return 0;
   }
 
