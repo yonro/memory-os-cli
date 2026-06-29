@@ -5,7 +5,7 @@
   "author": "yonro",
   "homepage": "https://xmemo.dev/product/mcp",
   "repository": "https://github.com/yonro/memory-os-cli",
-  "version": "0.4.173",
+  "version": "0.4.174",
   "category": "productivity",
   "tags": ["mcp", "memory", "ai-agents", "knowledge-management", "streamable-http", "oauth"],
   "locale": "en-US",
