@@ -17,4 +17,14 @@ Thumbs.db
 .agents/
 GEMINI.md
 QWEN.md
+.mcp.json
+AGENTS.md
 mcp-publisher.exe
+
+# Internal planning/review artifacts. Keep product docs in README/docs instead.
+*-PLAN.md
+*_PLAN.md
+*-REPORT.md
+*_REPORT.md
+*-PROGRESS.md
+*_PROGRESS.md
