@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent user-owned memory for agents with standalone runtime execution. Use when an agent should remember, recall, search, update, delete, save handoff state, manage TODOs, record expenses, diagnose XMemo auth, or operate XMemo even when MCP tools are not configured.
+description: Persistent user-owned memory for agents with standalone runtime execution. Use when an agent should remember, recall, search memory, save or restore handoff state, manage TODOs, record expenses, diagnose XMemo auth, or operate XMemo even when MCP tools are not configured.
 ---
 
 # XMemo Memory
@@ -19,6 +19,11 @@ If no credential is available, run:
 ```text
 node skills/xmemo/scripts/xmemo-skill.mjs login
 ```
+
+New users should create or sign in to an XMemo account at `https://xmemo.dev`.
+The `login` command opens the hosted device-login page and shows a one-time
+code; approve that code in the browser account session to issue the Skill's
+scoped `skill_token`.
 
 or, if you already have a token:
 

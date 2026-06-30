@@ -27,6 +27,10 @@ node skills/xmemo/scripts/xmemo-skill.mjs login
 echo "$XMEMO_KEY" | node skills/xmemo/scripts/xmemo-skill.mjs auth add --from-stdin
 ```
 
+New users should create or sign in to an XMemo account at `https://xmemo.dev`
+before approving the device-login code. The browser page must show the same
+one-time code printed by the Skill script.
+
 Do not paste the token into chat, logs, or project files.
 
 ## 3. Token verification
