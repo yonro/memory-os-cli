@@ -15,198 +15,142 @@ import { CLI_VERSION, DEFAULT_SERVICE_URL, TOKEN_ENV_VAR } from '../core/constan
 // Static tool metadata — returned when remote is unreachable or unauthenticated
 // ---------------------------------------------------------------------------
 
-const STATIC_TOOLS = [
-  {
-    name: 'remember',
-    description: 'Save a memory so it can be recalled in future conversations.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: 'Text body to save.' },
-        path: { type: 'string', description: 'Category path, e.g. preferences, projects/xmemo.' }
-      },
-      required: ['content', 'path']
-    }
+const STATIC_TOOL_DESCRIPTIONS = {
+  get_mcp_identity: 'Check XMemo connection status and the connected account/agent.',
+  remember: 'Save a memory so it can be recalled in future conversations.',
+  recall: 'Recall the most relevant saved memories before answering.',
+  recall_context: 'Build a context pack from XMemo memories for complex tasks.',
+  memory_stats: 'Show aggregate statistics for XMemo memories.',
+  update_memory: 'Update the content or metadata of an existing memory.',
+  explain_memory: 'Explain why a memory exists or matched a query.',
+  restore_memory: 'Restore a previously deleted memory.',
+  add_expense: 'Record one expense in the XMemo Ledger.',
+  list_ledger_transactions: 'Show XMemo Ledger records.',
+  get_monthly_ledger_summary: 'Summarize Ledger totals by month and currency.',
+  forget: 'Permanently delete a memory by target.',
+  create_memory_todo: 'Create a TODO/action item with an optional due time.',
+  list_memory_todos: 'List open or completed TODO/action items.',
+  complete_memory_todo: 'Mark a TODO/action item completed.',
+  list_memory_versions: 'List available versions for a memory.',
+  get_timeline: 'Show recent timeline events.',
+  record_event: 'Record a significant session event, milestone, or decision.',
+  update_state: 'Save the current working state during long-running work.',
+  get_project_context: 'Build project-scoped context from XMemo memories.'
+};
+
+const STATIC_TOOL_SCHEMAS = {
+  remember: {
+    content: { type: 'string', description: 'Text body to save.' },
+    path: { type: 'string', description: 'Category path, e.g. preferences, projects/xmemo.' }
   },
-  {
-    name: 'recall',
-    description: 'Recall the most relevant saved memories before answering.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Natural-language question or search text.' }
-      },
-      required: ['query']
-    }
+  recall: {
+    query: { type: 'string', description: 'Natural-language question or search text.' }
   },
-  {
-    name: 'search_memory',
-    description: 'Search XMemo memories by natural-language query.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Natural-language question or search text.' }
-      },
-      required: ['query']
-    }
+  recall_context: {
+    query: { type: 'string', description: 'Natural-language question or search text.' }
   },
-  {
-    name: 'recall_context',
-    description: 'Build a context pack from XMemo memories for complex tasks.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Natural-language question or search text.' }
-      },
-      required: ['query']
-    }
+  update_memory: {
+    memory_id: { type: 'string', description: 'Exact XMemo memory reference.' },
+    content: { type: 'string', description: 'Replacement memory content.' },
+    path: { type: 'string', description: 'Replacement memory path.' }
   },
-  {
-    name: 'update_memory',
-    description: 'Update the content or metadata of an existing memory.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        memory_id: { type: 'string', description: 'Exact XMemo memory reference.' }
-      },
-      required: ['memory_id']
-    }
+  explain_memory: {
+    memory_id: { type: 'string', description: 'Exact XMemo memory reference.' },
+    query: { type: 'string', description: 'Optional explanation query.' }
   },
-  {
-    name: 'forget',
-    description: 'Permanently delete a memory by target.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        target: { type: 'string', description: 'The memory to forget: current or an exact memory ID.' }
-      },
-      required: []
-    }
+  restore_memory: {
+    memory_id: { type: 'string', description: 'Exact XMemo memory reference.' },
+    reason: { type: 'string', description: 'Optional restore reason.' }
   },
-  {
-    name: 'forget_memory',
-    description: 'Delete a memory (recoverable) by exact reference.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        memory_id: { type: 'string', description: 'Exact XMemo memory reference.' }
-      },
-      required: ['memory_id']
-    }
+  add_expense: {
+    item: { type: 'string', description: 'The purchased item or service.' },
+    amount: { type: 'number', description: 'Positive transaction amount.' }
   },
-  {
-    name: 'redact_memory',
-    description: 'Redact sensitive content from a memory while keeping an audit trail.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        memory_id: { type: 'string', description: 'Exact XMemo memory reference.' }
-      },
-      required: ['memory_id']
-    }
+  list_ledger_transactions: {
+    query: { type: 'string', description: 'Optional ledger search text.' },
+    limit: { type: 'integer', description: 'Maximum number of records.' }
   },
-  {
-    name: 'explain_memory',
-    description: 'Explain why a memory exists or matched a query.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        memory_id: { type: 'string', description: 'Exact XMemo memory reference.' }
-      },
-      required: ['memory_id']
-    }
+  get_monthly_ledger_summary: {
+    months: { type: 'integer', description: 'Number of recent months to summarize.' }
   },
-  {
-    name: 'create_memory_todo',
-    description: 'Create a TODO/action item with an optional due time.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: 'Text body of the TODO item.' }
-      },
-      required: ['content']
-    }
+  forget: {
+    target: { type: 'string', description: 'The memory to forget: current or an exact memory ID.' },
+    reason: { type: 'string', description: 'Optional deletion reason.' }
   },
-  {
-    name: 'list_memory_todos',
-    description: 'List open or completed TODO/action items.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
+  create_memory_todo: {
+    content: { type: 'string', description: 'Text body of the TODO item.' },
+    due_at: { type: 'string', description: 'Optional due time.' }
   },
-  {
-    name: 'complete_memory_todo',
-    description: 'Mark a TODO/action item completed.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        todo_id: { type: 'string', description: 'The memory TODO/action-item ID to complete.' }
-      },
-      required: ['todo_id']
-    }
+  list_memory_todos: {
+    item_status: { type: 'string', description: 'Optional TODO status filter.' },
+    limit: { type: 'integer', description: 'Maximum number of TODOs.' }
   },
-  {
-    name: 'record_event',
-    description: 'Record a significant session event, milestone, or decision.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        content: { type: 'string', description: 'Text body of the event.' }
-      },
-      required: ['content']
-    }
+  complete_memory_todo: {
+    todo_id: { type: 'string', description: 'The memory TODO/action-item ID to complete.' }
   },
-  {
-    name: 'get_timeline',
-    description: 'Show recent events.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
+  list_memory_versions: {
+    memory_id: { type: 'string', description: 'Exact XMemo memory reference.' }
   },
-  {
-    name: 'add_expense',
-    description: 'Record one expense in the XMemo Ledger.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        item: { type: 'string', description: 'The purchased item or service.' },
-        amount: { type: 'number', description: 'Positive transaction amount.' }
-      },
-      required: ['item', 'amount']
-    }
+  record_event: {
+    content: { type: 'string', description: 'Text body of the event.' }
   },
-  {
-    name: 'create_restart_snapshot',
-    description: 'Save active state for restart/handoff.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
+  update_state: {
+    state_key: { type: 'string', description: 'Working-state key to save.' },
+    current_task: { type: 'string', description: 'Current task or work item.' },
+    next_action: { type: 'string', description: 'Next action for later resume.' }
   },
-  {
-    name: 'restore_restart_snapshot',
-    description: 'Resume previous work from a saved snapshot.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
-  },
-  {
-    name: 'memory_overview',
-    description: 'Show a summary of XMemo memories and recent activity.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      required: []
-    }
+  get_project_context: {
+    query: { type: 'string', description: 'Project-context query.' },
+    project_id: { type: 'string', description: 'Optional project identifier.' }
   }
+};
+
+const STATIC_TOOL_REQUIRED = {
+  remember: ['content', 'path'],
+  recall: ['query'],
+  recall_context: ['query'],
+  update_memory: ['memory_id'],
+  explain_memory: ['memory_id'],
+  restore_memory: ['memory_id'],
+  add_expense: ['item', 'amount'],
+  create_memory_todo: ['content'],
+  complete_memory_todo: ['todo_id'],
+  list_memory_versions: ['memory_id'],
+  record_event: ['content'],
+};
+
+const STATIC_TOOL_NAMES = [
+  'get_mcp_identity',
+  'remember',
+  'recall',
+  'recall_context',
+  'memory_stats',
+  'update_memory',
+  'explain_memory',
+  'restore_memory',
+  'add_expense',
+  'list_ledger_transactions',
+  'get_monthly_ledger_summary',
+  'forget',
+  'create_memory_todo',
+  'list_memory_todos',
+  'complete_memory_todo',
+  'list_memory_versions',
+  'get_timeline',
+  'record_event',
+  'update_state',
+  'get_project_context'
 ];
+
+const STATIC_TOOLS = STATIC_TOOL_NAMES.map((name) => ({
+  name,
+  description: STATIC_TOOL_DESCRIPTIONS[name],
+  inputSchema: {
+    type: 'object',
+    properties: STATIC_TOOL_SCHEMAS[name] || {},
+    required: STATIC_TOOL_REQUIRED[name] || []
+  }
+}));
 
 const SERVER_INFO = {
   name: 'xmemo',
