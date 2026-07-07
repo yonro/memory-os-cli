@@ -24,7 +24,7 @@ internal scripts are not part of this npm package.
 - **Native integrations**: OpenClaw XMemo memory plugin and Hermes `hermes-xmemo` provider
 - **MCP Endpoint**: `https://xmemo.dev/mcp` (Streamable HTTP)
 - **Auth**: Bearer Token (`XMEMO_KEY`) or MCP OAuth
-- **Tools**: `remember`, `recall`, `search_memory`, `update_memory`, `forget`, `redact_memory`, `explain_memory`, `create_memory_todo`, `list_memory_todos`, `complete_memory_todo`, `record_event`, `get_timeline`, `add_expense`
+- **Tools** (20): `get_mcp_identity`, `remember`, `recall`, `recall_context`, `memory_stats`, `update_memory`, `explain_memory`, `restore_memory`, `add_expense`, `list_ledger_transactions`, `get_monthly_ledger_summary`, `forget`, `create_memory_todo`, `list_memory_todos`, `complete_memory_todo`, `list_memory_versions`, `get_timeline`, `record_event`, `update_state`, `get_project_context`
 - **Clients**: Kimi, Claude, Cursor, Copilot, Gemini, Grok, Windsurf, Cline, Trae, Zed, Qwen, and more
 
 ```json

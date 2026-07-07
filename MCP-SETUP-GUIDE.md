@@ -202,7 +202,7 @@ Antigravity 2.0 支持 OAuth，首次使用时会自动打开浏览器完成授�
 
 > "列出你可以使用的 XMemo 工具。"
 
-如果 AI 能列出 `remember`、`recall`、`search_memory` 等工具，说明配置成功。
+如果 AI 能列出 `remember`、`recall`、`recall_context`、`add_expense` 等工具，说明配置成功。
 
 或者运行 XMemo CLI 的连通性检查：
 

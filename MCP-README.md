@@ -36,23 +36,30 @@ XMemo 是一个 **用户拥有的、托管的 MCP 记忆服务**，让 AI 智能
 
 ## 支持的 MCP 工具
 
-XMemo MCP 服务器提供以下工具，每个工具都有清晰的名称、描述和参数定义：
+XMemo MCP 服务器提供以下 20 个工具，每个工具都有清晰的名称、描述和参数定义：
 
 | 工具名称 | 功能描述 |
 |----------|----------|
+| `get_mcp_identity` | 检查 XMemo 连接状态及当前登录账户/Agent |
 | `remember` | 保存一条新记忆（笔记、决策、偏好等） |
-| `recall` / `recall_context` | 检索与当前上下文相关的记忆 |
-| `search_memory` | 通过关键词搜索记忆 |
-| `update_memory` | 修改/更新已有记忆内容 |
-| `forget` / `forget_memory` | 删除指定记忆（需确认） |
-| `redact_memory` | 对记忆内容进行脱敏处理，保留审计轨迹 |
+| `recall` | 检索与当前上下文最相关的记忆 |
+| `recall_context` | 为复杂任务构建结构化的记忆上下文包 |
+| `memory_stats` | 查看记忆的聚合统计信息 |
+| `update_memory` | 修改/更新已有记忆内容或元数据 |
 | `explain_memory` | 解释某条记忆为何存在或为何被匹配 |
+| `restore_memory` | 恢复此前被删除的记忆 |
+| `add_expense` | 记录一条流水/记账条目 |
+| `list_ledger_transactions` | 查看记账流水记录 |
+| `get_monthly_ledger_summary` | 按月汇总记账流水（支出/收入/币种） |
+| `forget` | 永久删除指定记忆（需确认目标） |
 | `create_memory_todo` | 创建记忆相关的待办/跟进任务 |
 | `list_memory_todos` | 列出所有待办事项 |
 | `complete_memory_todo` | 标记待办事项为已完成 |
-| `record_event` | 记录里程碑或重要决策事件 |
+| `list_memory_versions` | 查看某条记忆的历史版本 |
 | `get_timeline` | 查看近期事件时间线 |
-| `add_expense` | 记录一条流水/记账条目 |
+| `record_event` | 记录里程碑、决策或重要会话事件 |
+| `update_state` | 保存长任务执行过程中的当前工作状态，便于后续恢复 |
+| `get_project_context` | 构建项目范围的记忆上下文包 |
 
 ---
 
@@ -137,14 +144,14 @@ xmemo setup <client>
 
 ---
 
-### 场景 2：跨会话搜索记忆
+### 场景 2：跨会话检索记忆
 
 > **用户**："我之前保存过关于 CI/CD 的配置，帮我找出来。"
 
-**AI 调用 `search_memory`**：
+**AI 调用 `recall`**：
 ```json
 {
-  "tool": "search_memory",
+  "tool": "recall",
   "query": "CI/CD 配置"
 }
 ```
