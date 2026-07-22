@@ -14,6 +14,11 @@ import readline from 'node:readline';
 
 const SKILL_VERSION = '1.0.0';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
+const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
+const REST_COMMANDS = new Set([
+  'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
+  'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
+]);
 
 // Helper to parse arguments
 function parseArgs(args) {
@@ -21,6 +26,8 @@ function parseArgs(args) {
     json: false,
     baseUrl: process.env.XMEMO_BASE_URL || 'https://xmemo.dev',
     verify: false,
+    compact: false,
+    help: false,
   };
   const positionals = [];
   const flags = {};
@@ -33,6 +40,10 @@ function parseArgs(args) {
         options.json = true;
       } else if (key === 'verify') {
         options.verify = true;
+      } else if (key === 'compact') {
+        options.compact = true;
+      } else if (key === 'help') {
+        options.help = true;
       } else if (key === 'base-url') {
         options.baseUrl = args[++i];
       } else if (key.includes('=')) {
@@ -48,12 +59,81 @@ function parseArgs(args) {
         options.json = true;
       } else if (key === 'v') {
         options.verify = true;
+      } else if (key === 'h') {
+        options.help = true;
       }
     } else {
       positionals.push(arg);
     }
   }
   return { command: positionals[0], subcommand: positionals[1], positionals, options, flags };
+}
+
+function printUsage(command) {
+  const commonOptions = '[--json] [--base-url <url>]';
+  if (command === 'auth') {
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin\n\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
+    return;
+  }
+
+  if (REST_COMMANDS.has(command)) {
+    const commandUsage = {
+      remember: 'remember --content <text> --path <path>',
+      recall: 'recall --query <text> [--limit <n>] [--compact]',
+      search: 'search --query <text> [--limit <n>] [--compact]',
+      'save-state': 'save-state --key <key> [--content <text>]',
+      'restore-state': 'restore-state --key <key>',
+      'state-save': 'state-save --key <key> [--content <text>] (legacy alias)',
+      'state-restore': 'state-restore --key <key> (legacy alias)',
+      'todo-add': 'todo-add --content <text>',
+      'todo-list': 'todo-list',
+      'todo-done': 'todo-done --id <todo_id>',
+      'expense-add': 'expense-add --item <text> --amount <number> --currency <code>',
+      doctor: 'doctor',
+    };
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${commandUsage[command]} ${commonOptions}`);
+    return;
+  }
+
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login                              Start device login\n  logout                             Revoke and remove local credentials\n  auth status [--verify]             Show local or verified auth status\n  auth add --from-stdin              Store a token read from standard input\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override https://xmemo.dev\n  --compact                           Shorten recall/search content for terminals\n  --help, -h                          Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+}
+
+function parseJsonResponse(res, context) {
+  const body = typeof res.body === 'string' ? res.body.trim() : '';
+  if (!body) {
+    throw new Error(`${context}: server returned an empty response (HTTP ${res.statusCode}).`);
+  }
+  try {
+    return JSON.parse(body);
+  } catch {
+    const preview = body.length > 2_000 ? `${body.slice(0, 2_000)}…` : body;
+    throw new Error(`${context}: server returned a non-JSON response (HTTP ${res.statusCode}): ${preview}`);
+  }
+}
+
+function extractList(result) {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.results)) return result.results;
+  if (Array.isArray(result?.todos)) return result.todos;
+  return [];
+}
+
+function extractId(result) {
+  if (typeof result === 'string') return result;
+  if (result?.id) return result.id;
+  if (result?.memory_id) return result.memory_id;
+  return JSON.stringify(result) ?? String(result ?? '');
+}
+
+function apiErrorMessage(data, fallback = 'Operation failed') {
+  return data?.error?.message || data?.error_description || data?.error || fallback;
+}
+
+function formatMemoryContent(content, compact) {
+  const value = String(content ?? '');
+  const rendered = compact ? value.replace(/\s+/g, ' ').trim() : value;
+  const limit = compact ? 280 : 2_000;
+  return rendered.length > limit ? `${rendered.slice(0, limit)}… (truncated)` : rendered;
 }
 
 // HTTP request helper
@@ -141,9 +221,20 @@ async function readStdin() {
 async function main() {
   const { command, subcommand, options, flags } = parseArgs(process.argv.slice(2));
 
-  if (!command) {
-    console.log('XMemo Standalone Skill Runtime. Use one of: login, logout, auth status, auth add, remember, recall, search, state-save, state-restore, todo-add, todo-list, todo-done, expense-add, doctor.');
+  if (options.help) {
+    printUsage(command);
     process.exit(0);
+  }
+
+  if (!command) {
+    printUsage();
+    process.exit(0);
+  }
+
+  if (!['login', 'logout', 'auth'].includes(command) && !REST_COMMANDS.has(command)) {
+    console.error(`Unknown command: ${command}`);
+    printUsage();
+    process.exit(1);
   }
 
   // 1. LOGIN
@@ -156,11 +247,11 @@ async function main() {
         client_version: SKILL_VERSION,
         scopes: ['memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read']
       });
+      const data = parseJsonResponse(res, 'Device login start');
       if (res.statusCode !== 200) {
-        console.error('Failed to start device login:', res.body);
+        console.error(`Failed to start device login: ${apiErrorMessage(data, JSON.stringify(data))}`);
         process.exit(1);
       }
-      const data = JSON.parse(res.body);
       console.log(`To verify this device, open the following URL in your browser:\n`);
       console.log(`  ${data.verification_uri_complete}\n`);
       console.log(`Or enter the code: ${data.user_code}`);
@@ -175,7 +266,7 @@ async function main() {
             device_code: deviceCode,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
           });
-          const pollData = JSON.parse(pollRes.body);
+          const pollData = parseJsonResponse(pollRes, 'Device login polling');
           if (pollData.error) {
             if (pollData.error === 'authorization_pending') {
               setTimeout(poll, interval);
@@ -196,7 +287,7 @@ async function main() {
             }
           }
         } catch (e) {
-          console.error('Network error during polling:', e.message);
+          console.error('Login polling error:', e.message);
           setTimeout(poll, interval);
         }
       };
@@ -248,18 +339,19 @@ async function main() {
           const res = await makeHttpRequest(options.baseUrl, '/v1/auth/token/validate', 'GET', null, {
             'Authorization': `Bearer ${token}`
           });
+          const data = parseJsonResponse(res, 'Token verification');
           if (res.statusCode === 200) {
-            const data = JSON.parse(res.body);
             if (options.json) {
               console.log(JSON.stringify({ status: 'valid', scopes: data.scopes, setup_state: data.setup_state }));
             } else {
-              console.log(`Status: Logged in (verified)\nToken Prefix: ${maskedToken}\nScopes: ${data.scopes.join(', ')}`);
+              const scopes = Array.isArray(data.scopes) ? data.scopes : [];
+              console.log(`Status: Logged in (verified)\nToken Prefix: ${maskedToken}\nScopes: ${scopes.join(', ')}`);
             }
           } else {
             if (options.json) {
               console.log(JSON.stringify({ status: 'invalid' }));
             } else {
-              console.error('Status: Invalid or expired token.');
+              console.error(`Status: Invalid or expired token.${data ? ` ${apiErrorMessage(data, '')}` : ''}`);
             }
             process.exit(1);
           }
@@ -298,7 +390,8 @@ async function main() {
       }
     }
     
-    console.error('Unknown auth subcommand. Use "status" or "add".');
+    console.error(`Unknown auth subcommand: ${subcommand || '(missing)'}`);
+    printUsage('auth');
     process.exit(1);
   }
 
@@ -312,7 +405,11 @@ async function main() {
         operation: 'doctor',
         arguments: {}
       });
-      const data = JSON.parse(res.body);
+      const data = parseJsonResponse(res, 'Doctor health check');
+      if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
+        console.error(`Doctor health check failed: ${apiErrorMessage(data, JSON.stringify(data))}`);
+        process.exit(1);
+      }
       if (options.json) {
         console.log(JSON.stringify(data));
       } else {
@@ -327,14 +424,14 @@ async function main() {
   }
 
   if (!token) {
-    console.error('Error: No XMemo credential found. Please run "node xmemo-skill.mjs login" or set process.env.XMEMO_KEY.');
+    console.error(`Error: No XMemo credential found. Please run "${SCRIPT_COMMAND} login" or set process.env.XMEMO_KEY.`);
     process.exit(1);
   }
 
   // Normalize commands for operations mapping
   let opName = command;
-  if (command === 'save-state') opName = 'state-save';
-  if (command === 'restore-state') opName = 'state-restore';
+  if (command === 'save-state' || command === 'state-save') opName = 'state-save';
+  if (command === 'restore-state' || command === 'state-restore') opName = 'state-restore';
 
   try {
     const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
@@ -344,51 +441,52 @@ async function main() {
       'Authorization': `Bearer ${token}`
     });
 
+    const data = parseJsonResponse(res, `${opName} request`);
+    const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
     if (options.json) {
-      console.log(res.body);
-      process.exit(res.statusCode === 200 ? 0 : 1);
+      console.log(JSON.stringify(data));
+      process.exit(succeeded ? 0 : 1);
     }
 
-    const data = JSON.parse(res.body);
-    if (!data.ok) {
-      console.error(`Error: ${data.error?.message || 'Operation failed'} (Code: ${data.error?.code || 'error'})`);
+    if (!succeeded) {
+      console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
       process.exit(1);
     }
 
     if (opName === 'doctor') {
       const isValid = !!data.result?.auth_valid;
       if (isValid) {
-        console.log(`XMemo Service Status: OK\nAuthentication: Valid\nScopes: ${(data.result?.scopes || []).join(', ')}`);
+        console.log(`XMemo Service Status: OK\nAuthentication: Valid\nScopes: ${extractList(data.result?.scopes).join(', ')}`);
       } else {
         console.log(`XMemo Service Status: OK\nAuthentication: Invalid`);
         process.exit(1);
       }
     } else if (opName === 'recall' || opName === 'search') {
-      const results = data.result || [];
+      const results = extractList(data.result);
       if (results.length === 0) {
         console.log('No matching memories found.');
       } else {
         results.forEach((item, index) => {
-          console.log(`[${index + 1}] ID: ${item.id} | Path: ${item.path}`);
-          console.log(`Content: ${item.content}`);
+          console.log(`[${index + 1}] ID: ${item?.id || item?.memory_id || '(unknown)'} | Path: ${item?.path || '(unknown)'}`);
+          console.log(`Content: ${formatMemoryContent(item?.content, options.compact)}`);
           console.log(`---`);
         });
       }
     } else if (opName === 'todo-list') {
-      const todos = data.result || [];
+      const todos = extractList(data.result);
       if (todos.length === 0) {
         console.log('No TODOs found.');
       } else {
         todos.forEach((todo) => {
-          console.log(`- [${todo.status === 'done' ? 'x' : ' '}] ${todo.content} (ID: ${todo.id})`);
+          console.log(`- [${todo?.status === 'done' ? 'x' : ' '}] ${todo?.content || ''} (ID: ${todo?.id || todo?.memory_id || '(unknown)'})`);
         });
       }
     } else if (opName === 'state-restore') {
       console.log(`Working State restored:\nKey: ${data.result?.state_key}\nContent: ${data.result?.content}`);
     } else if (opName === 'remember') {
-      console.log(`✅ Saved to XMemo.\nID: ${data.result}`);
+      console.log(`✅ Saved to XMemo.\nID: ${extractId(data.result)}`);
     } else if (opName === 'expense-add') {
-      console.log(`✅ Expense recorded.\nID: ${data.result}`);
+      console.log(`✅ Expense recorded.\nID: ${extractId(data.result)}`);
     } else {
       console.log(`✅ Operation succeeded.`);
     }

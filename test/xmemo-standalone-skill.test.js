@@ -48,6 +48,7 @@ function createTestServer() {
   const requests = [];
   let responseData = { ok: true, result: {} };
   let responseStatus = 200;
+  let rawResponse = null;
   
   // Custom response sequence mapping
   let responsesSeq = [];
@@ -66,13 +67,16 @@ function createTestServer() {
         body: body ? JSON.parse(body) : null,
       });
 
-      res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
       if (responsesSeq.length > 0) {
         const nextResp = responsesSeq[responseIndex] || responsesSeq[responsesSeq.length - 1];
         responseIndex++;
         res.writeHead(nextResp.status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(nextResp.body));
+      } else if (rawResponse) {
+        res.writeHead(rawResponse.status, { 'Content-Type': rawResponse.contentType });
+        res.end(rawResponse.body);
       } else {
+        res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(responseData));
       }
     });
@@ -85,10 +89,16 @@ function createTestServer() {
       responseData = data;
       responseStatus = status;
       responsesSeq = [];
+      rawResponse = null;
     },
     setResponseSeq: (seq) => {
       responsesSeq = seq;
       responseIndex = 0;
+      rawResponse = null;
+    },
+    setRawResponse: (body, status = 502, contentType = 'text/html') => {
+      rawResponse = { body, status, contentType };
+      responsesSeq = [];
     },
     start: () => new Promise((resolve) => {
       server.listen(0, '127.0.0.1', () => {
@@ -194,6 +204,97 @@ test('skill script remember command calls /v1/skill/operations with operation re
   assert.equal(req.body.operation, 'remember');
   assert.equal(req.body.arguments.content, 'hello world');
   assert.equal(req.body.arguments.path, 'conventions');
+
+  await testServer.stop();
+});
+
+test('skill script extracts object IDs for remember and expense-add', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({ ok: true, result: { id: 'mem_object_123' } });
+  const rememberRes = await runScript(['remember', '--content', 'hello', '--path', 'test'], {
+    baseUrl,
+    env: { XMEMO_KEY: 'secret-token-key' }
+  });
+  assert.equal(rememberRes.code, 0);
+  assert.match(rememberRes.stdout, /ID: mem_object_123/);
+  assert.doesNotMatch(rememberRes.stdout, /\[object Object\]/);
+
+  testServer.setResponse({ ok: true, result: { memory_id: 'ledger_object_456' } });
+  const expenseRes = await runScript(['expense-add', '--item', 'lunch', '--amount', '15.5', '--currency', 'USD'], {
+    baseUrl,
+    env: { XMEMO_KEY: 'secret-token-key' }
+  });
+  assert.equal(expenseRes.code, 0);
+  assert.match(expenseRes.stdout, /ID: ledger_object_456/);
+  assert.doesNotMatch(expenseRes.stdout, /\[object Object\]/);
+
+  await testServer.stop();
+});
+
+test('skill script accepts wrapped recall, search, and TODO list payloads', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  testServer.setResponse({ ok: true, result: { results: [{ id: 'recall_1', path: 'projects/test', content: 'A'.repeat(500) }], coverage: { matched: 1 } } });
+  const recallRes = await runScript(['recall', '--query', 'test', '--compact'], { baseUrl, env });
+  assert.equal(recallRes.code, 0);
+  assert.match(recallRes.stdout, /ID: recall_1/);
+  assert.match(recallRes.stdout, /truncated/);
+
+  testServer.setResponse({ ok: true, result: { results: [{ id: 'search_1', path: 'projects/test', content: 'result' }] } });
+  const searchRes = await runScript(['search', '--query', 'test'], { baseUrl, env });
+  assert.equal(searchRes.code, 0);
+  assert.match(searchRes.stdout, /ID: search_1/);
+
+  testServer.setResponse({ ok: true, result: { todos: [{ id: 'todo_1', content: 'ship the fix', status: 'open' }] } });
+  const todoListRes = await runScript(['todo-list'], { baseUrl, env });
+  assert.equal(todoListRes.code, 0);
+  assert.match(todoListRes.stdout, /ship the fix \(ID: todo_1\)/);
+
+  await testServer.stop();
+});
+
+test('skill script exposes usage and preserves non-JSON server diagnostics', async () => {
+  const helpRes = await runScript(['recall', '--help']);
+  assert.equal(helpRes.code, 0);
+  assert.match(helpRes.stdout, /node scripts\/xmemo-skill\.mjs recall/);
+
+  const unknownRes = await runScript(['not-a-command']);
+  assert.notEqual(unknownRes.code, 0);
+  assert.match(unknownRes.stderr, /Unknown command: not-a-command/);
+  assert.match(unknownRes.stdout, /Commands:/);
+
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setRawResponse('<html>upstream unavailable</html>');
+  const failureRes = await runScript(['search', '--query', 'test'], {
+    baseUrl,
+    env: { XMEMO_KEY: 'secret-token-key' }
+  });
+  assert.notEqual(failureRes.code, 0);
+  assert.match(failureRes.stderr, /non-JSON response \(HTTP 502\)/);
+  assert.match(failureRes.stderr, /upstream unavailable/);
+
+  await testServer.stop();
+});
+
+test('skill script smoke-covers todo add and todo done operations', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  testServer.setResponse({ ok: true, result: { id: 'todo_new' } });
+  const addRes = await runScript(['todo-add', '--content', 'follow up'], { baseUrl, env });
+  assert.equal(addRes.code, 0);
+  assert.equal(testServer.requests.at(-1).body.operation, 'todo-add');
+
+  testServer.setResponse({ ok: true, result: { id: 'todo_new' } });
+  const doneRes = await runScript(['todo-done', '--id', 'todo_new'], { baseUrl, env });
+  assert.equal(doneRes.code, 0);
+  assert.equal(testServer.requests.at(-1).body.operation, 'todo-done');
 
   await testServer.stop();
 });

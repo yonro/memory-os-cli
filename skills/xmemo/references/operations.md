@@ -7,7 +7,7 @@ bundled `xmemo` Skill. This is the primary standalone runtime for direct REST ac
 
 XMemo supports two parallel integration paths:
 
-1. **Bundled Skill script** (`node skills/xmemo/scripts/xmemo-skill.mjs <command>`), which directly integrates with the XMemo REST API using stored credentials.
+1. **Bundled Skill script** (`node scripts/xmemo-skill.mjs <command>`), which directly integrates with the XMemo REST API using stored credentials. Run commands from the Skill root.
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
 If no credential is stored, the script reports the login or token add command as the repair path. Never paste a raw token into chat.
@@ -32,7 +32,7 @@ If no credential is stored, the script reports the login or token add command as
 ### Remember a decision
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs remember \
+node scripts/xmemo-skill.mjs remember \
   --content "Use pnpm for package management in this repo" \
   --path "projects/memory-os-cli/conventions"
 ```
@@ -40,39 +40,43 @@ node skills/xmemo/scripts/xmemo-skill.mjs remember \
 ### Recall before acting
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs recall \
-  --query "package manager convention for memory-os-cli"
+node scripts/xmemo-skill.mjs recall \
+  --query "package manager convention for memory-os-cli" --compact
 ```
 
 ### Save handoff state
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs save-state --key active_task
+node scripts/xmemo-skill.mjs save-state --key active_task
 ```
 
 ### Restore handoff state
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs restore-state --key active_task
+node scripts/xmemo-skill.mjs restore-state --key active_task
 ```
 
 ### Add a TODO
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs todo-add \
+node scripts/xmemo-skill.mjs todo-add \
   --content "Add unit tests for ledger expense command"
 ```
 
 ### Record an expense
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs expense-add \
+node scripts/xmemo-skill.mjs expense-add \
   --item "team lunch" --amount 42.5 --currency USD
 ```
 
 ## Direct Skill execution details
 
 If the Skill file itself is not available, you can still run direct operations by calling the XMemo REST API using tools like curl or any HTTP client.
+
+## Output and terminal safety
+
+`remember` and `expense-add` print the server-returned memory or ledger ID. `recall` and `search` accept `--compact` to render each memory on one shortened line; use `--json` when a caller needs the complete response payload. For the exact accepted parameters of any command, run `node scripts/xmemo-skill.mjs <command> --help`.
 
 ## Limitations
 

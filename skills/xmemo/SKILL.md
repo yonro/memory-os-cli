@@ -11,13 +11,13 @@ Give your agent durable memory that survives across sessions, projects, and tool
 
 XMemo supports two parallel integration paths:
 
-1. **Bundled Skill script** at `skills/xmemo/scripts/xmemo-skill.mjs` (Primary standalone direct REST API integration, fully self-contained and zero-dependency).
+1. **Bundled Skill script** at `scripts/xmemo-skill.mjs` (primary standalone direct REST API integration, fully self-contained and zero-dependency).
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
 If no credential is available, run:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs login
+node scripts/xmemo-skill.mjs login
 ```
 
 New users should create or sign in to an XMemo account at `https://xmemo.dev`.
@@ -28,7 +28,7 @@ scoped `skill_token`.
 or, if you already have a token:
 
 ```text
-echo "TOKEN_VALUE" | node skills/xmemo/scripts/xmemo-skill.mjs auth add --from-stdin
+echo "TOKEN_VALUE" | node scripts/xmemo-skill.mjs auth add --from-stdin
 ```
 
 Never ask the user to paste a raw token into chat, logs, or project files.
@@ -51,29 +51,29 @@ Never ask the user to paste a raw token into chat, logs, or project files.
 ## Bundled Script Commands
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs remember --content "..." --path "..."
-node skills/xmemo/scripts/xmemo-skill.mjs recall --query "..."
-node skills/xmemo/scripts/xmemo-skill.mjs search --query "..." --limit 5
-node skills/xmemo/scripts/xmemo-skill.mjs save-state --key active_task
-node skills/xmemo/scripts/xmemo-skill.mjs restore-state --key active_task
-node skills/xmemo/scripts/xmemo-skill.mjs todo-add --content "..."
-node skills/xmemo/scripts/xmemo-skill.mjs todo-list
-node skills/xmemo/scripts/xmemo-skill.mjs todo-done --id <todo_id>
-node skills/xmemo/scripts/xmemo-skill.mjs expense-add --item "..." --amount 12.5 --currency USD
-node skills/xmemo/scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs remember --content "..." --path "..."
+node scripts/xmemo-skill.mjs recall --query "..." --compact
+node scripts/xmemo-skill.mjs search --query "..." --limit 5 --compact
+node scripts/xmemo-skill.mjs save-state --key active_task
+node scripts/xmemo-skill.mjs restore-state --key active_task
+node scripts/xmemo-skill.mjs todo-add --content "..."
+node scripts/xmemo-skill.mjs todo-list
+node scripts/xmemo-skill.mjs todo-done --id <todo_id>
+node scripts/xmemo-skill.mjs expense-add --item "..." --amount 12.5 --currency USD
+node scripts/xmemo-skill.mjs doctor
 ```
 
-The script supports JSON output with --json. It never prints token values.
+The script supports JSON output with `--json`, command-specific usage with `--help`, and compact recall/search output with `--compact`. It never prints token values.
 
 ## Direct CLI Commands
 
 The Skill script handles all operations directly, including status checks and token management:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs auth status [--verify]
-node skills/xmemo/scripts/xmemo-skill.mjs auth add --from-stdin
-node skills/xmemo/scripts/xmemo-skill.mjs logout
-node skills/xmemo/scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs auth status [--verify]
+node scripts/xmemo-skill.mjs auth add --from-stdin
+node scripts/xmemo-skill.mjs logout
+node scripts/xmemo-skill.mjs doctor
 ```
 
 ## Setup And Repair
@@ -81,8 +81,8 @@ node skills/xmemo/scripts/xmemo-skill.mjs doctor
 If the bundled script reports auth or service errors, use the Skill diagnostics command:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs doctor
-node skills/xmemo/scripts/xmemo-skill.mjs auth status --verify
+node scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs auth status --verify
 ```
 
 For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.

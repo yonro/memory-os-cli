@@ -12,7 +12,8 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
 
   assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
   assert.match(skill, /Runtime Selection/);
-  assert.match(skill, /skills\/xmemo\/scripts\/xmemo-skill\.mjs/);
+  assert.match(skill, /scripts\/xmemo-skill\.mjs/);
+  assert.doesNotMatch(skill, /node skills\/xmemo\/scripts\/xmemo-skill\.mjs/);
   assert.match(skill, /xmemo-skill\.mjs login/);
   assert.match(skill, /auth add --from-stdin/);
   assert.match(skill, /remember/);
@@ -22,6 +23,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /restore-state/);
   assert.match(skill, /todo-add/);
   assert.match(skill, /expense-add/);
+  assert.match(skill, /--compact/);
   assert.match(skill, /references\/operations\.md/);
   assert.match(skill, /references\/troubleshooting\.md/);
   assert.match(skill, /Do not simulate a successful memory read or write/i);

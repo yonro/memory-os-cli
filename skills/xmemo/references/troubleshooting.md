@@ -8,7 +8,7 @@ produced it, and the next concrete repair command.
 Check that the script runs successfully:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs doctor
 ```
 
 ## 2. Authentication Status
@@ -16,15 +16,15 @@ node skills/xmemo/scripts/xmemo-skill.mjs doctor
 Check whether a credential is stored without exposing the token value:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs auth status
+node scripts/xmemo-skill.mjs auth status
 ```
 
 If the credential is missing, start device login or add a token directly:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs login
+node scripts/xmemo-skill.mjs login
 # or
-echo "$XMEMO_KEY" | node skills/xmemo/scripts/xmemo-skill.mjs auth add --from-stdin
+echo "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin
 ```
 
 New users should create or sign in to an XMemo account at `https://xmemo.dev`
@@ -38,7 +38,7 @@ Do not paste the token into chat, logs, or project files.
 Verify the stored credential against the hosted endpoint:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs auth status --verify
+node scripts/xmemo-skill.mjs auth status --verify
 ```
 
 If verification fails:
@@ -51,14 +51,14 @@ If verification fails:
 Check the hosted service without sending a token:
 
 ```text
-node skills/xmemo/scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs doctor
 ```
 
 If this fails:
 
 - Confirm the machine can reach `https://xmemo.dev`.
 - Check DNS, VPN, or corporate proxy settings.
-- Try an explicit base URL: `node skills/xmemo/scripts/xmemo-skill.mjs doctor --base-url https://xmemo.dev`.
+- Try an explicit base URL: `node scripts/xmemo-skill.mjs doctor --base-url https://xmemo.dev`.
 
 ## 5. Common errors
 
