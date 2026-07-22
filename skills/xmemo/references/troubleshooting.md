@@ -27,6 +27,17 @@ node scripts/xmemo-skill.mjs login
 echo "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin
 ```
 
+Formal login is recommended. If and only if a human is unavailable or has
+explicitly declined registration for now, create a limited temporary sandbox:
+
+```text
+node scripts/xmemo-skill.mjs register --reason unattended
+```
+
+Temporary credentials work only for `remember`, `recall`, and `search`. Give
+the displayed bind URL to the user, then use `auth claim-confirm` after their
+claim to receive the formal credential.
+
 New users should create or sign in to an XMemo account at `https://xmemo.dev`
 before approving the device-login code. The browser page must show the same
 one-time code printed by the Skill script.

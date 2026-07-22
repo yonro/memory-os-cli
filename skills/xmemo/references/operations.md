@@ -12,6 +12,30 @@ XMemo supports two parallel integration paths:
 
 If no credential is stored, the script reports the login or token add command as the repair path. Never paste a raw token into chat.
 
+## Account policy and temporary fallback
+
+Use `login` or `auth add` by default. They provide a formal, account-backed
+credential and the full command set. Do not automatically choose a temporary
+token just because it is convenient.
+
+Only use the fallback after the human explicitly declines formal registration,
+or in unattended automation with no human available:
+
+```text
+node scripts/xmemo-skill.mjs register --reason declined
+node scripts/xmemo-skill.mjs register --reason unattended
+```
+
+The fallback stores its token only on the local host and can use only
+`remember`, `recall`, and `search` in an isolated temporary memory space. Show
+the returned bind URL to the user. After their web claim, complete the
+one-time formal-token handoff with:
+
+```text
+node scripts/xmemo-skill.mjs auth claim-status
+node scripts/xmemo-skill.mjs auth claim-confirm
+```
+
 ## Command matrix
 
 | Skill script | Purpose |

@@ -18,6 +18,8 @@ async function runScript(args, options = {}) {
     const child = spawn(process.execPath, [skillScript, ...args], {
       env: {
         ...process.env,
+        HOME: options.homeDir || process.env.HOME,
+        USERPROFILE: options.homeDir || process.env.USERPROFILE,
         XMEMO_BASE_URL: options.baseUrl,
         XMEMO_KEY: options.env?.XMEMO_KEY,
         ...options.env,
@@ -297,6 +299,92 @@ test('skill script smoke-covers todo add and todo done operations', async () => 
   assert.equal(testServer.requests.at(-1).body.operation, 'todo-done');
 
   await testServer.stop();
+});
+
+test('skill script gates temporary registration and uses the temporary memory REST surface', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-test-'));
+  try {
+    const rejected = await runScript(['register'], { baseUrl, homeDir, env: {} });
+    assert.notEqual(rejected.code, 0);
+    assert.match(rejected.stderr, /conditional fallback/);
+    assert.equal(testServer.requests.length, 0);
+
+    testServer.setResponse({
+      agent_id: 'agent_temp_1',
+      temporary_token: 'temp_token_secret',
+      claim_code: 'claim_1',
+      bind_url: 'https://example.test/agents/bind?code=claim_1',
+      status: 'unclaimed',
+    });
+    const register = await runScript(['register', '--reason', 'unattended'], { baseUrl, homeDir, env: {} });
+    assert.equal(register.code, 0);
+    assert.match(register.stdout, /Temporary XMemo memory enabled/);
+    assert.match(register.stdout, /bind\?code=claim_1/);
+    assert.doesNotMatch(register.stdout, /temp_token_secret/);
+    assert.equal(testServer.requests.at(-1).url, '/v1/agents/register');
+    assert.equal(testServer.requests.at(-1).body.entry_type, 'skill');
+    assert.equal(testServer.requests.at(-1).body.metadata.registration_reason, 'unattended');
+
+    testServer.setResponse({ id: 'temporary_memory_1' }, 201);
+    const remember = await runScript(['remember', '--content', 'temporary note', '--path', 'scratch'], { baseUrl, homeDir, env: {} });
+    assert.equal(remember.code, 0);
+    assert.match(remember.stdout, /temporary XMemo memory/);
+    assert.equal(testServer.requests.at(-1).url, '/v1/remember');
+    assert.equal(testServer.requests.at(-1).headers.authorization, 'Bearer temp_token_secret');
+
+    testServer.setResponse({ results: [{ id: 'temporary_memory_1', path: 'scratch', content: 'temporary result' }] });
+    const recall = await runScript(['recall', '--query', 'temporary'], { baseUrl, homeDir, env: {} });
+    assert.equal(recall.code, 0);
+    assert.match(recall.stdout, /temporary result/);
+    assert.match(testServer.requests.at(-1).url, /^\/v1\/recall\?query=temporary/);
+
+    const unsupported = await runScript(['todo-list'], { baseUrl, homeDir, env: {} });
+    assert.notEqual(unsupported.code, 0);
+    assert.match(unsupported.stderr, /supports only remember, recall, and search/);
+  } finally {
+    await testServer.stop();
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test('skill script confirms a claimed temporary registration and stores the formal handoff token', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-claim-test-'));
+  try {
+    testServer.setResponse({
+      agent_id: 'agent_temp_claim',
+      temporary_token: 'temp_claim_token',
+      claim_code: 'claim_2',
+      bind_url: 'https://example.test/agents/bind?code=claim_2',
+      status: 'unclaimed',
+    });
+    const register = await runScript(['register', '--reason', 'declined'], { baseUrl, homeDir, env: {} });
+    assert.equal(register.code, 0);
+
+    testServer.setResponseSeq([
+      { status: 200, body: { status: 'pending_bind_confirmation', confirmation_token: 'confirm_once' } },
+      { status: 200, body: { status: 'success' } },
+      { status: 200, body: { status: 'claimed', formal_token: 'formal_handoff_token' } },
+    ]);
+    const claim = await runScript(['auth', 'claim-confirm'], { baseUrl, homeDir, env: {} });
+    assert.equal(claim.code, 0);
+    assert.match(claim.stdout, /Formal XMemo credential received/);
+    assert.doesNotMatch(claim.stdout, /formal_handoff_token/);
+    assert.equal(testServer.requests.at(-2).url, '/v1/agents/bind/confirm-current-user');
+    assert.deepEqual(testServer.requests.at(-2).body, { confirmation_token: 'confirm_once' });
+
+    testServer.setResponse({ ok: true, result: { todos: [] } });
+    const todoList = await runScript(['todo-list'], { baseUrl, homeDir, env: {} });
+    assert.equal(todoList.code, 0);
+    assert.equal(testServer.requests.at(-1).url, '/v1/skill/operations');
+    assert.equal(testServer.requests.at(-1).headers.authorization, 'Bearer formal_handoff_token');
+  } finally {
+    await testServer.stop();
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
 });
 
 test('skill script state-save and state-restore commands', async () => {
