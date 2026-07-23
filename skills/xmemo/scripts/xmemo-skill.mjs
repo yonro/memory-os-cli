@@ -13,10 +13,11 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.0.0';
+const SKILL_VERSION = '1.0.7';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
+const PLAINTEXT_STORAGE = 'plaintext-user-file';
 const REST_COMMANDS = new Set([
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
@@ -30,6 +31,7 @@ function parseArgs(args) {
     verify: false,
     compact: false,
     help: false,
+    allowPlaintext: false,
   };
   const positionals = [];
   const flags = {};
@@ -46,6 +48,10 @@ function parseArgs(args) {
         options.compact = true;
       } else if (key === 'help') {
         options.help = true;
+      } else if (key === 'allow-plaintext') {
+        options.allowPlaintext = true;
+      } else if (key === 'from-stdin') {
+        flags[key] = true;
       } else if (key === 'base-url') {
         options.baseUrl = args[++i];
       } else if (key.includes('=')) {
@@ -74,7 +80,7 @@ function parseArgs(args) {
 function printUsage(command) {
   const commonOptions = '[--json] [--base-url <url>]';
   if (command === 'auth') {
-    console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin\n  ${SCRIPT_COMMAND} auth claim-status\n  ${SCRIPT_COMMAND} auth claim-confirm\n\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
     return;
   }
 
@@ -97,7 +103,7 @@ function printUsage(command) {
     return;
   }
 
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login                              Start formal device login (recommended)\n  register --reason <unattended|declined>\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove local credentials\n  auth status [--verify]             Show local or verified auth status\n  auth add --from-stdin              Store a formal token read from standard input\n  auth claim-status                  Check temporary-account claim status\n  auth claim-confirm                 Confirm a pending human claim and accept formal token handoff\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override https://xmemo.dev\n  --compact                           Shorten recall/search content for terminals\n  --help, -h                          Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove local credentials\n  auth status [--verify]             Show local or verified auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override https://xmemo.dev\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
 }
 
 function parseJsonResponse(res, context) {
@@ -129,6 +135,20 @@ function extractId(result) {
 
 function apiErrorMessage(data, fallback = 'Operation failed') {
   return data?.error?.message || data?.error_description || data?.error || fallback;
+}
+
+function redactSensitiveResponse(value) {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(redactSensitiveResponse);
+  const sensitiveKeys = new Set(['access_token', 'temporary_token', 'formal_token', 'confirmation_token', 'token']);
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    sensitiveKeys.has(key) ? '[REDACTED]' : redactSensitiveResponse(item),
+  ]));
+}
+
+function safeJson(value) {
+  return JSON.stringify(redactSensitiveResponse(value));
 }
 
 function formatMemoryContent(content, compact) {
@@ -190,27 +210,72 @@ async function getStoredToken() {
 
 async function getStoredCredential() {
   if (process.env.XMEMO_KEY) {
-    return { token: process.env.XMEMO_KEY, credential_type: 'environment' };
+    return { token: process.env.XMEMO_KEY, credential_type: 'environment', storage: 'environment' };
   }
   try {
     const data = await fs.readFile(credentialsPath, 'utf8');
     const parsed = JSON.parse(data);
-    return parsed.token ? parsed : null;
+    if (!parsed.token) return null;
+    if (parsed.storage !== PLAINTEXT_STORAGE || parsed.plaintext_storage_consent !== true) {
+      console.error(`⚠️ Legacy plaintext XMemo credential detected at ${credentialsPath}. Rotate it with XMEMO_KEY, or explicitly recreate it with --allow-plaintext.`);
+    }
+    return parsed;
   } catch {
     return null;
   }
 }
 
-// Save credential helper
-async function saveToken(token, details = {}) {
-  await fs.mkdir(path.dirname(credentialsPath), { recursive: true });
+async function bestEffortChmod(targetPath, mode) {
+  try {
+    await fs.chmod(targetPath, mode);
+  } catch {
+    // Some platforms do not implement POSIX permission bits. Never claim this is encryption.
+  }
+}
+
+function plaintextStorageAllowed(options, credential = null) {
+  return options?.allowPlaintext === true
+    || (credential?.storage === PLAINTEXT_STORAGE && credential?.plaintext_storage_consent === true);
+}
+
+function requirePlaintextStorageConsent(options, action) {
+  if (options?.allowPlaintext === true) return;
+  throw new Error(`${action} needs to persist a token between commands. XMEMO_KEY is preferred and is never copied to disk. To explicitly permit unencrypted storage in ${credentialsPath}, rerun with --allow-plaintext.`);
+}
+
+function warnPlaintextStorage() {
+  console.error(`⚠️ Plaintext credential storage explicitly enabled. The token will be stored unencrypted at ${credentialsPath} and may be read by processes running as your OS user. Prefer XMEMO_KEY or a managed secret store; never share or commit this file.`);
+}
+
+// Save credential helper. Every caller must prove explicit consent or carry forward recorded consent.
+async function saveToken(token, details = {}, { allowPlaintext = false, warn = false } = {}) {
+  if (!allowPlaintext) {
+    throw new Error(`Refusing unencrypted credential storage without --allow-plaintext. Prefer XMEMO_KEY.`);
+  }
+  if (warn) warnPlaintextStorage();
+  const credentialDir = path.dirname(credentialsPath);
+  await fs.mkdir(credentialDir, { recursive: true, mode: 0o700 });
+  await bestEffortChmod(credentialDir, 0o700);
+  const {
+    token: _discardToken,
+    created_at: _discardCreatedAt,
+    storage: _discardStorage,
+    plaintext_storage_consent: _discardConsent,
+    plaintext_storage_consent_at: _discardConsentAt,
+    claim_code: _discardClaimCode,
+    ...safeDetails
+  } = details;
   const data = JSON.stringify({
     token,
     created_at: new Date().toISOString(),
     credential_type: 'formal',
-    ...details,
+    ...safeDetails,
+    storage: PLAINTEXT_STORAGE,
+    plaintext_storage_consent: true,
+    plaintext_storage_consent_at: new Date().toISOString(),
   }, null, 2);
-  await fs.writeFile(credentialsPath, data, 'utf8');
+  await fs.writeFile(credentialsPath, `${data}\n`, { encoding: 'utf8', mode: 0o600 });
+  await bestEffortChmod(credentialsPath, 0o600);
 }
 
 async function getInstallationFingerprint() {
@@ -224,8 +289,11 @@ async function getInstallationFingerprint() {
   }
 
   const installation_fingerprint = randomUUID();
-  await fs.mkdir(path.dirname(registrationPath), { recursive: true });
-  await fs.writeFile(registrationPath, JSON.stringify({ installation_fingerprint, created_at: new Date().toISOString() }, null, 2), 'utf8');
+  const registrationDir = path.dirname(registrationPath);
+  await fs.mkdir(registrationDir, { recursive: true, mode: 0o700 });
+  await bestEffortChmod(registrationDir, 0o700);
+  await fs.writeFile(registrationPath, `${JSON.stringify({ installation_fingerprint, created_at: new Date().toISOString() }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await bestEffortChmod(registrationPath, 0o600);
   return installation_fingerprint;
 }
 
@@ -257,20 +325,32 @@ async function requestTemporaryMemoryOperation(command, options, flags, credenti
   }
 
   const data = parseJsonResponse(res, `Temporary ${command} request`);
-  if (options.json) {
-    console.log(JSON.stringify(data));
-    process.exit(res.statusCode >= 200 && res.statusCode < 300 ? 0 : 1);
-  }
   if (res.statusCode < 200 || res.statusCode >= 300) {
     const challenge = data?.detail;
     if (res.statusCode === 428 && challenge?.errorType === 'binding_confirmation_required') {
-      const pending = { ...credential, pending_confirmation_token: challenge.confirmation_token };
-      await saveToken(credential.token, pending);
-      console.error('Your human account has a pending bind confirmation. Run "auth claim-confirm" to finish the formal-token handoff.');
+      const allowPlaintext = plaintextStorageAllowed(options, credential);
+      const pending = {
+        credential_type: 'temporary',
+        agent_id: credential.agent_id,
+        bind_url: credential.bind_url,
+        registration_reason: credential.registration_reason,
+        pending_confirmation_token: challenge.confirmation_token,
+      };
+      await saveToken(credential.token, pending, { allowPlaintext, warn: options.allowPlaintext && !credential.plaintext_storage_consent });
+      if (options.json) {
+        console.log(safeJson(data));
+      } else {
+        console.error('Your human account has a pending bind confirmation. Run "auth claim-confirm" to finish the formal-token handoff. Do not share the bind URL or confirmation value.');
+      }
     } else {
-      console.error(`Temporary ${command} failed: ${apiErrorMessage(data, JSON.stringify(data))}`);
+      console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}`);
     }
     process.exit(1);
+  }
+
+  if (options.json) {
+    console.log(safeJson(data));
+    process.exit(0);
   }
 
   if (command === 'remember') {
@@ -286,15 +366,19 @@ async function claimStatus(baseUrl, credential, options) {
   });
   const data = parseJsonResponse(res, 'Claim status request');
   if (res.statusCode < 200 || res.statusCode >= 300) {
-    throw new Error(`Claim status request failed: ${apiErrorMessage(data, JSON.stringify(data))}`);
+    throw new Error(`Claim status request failed: ${apiErrorMessage(data, safeJson(data))}`);
   }
   if (typeof data.formal_token === 'string' && data.formal_token) {
-    await saveToken(data.formal_token, { credential_type: 'formal', agent_id: credential.agent_id });
-    console.log('✅ Formal XMemo credential received and stored. Temporary access has been replaced.');
+    const allowPlaintext = plaintextStorageAllowed(options, credential);
+    await saveToken(data.formal_token, { credential_type: 'formal', agent_id: credential.agent_id }, {
+      allowPlaintext,
+      warn: options.allowPlaintext && !credential.plaintext_storage_consent,
+    });
+    console.log('✅ Formal XMemo credential received and stored in the explicitly approved user credential file. Temporary access has been replaced.');
     return data;
   }
   if (options.json) {
-    console.log(JSON.stringify(data));
+    console.log(safeJson(data));
   } else {
     console.log(`Claim status: ${data.status || 'unknown'}`);
   }
@@ -337,6 +421,7 @@ async function main() {
   // 1. LOGIN
   if (command === 'login') {
     try {
+      requirePlaintextStorageConsent(options, 'Device login');
       const res = await makeHttpRequest(options.baseUrl, '/v1/auth/device/start', 'POST', {
         client_id: 'xmemo-skill',
         surface: 'standalone_skill',
@@ -346,7 +431,7 @@ async function main() {
       });
       const data = parseJsonResponse(res, 'Device login start');
       if (res.statusCode !== 200) {
-        console.error(`Failed to start device login: ${apiErrorMessage(data, JSON.stringify(data))}`);
+        console.error(`Failed to start device login: ${apiErrorMessage(data, safeJson(data))}`);
         process.exit(1);
       }
       console.log(`To verify this device, open the following URL in your browser:\n`);
@@ -375,8 +460,9 @@ async function main() {
             }
           } else if (pollData.access_token) {
             try {
-              await saveToken(pollData.access_token);
-              console.log('✅ Authorization successful. Credentials stored securely.');
+              await saveToken(pollData.access_token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
+              console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}`);
+              console.log('Token value was not printed. Project files were not modified.');
               process.exit(0);
             } catch (err) {
               console.error('Failed to save credentials file:', err.message);
@@ -400,7 +486,13 @@ async function main() {
   if (command === 'register') {
     const reason = flags.reason;
     if (!['unattended', 'declined'].includes(reason)) {
-      console.error(`Temporary registration is a conditional fallback. Use "${SCRIPT_COMMAND} register --reason unattended" when no human can log in, or "--reason declined" after the human explicitly declines formal registration.`);
+      console.error(`Temporary registration is a conditional fallback. Use "${SCRIPT_COMMAND} register --reason unattended --allow-plaintext" when no human can log in, or "--reason declined --allow-plaintext" after the human explicitly declines formal registration.`);
+      process.exit(1);
+    }
+    try {
+      requirePlaintextStorageConsent(options, 'Temporary registration');
+    } catch (e) {
+      console.error(`Temporary registration refused: ${e.message}`);
       process.exit(1);
     }
     if (await getStoredToken()) {
@@ -420,19 +512,18 @@ async function main() {
       });
       const data = parseJsonResponse(res, 'Temporary registration');
       if (res.statusCode < 200 || res.statusCode >= 300 || !data.temporary_token) {
-        throw new Error(apiErrorMessage(data, JSON.stringify(data)));
+        throw new Error(apiErrorMessage(data, safeJson(data)));
       }
       await saveToken(data.temporary_token, {
         credential_type: 'temporary',
         agent_id: data.agent_id,
-        claim_code: data.claim_code,
         bind_url: data.bind_url,
         registration_reason: reason,
-      });
+      }, { allowPlaintext: options.allowPlaintext, warn: true });
       if (options.json) {
-        console.log(JSON.stringify({ agent_id: data.agent_id, claim_code: data.claim_code, bind_url: data.bind_url, status: data.status }));
+        console.log(JSON.stringify({ agent_id: data.agent_id, bind_url: data.bind_url, status: data.status }));
       } else {
-        console.log(`✅ Temporary XMemo memory enabled for this installation.\nThis is a limited sandbox, not a formal account.\nComplete formal registration (recommended): ${data.bind_url}\nAfter the human claim, run "${SCRIPT_COMMAND} auth claim-confirm" to accept the formal credential.`);
+        console.log(`✅ Temporary XMemo memory enabled for this installation.\nThis is a limited sandbox, not a formal account.\nComplete formal registration (recommended): ${data.bind_url}\nDo not share this bind URL publicly. After the human claim, run "${SCRIPT_COMMAND} auth claim-confirm" to accept the formal credential.`);
       }
       process.exit(0);
     } catch (e) {
@@ -515,21 +606,28 @@ async function main() {
     
     if (subcommand === 'add') {
       if (flags['from-stdin'] !== undefined || process.argv.includes('--from-stdin')) {
+        try {
+          requirePlaintextStorageConsent(options, 'auth add');
+        } catch (e) {
+          console.error(`Credential storage refused: ${e.message}`);
+          process.exit(1);
+        }
         const token = await readStdin();
         if (!token) {
           console.error('Error: Stdin did not provide a token.');
           process.exit(1);
         }
         try {
-          await saveToken(token);
-          console.log('✅ Credentials saved.');
+          await saveToken(token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
+          console.log(`✅ Credential stored in the explicitly approved user credential file: ${credentialsPath}`);
+          console.log('Token value was not printed. Project files were not modified.');
           process.exit(0);
         } catch (err) {
           console.error('Failed to save credentials file:', err.message);
           process.exit(1);
         }
       } else {
-        console.error('Error: Run "auth add --from-stdin" to supply token.');
+        console.error(`Error: Run "${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext" to supply and explicitly store a token.`);
         process.exit(1);
       }
     }
@@ -553,7 +651,16 @@ async function main() {
           });
           const confirmData = parseJsonResponse(confirmRes, 'Claim confirmation');
           if (confirmRes.statusCode < 200 || confirmRes.statusCode >= 300) {
-            throw new Error(apiErrorMessage(confirmData, JSON.stringify(confirmData)));
+            throw new Error(apiErrorMessage(confirmData, safeJson(confirmData)));
+          }
+          if (credential.pending_confirmation_token) {
+            const allowPlaintext = plaintextStorageAllowed(options, credential);
+            await saveToken(credential.token, {
+              credential_type: 'temporary',
+              agent_id: credential.agent_id,
+              bind_url: credential.bind_url,
+              registration_reason: credential.registration_reason,
+            }, { allowPlaintext, warn: options.allowPlaintext && !credential.plaintext_storage_consent });
           }
           await claimStatus(options.baseUrl, credential, options);
         }
@@ -582,7 +689,7 @@ async function main() {
       });
       const data = parseJsonResponse(res, 'Doctor health check');
       if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
-        console.error(`Doctor health check failed: ${apiErrorMessage(data, JSON.stringify(data))}`);
+        console.error(`Doctor health check failed: ${apiErrorMessage(data, safeJson(data))}`);
         process.exit(1);
       }
       if (options.json) {
@@ -599,7 +706,7 @@ async function main() {
   }
 
   if (!token) {
-    console.error(`Error: No XMemo credential found. Recommended: run "${SCRIPT_COMMAND} login". For a limited temporary sandbox only when permitted, run "${SCRIPT_COMMAND} register --reason unattended|declined".`);
+    console.error(`Error: No XMemo credential found. Preferred: set XMEMO_KEY. For formal account login with explicit local storage consent, run "${SCRIPT_COMMAND} login --allow-plaintext". For a limited temporary sandbox only when permitted, run "${SCRIPT_COMMAND} register --reason unattended|declined --allow-plaintext".`);
     process.exit(1);
   }
 

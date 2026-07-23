@@ -10,7 +10,17 @@ XMemo supports two parallel integration paths:
 1. **Bundled Skill script** (`node scripts/xmemo-skill.mjs <command>`), which directly integrates with the XMemo REST API using stored credentials. Run commands from the Skill root.
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
-If no credential is stored, the script reports the login or token add command as the repair path. Never paste a raw token into chat.
+Credential resolution is `XMEMO_KEY` first, then the user-scoped credential
+file. An environment token is never copied into that file. If no credential is
+available, the script reports the formal login or token-add repair path. Never
+paste a raw token into chat.
+
+The zero-dependency runtime cannot provide one portable operating-system
+keychain implementation. Commands that create or replace a local credential
+therefore require `--allow-plaintext`. This flag explicitly permits an
+unencrypted user-file credential; the script prints a warning and applies
+private POSIX permissions where supported. Prefer `XMEMO_KEY` or a managed
+secret store when this local trust boundary is not acceptable.
 
 ## Account policy and temporary fallback
 
@@ -22,19 +32,24 @@ Only use the fallback after the human explicitly declines formal registration,
 or in unattended automation with no human available:
 
 ```text
-node scripts/xmemo-skill.mjs register --reason declined
-node scripts/xmemo-skill.mjs register --reason unattended
+node scripts/xmemo-skill.mjs register --reason declined --allow-plaintext
+node scripts/xmemo-skill.mjs register --reason unattended --allow-plaintext
 ```
 
-The fallback stores its token only on the local host and can use only
+The fallback stores its token in the explicitly approved user credential file and can use only
 `remember`, `recall`, and `search` in an isolated temporary memory space. Show
-the returned bind URL to the user. After their web claim, complete the
+the returned bind URL only to the intended user; do not publish or log it. After
+their web claim, complete the
 one-time formal-token handoff with:
 
 ```text
 node scripts/xmemo-skill.mjs auth claim-status
 node scripts/xmemo-skill.mjs auth claim-confirm
 ```
+
+For a legacy temporary credential that predates recorded consent, append
+`--allow-plaintext` to the claim command once. Successful handoff overwrites the
+temporary credential and removes pending confirmation data.
 
 ## Command matrix
 

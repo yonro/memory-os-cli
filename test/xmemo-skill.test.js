@@ -16,6 +16,9 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.doesNotMatch(skill, /node skills\/xmemo\/scripts\/xmemo-skill\.mjs/);
   assert.match(skill, /xmemo-skill\.mjs login/);
   assert.match(skill, /auth add --from-stdin/);
+  assert.match(skill, /XMEMO_KEY/);
+  assert.match(skill, /--allow-plaintext/);
+  assert.match(skill, /unencrypted/i);
   assert.match(skill, /remember/);
   assert.match(skill, /recall/);
   assert.match(skill, /search/);

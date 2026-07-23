@@ -14,16 +14,27 @@ XMemo supports two parallel integration paths:
 1. **Bundled Skill script** at `scripts/xmemo-skill.mjs` (primary standalone direct REST API integration, fully self-contained and zero-dependency).
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
-If no credential is available, run:
+Credential lookup always prefers the `XMEMO_KEY` environment variable. When it
+is present, the script does not copy its value into a local credential file.
+
+If no credential is available, use formal account login (recommended):
 
 ```text
-node scripts/xmemo-skill.mjs login
+node scripts/xmemo-skill.mjs login --allow-plaintext
 ```
 
 New users should create or sign in to an XMemo account at `https://xmemo.dev`.
 The `login` command opens the hosted device-login page and shows a one-time
 code; approve that code in the browser account session to issue the Skill's
 scoped `skill_token`.
+
+The standalone zero-dependency script has no cross-platform operating-system
+keychain integration. `--allow-plaintext` is therefore an explicit decision to
+store the issued token unencrypted in the current user's XMemo directory so
+later commands can use it. The script prints the exact path, restricts POSIX
+permissions where supported, never prints the token, and never writes it into
+the project. Prefer `XMEMO_KEY` or a managed secret store when plaintext local
+storage is not acceptable.
 
 Formal registration/login is the default and recommended path. It gives the
 user account-backed memory and the full command set.
@@ -32,17 +43,20 @@ Only when no human can complete login (`unattended`) or the human explicitly
 declines registration for now (`declined`), use the explicit temporary fallback:
 
 ```text
-node scripts/xmemo-skill.mjs register --reason unattended
+node scripts/xmemo-skill.mjs register --reason unattended --allow-plaintext
 ```
 
 Temporary access is an isolated, limited memory sandbox. It only supports
 `remember`, `recall`, and `search`; show the returned bind URL to the user and
-then run `node scripts/xmemo-skill.mjs auth claim-confirm` after they claim it.
+do not share that URL publicly. Run
+`node scripts/xmemo-skill.mjs auth claim-confirm` after they claim it. Temporary
+and pending-confirmation values inherit the same explicit plaintext-storage
+consent and are replaced or cleared during formal-token handoff.
 
 or, if you already have a token:
 
 ```text
-echo "TOKEN_VALUE" | node scripts/xmemo-skill.mjs auth add --from-stdin
+echo "TOKEN_VALUE" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
 Never ask the user to paste a raw token into chat, logs, or project files.
@@ -75,7 +89,7 @@ node scripts/xmemo-skill.mjs todo-list
 node scripts/xmemo-skill.mjs todo-done --id <todo_id>
 node scripts/xmemo-skill.mjs expense-add --item "..." --amount 12.5 --currency USD
 node scripts/xmemo-skill.mjs doctor
-node scripts/xmemo-skill.mjs register --reason <unattended|declined>
+node scripts/xmemo-skill.mjs register --reason <unattended|declined> --allow-plaintext
 ```
 
 The script supports JSON output with `--json`, command-specific usage with `--help`, and compact recall/search output with `--compact`. It never prints token values.
@@ -86,9 +100,9 @@ The Skill script handles all operations directly, including status checks and to
 
 ```text
 node scripts/xmemo-skill.mjs auth status [--verify]
-node scripts/xmemo-skill.mjs auth add --from-stdin
-node scripts/xmemo-skill.mjs auth claim-status
-node scripts/xmemo-skill.mjs auth claim-confirm
+node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
+node scripts/xmemo-skill.mjs auth claim-confirm [--allow-plaintext]
 node scripts/xmemo-skill.mjs logout
 node scripts/xmemo-skill.mjs doctor
 ```
@@ -125,6 +139,9 @@ For detailed examples, read `references/operations.md`. For auth, network, and s
 
 - Keep XMemo credentials private. Do not paste them into public prompts,
   screenshots, repositories, issue comments, marketplace metadata, or shared logs.
+- Prefer `XMEMO_KEY` or a managed secret store. Use `--allow-plaintext` only
+  after accepting that processes running as the same operating-system user may
+  read the local credential file.
 - Use synthetic data for marketplace demos and screenshots.
 - Do not claim a marketplace integration is certified unless there is explicit
   approval evidence for that marketplace.

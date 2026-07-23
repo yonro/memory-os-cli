@@ -283,6 +283,82 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
   await testServer.stop();
 });
 
+test('skill script requires explicit consent before storing plaintext credentials', async () => {
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-credential-test-'));
+  const credentialPath = path.join(homeDir, '.xmemo', 'skill-credentials.json');
+  const token = 'formal_token_value_123456';
+  try {
+    const loginRefused = await runScript(['login'], { homeDir, env: {} });
+    assert.notEqual(loginRefused.code, 0);
+    assert.match(loginRefused.stderr, /--allow-plaintext/);
+
+    const refused = await runScript(['auth', 'add', '--from-stdin'], {
+      homeDir,
+      env: {},
+      stdin: token,
+    });
+    assert.notEqual(refused.code, 0);
+    assert.match(refused.stderr, /--allow-plaintext/);
+    await assert.rejects(fs.readFile(credentialPath, 'utf8'), { code: 'ENOENT' });
+
+    const falseValueDoesNotBypass = await runScript(['auth', 'add', '--from-stdin', '--allow-plaintext=false'], {
+      homeDir,
+      env: {},
+      stdin: token,
+    });
+    assert.notEqual(falseValueDoesNotBypass.code, 0);
+    assert.match(falseValueDoesNotBypass.stderr, /--allow-plaintext/);
+    await assert.rejects(fs.readFile(credentialPath, 'utf8'), { code: 'ENOENT' });
+
+    const accepted = await runScript(['auth', 'add', '--from-stdin', '--allow-plaintext'], {
+      homeDir,
+      env: {},
+      stdin: token,
+    });
+    assert.equal(accepted.code, 0);
+    assert.match(accepted.stderr, /unencrypted/i);
+    assert.doesNotMatch(`${accepted.stdout}${accepted.stderr}`, new RegExp(token));
+
+    const stored = JSON.parse(await fs.readFile(credentialPath, 'utf8'));
+    assert.equal(stored.token, token);
+    assert.equal(stored.storage, 'plaintext-user-file');
+    assert.equal(stored.plaintext_storage_consent, true);
+    assert.equal(typeof stored.plaintext_storage_consent_at, 'string');
+    if (process.platform !== 'win32') {
+      const stat = await fs.stat(credentialPath);
+      assert.equal(stat.mode & 0o777, 0o600);
+    }
+  } finally {
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test('skill script keeps XMEMO_KEY ahead of a stored credential', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-env-priority-test-'));
+  try {
+    const credentialDir = path.join(homeDir, '.xmemo');
+    await fs.mkdir(credentialDir, { recursive: true });
+    await fs.writeFile(path.join(credentialDir, 'skill-credentials.json'), JSON.stringify({
+      token: 'stored_token_should_not_be_used',
+      credential_type: 'formal',
+    }));
+    testServer.setResponse({ status: 'valid', scopes: ['memory:read'] });
+
+    const result = await runScript(['auth', 'status', '--verify'], {
+      baseUrl,
+      homeDir,
+      env: { XMEMO_KEY: 'environment_token_wins_123456' },
+    });
+    assert.equal(result.code, 0);
+    assert.equal(testServer.requests[0].headers.authorization, 'Bearer environment_token_wins_123456');
+  } finally {
+    await testServer.stop();
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
 test('skill script smoke-covers todo add and todo done operations', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
@@ -311,6 +387,11 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.match(rejected.stderr, /conditional fallback/);
     assert.equal(testServer.requests.length, 0);
 
+    const unconsented = await runScript(['register', '--reason', 'unattended'], { baseUrl, homeDir, env: {} });
+    assert.notEqual(unconsented.code, 0);
+    assert.match(unconsented.stderr, /--allow-plaintext/);
+    assert.equal(testServer.requests.length, 0);
+
     testServer.setResponse({
       agent_id: 'agent_temp_1',
       temporary_token: 'temp_token_secret',
@@ -318,14 +399,30 @@ test('skill script gates temporary registration and uses the temporary memory RE
       bind_url: 'https://example.test/agents/bind?code=claim_1',
       status: 'unclaimed',
     });
-    const register = await runScript(['register', '--reason', 'unattended'], { baseUrl, homeDir, env: {} });
+    const register = await runScript(['register', '--reason', 'unattended', '--allow-plaintext'], { baseUrl, homeDir, env: {} });
     assert.equal(register.code, 0);
     assert.match(register.stdout, /Temporary XMemo memory enabled/);
     assert.match(register.stdout, /bind\?code=claim_1/);
     assert.doesNotMatch(register.stdout, /temp_token_secret/);
+    assert.match(register.stderr, /unencrypted/i);
     assert.equal(testServer.requests.at(-1).url, '/v1/agents/register');
     assert.equal(testServer.requests.at(-1).body.entry_type, 'skill');
     assert.equal(testServer.requests.at(-1).body.metadata.registration_reason, 'unattended');
+    const stored = JSON.parse(await fs.readFile(path.join(homeDir, '.xmemo', 'skill-credentials.json'), 'utf8'));
+    assert.equal(stored.credential_type, 'temporary');
+    assert.equal(stored.storage, 'plaintext-user-file');
+    assert.equal(stored.claim_code, undefined);
+
+    testServer.setResponse({
+      detail: {
+        errorType: 'binding_confirmation_required',
+        confirmation_token: 'confirmation_value_must_not_print',
+      },
+    }, 428);
+    const pending = await runScript(['remember', '--content', 'pending claim', '--json'], { baseUrl, homeDir, env: {} });
+    assert.notEqual(pending.code, 0);
+    assert.match(pending.stdout, /\[REDACTED\]/);
+    assert.doesNotMatch(`${pending.stdout}${pending.stderr}`, /confirmation_value_must_not_print/);
 
     testServer.setResponse({ id: 'temporary_memory_1' }, 201);
     const remember = await runScript(['remember', '--content', 'temporary note', '--path', 'scratch'], { baseUrl, homeDir, env: {} });
@@ -361,7 +458,7 @@ test('skill script confirms a claimed temporary registration and stores the form
       bind_url: 'https://example.test/agents/bind?code=claim_2',
       status: 'unclaimed',
     });
-    const register = await runScript(['register', '--reason', 'declined'], { baseUrl, homeDir, env: {} });
+    const register = await runScript(['register', '--reason', 'declined', '--allow-plaintext'], { baseUrl, homeDir, env: {} });
     assert.equal(register.code, 0);
 
     testServer.setResponseSeq([
@@ -375,6 +472,11 @@ test('skill script confirms a claimed temporary registration and stores the form
     assert.doesNotMatch(claim.stdout, /formal_handoff_token/);
     assert.equal(testServer.requests.at(-2).url, '/v1/agents/bind/confirm-current-user');
     assert.deepEqual(testServer.requests.at(-2).body, { confirmation_token: 'confirm_once' });
+    const stored = JSON.parse(await fs.readFile(path.join(homeDir, '.xmemo', 'skill-credentials.json'), 'utf8'));
+    assert.equal(stored.token, 'formal_handoff_token');
+    assert.equal(stored.credential_type, 'formal');
+    assert.equal(stored.pending_confirmation_token, undefined);
+    assert.equal(stored.claim_code, undefined);
 
     testServer.setResponse({ ok: true, result: { todos: [] } });
     const todoList = await runScript(['todo-list'], { baseUrl, homeDir, env: {} });
