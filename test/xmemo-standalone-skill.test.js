@@ -51,6 +51,7 @@ function createTestServer() {
   let responseData = { ok: true, result: {} };
   let responseStatus = 200;
   let rawResponse = null;
+  let responseDelayMs = 0;
   
   // Custom response sequence mapping
   let responsesSeq = [];
@@ -69,17 +70,25 @@ function createTestServer() {
         body: body ? JSON.parse(body) : null,
       });
 
-      if (responsesSeq.length > 0) {
-        const nextResp = responsesSeq[responseIndex] || responsesSeq[responsesSeq.length - 1];
-        responseIndex++;
-        res.writeHead(nextResp.status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(nextResp.body));
-      } else if (rawResponse) {
-        res.writeHead(rawResponse.status, { 'Content-Type': rawResponse.contentType });
-        res.end(rawResponse.body);
+      const sendResponse = () => {
+        if (res.destroyed || res.writableEnded) return;
+        if (responsesSeq.length > 0) {
+          const nextResp = responsesSeq[responseIndex] || responsesSeq[responsesSeq.length - 1];
+          responseIndex++;
+          res.writeHead(nextResp.status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(nextResp.body));
+        } else if (rawResponse) {
+          res.writeHead(rawResponse.status, { 'Content-Type': rawResponse.contentType });
+          res.end(rawResponse.body);
+        } else {
+          res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(responseData));
+        }
+      };
+      if (responseDelayMs > 0) {
+        setTimeout(sendResponse, responseDelayMs);
       } else {
-        res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(responseData));
+        sendResponse();
       }
     });
   });
@@ -102,6 +111,9 @@ function createTestServer() {
       rawResponse = { body, status, contentType };
       responsesSeq = [];
     },
+    setResponseDelay: (delayMs) => {
+      responseDelayMs = delayMs;
+    },
     start: () => new Promise((resolve) => {
       server.listen(0, '127.0.0.1', () => {
         resolve(`http://127.0.0.1:${server.address().port}`);
@@ -109,6 +121,7 @@ function createTestServer() {
     }),
     stop: () => new Promise((resolve) => {
       server.close(() => resolve());
+      server.closeAllConnections?.();
     }),
   };
 }
@@ -159,6 +172,28 @@ test('skill script anonymous doctor command succeeds when no credentials are pre
   assert.equal(res.code, 0);
   assert.match(res.stdout, /XMemo Service Status: OK/);
   assert.match(res.stdout, /Authentication: Missing\/Unauthenticated/);
+
+  await testServer.stop();
+});
+
+test('skill script doctor --anonymous does not transmit an available credential', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({
+    ok: true,
+    operation: 'doctor',
+    result: { status: 'ok', auth_valid: false }
+  });
+
+  const res = await runScript(['doctor', '--anonymous'], {
+    baseUrl,
+    env: { XMEMO_KEY: 'credential-must-not-be-sent' }
+  });
+
+  assert.equal(res.code, 0);
+  assert.match(res.stdout, /Authentication: Missing\/Unauthenticated/);
+  assert.equal(testServer.requests.length, 1);
+  assert.equal(testServer.requests[0].headers.authorization, undefined);
 
   await testServer.stop();
 });
@@ -264,6 +299,15 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
   assert.equal(helpRes.code, 0);
   assert.match(helpRes.stdout, /node scripts\/xmemo-skill\.mjs recall/);
 
+  const loginHelp = await runScript(['login', '--help']);
+  assert.equal(loginHelp.code, 0);
+  assert.match(loginHelp.stdout, /login --allow-plaintext/);
+  assert.doesNotMatch(loginHelp.stdout, /Commands:/);
+
+  const versionRes = await runScript(['--version']);
+  assert.equal(versionRes.code, 0);
+  assert.match(versionRes.stdout, /^1\.0\.8\s*$/);
+
   const unknownRes = await runScript(['not-a-command']);
   assert.notEqual(unknownRes.code, 0);
   assert.match(unknownRes.stderr, /Unknown command: not-a-command/);
@@ -281,6 +325,82 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
   assert.match(failureRes.stderr, /upstream unavailable/);
 
   await testServer.stop();
+});
+
+test('skill script rejects unsafe origins and unknown or secret-like options before transmission', async () => {
+  const unsafeOrigin = await runScript(['doctor', '--base-url', 'http://example.com'], {
+    env: { XMEMO_KEY: 'secret-token-key' }
+  });
+  assert.notEqual(unsafeOrigin.code, 0);
+  assert.match(unsafeOrigin.stderr, /must use HTTPS/);
+
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  try {
+    const secretValue = 'must_not_be_transmitted_123';
+    const rejected = await runScript(['remember', '--content', 'safe', '--token', secretValue], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.notEqual(rejected.code, 0);
+    assert.match(rejected.stderr, /Refusing sensitive command-line option --token/);
+    assert.doesNotMatch(`${rejected.stdout}${rejected.stderr}`, new RegExp(secretValue));
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script enforces request timeout', async () => {
+  const timeoutServer = createTestServer();
+  const timeoutBaseUrl = await timeoutServer.start();
+  timeoutServer.setResponseDelay(100);
+  try {
+    const timeout = await runScript(['search', '--query', 'slow', '--timeout-ms', '20'], {
+      baseUrl: timeoutBaseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.notEqual(timeout.code, 0);
+    assert.match(timeout.stderr, /timed out after 20 ms/);
+  } finally {
+    await timeoutServer.stop();
+  }
+});
+
+test('skill script rejects oversized responses', async () => {
+  const largeServer = createTestServer();
+  const largeBaseUrl = await largeServer.start();
+  largeServer.setRawResponse('x'.repeat(8_388_609), 200, 'text/plain');
+  try {
+    const oversized = await runScript(['search', '--query', 'large'], {
+      baseUrl: largeBaseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.notEqual(oversized.code, 0);
+    assert.match(oversized.stderr, /exceeded the 8388608-byte safety limit/);
+  } finally {
+    await largeServer.stop();
+  }
+});
+
+test('skill script redacts sensitive fields from JSON output', async () => {
+  const jsonServer = createTestServer();
+  const jsonBaseUrl = await jsonServer.start();
+  jsonServer.setResponse({
+    ok: true,
+    result: { id: 'memory-1', token: 'server_token_must_not_print' }
+  });
+  try {
+    const redacted = await runScript(['remember', '--content', 'safe', '--json'], {
+      baseUrl: jsonBaseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(redacted.code, 0);
+    assert.match(redacted.stdout, /\[REDACTED\]/);
+    assert.doesNotMatch(redacted.stdout, /server_token_must_not_print/);
+  } finally {
+    await jsonServer.stop();
+  }
 });
 
 test('skill script requires explicit consent before storing plaintext credentials', async () => {
@@ -333,6 +453,74 @@ test('skill script requires explicit consent before storing plaintext credential
   }
 });
 
+test('skill script device login preserves formal-account scopes and respects authorization expiry', async () => {
+  const successServer = createTestServer();
+  const successBaseUrl = await successServer.start();
+  const successHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-login-scope-test-'));
+  try {
+    successServer.setResponseSeq([
+      {
+        status: 200,
+        body: {
+          device_code: 'device-code',
+          verification_uri_complete: 'https://xmemo.dev/device',
+          user_code: 'ABCD-EFGH',
+          interval: 0.001,
+          expires_in: 1,
+        },
+      },
+      {
+        status: 200,
+        body: { access_token: 'formal_token_value_123456' },
+      },
+    ]);
+    const success = await runScript(['login', '--allow-plaintext'], {
+      baseUrl: successBaseUrl,
+      homeDir: successHome,
+      env: {},
+    });
+    assert.equal(success.code, 0);
+    assert.deepEqual(successServer.requests[0].body.scopes, [
+      'memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read'
+    ]);
+  } finally {
+    await successServer.stop();
+    await fs.rm(successHome, { recursive: true, force: true });
+  }
+
+  const expiryServer = createTestServer();
+  const expiryBaseUrl = await expiryServer.start();
+  const expiryHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-login-expiry-test-'));
+  try {
+    expiryServer.setResponseSeq([
+      {
+        status: 200,
+        body: {
+          device_code: 'expiring-device-code',
+          verification_uri_complete: 'https://xmemo.dev/device',
+          user_code: 'EXPI-RE00',
+          interval: 0.001,
+          expires_in: 0.02,
+        },
+      },
+      {
+        status: 200,
+        body: { error: 'authorization_pending' },
+      },
+    ]);
+    const expired = await runScript(['login', '--allow-plaintext'], {
+      baseUrl: expiryBaseUrl,
+      homeDir: expiryHome,
+      env: {},
+    });
+    assert.notEqual(expired.code, 0);
+    assert.match(expired.stderr, /authorization code expired|authorization window expired/);
+  } finally {
+    await expiryServer.stop();
+    await fs.rm(expiryHome, { recursive: true, force: true });
+  }
+});
+
 test('skill script keeps XMEMO_KEY ahead of a stored credential', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
@@ -353,6 +541,46 @@ test('skill script keeps XMEMO_KEY ahead of a stored credential', async () => {
     });
     assert.equal(result.code, 0);
     assert.equal(testServer.requests[0].headers.authorization, 'Bearer environment_token_wins_123456');
+  } finally {
+    await testServer.stop();
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test('skill script does not reveal token prefixes or revoke externally managed XMEMO_KEY by default', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-env-logout-test-'));
+  const credentialDir = path.join(homeDir, '.xmemo');
+  const credentialPath = path.join(credentialDir, 'skill-credentials.json');
+  const environmentToken = 'mos_sensitive_account_prefix:secret-value';
+  try {
+    await fs.mkdir(credentialDir, { recursive: true });
+    await fs.writeFile(credentialPath, JSON.stringify({
+      token: 'stored_fallback_must_remain',
+      credential_type: 'formal',
+      storage: 'plaintext-user-file',
+      plaintext_storage_consent: true,
+    }));
+
+    const status = await runScript(['auth', 'status'], {
+      baseUrl,
+      homeDir,
+      env: { XMEMO_KEY: environmentToken }
+    });
+    assert.equal(status.code, 0);
+    assert.match(status.stdout, /Credential Source: XMEMO_KEY/);
+    assert.doesNotMatch(`${status.stdout}${status.stderr}`, /mos_sensitive_account_prefix/);
+
+    const logout = await runScript(['logout'], {
+      baseUrl,
+      homeDir,
+      env: { XMEMO_KEY: environmentToken }
+    });
+    assert.equal(logout.code, 0);
+    assert.match(logout.stdout, /externally managed/);
+    assert.equal(testServer.requests.length, 0);
+    assert.equal(JSON.parse(await fs.readFile(credentialPath, 'utf8')).token, 'stored_fallback_must_remain');
   } finally {
     await testServer.stop();
     await fs.rm(homeDir, { recursive: true, force: true });

@@ -14,6 +14,8 @@ XMemo supports two parallel integration paths:
 1. **Bundled Skill script** at `scripts/xmemo-skill.mjs` (primary standalone direct REST API integration, fully self-contained and zero-dependency).
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
+Run bundled commands from the Skill root with Node.js 20 or newer.
+
 Credential lookup always prefers the `XMEMO_KEY` environment variable. When it
 is present, the script does not copy its value into a local credential file.
 
@@ -53,10 +55,17 @@ do not share that URL publicly. Run
 and pending-confirmation values inherit the same explicit plaintext-storage
 consent and are replaced or cleared during formal-token handoff.
 
-or, if you already have a token:
+or, if you already have a token, pipe it without putting the value in the
+command line. POSIX shell:
 
 ```text
-echo "TOKEN_VALUE" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+printf '%s' "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+```
+
+PowerShell:
+
+```powershell
+$env:XMEMO_KEY | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
 Never ask the user to paste a raw token into chat, logs, or project files.
@@ -89,10 +98,13 @@ node scripts/xmemo-skill.mjs todo-list
 node scripts/xmemo-skill.mjs todo-done --id <todo_id>
 node scripts/xmemo-skill.mjs expense-add --item "..." --amount 12.5 --currency USD
 node scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs doctor --anonymous
 node scripts/xmemo-skill.mjs register --reason <unattended|declined> --allow-plaintext
 ```
 
-The script supports JSON output with `--json`, command-specific usage with `--help`, and compact recall/search output with `--compact`. It never prints token values.
+The script supports JSON output with `--json`, command-specific usage with
+`--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact
+recall/search output with `--compact`. It never prints token values or prefixes.
 
 ## Direct CLI Commands
 
@@ -103,9 +115,14 @@ node scripts/xmemo-skill.mjs auth status [--verify]
 node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
 node scripts/xmemo-skill.mjs auth claim-confirm [--allow-plaintext]
-node scripts/xmemo-skill.mjs logout
+node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 node scripts/xmemo-skill.mjs doctor
 ```
+
+`logout` revokes and removes a user credential file. When `XMEMO_KEY` supplies
+the active credential, logout leaves that externally managed token unchanged
+unless `--revoke-environment-token` is explicitly passed; unset the environment
+variable in the launching environment to stop using it.
 
 ## Setup And Repair
 
@@ -113,9 +130,14 @@ If the bundled script reports auth or service errors, use the Skill diagnostics 
 
 ```text
 node scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs doctor --anonymous
 node scripts/xmemo-skill.mjs auth status --verify
 node scripts/xmemo-skill.mjs auth claim-status
 ```
+
+`doctor` retains authenticated diagnosis when a credential is available.
+`doctor --anonymous` performs the same service-health check without sending an
+Authorization header.
 
 For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
 
@@ -142,6 +164,9 @@ For detailed examples, read `references/operations.md`. For auth, network, and s
 - Prefer `XMEMO_KEY` or a managed secret store. Use `--allow-plaintext` only
   after accepting that processes running as the same operating-system user may
   read the local credential file.
+- The default service is `https://xmemo.dev`. Custom HTTPS origins are supported
+  but receive credentials when an authenticated command runs; use only trusted
+  hosts. Plain HTTP is rejected except for localhost/loopback development.
 - Use synthetic data for marketplace demos and screenshots.
 - Do not claim a marketplace integration is certified unless there is explicit
   approval evidence for that marketplace.

@@ -24,7 +24,13 @@ If the credential is missing, start device login or add a token directly:
 ```text
 node scripts/xmemo-skill.mjs login --allow-plaintext
 # or
-echo "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+printf '%s' "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+```
+
+PowerShell token-add equivalent:
+
+```powershell
+$env:XMEMO_KEY | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
 `XMEMO_KEY` remains the preferred credential source and is never copied to the
@@ -65,10 +71,18 @@ If verification fails:
 
 ## 4. Network and service
 
-Check the hosted service without sending a token:
+Check the hosted service and current credential together:
 
 ```text
 node scripts/xmemo-skill.mjs doctor
+```
+
+When a credential is available, `doctor` sends it so the service can report
+authentication validity. To check service health without any Authorization
+header, run:
+
+```text
+node scripts/xmemo-skill.mjs doctor --anonymous
 ```
 
 If this fails:
@@ -76,6 +90,11 @@ If this fails:
 - Confirm the machine can reach `https://xmemo.dev`.
 - Check DNS, VPN, or corporate proxy settings.
 - Try an explicit base URL: `node scripts/xmemo-skill.mjs doctor --base-url https://xmemo.dev`.
+- Increase the per-request timeout only when the service is known to be slow:
+  `node scripts/xmemo-skill.mjs doctor --timeout-ms 60000`.
+- Custom service origins must use HTTPS. Plain HTTP is accepted only for
+  localhost/loopback development, and authenticated commands warn before sending
+  a credential to a non-default origin.
 
 ## 5. Common errors
 
@@ -85,6 +104,9 @@ If this fails:
 | `Refusing unencrypted credential storage` | Missing explicit consent | Prefer `XMEMO_KEY`, or rerun the credential-writing command with `--allow-plaintext` |
 | `Authentication failed (HTTP 401)` | Token invalid/expired | Run `login` or add a new token |
 | `Remote XMemo server is not reachable` | Network or service outage | Check network/VPN/proxy |
+| `XMemo base URL must use HTTPS` | Insecure non-loopback service URL | Use HTTPS, or localhost HTTP only for local development |
+| `Request timed out` | Service/network exceeded the request deadline | Retry after checking service health, or set a bounded `--timeout-ms` |
+| `Unknown option` | Unsupported or misspelled command parameter | Run the command with `--help`; do not pass tokens as flags |
 | `Method not found` | Server does not expose the requested operation | Server-side capability gap |
 
 ## Security reminders
@@ -93,6 +115,10 @@ If this fails:
 - Never pass `--token`, `--api-key`, `--bearer`, or `--xmemo-key` to the Skill script.
 - Prefer `login` for interactive authentication.
 - Prefer `XMEMO_KEY` or a managed secret store over plaintext file storage.
+- `auth status` reports the credential source but never prints a token prefix.
+- `logout` leaves externally managed `XMEMO_KEY` unchanged by default. Unset the
+  variable to stop using it; pass `--revoke-environment-token` only when remote
+  revocation is explicitly intended.
 - `--allow-plaintext` means the local token is unencrypted and may be read by
   processes running as the same operating-system user.
 - Treat `X-Memory-OS-Agent-ID` as an attribution signal, not authorization proof.
