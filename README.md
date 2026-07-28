@@ -1,22 +1,105 @@
-# XMemo CLI
+<div align="center">
+  <a href="https://xmemo.dev">
+    <img src="https://raw.githubusercontent.com/yonro/memory-os-cli/main/plugins/xmemo/assets/logo.svg" width="112" alt="XMemo logo">
+  </a>
 
-[![smithery badge](https://smithery.ai/badge/xmemo/xmemo)](https://smithery.ai/servers/xmemo/xmemo)
-[![MCP Badge](https://lobehub.com/badge/mcp/yonro-memory-os-cli)](https://lobehub.com/mcp/yonro-memory-os-cli)
+  <h1>XMemo CLI</h1>
 
-`@xmemo/client` is the privacy-first command line entry point for XMemo client
-setup. It is intentionally small: the npm package contains only the CLI and
-setup/helper assets needed on a user's machine: the CLI runtime, client setup
-profiles, XMemo skills, and marketplace plugin metadata.
+  <p>
+    <strong>One private memory layer for every AI agent.</strong>
+  </p>
+  <p>
+    Install, authenticate, diagnose, and connect XMemo across your AI toolchain
+    from one production-ready command line.
+  </p>
 
-`@yonro/xmemo-client` is reserved as a Yonro fallback package. The CLI exposes
-`xmemo` as the primary command and keeps `memory-os` as a compatibility alias.
+  <p>
+    <a href="https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/yonro/memory-os-cli/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI"></a>
+    <a href="https://www.npmjs.com/package/@xmemo/client"><img alt="npm version" src="https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm"></a>
+    <a href="https://www.npmjs.com/package/@xmemo/client"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads"></a>
+    <a href="https://www.npmjs.com/package/@xmemo/client"><img alt="Node.js version" src="https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node"></a>
+    <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license"></a>
+    <a href="https://github.com/yonro/memory-os-cli/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/yonro/memory-os-cli?style=flat-square&logo=github&label=stars"></a>
+  </p>
 
-The XMemo server, database, token registry, deployment files, logs, and
-internal scripts are not part of this npm package.
+  <p>
+    <a href="https://modelcontextprotocol.io/"><img alt="MCP compatible" src="https://img.shields.io/badge/MCP-compatible-14b8a6?style=flat-square"></a>
+    <a href="https://xmemo.dev"><img alt="XMemo Cloud" src="https://img.shields.io/badge/XMemo-xmemo.dev-0f766e?style=flat-square"></a>
+    <a href="#enterprise-privacy-and-security-defaults"><img alt="Privacy first" src="https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white"></a>
+    <a href="https://smithery.ai/servers?q=XMemo"><img alt="Smithery" src="https://img.shields.io/badge/Smithery-listed-7c3aed?style=flat-square"></a>
+    <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="LobeHub" src="https://img.shields.io/badge/LobeHub-MCP-6366f1?style=flat-square"></a>
+  </p>
 
-> **XMemo CLI is the top-level control plane** — use `xmemo login`, `xmemo doctor`, `xmemo setup <client>`, and smoke checks before hand-editing MCP config. Hosted MCP remains the universal runtime path for clients that do not have a native integration.
+  <p>
+    <a href="#quick-start">Quick start</a> ·
+    <a href="#supported-integrations">Integrations</a> ·
+    <a href="#command-reference">Commands</a> ·
+    <a href="#enterprise-privacy-and-security-defaults">Security</a> ·
+    <a href="#mcp-setup">MCP setup</a>
+  </p>
+</div>
 
-## XMemo Runtime Overview
+---
+
+`@xmemo/client` is the privacy-first control plane for connecting AI clients to
+XMemo. It keeps setup repeatable, credentials out of project files, and client
+configuration consistent across native integrations and hosted MCP.
+
+The package is intentionally small. It contains only the CLI runtime, client
+setup profiles, XMemo skills, and marketplace plugin metadata required on a
+user's machine. The XMemo server, database, token registry, deployment files,
+logs, and internal scripts are not included.
+
+`xmemo` is the primary command. `memory-os` remains available as a compatibility
+alias, and `@yonro/xmemo-client` is reserved as the Yonro fallback package.
+
+## Why XMemo CLI
+
+- **One control plane** — login, diagnostics, setup, status, and smoke tests use
+  the same CLI across supported agents.
+- **Privacy by default** — tokens stay in user-scoped storage or environment
+  variables instead of project files, generated configs, logs, or prompts.
+- **Native where it matters** — OpenClaw and Hermes use dedicated integrations;
+  other clients connect through the portable hosted MCP endpoint.
+- **Safe automation** — every supported setup path provides a dry-run or
+  inspection path before it changes client configuration.
+- **Minimal distribution** — the npm package uses an explicit file allowlist and
+  requires Node.js 20 or later.
+
+## Quick start
+
+```bash
+npm install -g @xmemo/client
+xmemo login
+xmemo doctor
+xmemo setup codex
+xmemo status
+```
+
+Replace `codex` with the client you use. Run `xmemo setup <client> --dry-run`
+first when you want to inspect the planned changes.
+
+## Supported integrations
+
+| Client | Setup command | Integration path |
+| --- | --- | --- |
+| **Codex** | `xmemo setup codex` | Hosted MCP + XMemo skill |
+| **Cursor** | `xmemo setup cursor` | Hosted MCP + XMemo profile |
+| **Copilot CLI** | `xmemo setup copilot` | Local stdio proxy |
+| **Gemini CLI** | `xmemo setup gemini` | MCP OAuth |
+| **Antigravity** | `xmemo setup antigravity` | MCP OAuth |
+| **OpenClaw** | `xmemo setup openclaw` | Native memory plugin |
+| **Hermes** | `xmemo setup hermes` | Native memory provider |
+| **Kiro** | `xmemo setup kiro` | Hosted MCP |
+| **Grok** | `xmemo setup grok` | Hosted MCP |
+| **Other MCP clients** | `xmemo mcp config --client generic` | Streamable HTTP |
+
+> [!TIP]
+> Start with `xmemo login`, `xmemo doctor`, and `xmemo setup <client>` before
+> hand-editing MCP configuration. Hosted MCP is the universal runtime path when
+> a client does not have a native integration.
+
+## Runtime overview
 
 **XMemo** is a user-owned memory system that lets AI agents persistently store, search, recall, update, and manage notes and memory fragments across sessions, projects, and tools.
 
@@ -43,7 +126,7 @@ internal scripts are not part of this npm package.
 
 See [MCP Setup](#mcp-setup) for detailed client configuration.
 
-## Install
+## Installation and updates
 
 ```bash
 npm install -g @xmemo/client
@@ -58,7 +141,10 @@ xmemo update
 This runs `npm install -g @xmemo/client@latest`. Use `xmemo update --dry-run`
 to print the exact command without changing anything.
 
-## Commands
+## Command reference
+
+<details>
+<summary><strong>Show the complete CLI command catalog</strong></summary>
 
 ```bash
 xmemo update
@@ -104,6 +190,8 @@ xmemo profile install antigravity
 xmemo smoke --client codex
 xmemo privacy
 ```
+
+</details>
 
 ## Enterprise privacy and security defaults
 
