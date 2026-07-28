@@ -1,16 +1,14 @@
 <div align="center">
   <a href="https://xmemo.dev">
-    <img src="https://raw.githubusercontent.com/yonro/memory-os-cli/main/plugins/xmemo/assets/logo.svg" width="112" alt="XMemo logo">
+    <img src="./plugins/xmemo/assets/logo.png" width="132" alt="XMemo logo">
   </a>
 
   <h1>XMemo CLI</h1>
 
+  <p><strong>One private memory layer for every AI agent.</strong></p>
   <p>
-    <strong>One private memory layer for every AI agent.</strong>
-  </p>
-  <p>
-    Install, authenticate, diagnose, and connect XMemo across your AI toolchain
-    from one production-ready command line.
+    Install, authenticate, diagnose, and connect XMemo across editors,
+    CLIs, and autonomous agents from one production-ready command line.
   </p>
 
   <p>
@@ -23,48 +21,62 @@
   </p>
 
   <p>
-    <a href="https://modelcontextprotocol.io/"><img alt="MCP compatible" src="https://img.shields.io/badge/MCP-compatible-14b8a6?style=flat-square"></a>
-    <a href="https://xmemo.dev"><img alt="XMemo Cloud" src="https://img.shields.io/badge/XMemo-xmemo.dev-0f766e?style=flat-square"></a>
-    <a href="#enterprise-privacy-and-security-defaults"><img alt="Privacy first" src="https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white"></a>
-    <a href="https://smithery.ai/servers?q=XMemo"><img alt="Smithery" src="https://img.shields.io/badge/Smithery-listed-7c3aed?style=flat-square"></a>
-    <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="LobeHub" src="https://img.shields.io/badge/LobeHub-MCP-6366f1?style=flat-square"></a>
+    <a href="https://modelcontextprotocol.io/"><img alt="MCP compatible" src="https://img.shields.io/badge/MCP-compatible-2563eb?style=flat-square"></a>
+    <a href="https://xmemo.dev"><img alt="XMemo Cloud" src="https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square"></a>
+    <a href="#security-by-default"><img alt="Privacy first" src="https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white"></a>
+    <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="LobeHub" src="https://img.shields.io/badge/LobeHub-MCP-ec4899?style=flat-square"></a>
   </p>
 
   <p>
     <a href="#quick-start">Quick start</a> ·
     <a href="#supported-integrations">Integrations</a> ·
+    <a href="#connection-modes">Connection modes</a> ·
     <a href="#command-reference">Commands</a> ·
-    <a href="#enterprise-privacy-and-security-defaults">Security</a> ·
-    <a href="#mcp-setup">MCP setup</a>
+    <a href="#security-by-default">Security</a>
   </p>
 </div>
 
 ---
 
-`@xmemo/client` is the privacy-first control plane for connecting AI clients to
-XMemo. It keeps setup repeatable, credentials out of project files, and client
-configuration consistent across native integrations and hosted MCP.
+`@xmemo/client` is the official control plane for connecting AI tools to
+[XMemo](https://xmemo.dev). It makes setup repeatable, keeps credentials out of
+project files, and gives every supported client a consistent path to durable,
+user-owned memory.
 
-The package is intentionally small. It contains only the CLI runtime, client
-setup profiles, XMemo skills, and marketplace plugin metadata required on a
-user's machine. The XMemo server, database, token registry, deployment files,
-logs, and internal scripts are not included.
+The package is deliberately small: the CLI runtime, safe client configuration,
+behavior profiles, XMemo skills, and marketplace metadata. Server code,
+databases, deployment files, logs, and internal operations remain outside the
+npm distribution.
 
-`xmemo` is the primary command. `memory-os` remains available as a compatibility
-alias, and `@yonro/xmemo-client` is reserved as the Yonro fallback package.
+## Architecture
+
+<p align="center">
+  <img src="./docs/assets/xmemo-cli-architecture.svg" width="100%" alt="XMemo CLI architecture">
+</p>
+
+| | |
+| --- | --- |
+| **Package** | [`@xmemo/client`](https://www.npmjs.com/package/@xmemo/client) |
+| **Primary command** | `xmemo` |
+| **Local MCP command** | `xmemo-mcp` |
+| **Hosted MCP** | `https://xmemo.dev/mcp` |
+| **Runtime** | Node.js 20 or later |
+| **License** | MIT |
 
 ## Why XMemo CLI
 
-- **One control plane** — login, diagnostics, setup, status, and smoke tests use
-  the same CLI across supported agents.
-- **Privacy by default** — tokens stay in user-scoped storage or environment
-  variables instead of project files, generated configs, logs, or prompts.
-- **Native where it matters** — OpenClaw and Hermes use dedicated integrations;
-  other clients connect through the portable hosted MCP endpoint.
-- **Safe automation** — every supported setup path provides a dry-run or
-  inspection path before it changes client configuration.
-- **Minimal distribution** — the npm package uses an explicit file allowlist and
-  requires Node.js 20 or later.
+- **One control plane** — login, diagnostics, configuration, profiles, updates,
+  and smoke checks share one predictable interface.
+- **Private by design** — generated project configuration references a
+  credential; it never embeds the credential value.
+- **Native where it matters** — OpenClaw and Hermes use dedicated memory
+  integrations instead of duplicating the same capability through MCP.
+- **Portable everywhere else** — hosted Streamable HTTP MCP and local stdio
+  cover modern editors, terminals, and agent runtimes.
+- **Safe automation** — supported setup and removal paths offer preview,
+  dry-run, or explicit confirmation before making changes.
+- **Small supply-chain surface** — the npm package is governed by an explicit
+  file allowlist and release provenance.
 
 ## Quick start
 
@@ -76,39 +88,53 @@ xmemo setup codex
 xmemo status
 ```
 
-Replace `codex` with the client you use. Run `xmemo setup <client> --dry-run`
-first when you want to inspect the planned changes.
+Replace `codex` with your client. Preview a configuration before writing it:
+
+```bash
+xmemo setup cursor --dry-run
+```
+
+<p align="center">
+  <img src="./docs/assets/xmemo-cli-workflow.svg" width="100%" alt="XMemo CLI setup workflow">
+</p>
+
+> [!TIP]
+> Start with `xmemo login`, `xmemo doctor`, and `xmemo setup <client>`.
+> Hand-edit MCP configuration only when a client has no verified setup path.
 
 ## Supported integrations
 
-| Client | Setup command | Integration path |
+| Client | Recommended command | Connection |
 | --- | --- | --- |
-| **Codex** | `xmemo setup codex` | Hosted MCP + XMemo skill |
-| **Cursor** | `xmemo setup cursor` | Hosted MCP + XMemo profile |
-| **Copilot CLI** | `xmemo setup copilot` | Local stdio proxy |
-| **Gemini CLI** | `xmemo setup gemini` | MCP OAuth |
-| **Antigravity** | `xmemo setup antigravity` | MCP OAuth |
-| **OpenClaw** | `xmemo setup openclaw` | Native memory plugin |
+| **Codex** | `xmemo setup codex` | Hosted MCP + behavior profile |
+| **Cursor** | `xmemo setup cursor` | Hosted MCP + behavior profile |
+| **Copilot CLI** | `xmemo setup copilot` | Local authenticated proxy |
+| **Gemini CLI** | `xmemo setup gemini` | Hosted MCP + OAuth |
+| **Antigravity** | `xmemo setup antigravity` | Hosted MCP + OAuth |
+| **OpenClaw** | `xmemo setup openclaw` | Native memory plugin + Skill |
 | **Hermes** | `xmemo setup hermes` | Native memory provider |
 | **Kiro** | `xmemo setup kiro` | Hosted MCP |
 | **Grok** | `xmemo setup grok` | Hosted MCP |
-| **Other MCP clients** | `xmemo mcp config --client generic` | Streamable HTTP |
+| **Other MCP clients** | `xmemo mcp config --client generic` | Generated template |
 
-> [!TIP]
-> Start with `xmemo login`, `xmemo doctor`, and `xmemo setup <client>` before
-> hand-editing MCP configuration. Hosted MCP is the universal runtime path when
-> a client does not have a native integration.
+The client registry also covers Windsurf, Cline, Continue, Claude Desktop,
+Claude Code, Kimi Code, Zed, JetBrains, OpenCode, Qwen, Trae, and compatible
+MCP hosts. Run `xmemo mcp list` for the current machine-readable catalog.
 
-## Runtime overview
+## Connection modes
 
-**XMemo** is a user-owned memory system that lets AI agents persistently store, search, recall, update, and manage notes and memory fragments across sessions, projects, and tools.
+### Hosted MCP
 
-- **Top-level CLI**: `xmemo` from `@xmemo/client`
-- **Native integrations**: OpenClaw XMemo memory plugin and Hermes `hermes-xmemo` provider
-- **MCP Endpoint**: `https://xmemo.dev/mcp` (Streamable HTTP)
-- **Auth**: Bearer Token (`XMEMO_KEY`) or MCP OAuth
-- **Tools** (20): `get_mcp_identity`, `remember`, `recall`, `recall_context`, `memory_stats`, `update_memory`, `explain_memory`, `restore_memory`, `add_expense`, `list_ledger_transactions`, `get_monthly_ledger_summary`, `forget`, `create_memory_todo`, `list_memory_todos`, `complete_memory_todo`, `list_memory_versions`, `get_timeline`, `record_event`, `update_state`, `get_project_context`
-- **Clients**: Kimi, Claude, Cursor, Copilot, Gemini, Grok, Windsurf, Cline, Trae, Zed, Qwen, and more
+The recommended universal path is the XMemo Streamable HTTP endpoint:
+
+```text
+https://xmemo.dev/mcp
+```
+
+OAuth-capable clients complete authentication in the browser. Other clients
+reference `XMEMO_KEY` without copying its value into repository files.
+
+Generic configuration shape:
 
 ```json
 {
@@ -124,298 +150,213 @@ first when you want to inspect the planned changes.
 }
 ```
 
-See [MCP Setup](#mcp-setup) for detailed client configuration.
+Client configuration keys differ; prefer `xmemo setup <client>` over copying
+this generic example directly.
 
-## Installation and updates
+### Local stdio MCP
+
+`xmemo-mcp` is the dedicated stdio entry point for marketplaces and clients
+that launch a local process. Safe discovery exposes 20 tools, three prompts,
+and two documentation resources without a token. Tool execution still requires
+authentication.
+
+After a global installation:
 
 ```bash
-npm install -g @xmemo/client
+xmemo-mcp
 ```
 
-Upgrade an existing global install:
+Install-free MCP configuration:
 
-```bash
-xmemo update
+```json
+{
+  "mcpServers": {
+    "XMemo": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "--package",
+        "@xmemo/client@latest",
+        "xmemo-mcp"
+      ]
+    }
+  }
+}
 ```
 
-This runs `npm install -g @xmemo/client@latest`. Use `xmemo update --dry-run`
-to print the exact command without changing anything.
+`xmemo mcp serve` is equivalent when the CLI is already installed.
 
-## Command reference
+### Native integrations
 
-<details>
-<summary><strong>Show the complete CLI command catalog</strong></summary>
+OpenClaw and Hermes have dedicated memory providers. Their default setup avoids
+installing a second, duplicate XMemo tool surface.
 
 ```bash
-xmemo update
-xmemo setup codex
-xmemo setup codex --dry-run
-xmemo setup cursor
-xmemo setup cursor --dry-run
-xmemo setup copilot
-xmemo setup copilot --dry-run
+# Native OpenClaw plugin + XMemo Skill
 xmemo setup openclaw
-xmemo setup openclaw --dry-run
-xmemo setup openclaw --with-mcp
-xmemo setup openclaw --mcp-only
+
+# Native Hermes memory provider
 xmemo setup hermes
-xmemo setup hermes --with-mcp
-xmemo setup hermes --mcp-only
-xmemo setup gemini
-xmemo setup gemini --dry-run
-xmemo setup antigravity
-xmemo setup antigravity --dry-run
-xmemo setup kiro
-xmemo setup kiro --dry-run
-xmemo setup grok
-xmemo setup grok --dry-run
-xmemo mcp add antigravity2
-xmemo mcp add antigravity2 --write
-xmemo doctor
-xmemo discovery show
-xmemo setup
-xmemo login
-xmemo auth status
-xmemo status
-xmemo token status
-xmemo token add --from-stdin
-xmemo env example --shell bash
-xmemo mcp list
-xmemo mcp config --client generic
-xmemo mcp config --client antigravity
-xmemo mcp add antigravity --write
-xmemo profile status codex
-xmemo profile install gemini
-xmemo profile install antigravity
-xmemo smoke --client codex
-xmemo privacy
 ```
 
-</details>
+Add hosted MCP only when an explicit fallback is desired:
 
-## Enterprise privacy and security defaults
+```bash
+xmemo setup openclaw --with-mcp
+xmemo setup hermes --with-mcp
+```
 
-- No telemetry or analytics.
-- `xmemo doctor`, `xmemo discovery show`, and `xmemo status` do not send tokens.
-- MCP config generated by the CLI references `XMEMO_KEY` or uses the client's
-  MCP OAuth flow; it does not write token values into project files.
-- The CLI generates one stable non-secret `XMEMO_AGENT_INSTANCE_ID` per device
-  and stores it in user-scoped config outside git. All agents on the same device
-  share this instance ID.
-- `xmemo setup <client>` can install a marker-scoped XMemo memory behavior
-  profile for the selected agent. The profile contains instructions only; it
-  never embeds token values.
-- `xmemo login` stores the issued credential in the user-scoped XMemo CLI
-  config directory, shows the approved account when the server provides it,
-  and does not require extra token configuration afterward.
-- `xmemo token add` remains available for existing tokens and still avoids
-  project files, shell history, and printed token values.
-- Legacy `xmemo token set` refuses plaintext credential storage unless
-  `--allow-plaintext` is explicitly provided.
-- The npm package uses a `files` whitelist so only `bin`, `src`, `skills`,
-  published plugin metadata/assets, `README.md`, and `LICENSE` are published.
+Use `--mcp-only` to skip the native integration and install only the hosted MCP
+fallback.
 
-## Token flow
+## Authentication
 
-Recommended personal-user flow:
+### Browser login
+
+Recommended for personal accounts:
 
 ```bash
 xmemo login
 xmemo auth status
-xmemo token status --verify
 ```
 
-`xmemo login` uses the hosted device-login flow when the service advertises it:
-the CLI shows a browser URL and one-time code, the user authorizes in XMemo, and
-the CLI stores the issued MCP token in the user-scoped credential file. When the
-service returns approved account metadata, the CLI prints the account label so
-users can confirm which XMemo account was connected. No manual token setup is
-needed after a successful `xmemo login`; `xmemo token status --verify` is only
-an optional connectivity check. The CLI waits for the full browser authorization
-window by default; use `--timeout-ms` only to shorten or extend that approval
-window, and `--http-timeout-ms` only for individual service requests.
+The CLI uses the hosted device-login flow, waits for browser approval, and
+stores the issued credential in user-scoped XMemo storage. It never prints the
+credential value.
 
-Users who already have a token can configure it directly without shell profiles:
+### Existing token
+
+Pipe an existing token through stdin so it does not appear in command history:
 
 ```bash
 printf '%s\n' 'your-token' | xmemo token add --from-stdin
 xmemo token status --verify
 ```
 
-This is the preferred fallback while a hosted service is rolling out device
-login. It still avoids project files, MCP config files, logs, and chat
-transcripts.
-
-Tokens should be created by the XMemo website or enterprise console, then
-stored with `xmemo login`, `xmemo token add`, a user environment variable, or an
-enterprise secret manager:
-
-```bash
-export XMEMO_KEY="your-token"
-```
-
 PowerShell:
 
 ```powershell
-[Environment]::SetEnvironmentVariable("XMEMO_KEY", "your-token", "User")
+$xmemoToken = Read-Host "XMemo token"
+$xmemoToken | xmemo token add --from-stdin
+Remove-Variable xmemoToken
 ```
 
-Do not commit tokens to source control, MCP config files, `.env` files, logs, or
-chat transcripts.
+For CI and managed workstations, expose `XMEMO_KEY` through the platform's
+secret manager. Do not commit it to `.env`, MCP configuration, logs, issue
+reports, or chat transcripts.
 
-## Hosted discovery setup
+## Command reference
 
-Hosted setup uses the XMemo public discovery contracts. The CLI reads
-secret-free discovery and onboarding status documents, then tells the user where
-the API, MCP endpoint, docs, and any server-advertised onboarding links are.
+<details>
+<summary><strong>Lifecycle and diagnostics</strong></summary>
 
 ```bash
+xmemo --version
+xmemo update
+xmemo update --dry-run
 xmemo doctor
 xmemo discovery show
-xmemo setup
+xmemo status
+xmemo privacy
 ```
 
-Discovery requests do not send `XMEMO_KEY` or any Authorization
-header. Token creation still happens in the website or enterprise console; the
-public service discovery document does not return token values.
+</details>
 
-The hosted default service/base URL is `https://xmemo.dev`, so normal users do
-not need to type a service address. The MCP endpoint is discovered from that
-base URL and written as `https://xmemo.dev/mcp`; `https://mcp.xmemo.dev` is not
-the current canonical setup URL. Use `--url <service-url>` or `XMEMO_URL` only
-for private, enterprise, or self-hosted deployments. `MEMORY_OS_URL` remains
-accepted as a compatibility alias.
+<details>
+<summary><strong>Authentication</strong></summary>
 
-Generate and write a client config from discovery:
+```bash
+xmemo login
+xmemo auth status
+xmemo token status --verify
+xmemo token add --from-stdin
+xmemo env example --shell bash
+```
+
+</details>
+
+<details>
+<summary><strong>Client setup</strong></summary>
+
+```bash
+xmemo setup <client>
+xmemo setup <client> --dry-run
+xmemo setup --all
+xmemo setup openclaw [--with-mcp|--mcp-only]
+xmemo setup hermes [--with-mcp|--mcp-only]
+```
+
+</details>
+
+<details>
+<summary><strong>MCP and behavior profiles</strong></summary>
+
+```bash
+xmemo mcp serve
+xmemo mcp list
+xmemo mcp config --client generic
+xmemo mcp add <client> --write
+xmemo mcp proxy
+xmemo profile install <client>
+xmemo profile status <client>
+xmemo profile uninstall <client>
+xmemo smoke --client codex
+```
+
+</details>
+
+<details>
+<summary><strong>Safe removal</strong></summary>
+
+```bash
+xmemo uninstall <client> --dry-run
+xmemo uninstall <client> --yes
+xmemo uninstall --all --dry-run
+xmemo uninstall --all --yes --profiles
+```
+
+Only XMemo-owned entries and marker-scoped behavior profiles are removed.
+Unrelated MCP servers, credentials, and device identity remain intact.
+
+</details>
+
+Run `xmemo help` or `xmemo <command> --help` for complete, version-matched
+options.
+
+## Client notes
+
+<details>
+<summary><strong>Codex and Cursor</strong></summary>
 
 ```bash
 xmemo setup codex
-xmemo setup codex --url "https://your-private-service.example"
+xmemo smoke --client codex
+
 xmemo setup cursor
-xmemo setup copilot
-xmemo setup openclaw
-xmemo setup hermes
+```
+
+Both setup paths write a user-scoped MCP entry and can install a marker-scoped
+memory behavior profile. Use `--no-profile` to configure MCP only. Cursor's
+public marketplace plugin remains OAuth-first and contains no bearer-token
+configuration.
+
+</details>
+
+<details>
+<summary><strong>Gemini CLI and Antigravity</strong></summary>
+
+```bash
 xmemo setup gemini
 xmemo setup antigravity
 ```
 
-`xmemo setup <client>` is the unified setup entry point. For write-capable
-clients, it applies the user-scoped config directly; use `--dry-run` to preview
-without writing. Codex/Cursor configs reference `XMEMO_KEY`; OAuth-native
-clients such as Gemini CLI and Antigravity use the client's MCP OAuth flow
-instead. `xmemo setup openclaw` is a custom OpenClaw installer: it installs or
-updates the native `@xmemo/openclaw-memory` plugin and the XMemo Skill, and does
-not add the hosted MCP server unless `--with-mcp` is passed. No generated config
-embeds a token value. Write-capable client configs also include stable
-non-secret agent identity headers where the client format supports them.
-`--yes` remains accepted for Codex and Cursor as a compatibility no-op.
+These clients use hosted MCP OAuth. Their generated configuration carries no
+token value; restart the client and complete the browser login on first use.
 
-After writing MCP config, `xmemo setup <client>` prompts:
+</details>
 
-```text
-Write XMemo memory behavior profile to <path>? [Y/n]
-```
-
-The default is `Y`, so pressing Enter writes a marker-scoped profile that nudges
-the agent to recall/search XMemo at the start of non-trivial work and remember
-high-signal decisions after meaningful changes. Use `n` or `--no-profile` to
-configure MCP only. Use `--dry-run` to preview without writing config or profile
-files, and `--profile-target <path>` to choose a different behavior profile
-target.
-
-### Uninstall
-
-Remove the XMemo MCP server entry from one or all detected client configs:
-
-```bash
-xmemo uninstall --all --dry-run
-xmemo uninstall --all --yes
-xmemo uninstall cursor --yes
-xmemo uninstall --all --yes --profiles
-```
-
-`xmemo uninstall --all` scans the same clients as `setup --all` and removes only
-the `XMemo` entry (and legacy names such as `memory_os`) from each detected
-config file. Other MCP servers are preserved. By default it shows a summary and
-asks for confirmation; pass `--yes` (or `-y`) to skip the prompt, or `--dry-run`
-to preview without modifying files.
-
-Pass `--profiles` to also remove installed behavior profiles (Codex `AGENTS.md`,
-Cursor memory profile, etc.). Identity files and credentials are not removed, so
-a later `xmemo setup --all` can re-enable XMemo with the same agent instance ID.
-
-Default behavior profile targets:
-
-```text
-codex       ./AGENTS.md
-cursor      ~/.cursor/memory-profile.md
-gemini      ~/.gemini/GEMINI.md
-antigravity ~/.gemini/antigravity/MEMORY.md
-```
-
-Antigravity 2.0 currently uses the lower-level MCP writer because its stable
-user config path is separate from the original Antigravity profile. Preview the
-generated OAuth-first config with:
-
-```bash
-xmemo mcp add antigravity2 --url https://xmemo.dev
-```
-
-Write it to the default Antigravity 2.0 config path with:
-
-```bash
-xmemo mcp add antigravity2 --url https://xmemo.dev --write
-```
-
-The generated config uses `https://xmemo.dev/mcp`, contains no bearer token, and
-expects Antigravity 2.0 to complete MCP OAuth in the browser on first use.
-`XMEMO_AGENT_INSTANCE_ID` is a device-level identifier shared by all agents on
-the same machine, generated and stored when `--write` is used.
-
-## MCP setup
-
-List supported client generators:
-
-```bash
-xmemo mcp list
-```
-
-Current write-capable clients:
-
-```text
-codex       ~/.codex/config.toml
-cursor      ~/.cursor/mcp.json
-copilot     ~/.copilot/mcp-config.json
-gemini      ~/.gemini/settings.json
-antigravity ~/.gemini/antigravity/mcp_config.json
-antigravity2 ~/.antigravity2/mcp.json
-kiro        ~/.kiro/settings/mcp.json
-```
-
-For clients without a verified user-scoped write path, generate a read-only
-template and apply it manually after review:
-
-```bash
-xmemo mcp config --client generic --base-url "https://your-private-service.example" --json
-```
-
-Codex, Cursor, Copilot CLI, Gemini CLI, Antigravity, OpenClaw, Hermes, and Kiro
-have write-capable setup helpers. Antigravity 2.0 is write-capable through
-`xmemo mcp add antigravity2 --write`.
-Other client writes should only be added after their official user-scoped config
-format is verified.
-
-OpenClaw and Hermes use the same setup modes:
-
-| Command | Result |
-|---------|--------|
-| `xmemo setup <openclaw|hermes>` | Install/update the native integration and sync credentials. MCP is not installed. |
-| `xmemo setup <openclaw|hermes> --with-mcp` | Install/update the native integration, sync credentials, and add hosted MCP fallback. |
-| `xmemo setup <openclaw|hermes> --mcp-only` | Add hosted MCP fallback only. Native plugin/Skill install and native credential sync are skipped. |
-
-### OpenClaw
-
-Recommended OpenClaw setup:
+<details>
+<summary><strong>OpenClaw</strong></summary>
 
 ```bash
 xmemo login
@@ -423,81 +364,26 @@ xmemo setup openclaw
 openclaw xmemo status
 ```
 
-`xmemo setup openclaw` installs or updates OpenClaw's native XMemo memory plugin
-from `@xmemo/openclaw-memory`, installs the XMemo Skill with `openclaw skills
-install xmemo --force`, and then runs `openclaw xmemo status --json` so the user
-can see whether credentials are available. The native plugin reads the same
-user-scoped XMemo credential used by `xmemo login` and `xmemo token add
---from-stdin`, so normal users do not need to separately configure an OpenClaw
-API key.
+The setup command installs or updates `@xmemo/openclaw-memory`, installs the
+XMemo Skill, reuses the shared XMemo credential, and checks plugin status.
 
-Hosted MCP is not installed by default because it creates a second XMemo tool
-surface beside the native memory plugin. If you intentionally want that fallback
-too, run:
+</details>
 
-```bash
-xmemo setup openclaw --with-mcp
-```
-
-The fallback MCP entry references `Authorization: Bearer ${XMEMO_KEY}` and does
-not embed the token value. To install only the hosted MCP fallback without the
-native plugin or Skill, run:
-
-```bash
-xmemo setup openclaw --mcp-only
-```
-
-Use `--no-skill` only when the XMemo Skill is managed by another deployment
-path. Use `--openclaw-bin <path>` for custom OpenClaw binary locations.
-
-### Hermes
-
-Recommended Hermes setup:
+<details>
+<summary><strong>Hermes</strong></summary>
 
 ```bash
 xmemo login
 xmemo setup hermes
 ```
 
-`xmemo setup hermes` is Hermes-aware rather than a raw MCP writer. It installs
-or updates the native `hermes-xmemo` package with `python -m pip install -U
-hermes-xmemo`, runs `hermes-xmemo install`, then resolves the XMemo token from,
-in order, process environment (`XMEMO_KEY`, `MEMORY_OS_API_KEY`, or
-`MEMORY_OS_MCP_TOKEN`), the shared `@xmemo/client` credential written by
-`xmemo login` / `xmemo token add --from-stdin`, and an existing
-`$HERMES_HOME/.env`. It syncs the token to Hermes' `$HERMES_HOME/.env` as
-`XMEMO_KEY`, which keeps the native `hermes-xmemo` plugin and any optional
-Hermes MCP fallback on the same credential.
+The setup command installs or updates `hermes-xmemo`, configures the native
+provider, and synchronizes the user-scoped XMemo credential with Hermes.
 
-Hosted MCP is not installed by default because it creates a second XMemo tool
-surface beside the native memory provider. If you intentionally want that
-fallback too, run:
+</details>
 
-```bash
-xmemo setup hermes --with-mcp
-```
-
-The fallback MCP entry references `Authorization:Bearer ${XMEMO_KEY}` and does
-not embed the token value. To install only the hosted MCP fallback without the
-native plugin or native credential sync, run:
-
-```bash
-xmemo setup hermes --mcp-only
-```
-
-If an older Hermes plugin setup already created `$HERMES_HOME/.env`,
-`xmemo setup hermes` can backfill the same token into the shared `@xmemo/client`
-credential file so future XMemo CLI and MCP flows reuse it. Use `--no-plugin`
-only when the native Hermes plugin is managed by another deployment path. Use
-`--hermes-home <path>` for non-default Hermes homes. The legacy
-`hermes memory setup xmemo` flow remains supported by the plugin and can reuse
-the shared credential when present.
-
-### Copilot CLI
-
-Copilot CLI has `/mcp` management and reads user MCP configuration from
-`~/.copilot/mcp-config.json` (or `$COPILOT_HOME/mcp-config.json`). XMemo writes
-a local proxy server entry there:
+<details>
+<summary><strong>Copilot CLI</strong></summary>
 
 ```bash
 xmemo login
@@ -505,292 +391,109 @@ xmemo setup copilot
 xmemo mcp proxy
 ```
 
-`xmemo setup copilot` writes `XMemo` to Copilot CLI's user MCP config and
-does not include token or identity headers. Use `xmemo setup copilot --dry-run`
-to preview without writing. `xmemo mcp proxy` reads the token saved by
-`xmemo login` or `xmemo token add --from-stdin`, adds the XMemo bearer token and
-local agent identity, then forwards requests to `https://xmemo.dev/mcp`. If
-Copilot CLI is already open, reload MCP config or restart Copilot CLI after
-setup.
-If you specifically want the older environment-variable template, run:
+Copilot CLI receives a local proxy entry. The proxy reads the credential from
+user-scoped storage, adds identity metadata, and forwards requests to hosted
+MCP without writing secrets into Copilot configuration.
+
+</details>
+
+## Security by default
+
+| Control | Default behavior |
+| --- | --- |
+| **Telemetry** | No CLI analytics or usage telemetry |
+| **Credential output** | Token values are never printed |
+| **Project files** | Generated configuration references secrets; it does not embed them |
+| **Discovery** | `doctor`, `discovery show`, and public capability discovery send no token |
+| **Identity** | One stable, non-secret agent-instance ID is stored outside git |
+| **Writes** | Setup supports preview/dry-run; broad removal requires confirmation |
+| **Legacy plaintext** | `token set` refuses plaintext storage without explicit consent |
+| **Package contents** | An npm `files` allowlist excludes tests, operations, logs, and server code |
+
+Credential precedence and compatibility aliases are documented by:
 
 ```bash
-xmemo mcp config --client copilot-cli --remote-env
+xmemo env example --shell bash
+xmemo privacy
 ```
 
-### Codex
-
-Recommended Codex setup:
-
-```bash
-xmemo setup codex
-xmemo smoke --client codex
-```
-
-`setup codex` writes the MCP config to user-scoped Codex config and, by default,
-installs the XMemo Codex behavior profile into the current project's `AGENTS.md`
-between these markers. Use `xmemo setup codex --dry-run` to preview without
-writing or `xmemo setup codex --no-profile` to skip the behavior profile.
-
-```html
-<!-- memory-os:codex-profile:start -->
-<!-- memory-os:codex-profile:end -->
-```
-
-Repeat installs update only that marker block. Remove it with:
-
-```bash
-xmemo profile uninstall codex
-```
-
-Advanced: generate a Codex MCP config snippet without touching files:
-
-```bash
-xmemo mcp add codex --url "$XMEMO_URL"
-```
-
-Write it to the default Codex config path:
-
-```bash
-xmemo mcp add codex --url "$XMEMO_URL" --write
-```
-
-The generated config references `XMEMO_KEY`, includes the non-secret
-`X-Memory-OS-Agent-ID` / `X-Memory-OS-Agent-Instance-ID` attribution headers,
-and does not include the token value.
-
-Codex MCP-depth checks:
-
-```bash
-xmemo mcp profile codex
-xmemo profile install codex --dry-run
-xmemo profile install codex
-xmemo profile status codex
-xmemo smoke --client codex
-```
-
-`xmemo mcp profile codex` prints the recommended memory behavior profile:
-recall/search at the start of non-trivial tasks, write back high-signal
-decisions and fixes, and never store secrets. `xmemo smoke --client codex`
-checks the local Codex TOML config for the `XMemo` MCP server,
-`bearer_token_env_var = "XMEMO_KEY"`, token presence in the environment, and
-absence of embedded token values.
-
-### Cursor
-
-Cursor marketplace plugin assets live in `.cursor-plugin/marketplace.json` and
-`plugins/xmemo/`. The marketplace plugin is OAuth-first and its `mcp.json` stores
-only `https://xmemo.dev/mcp`; it must not contain `Authorization`, `Bearer`, or
-`XMEMO_KEY`.
-
-Recommended Cursor setup:
-
-```bash
-xmemo setup cursor
-```
-
-`setup cursor` merges the Cursor MCP config into the default Cursor user config
-path. Use `xmemo setup cursor --dry-run` to preview without writing. The
-lower-level equivalent remains:
-
-```bash
-xmemo mcp add cursor --url "$XMEMO_URL" --write
-```
-
-The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
-MCP server entry. Edit the config manually if you need to rotate the endpoint.
-Cursor configs include
-`X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`; the instance ID is
-non-secret and stored under the user's XMemo CLI config directory. By default,
-the setup prompt also installs a Cursor behavior profile at
-`~/.cursor/memory-profile.md`; answer `n` or pass `--no-profile` to skip it.
-Use this direct-key setup only for local/manual installs where Cursor OAuth is
-unavailable; public plugin submission should use the OAuth-first plugin config.
-
-### Gemini CLI
-
-Recommended Gemini CLI setup:
-
-```bash
-xmemo setup gemini
-```
-
-`setup gemini` merges an XMemo MCP server into Gemini CLI's user settings at
-`~/.gemini/settings.json`. It writes a remote HTTP server using Gemini's
-`httpUrl` key plus `X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`
-headers. Use `xmemo setup gemini --dry-run` to preview without writing.
-
-Unlike Codex/Cursor, the Gemini config carries **no token**: authentication uses
-Gemini CLI's built-in MCP OAuth flow (a one-time browser login on first use).
-This is deliberate — Gemini redacts environment variables matching
-`*KEY*`/`*TOKEN*`/`*AUTH*` during header expansion, so an `${XMEMO_KEY}`
-reference would not survive. OAuth avoids storing any secret in the config and
-still grants the full XMemo tool profile. After setup, restart Gemini CLI and
-run `/mcp` (or the first XMemo tool call) to complete the OAuth login. By
-default, the setup prompt also installs a Gemini behavior profile at
-`~/.gemini/GEMINI.md`; answer `n` or pass `--no-profile` to skip it.
-
-The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
-MCP server entry. Edit the config manually if you need to rotate the endpoint.
-
-### Antigravity
-
-Recommended Antigravity setup:
-
-```bash
-xmemo setup antigravity
-```
-
-`setup antigravity` merges an XMemo MCP server into Antigravity's user MCP config
-at `~/.gemini/antigravity/mcp_config.json`. It writes Antigravity's
-`serverUrl` shape plus `X-Memory-OS-Agent-ID` and
-`X-Memory-OS-Agent-Instance-ID` headers. Like Gemini CLI, the config carries
-**no token**: restart Antigravity and complete the MCP OAuth flow on first use.
-By default, the setup prompt also installs an Antigravity behavior profile at
-`~/.gemini/antigravity/MEMORY.md`; answer `n` or pass `--no-profile` to skip it.
-
-The lower-level equivalent is:
-
-```bash
-xmemo mcp add antigravity --write
-```
-
-Use `xmemo setup antigravity` for normal installs because it performs discovery
-and chooses the recommended Antigravity path automatically. Use
-`xmemo mcp add antigravity --write` when you want the generic MCP writer
-directly, for example with `--url` or `--config` in advanced/multi-client setup.
-The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
-MCP server entry. Edit the config manually if you need to rotate the endpoint.
-
-### Kiro
-
-Recommended Kiro setup:
-
-```bash
-xmemo setup kiro
-```
-
-`setup kiro` merges an XMemo MCP server into Kiro's user MCP config at
-`~/.kiro/settings/mcp.json`. It writes a remote HTTP server using Kiro's
-standard `url` key plus `X-Memory-OS-Agent-ID` and `X-Memory-OS-Agent-Instance-ID`
-headers. Use `xmemo setup kiro --dry-run` to preview without writing.
-
-The Kiro config includes `Authorization: Bearer ${env:XMEMO_KEY}` so
-authentication uses the environment variable approach. Set your XMemo token with:
-
-```bash
-xmemo login
-# or
-printf '%s\n' 'your-token' | xmemo token add --from-stdin
-```
-
-After setup, restart Kiro or reload MCP servers for the changes to take effect.
-The CLI refuses to overwrite an existing `XMemo`, `memory_os`, or `memory-os`
-MCP server entry. Edit the config manually if you need to rotate the endpoint.
-
-### Grok (xAI)
-
-Recommended Grok setup:
-
-```bash
-xmemo setup grok
-```
-
-`setup grok` appends an XMemo MCP server to Grok's user config at
-`~/.grok/config.toml` using Grok's TOML `[mcp_servers.XMemo]` format with `url`,
-`bearer_token_env_var = "XMEMO_KEY"`, and an `[mcp_servers.XMemo.http_headers]`
-table carrying `X-Memory-OS-Agent-ID`. Use `xmemo setup grok --dry-run` to
-preview without writing.
-
-Set your XMemo token with:
-
-```bash
-xmemo login
-# or
-printf '%s\n' 'your-token' | xmemo token add --from-stdin
-```
-
-Grok is also fully compatible with Claude Code: it automatically reads Claude
-Code marketplaces, plugins, skills, and MCP servers. So `xmemo setup claude-code`
-plus the repo's `.claude-plugin/`, `.mcp.json`, and `skills/` are discovered by
-Grok with zero extra configuration. Use `xmemo setup grok` when you want the
-server written directly into Grok's own `~/.grok/config.toml`.
-
-After setup, restart Grok or run `/mcps` to reload MCP servers. The CLI refuses
-to overwrite an existing `XMemo` MCP server entry; edit the config manually if
-you need to rotate the endpoint.
-
-### Antigravity 2.0
-
-Recommended Antigravity 2.0 setup:
-
-```bash
-xmemo mcp add antigravity2 --write
-```
-
-Use a dry preview first if you want to inspect the exact JSON before writing:
-
-```bash
-xmemo mcp add antigravity2
-```
-
-Antigravity 2.0 uses a separate config path from the original Antigravity
-profile. The default write target is `~/.antigravity2/mcp.json`; on Windows the
-server-side config contract also documents `%APPDATA%\\Antigravity 2.0\\mcp.json`
-as the Antigravity 2.0 user config location. Pass `--config <path>` when you
-want to write to a specific file.
-
-The generated `XMemo` entry uses hosted HTTP MCP:
-
-```json
-{
-  "mcpServers": {
-    "XMemo": {
-      "type": "http",
-      "url": "https://xmemo.dev/mcp"
-    }
-  }
-}
-```
-
-No token value is written. Restart Antigravity 2.0 after setup and complete the
-MCP OAuth browser flow on first use. If you use `--write`, the CLI also prepares
-a device-level `XMEMO_AGENT_INSTANCE_ID` shared by all agents on the same
-machine so XMemo can attribute activity consistently without embedding secrets.
-
-## Release model
-
-This repository is the source for the `@xmemo/client` npm package. Releases
-should be published from GitHub Actions on tags or GitHub Releases, not from a
-developer workstation.
-
-Recommended flow:
-
-```text
-develop -> test -> tag/release -> GitHub Actions -> npm publish --provenance
-```
+For private or self-hosted deployments, set `XMEMO_URL` or pass
+`--url <service-url>`. `MEMORY_OS_URL` remains a compatibility alias.
 
 ## Package boundary
 
-Included in npm:
+Published to npm:
 
 ```text
 bin/
+docs/assets/
 src/
+skills/
+plugins/kiro/
+plugins/xmemo/
 README.md
 LICENSE
 ```
 
-Excluded from npm:
+Not published:
 
 ```text
 .github/
+docs/analysis/
+docs/architecture/
 test/
 coverage/
 server code
 database migrations
 deployment files
-logs
-local state
-secrets
+logs and local state
 ```
+
+## Development
+
+```bash
+npm install
+npm run lint
+npm test
+npm run pack:dry-run
+```
+
+Before proposing a release, run the complete package gate:
+
+```bash
+npm run prepublishOnly
+```
+
+The local stdio server can be inspected directly:
+
+```bash
+node bin/mcp-stdio.js
+```
+
+## Release model
+
+Releases are produced by GitHub Actions from a tag or GitHub Release, not from
+a developer workstation:
+
+```text
+develop → test → tag/release → GitHub Actions → npm publish --provenance
+```
+
+Version-bearing files must stay synchronized:
+
+- `package.json`
+- `package-lock.json`
+- `server.json`
+- `lhm.plugin.json`
+
+## Documentation and support
+
+- [XMemo](https://xmemo.dev)
+- [XMemo MCP guide](https://xmemo.dev/product/mcp)
+- [MCP server reference](./MCP-README.md)
+- [Issues](https://github.com/yonro/memory-os-cli/issues)
+- [Releases](https://github.com/yonro/memory-os-cli/releases)
+
+## License
+
+[MIT](./LICENSE) © 2025–2026 Yonro

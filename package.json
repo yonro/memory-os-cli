@@ -1,16 +1,17 @@
 {
   "name": "@xmemo/client",
-  "version": "0.4.178",
+  "version": "0.4.179",
   "description": "Privacy-first CLI and MCP setup helper for XMemo.",
   "mcpName": "io.github.yonro/xmemo",
   "type": "module",
   "bin": {
+    "xmemo-mcp": "bin/mcp-stdio.js",
     "xmemo": "bin/memory-os.js",
-    "memory-os": "bin/memory-os.js",
-    "xmemo-mcp": "bin/mcp-stdio.js"
+    "memory-os": "bin/memory-os.js"
   },
   "files": [
     "bin",
+    "docs/assets",
     "src",
     "skills",
     "plugins/kiro",

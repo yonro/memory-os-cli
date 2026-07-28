@@ -142,7 +142,7 @@ const STATIC_TOOL_NAMES = [
   'get_project_context'
 ];
 
-const STATIC_TOOLS = STATIC_TOOL_NAMES.map((name) => ({
+export const STATIC_TOOLS = STATIC_TOOL_NAMES.map((name) => ({
   name,
   description: STATIC_TOOL_DESCRIPTIONS[name],
   inputSchema: {
@@ -157,7 +157,7 @@ const SERVER_INFO = {
   version: CLI_VERSION
 };
 
-const STATIC_PROMPTS = [
+export const STATIC_PROMPTS = [
   {
     name: 'remember',
     description: 'Save a memory to XMemo for future recall across sessions.',
@@ -181,6 +181,53 @@ const STATIC_PROMPTS = [
     ]
   }
 ];
+
+const GETTING_STARTED_RESOURCE = `# XMemo MCP quick start
+
+XMemo gives AI agents durable, user-owned memory across clients and sessions.
+
+1. Install the CLI: \`npm install -g @xmemo/client\`
+2. Sign in: \`xmemo login\`
+3. Check the connection: \`xmemo doctor\`
+4. Configure a client: \`xmemo setup <client>\`
+
+For stdio MCP clients, run \`xmemo-mcp\` or \`xmemo mcp serve\`.
+For Streamable HTTP clients, connect to \`https://xmemo.dev/mcp\`.
+
+Documentation: https://xmemo.dev/product/mcp
+`;
+
+const SECURITY_RESOURCE = `# XMemo security and privacy
+
+- Credentials are read from the user-scoped XMemo credential store or the
+  \`XMEMO_KEY\` environment variable.
+- Generated project configuration never embeds token values.
+- Discovery, tools, prompts, and these documentation resources are available
+  without a token; tool execution requires authentication.
+- Never paste XMemo credentials into prompts, source files, logs, or public
+  issue reports.
+- Destructive operations such as \`forget\` require an explicit user request.
+`;
+
+export const STATIC_RESOURCES = [
+  {
+    uri: 'xmemo://docs/getting-started',
+    name: 'XMemo MCP quick start',
+    description: 'Installation, authentication, and connection guidance for XMemo MCP.',
+    mimeType: 'text/markdown'
+  },
+  {
+    uri: 'xmemo://docs/security',
+    name: 'XMemo security and privacy',
+    description: 'Credential handling, privacy boundaries, and destructive-action guidance.',
+    mimeType: 'text/markdown'
+  }
+];
+
+const STATIC_RESOURCE_CONTENT = new Map([
+  ['xmemo://docs/getting-started', GETTING_STARTED_RESOURCE],
+  ['xmemo://docs/security', SECURITY_RESOURCE]
+]);
 
 function handlePromptsGet(id, params, ctx) {
   const name = params?.name;
@@ -209,9 +256,28 @@ function handlePromptsGet(id, params, ctx) {
   return makeResult(id, { description: prompt.description, messages });
 }
 
+function handleResourcesRead(id, params) {
+  const uri = params?.uri;
+  const resource = STATIC_RESOURCES.find((item) => item.uri === uri);
+  const text = STATIC_RESOURCE_CONTENT.get(uri);
+  if (!resource || text === undefined) {
+    return makeError(id, -32002, `Resource not found: ${uri || '(missing uri)'}`);
+  }
+  return makeResult(id, {
+    contents: [
+      {
+        uri: resource.uri,
+        mimeType: resource.mimeType,
+        text
+      }
+    ]
+  });
+}
+
 const SERVER_CAPABILITIES = {
   tools: {},
-  prompts: {}
+  prompts: {},
+  resources: {}
 };
 
 // ---------------------------------------------------------------------------
@@ -298,7 +364,9 @@ async function handleRequest(request, ctx) {
     case 'prompts/get':
       return handlePromptsGet(id, params, ctx);
     case 'resources/list':
-      return makeResult(id, { resources: [] });
+      return makeResult(id, { resources: STATIC_RESOURCES });
+    case 'resources/read':
+      return handleResourcesRead(id, params);
     case 'ping':
       return makeResult(id, {});
     default:

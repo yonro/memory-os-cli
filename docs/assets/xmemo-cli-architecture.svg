@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">XMemo CLI architecture</title>
+  <desc id="desc">AI clients connect through XMemo CLI using native integrations, hosted MCP, or a local stdio server, while credentials remain outside project files.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+    </marker>
+    <style>
+      .canvas { fill: #f8fafc; stroke: #e2e8f0; }
+      .card { fill: #ffffff; stroke: #cbd5e1; }
+      .core { fill: #f5f3ff; stroke: #8b5cf6; }
+      .endpoint { fill: #fdf4ff; stroke: #d946ef; }
+      .title { fill: #0f172a; font: 700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .label { fill: #0f172a; font: 650 17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .body { fill: #475569; font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .caption { fill: #64748b; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .line { fill: none; stroke: #94a3b8; stroke-width: 2; marker-end: url(#arrow); }
+      .arrow-head { fill: #94a3b8; }
+      .accent-blue { fill: #06b6d4; }
+      .accent-violet { fill: #8b5cf6; }
+      .accent-pink { fill: #ec4899; }
+      @media (prefers-color-scheme: dark) {
+        .canvas { fill: #0d1117; stroke: #30363d; }
+        .card { fill: #161b22; stroke: #3d444d; }
+        .core { fill: #211a36; stroke: #a78bfa; }
+        .endpoint { fill: #2a1830; stroke: #e879f9; }
+        .title, .label { fill: #f0f6fc; }
+        .body { fill: #b1bac4; }
+        .caption { fill: #8b949e; }
+        .line { stroke: #6e7681; }
+        .arrow-head { fill: #6e7681; }
+      }
+    </style>
+  </defs>
+
+  <rect class="canvas" x="1" y="1" width="1198" height="438" rx="22"/>
+  <text class="title" x="48" y="56">One CLI, three connection paths</text>
+  <text class="caption" x="48" y="82">Choose the integration that fits the client without moving credentials into the repository.</text>
+
+  <rect class="card" x="48" y="126" width="246" height="234" rx="16"/>
+  <rect class="accent-blue" x="48" y="126" width="7" height="234" rx="3"/>
+  <text class="label" x="80" y="168">AI clients</text>
+  <text class="body" x="80" y="204">Codex · Cursor · Gemini</text>
+  <text class="body" x="80" y="232">Copilot · Kiro · Grok</text>
+  <text class="body" x="80" y="260">OpenClaw · Hermes</text>
+  <text class="body" x="80" y="288">and other MCP clients</text>
+  <text class="caption" x="80" y="328">Editors, CLIs, and agents</text>
+
+  <rect class="core" x="366" y="126" width="246" height="234" rx="16"/>
+  <rect class="accent-violet" x="366" y="126" width="7" height="234" rx="3"/>
+  <text class="label" x="398" y="168">XMemo CLI</text>
+  <text class="body" x="398" y="204">Install and update</text>
+  <text class="body" x="398" y="232">Authenticate and diagnose</text>
+  <text class="body" x="398" y="260">Generate safe client config</text>
+  <text class="body" x="398" y="288">Install behavior profiles</text>
+  <text class="caption" x="398" y="328">npm package: @xmemo/client</text>
+
+  <rect class="card" x="684" y="112" width="228" height="78" rx="14"/>
+  <text class="label" x="712" y="144">Native adapters</text>
+  <text class="caption" x="712" y="169">OpenClaw · Hermes</text>
+
+  <rect class="card" x="684" y="204" width="228" height="78" rx="14"/>
+  <text class="label" x="712" y="236">Hosted MCP</text>
+  <text class="caption" x="712" y="261">https://xmemo.dev/mcp</text>
+
+  <rect class="card" x="684" y="296" width="228" height="78" rx="14"/>
+  <text class="label" x="712" y="328">Local stdio</text>
+  <text class="caption" x="712" y="353">xmemo-mcp</text>
+
+  <rect class="endpoint" x="984" y="126" width="168" height="234" rx="16"/>
+  <rect class="accent-pink" x="984" y="126" width="7" height="234" rx="3"/>
+  <text class="label" x="1016" y="168">XMemo</text>
+  <text class="body" x="1016" y="204">Durable memory</text>
+  <text class="body" x="1016" y="232">Search and recall</text>
+  <text class="body" x="1016" y="260">Project context</text>
+  <text class="body" x="1016" y="288">Governance</text>
+  <text class="caption" x="1016" y="328">User-owned context</text>
+
+  <path class="line" d="M294 243 H354"/>
+  <path class="line" d="M612 243 H650 V151 H672"/>
+  <path class="line" d="M612 243 H672"/>
+  <path class="line" d="M612 243 H650 V335 H672"/>
+  <path class="line" d="M912 151 H948 V210 H972"/>
+  <path class="line" d="M912 243 H972"/>
+  <path class="line" d="M912 335 H948 V276 H972"/>
+
+  <text class="caption" x="48" y="405">Credentials stay in user-scoped storage, environment variables, OAuth, or an enterprise secret manager.</text>
+</svg>

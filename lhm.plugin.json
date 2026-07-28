@@ -1,16 +1,200 @@
 {
-  "identifier": "xmemo",
-  "name": "XMemo",
-  "description": "User-owned memory for AI agents over remote MCP. Save, search, recall, update, forget, redact, and explain memories across Copilot, Claude, ChatGPT, IDEs, CLIs, and other MCP-compatible agents.",
+  "identifier": "yonro-memory-os-cli",
+  "name": "XMemo CLI",
+  "description": "User-owned memory for AI agents over MCP. Save, recall, update, explain, and govern durable context across clients, projects, and sessions.",
   "author": "yonro",
+  "authorUrl": "https://github.com/yonro",
   "homepage": "https://xmemo.dev/product/mcp",
-  "repository": "https://github.com/yonro/memory-os-cli",
-  "version": "0.4.178",
+  "icon": "https://raw.githubusercontent.com/yonro/memory-os-cli/main/plugins/xmemo/assets/logo.png",
+  "version": "0.4.179",
   "category": "productivity",
-  "tags": ["mcp", "memory", "ai-agents", "knowledge-management", "streamable-http", "oauth"],
-  "locale": "en-US",
-  "server": {
-    "type": "streamable-http",
-    "url": "https://xmemo.dev/mcp"
-  }
+  "connectionType": "hybrid",
+  "cloudEndpoint": "https://xmemo.dev/mcp",
+  "tags": [
+    "xmemo",
+    "mcp",
+    "memory",
+    "ai-agents",
+    "knowledge-management",
+    "streamable-http",
+    "oauth",
+    "privacy"
+  ],
+  "deploymentOptions": [
+    {
+      "installationMethod": "npm",
+      "isRecommended": true,
+      "description": "Install @xmemo/client and run its dedicated token-free discovery server over stdio.",
+      "installationDetails": {
+        "packageName": "@xmemo/client"
+      },
+      "connection": {
+        "type": "stdio",
+        "command": "xmemo-mcp",
+        "args": []
+      },
+      "systemDependencies": [
+        {
+          "name": "nodejs",
+          "type": "runtime",
+          "requiredVersion": ">=20.0.0",
+          "checkCommand": "node --version",
+          "versionParsingRequired": true,
+          "installInstructions": {
+            "macos": "brew install node@20",
+            "linux_debian": "sudo apt install nodejs npm",
+            "windows": "Download Node.js 20 or newer from https://nodejs.org/en/download/",
+            "manual": "Install Node.js 20 or newer from https://nodejs.org/en/download/"
+          }
+        }
+      ]
+    },
+    {
+      "installationMethod": "manual",
+      "isRecommended": false,
+      "description": "Connect directly to the hosted Streamable HTTP endpoint with MCP OAuth or an XMemo bearer token.",
+      "connection": {
+        "type": "http",
+        "url": "https://xmemo.dev/mcp"
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "get_mcp_identity",
+      "description": "Check XMemo connection status and the connected account or agent."
+    },
+    {
+      "name": "remember",
+      "description": "Save a memory so it can be recalled in future conversations."
+    },
+    {
+      "name": "recall",
+      "description": "Recall the most relevant saved memories before answering."
+    },
+    {
+      "name": "recall_context",
+      "description": "Build a context pack from XMemo memories for complex tasks."
+    },
+    {
+      "name": "memory_stats",
+      "description": "Show aggregate statistics for XMemo memories."
+    },
+    {
+      "name": "update_memory",
+      "description": "Update the content or metadata of an existing memory."
+    },
+    {
+      "name": "explain_memory",
+      "description": "Explain why a memory exists or matched a query."
+    },
+    {
+      "name": "restore_memory",
+      "description": "Restore a previously deleted memory."
+    },
+    {
+      "name": "add_expense",
+      "description": "Record one expense in the XMemo Ledger."
+    },
+    {
+      "name": "list_ledger_transactions",
+      "description": "Show XMemo Ledger records."
+    },
+    {
+      "name": "get_monthly_ledger_summary",
+      "description": "Summarize Ledger totals by month and currency."
+    },
+    {
+      "name": "forget",
+      "description": "Permanently delete a memory by target."
+    },
+    {
+      "name": "create_memory_todo",
+      "description": "Create a TODO or action item with an optional due time."
+    },
+    {
+      "name": "list_memory_todos",
+      "description": "List open or completed TODO and action items."
+    },
+    {
+      "name": "complete_memory_todo",
+      "description": "Mark a TODO or action item completed."
+    },
+    {
+      "name": "list_memory_versions",
+      "description": "List available versions for a memory."
+    },
+    {
+      "name": "get_timeline",
+      "description": "Show recent timeline events."
+    },
+    {
+      "name": "record_event",
+      "description": "Record a significant session event, milestone, or decision."
+    },
+    {
+      "name": "update_state",
+      "description": "Save the current working state during long-running work."
+    },
+    {
+      "name": "get_project_context",
+      "description": "Build project-scoped context from XMemo memories."
+    }
+  ],
+  "prompts": [
+    {
+      "name": "remember",
+      "description": "Save a memory to XMemo for future recall across sessions.",
+      "arguments": [
+        {
+          "name": "content",
+          "description": "The text to remember.",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "name": "path",
+          "description": "Optional category path for the memory.",
+          "required": false,
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "recall",
+      "description": "Recall relevant memories from XMemo before answering a question.",
+      "arguments": [
+        {
+          "name": "query",
+          "description": "What to search for in memory.",
+          "required": true,
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "project-context",
+      "description": "Build a context pack from XMemo for the current project or task.",
+      "arguments": [
+        {
+          "name": "query",
+          "description": "Describe the project or task context needed.",
+          "required": true,
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "uri": "xmemo://docs/getting-started",
+      "name": "XMemo MCP quick start",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "xmemo://docs/security",
+      "name": "XMemo security and privacy",
+      "mimeType": "text/markdown"
+    }
+  ]
 }

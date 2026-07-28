@@ -46,7 +46,80 @@ test('offline stdio tools/list exposes current full/free XMemo tools', async () 
   assert.equal(names.includes('update_project_decision'), false);
 });
 
+test('offline stdio initialize advertises tools, prompts, and resources', async () => {
+  const [response] = await callStdio([
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'marketplace-validator', version: '1.0.0' }
+      }
+    }
+  ]);
+
+  assert.equal(response.result.serverInfo.name, 'xmemo');
+  assert.deepEqual(response.result.capabilities, {
+    tools: {},
+    prompts: {},
+    resources: {}
+  });
+});
+
+test('offline stdio exposes prompt templates and readable documentation resources', async () => {
+  const responses = await callStdio([
+    { jsonrpc: '2.0', id: 1, method: 'prompts/list', params: {} },
+    { jsonrpc: '2.0', id: 2, method: 'resources/list', params: {} },
+    {
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'resources/read',
+      params: { uri: 'xmemo://docs/getting-started' }
+    },
+    {
+      jsonrpc: '2.0',
+      id: 4,
+      method: 'resources/read',
+      params: { uri: 'xmemo://docs/security' }
+    }
+  ]);
+
+  assert.deepEqual(
+    responses[0].result.prompts.map((prompt) => prompt.name),
+    ['remember', 'recall', 'project-context']
+  );
+  assert.deepEqual(
+    responses[1].result.resources.map((resource) => resource.uri),
+    ['xmemo://docs/getting-started', 'xmemo://docs/security']
+  );
+  assert.match(responses[2].result.contents[0].text, /xmemo-mcp/);
+  assert.match(responses[3].result.contents[0].text, /never embeds token values/i);
+});
+
+test('offline stdio rejects unknown resources with an MCP error', async () => {
+  const [response] = await callStdio([
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'resources/read',
+      params: { uri: 'xmemo://docs/missing' }
+    }
+  ]);
+
+  assert.equal(response.error.code, -32002);
+  assert.match(response.error.message, /Resource not found/);
+});
+
 async function callStdioToolsList() {
+  const [response] = await callStdio([
+    { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }
+  ]);
+  return response;
+}
+
+async function callStdio(requests) {
   const child = spawn(process.execPath, [path.join(root, 'bin', 'mcp-stdio.js')], {
     cwd: root,
     env: {
@@ -69,7 +142,9 @@ async function callStdioToolsList() {
     stderr += chunk;
   });
 
-  child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })}\n`);
+  for (const request of requests) {
+    child.stdin.write(`${JSON.stringify(request)}\n`);
+  }
   child.stdin.end();
 
   const code = await new Promise((resolve) => {
@@ -78,6 +153,6 @@ async function callStdioToolsList() {
   assert.equal(code, 0, stderr);
 
   const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
-  assert.equal(lines.length, 1, stdout);
-  return JSON.parse(lines[0]);
+  assert.equal(lines.length, requests.length, stdout);
+  return lines.map((line) => JSON.parse(line));
 }

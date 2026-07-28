@@ -2,7 +2,7 @@
 
 > **AI 驱动的智能笔记与记忆管理 MCP 服务，让大模型拥有持久化记忆能力。**
 
-[![smithery badge](https://smithery.ai/badge/xmemo/xmemo)](https://smithery.ai/servers/xmemo/xmemo)
+[![MCP Badge](https://lobehub.com/badge/mcp-full/yonro-memory-os-cli?theme=light)](https://lobehub.com/mcp/yonro-memory-os-cli)
 
 ---
 
@@ -60,6 +60,18 @@ XMemo MCP 服务器提供以下 20 个工具，每个工具都有清晰的名称
 | `record_event` | 记录里程碑、决策或重要会话事件 |
 | `update_state` | 保存长任务执行过程中的当前工作状态，便于后续恢复 |
 | `get_project_context` | 构建项目范围的记忆上下文包 |
+
+### Prompts 与 Resources
+
+本地 stdio 服务同时提供 3 个可调用 Prompt：
+`remember`、`recall` 和 `project-context`。
+
+它还提供两个无需凭据即可读取的安全文档资源：
+
+| Resource URI | 内容 |
+|--------------|------|
+| `xmemo://docs/getting-started` | 安装、登录和 MCP 接入快速指南 |
+| `xmemo://docs/security` | 凭据处理、隐私边界和破坏性操作规则 |
 
 ---
 
@@ -120,7 +132,11 @@ Cursor、Gemini CLI、Antigravity、OpenCode 等客户端支持 MCP OAuth 流程
 npm install -g @xmemo/client
 xmemo login
 xmemo setup <client>
+xmemo-mcp
 ```
+
+`xmemo-mcp` 是专用的 stdio MCP 入口；`xmemo mcp serve` 与它等价。
+能力发现（Tools、Prompts、Resources）不需要 Token，实际工具执行仍需认证。
 
 支持的客户端：`codex`、`cursor`、`copilot`、`gemini`、`antigravity`、`grok`、`kiro`、`claude-desktop`、`windsurf`、`cline`、`kimi`、`qwen`、`trae` 等。
 
@@ -225,7 +241,7 @@ xmemo setup <client>
 - 📖 **MCP 产品页**：https://xmemo.dev/product/mcp
 - 🔧 **GitHub 仓库**：https://github.com/yonro/memory-os-cli
 - 📝 **行为配置（Skill）**：[`skills/xmemo/SKILL.md`](skills/xmemo/SKILL.md)
-- 🖼️ **Logo**：[`plugins/xmemo/assets/logo.svg`](plugins/xmemo/assets/logo.svg)
+- 🖼️ **Logo**：[`plugins/xmemo/assets/logo.png`](plugins/xmemo/assets/logo.png)
 
 ---
 

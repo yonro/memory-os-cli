@@ -5,7 +5,7 @@ XMemo gives Cursor a hosted, user-owned memory layer for durable project context
 ## What it installs
 
 - `mcp.json` adds the hosted XMemo MCP server at `https://xmemo.dev/mcp`.
-- `assets/logo.svg` reuses the canonical XMemo marketplace icon source used by the existing ChatGPT/Claude listing assets.
+- `assets/logo.png` is the canonical XMemo product mark used by the hosted application and marketplace listings.
 - `rules/AGENTS.mdc` tells Cursor when to use XMemo memory.
 - `skills/agents/SKILL.md` gives Cursor a safe workflow for recall, writes, TODOs, and destructive memory actions.
 
