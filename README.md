@@ -25,6 +25,7 @@
     <a href="https://xmemo.dev"><img alt="XMemo Cloud" src="https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square"></a>
     <a href="#security-by-default"><img alt="Privacy first" src="https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white"></a>
     <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="LobeHub" src="https://img.shields.io/badge/LobeHub-MCP-ec4899?style=flat-square"></a>
+    <a href="https://glama.ai/mcp/servers/yonro/memory-os-cli"><img alt="Glama quality score" src="https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg"></a>
   </p>
 
   <p>
