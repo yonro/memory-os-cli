@@ -222,15 +222,24 @@ xmemo auth status
 ```
 
 The CLI uses the hosted device-login flow, waits for browser approval, and
-stores the issued credential in user-scoped XMemo storage. It never prints the
-credential value.
+asks once before storing the issued credential unencrypted in the current
+user's XMemo config directory. The exact path is shown before approval, file
+permissions are restricted where the operating system supports it, and the
+credential value is never printed. Prefer `XMEMO_KEY` or a managed secret store
+on shared systems.
+
+For non-interactive automation, record the same decision explicitly:
+
+```bash
+xmemo login --allow-plaintext
+```
 
 ### Existing token
 
 Pipe an existing token through stdin so it does not appear in command history:
 
 ```bash
-printf '%s\n' 'your-token' | xmemo token add --from-stdin
+printf '%s\n' 'your-token' | xmemo token add --from-stdin --allow-plaintext
 xmemo token status --verify
 ```
 
@@ -238,7 +247,7 @@ PowerShell:
 
 ```powershell
 $xmemoToken = Read-Host "XMemo token"
-$xmemoToken | xmemo token add --from-stdin
+$xmemoToken | xmemo token add --from-stdin --allow-plaintext
 Remove-Variable xmemoToken
 ```
 
@@ -269,8 +278,9 @@ xmemo privacy
 ```bash
 xmemo login
 xmemo auth status
+xmemo auth-status --verify
 xmemo token status --verify
-xmemo token add --from-stdin
+xmemo token add --from-stdin --allow-plaintext
 xmemo env example --shell bash
 ```
 
@@ -408,7 +418,7 @@ MCP without writing secrets into Copilot configuration.
 | **Discovery** | `doctor`, `discovery show`, and public capability discovery send no token |
 | **Identity** | One stable, non-secret agent-instance ID is stored outside git |
 | **Writes** | Setup supports preview/dry-run; broad removal requires confirmation |
-| **Legacy plaintext** | `token set` refuses plaintext storage without explicit consent |
+| **Local credential storage** | Interactive login asks first; non-interactive writes require `--allow-plaintext`; stored tokens are unencrypted |
 | **Package contents** | An npm `files` allowlist excludes tests, operations, logs, and server code |
 
 Credential precedence and compatibility aliases are documented by:
@@ -454,6 +464,7 @@ logs and local state
 
 ```bash
 npm install
+npm run release:check
 npm run lint
 npm test
 npm run pack:dry-run
@@ -473,11 +484,11 @@ node bin/mcp-stdio.js
 
 ## Release model
 
-Releases are produced by GitHub Actions from a tag or GitHub Release, not from
-a developer workstation:
+Normal releases are produced by GitHub Actions from the exact tagged commit,
+not from a mutable branch checkout or a developer workstation:
 
 ```text
-develop → test → tag/release → GitHub Actions → npm publish --provenance
+develop → version sync → test → tag → GitHub Actions → npm publish --provenance
 ```
 
 Version-bearing files must stay synchronized:
@@ -486,6 +497,10 @@ Version-bearing files must stay synchronized:
 - `package-lock.json`
 - `server.json`
 - `lhm.plugin.json`
+
+`node scripts/check-release-version.mjs --tag vX.Y.Z` verifies the tag and every
+version-bearing file before publication. The separate npm publish workflow is
+manual recovery only, so creating a GitHub Release cannot publish twice.
 
 ## Documentation and support
 

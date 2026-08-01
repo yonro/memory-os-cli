@@ -87,7 +87,7 @@ export async function mcpCommand(args, io) {
 
     writeLine(io.stdout, `${PRODUCT_NAME} MCP config template for ${clientId}`);
     if (useLocalProxy) {
-      writeLine(io.stdout, `Requires credential: ${COMMAND_NAME} login or ${COMMAND_NAME} token add --from-stdin`);
+      writeLine(io.stdout, `Requires credential: ${COMMAND_NAME} login or ${COMMAND_NAME} token add --from-stdin --allow-plaintext`);
       writeLine(io.stdout, `Run local proxy: ${template.requiresLocalCommand}`);
     } else {
       if (template.requiresEnv?.length > 0) {

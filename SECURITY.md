@@ -8,7 +8,8 @@ XMemo CLI is designed to minimize local secret exposure.
 - Token values are never printed by CLI commands.
 - Generated MCP config references `XMEMO_KEY` instead of embedding a token value.
 - Agent instance IDs are non-secret and stored in user-scoped config outside git.
-- Plaintext token storage requires explicit `--allow-plaintext`.
+- Interactive `xmemo login` asks before unencrypted token storage; non-interactive
+  writes require explicit `--allow-plaintext`.
 - npm publish is constrained by the package `files` whitelist.
 
 ## Reporting vulnerabilities

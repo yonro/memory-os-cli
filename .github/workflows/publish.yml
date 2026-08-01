@@ -1,10 +1,12 @@
 name: Publish npm package
 
 on:
-  release:
-    types:
-      - published
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Existing release tag to recover, for example v0.4.179
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,14 +18,19 @@ jobs:
     environment: npm
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
+      - run: node scripts/check-release-version.mjs --tag "${{ inputs.ref }}"
       - run: npm run lint
       - run: npm test
+      - run: npm run pack:dry-run
       - run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

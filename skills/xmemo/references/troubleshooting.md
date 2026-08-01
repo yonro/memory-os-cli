@@ -17,6 +17,8 @@ Check whether a credential is stored without exposing the token value:
 
 ```text
 node scripts/xmemo-skill.mjs auth status
+# equivalent discovery-compatible alias
+node scripts/xmemo-skill.mjs auth-status
 ```
 
 If the credential is missing, start device login or add a token directly:
@@ -48,7 +50,12 @@ node scripts/xmemo-skill.mjs register --reason unattended --allow-plaintext
 
 Temporary credentials work only for `remember`, `recall`, and `search`. Give
 the displayed bind URL to the user, then use `auth claim-confirm` after their
-claim to receive the formal credential. Do not share the bind URL publicly.
+claim to receive the formal credential. The script displays the current
+temporary item and time limits immediately after registration. The current
+policy is 100 items, 14 days without successful memory activity, and 30 days
+maximum from registration. Do not share the bind URL publicly. If the user
+rejects a pending bind, run `node scripts/xmemo-skill.mjs auth claim-deny` to
+reject it server-side and clear the local pending confirmation value.
 
 New users should create or sign in to an XMemo account at `https://xmemo.dev`
 before approving the device-login code. The browser page must show the same
@@ -62,6 +69,7 @@ Verify the stored credential against the hosted endpoint:
 
 ```text
 node scripts/xmemo-skill.mjs auth status --verify
+node scripts/xmemo-skill.mjs auth-status --verify
 ```
 
 If verification fails:
@@ -107,6 +115,8 @@ If this fails:
 | `XMemo base URL must use HTTPS` | Insecure non-loopback service URL | Use HTTPS, or localhost HTTP only for local development |
 | `Request timed out` | Service/network exceeded the request deadline | Retry after checking service health, or set a bounded `--timeout-ms` |
 | `Unknown option` | Unsupported or misspelled command parameter | Run the command with `--help`; do not pass tokens as flags |
+| `--metadata must be a JSON object` | Metadata is invalid JSON, an array, or a scalar | Pass one JSON object, for example `'{"source":"review"}'` |
+| `--explain must be true or false` | A boolean parameter used another spelling | Pass the literal `true` or `false` |
 | `Method not found` | Server does not expose the requested operation | Server-side capability gap |
 
 ## Security reminders

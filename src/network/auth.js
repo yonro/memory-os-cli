@@ -26,7 +26,13 @@ export async function startDeviceLogin(baseUrl, timeoutMs, io) {
     client_id: PACKAGE_NAME,
     cli_version: CLI_VERSION,
     token_type: 'mcp_token',
-    scopes: ['memory:read', 'memory:write']
+    scopes: [
+      'memory:read',
+      'memory:write',
+      'memory:restore',
+      'ledger:write',
+      'ledger:read'
+    ]
   }, timeoutMs, io);
 
   const deviceCode = stringValue(payload, ['device_code']);
@@ -80,14 +86,17 @@ export async function pollDeviceLogin(baseUrl, start, loginTimeoutMs, httpTimeou
   throw new UsageError('Device login expired before authorization completed.');
 }
 
-export async function storeTokenFromStdin(io, metadata = {}) {
+export async function storeTokenFromStdin(io, metadata = {}, options = {}) {
   const token = (await readAll(io.stdin)).trim();
   validateToken(token);
-  return await storeTokenValue(token, metadata, io.env);
+  return await storeTokenValue(token, metadata, io.env, options);
 }
 
-export async function storeTokenValue(token, metadata, env) {
+export async function storeTokenValue(token, metadata, env, options = {}) {
   validateToken(token);
+  if (options.allowPlaintext !== true) {
+    throw new UsageError('Refusing to store an unencrypted token without explicit plaintext-storage consent.');
+  }
   const credentialPath = credentialsPath(env);
   await writePlaintextCredential(credentialPath, token, metadata);
   return {
@@ -95,7 +104,8 @@ export async function storeTokenValue(token, metadata, env) {
     tokenPresent: true,
     tokenPrinted: false,
     projectFilesModified: false,
-    storage: 'user-scoped-credential-file'
+    storage: 'user-scoped-credential-file',
+    encryption: 'none'
   };
 }
 
@@ -110,6 +120,8 @@ export async function readStoredCredential(env) {
     path: credentialPath,
     token: stringValue(parsed, ['token']),
     storage: stringValue(parsed, ['storage']),
+    encryption: stringValue(parsed, ['encryption']),
+    plaintextStorageConsent: parsed.plaintextStorageConsent === true,
     account: accountFromPayload(parsed.metadata)
   };
 }
@@ -176,6 +188,9 @@ async function writePlaintextCredential(credentialPath, token, metadata = {}) {
     version: 1,
     tokenEnvVar: TOKEN_ENV_VAR,
     storage: 'user-scoped-credential-file',
+    encryption: 'none',
+    plaintextStorageConsent: true,
+    plaintextStorageConsentAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     metadata,
     token

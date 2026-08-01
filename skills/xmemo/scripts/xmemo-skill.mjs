@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.0.8';
+const SKILL_VERSION = '1.1.0';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -22,6 +22,11 @@ const DEFAULT_BASE_URL = 'https://xmemo.dev';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 300_000;
 const MAX_RESPONSE_BYTES = 8_388_608;
+const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
+  max_items: 100,
+  ttl_seconds: 1_209_600,
+  max_lifetime_seconds: 2_592_000,
+});
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
@@ -49,6 +54,7 @@ const AUTH_FLAGS = {
   add: new Set(['from-stdin']),
   'claim-status': new Set(),
   'claim-confirm': new Set(),
+  'claim-deny': new Set(),
 };
 
 // Helper to parse arguments
@@ -154,7 +160,7 @@ function readOptionValue(args, index, key, inlineValue) {
 function printUsage(command) {
   const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
   if (command === 'auth') {
-    console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-deny [--allow-plaintext]\n\nAlias: ${SCRIPT_COMMAND} auth-status [--verify]\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
     return;
   }
 
@@ -173,12 +179,12 @@ function printUsage(command) {
 
   if (REST_COMMANDS.has(command)) {
     const commandUsage = {
-      remember: 'remember --content <text> --path <path>',
-      recall: 'recall --query <text> [--limit <n>] [--compact]',
-      search: 'search --query <text> [--limit <n>] [--compact]',
-      'save-state': 'save-state --key <key> [--content <text>]',
+      remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
+      recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+      search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+      'save-state': 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
       'restore-state': 'restore-state --key <key>',
-      'state-save': 'state-save --key <key> [--content <text>] (legacy alias)',
+      'state-save': 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
       'state-restore': 'state-restore --key <key> (legacy alias)',
       'todo-add': 'todo-add --content <text>',
       'todo-list': 'todo-list',
@@ -190,7 +196,7 @@ function printUsage(command) {
     return;
   }
 
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -202,6 +208,36 @@ function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
     throw new Error(`${name} must be between 1 and ${max}.`);
   }
   return parsed;
+}
+
+function parseIntegerInRange(value, name, min, max) {
+  if (!/^\d+$/.test(String(value ?? ''))) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}.`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be between ${min} and ${max}.`);
+  }
+  return parsed;
+}
+
+function parseJsonObject(value, name) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(value));
+  } catch {
+    throw new Error(`${name} must be a valid JSON object.`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${name} must be a JSON object.`);
+  }
+  return parsed;
+}
+
+function parseStrictBoolean(value, name) {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  throw new Error(`${name} must be true or false.`);
 }
 
 function isLoopbackHostname(hostname) {
@@ -270,7 +306,10 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
   }
 
   if (flags.limit !== undefined) parsePositiveInteger(flags.limit, '--limit', 100);
-  if (flags.ttl_seconds !== undefined) parsePositiveInteger(flags.ttl_seconds, '--ttl_seconds', 31_536_000);
+  if (flags.ttl_seconds !== undefined) parseIntegerInRange(flags.ttl_seconds, '--ttl_seconds', 0, 604_800);
+  if (flags.metadata !== undefined) flags.metadata = parseJsonObject(flags.metadata, '--metadata');
+  if (flags.explain !== undefined) flags.explain = parseStrictBoolean(flags.explain, '--explain');
+  if (flags.prefer_working !== undefined) flags.prefer_working = parseStrictBoolean(flags.prefer_working, '--prefer_working');
   if (flags.threshold !== undefined) {
     const threshold = Number(flags.threshold);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
@@ -348,6 +387,12 @@ function formatMemoryContent(content, compact) {
   return rendered.length > limit ? `${rendered.slice(0, limit)}… (truncated)` : rendered;
 }
 
+function formatDuration(seconds) {
+  if (seconds % 86_400 === 0) return `${seconds / 86_400} days`;
+  if (seconds % 3_600 === 0) return `${seconds / 3_600} hours`;
+  return `${seconds} seconds`;
+}
+
 // HTTP request helper
 function makeHttpRequest(baseUrl, apiPath, method, body = null, headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
@@ -419,6 +464,26 @@ function makeHttpRequest(baseUrl, apiPath, method, body = null, headers = {}, ti
       reject(e);
     }
   });
+}
+
+async function fetchTemporaryLimits(baseUrl, timeoutMs) {
+  try {
+    const res = await makeHttpRequest(baseUrl, '/.well-known/xmemo-agent.json', 'GET', null, {}, timeoutMs);
+    if (res.statusCode < 200 || res.statusCode >= 300) return { ...DEFAULT_TEMPORARY_LIMITS };
+    const data = parseJsonResponse(res, 'Temporary-memory policy discovery');
+    const limits = data?.temporary_token?.limits;
+    const max_items = Number(limits?.max_items);
+    const ttl_seconds = Number(limits?.ttl_seconds);
+    const max_lifetime_seconds = Number(limits?.max_lifetime_seconds);
+    if (![max_items, ttl_seconds, max_lifetime_seconds].every(Number.isSafeInteger)
+      || max_items <= 0 || ttl_seconds <= 0 || max_lifetime_seconds <= 0) {
+      return { ...DEFAULT_TEMPORARY_LIMITS };
+    }
+    return { max_items, ttl_seconds, max_lifetime_seconds };
+  } catch {
+    // Discovery must not make an otherwise available registration endpoint unusable.
+    return { ...DEFAULT_TEMPORARY_LIMITS };
+  }
 }
 
 // Read credential helper
@@ -533,14 +598,17 @@ async function requestTemporaryMemoryOperation(command, options, flags, credenti
   const headers = { Authorization: `Bearer ${credential.token}` };
   let res;
   if (command === 'remember') {
-    res = await makeHttpRequest(options.baseUrl, '/v1/remember', 'POST', {
-      content: flags.content || '',
-      path: flags.path || 'memories',
-    }, headers, options.timeoutMs);
+    const body = Object.fromEntries(Object.entries(flags).filter(([, value]) => value !== undefined));
+    body.content = flags.content || '';
+    body.path = flags.path || 'memories';
+    res = await makeHttpRequest(options.baseUrl, '/v1/remember', 'POST', body, headers, options.timeoutMs);
   } else {
     const params = new URLSearchParams({ query: flags.query || '', limit: String(flags.limit || 5) });
-    if (flags.path) params.set('path', flags.path);
-    res = await makeHttpRequest(options.baseUrl, `/v1/recall?${params}`, 'GET', null, headers, options.timeoutMs);
+    for (const key of ['threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']) {
+      if (flags[key] !== undefined) params.set(key, String(flags[key]));
+    }
+    const apiPath = command === 'search' ? '/v1/memories/search' : '/v1/recall';
+    res = await makeHttpRequest(options.baseUrl, `${apiPath}?${params}`, 'GET', null, headers, options.timeoutMs);
   }
 
   const data = parseJsonResponse(res, `Temporary ${command} request`);
@@ -619,7 +687,13 @@ async function readStdin() {
 
 // Command execution dispatcher
 async function main() {
-  const { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
+  let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
+
+  if (command === 'auth-status') {
+    command = 'auth';
+    subcommand = 'status';
+    positionals = ['auth', 'status', ...positionals.slice(1)];
+  }
 
   if (options.help) {
     printUsage(command);
@@ -753,6 +827,7 @@ async function main() {
       process.exit(1);
     }
     try {
+      const limits = await fetchTemporaryLimits(options.baseUrl, options.timeoutMs);
       const installation_fingerprint = await getInstallationFingerprint();
       const res = await makeHttpRequest(options.baseUrl, '/v1/agents/register', 'POST', {
         entry_type: 'skill',
@@ -774,9 +849,9 @@ async function main() {
         registration_reason: reason,
       }, { allowPlaintext: options.allowPlaintext, warn: true });
       if (options.json) {
-        console.log(safeJson({ agent_id: data.agent_id, bind_url: data.bind_url, status: data.status }));
+        console.log(safeJson({ agent_id: data.agent_id, bind_url: data.bind_url, status: data.status, limits }));
       } else {
-        console.log(`✅ Temporary XMemo memory enabled for this installation.\nThis is a limited sandbox, not a formal account.\nComplete formal registration (recommended): ${sanitizeTerminalText(data.bind_url)}\nDo not share this bind URL publicly. After the human claim, run "${SCRIPT_COMMAND} auth claim-confirm" to accept the formal credential.`);
+        console.log(`✅ Temporary XMemo memory enabled for this installation.\nThis is a limited sandbox, not a formal account.\nTemporary limits: up to ${limits.max_items} items; expires after ${formatDuration(limits.ttl_seconds)} without successful memory activity; maximum ${formatDuration(limits.max_lifetime_seconds)} from registration.\nComplete formal registration (recommended): ${sanitizeTerminalText(data.bind_url)}\nDo not share this bind URL publicly. After the human claim, run "${SCRIPT_COMMAND} auth claim-confirm" to accept the formal credential.`);
       }
       process.exit(0);
     } catch (e) {
@@ -936,13 +1011,35 @@ async function main() {
       }
     }
 
-    if (subcommand === 'claim-status' || subcommand === 'claim-confirm') {
+    if (subcommand === 'claim-status' || subcommand === 'claim-confirm' || subcommand === 'claim-deny') {
       const credential = await getStoredCredential();
       if (!credential?.token || credential.credential_type !== 'temporary') {
         console.error('Error: Claim commands require a locally stored temporary credential from "register".');
         process.exit(1);
       }
       try {
+        if (subcommand === 'claim-deny') {
+          const denyRes = await makeHttpRequest(options.baseUrl, '/v1/agents/bind/deny-current-user', 'POST', {}, {
+            Authorization: `Bearer ${credential.token}`,
+          }, options.timeoutMs);
+          const denyData = parseJsonResponse(denyRes, 'Claim denial');
+          if (denyRes.statusCode < 200 || denyRes.statusCode >= 300) {
+            throw new Error(apiErrorMessage(denyData, safeJson(denyData)));
+          }
+          const allowPlaintext = plaintextStorageAllowed(options, credential);
+          await saveToken(credential.token, {
+            credential_type: 'temporary',
+            agent_id: credential.agent_id,
+            bind_url: credential.bind_url,
+            registration_reason: credential.registration_reason,
+          }, { allowPlaintext, warn: options.allowPlaintext && !credential.plaintext_storage_consent });
+          if (options.json) {
+            console.log(safeJson(denyData));
+          } else {
+            console.log('Pending account binding declined. The credential remains limited to isolated temporary memory; formal account login is still recommended.');
+          }
+          process.exit(0);
+        }
         const status = await claimStatus(options.baseUrl, credential, options);
         if (subcommand === 'claim-confirm' && !status.formal_token) {
           const confirmation_token = status.confirmation_token || credential.pending_confirmation_token;

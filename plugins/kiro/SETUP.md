@@ -42,7 +42,7 @@ This opens your browser for secure OAuth authentication and automatically stores
 If you already have a token, add it to the token store:
 
 ```bash
-printf '%s\n' 'your-token' | xmemo token add --from-stdin
+printf '%s\n' 'your-token' | xmemo token add --from-stdin --allow-plaintext
 ```
 
 After authentication, export your token to the environment variable:

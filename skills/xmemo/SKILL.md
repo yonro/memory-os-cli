@@ -49,8 +49,11 @@ node scripts/xmemo-skill.mjs register --reason unattended --allow-plaintext
 ```
 
 Temporary access is an isolated, limited memory sandbox. It only supports
-`remember`, `recall`, and `search`; show the returned bind URL to the user and
-do not share that URL publicly. Run
+`remember`, `recall`, and `search`. The script reads the current public policy
+before registration and immediately discloses its item cap, inactivity expiry,
+and maximum lifetime (currently 100 items, 14 days of inactivity, and 30 days
+from registration). Show the returned bind URL to the user and do not share
+that URL publicly. Run
 `node scripts/xmemo-skill.mjs auth claim-confirm` after they claim it. Temporary
 and pending-confirmation values inherit the same explicit plaintext-storage
 consent and are replaced or cleared during formal-token handoff.
@@ -80,8 +83,9 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   before stopping.
 - **Record concrete expenses.** Use `expense-add` when the user states a concrete
   purchase or income.
-- **Confirm destructive actions.** Always confirm the exact target before
-  `forget`, overwrite, or broad cleanup operations.
+- **Confirm destructive actions.** The bundled script does not expose memory
+  deletion or overwrite commands. Use an authorized product surface with an
+  explicit target and user confirmation if such an operation is required.
 - **Read provenance correctly.** `agent_id`, `agent_instance_id`, and
   `agent_boundary` are attribution signals, not authorization boundaries.
 
@@ -112,9 +116,11 @@ The Skill script handles all operations directly, including status checks and to
 
 ```text
 node scripts/xmemo-skill.mjs auth status [--verify]
+node scripts/xmemo-skill.mjs auth-status [--verify]
 node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
 node scripts/xmemo-skill.mjs auth claim-confirm [--allow-plaintext]
+node scripts/xmemo-skill.mjs auth claim-deny [--allow-plaintext]
 node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 node scripts/xmemo-skill.mjs doctor
 ```
@@ -132,6 +138,7 @@ If the bundled script reports auth or service errors, use the Skill diagnostics 
 node scripts/xmemo-skill.mjs doctor
 node scripts/xmemo-skill.mjs doctor --anonymous
 node scripts/xmemo-skill.mjs auth status --verify
+node scripts/xmemo-skill.mjs auth-status --verify
 node scripts/xmemo-skill.mjs auth claim-status
 ```
 

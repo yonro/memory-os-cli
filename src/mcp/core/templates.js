@@ -84,7 +84,7 @@ export function mcpLocalProxyTemplate(clientId, proxyUrl, options = {}) {
         }
       }
     },
-    requiresCredential: [`${COMMAND_NAME} login`, `${COMMAND_NAME} token add --from-stdin`],
+    requiresCredential: [`${COMMAND_NAME} login`, `${COMMAND_NAME} token add --from-stdin --allow-plaintext`],
     requiresLocalCommand: `${COMMAND_NAME} mcp proxy --port ${new URL(proxyUrl).port || DEFAULT_PROXY_PORT}`,
     agentIdentity: {
       agentId: clientId,

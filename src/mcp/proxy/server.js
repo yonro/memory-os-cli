@@ -25,7 +25,7 @@ export async function mcpProxyCommand(args, io, { agentIdentity }) {
   const port = parsePositiveInteger(optionValue(args, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
   const token = await resolveCredentialToken(io.env);
   if (!token) {
-    throw new UsageError(`No token found. Run \`${COMMAND_NAME} login\` or \`${COMMAND_NAME} token add --from-stdin\` first.`);
+    throw new UsageError(`No token found. Run \`${COMMAND_NAME} login\` or \`${COMMAND_NAME} token add --from-stdin --allow-plaintext\` first.`);
   }
   validateToken(token);
   const identity = await agentIdentity('copilot-cli', io.env);
@@ -109,4 +109,3 @@ function baseUrlOption(args, env) {
     ?? env.MEMORY_OS_BASE_URL
     ?? DEFAULT_SERVICE_URL;
 }
-

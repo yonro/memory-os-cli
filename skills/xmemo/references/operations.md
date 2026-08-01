@@ -48,13 +48,24 @@ node scripts/xmemo-skill.mjs register --reason unattended --allow-plaintext
 
 The fallback stores its token in the explicitly approved user credential file and can use only
 `remember`, `recall`, and `search` in an isolated temporary memory space. Show
-the returned bind URL only to the intended user; do not publish or log it. After
-their web claim, complete the
+the returned bind URL only to the intended user; do not publish or log it. The
+script reads `/.well-known/xmemo-agent.json` and discloses the current cap and
+expiry immediately after registration. The current policy is 100 items, expiry
+after 14 days without successful memory activity, and an absolute maximum of
+30 days from registration. Formal registration removes these sandbox limits.
+After their web claim, complete the
 one-time formal-token handoff with:
 
 ```text
 node scripts/xmemo-skill.mjs auth claim-status
 node scripts/xmemo-skill.mjs auth claim-confirm
+```
+
+If the user does not approve the pending bind, reject it as the temporary-token
+holder and keep the isolated temporary credential:
+
+```text
+node scripts/xmemo-skill.mjs auth claim-deny
 ```
 
 For a legacy temporary credential that predates recorded consent, append
@@ -75,6 +86,8 @@ temporary credential and removes pending confirmation data.
 | `todo-done` | Mark a TODO done |
 | `expense-add` | Record a ledger expense |
 | `doctor` | Check service health and auth status; add `--anonymous` to omit credentials |
+| `auth status` / `auth-status` | Show local auth state; add `--verify` for server validation |
+| `auth claim-status` / `auth claim-confirm` / `auth claim-deny` | Inspect, approve, or reject the two-phase temporary bind |
 | `logout` | Revoke/remove a local credential; externally managed `XMEMO_KEY` requires explicit revocation |
 
 ## Examples
@@ -91,11 +104,23 @@ node scripts/xmemo-skill.mjs remember --content "Use pnpm for package management
 node scripts/xmemo-skill.mjs recall --query "package manager convention for memory-os-cli" --compact
 ```
 
+Structured arguments are parsed before transmission. Pass metadata as a JSON
+object and boolean query controls as the literal values `true` or `false`:
+
+```text
+node scripts/xmemo-skill.mjs remember --content "Verified decision" --path "projects/demo/decisions" --metadata '{"source":"review"}'
+node scripts/xmemo-skill.mjs search --query "active implementation" --explain true --prefer_working false --compact
+```
+
 ### Save handoff state
 
 ```text
 node scripts/xmemo-skill.mjs save-state --key active_task
 ```
+
+`--ttl_seconds` accepts `0` through `604800` (seven days), matching the hosted
+state-operation contract. A value of `0` requests the server's non-expiring
+state behavior for that item.
 
 ### Restore handoff state
 

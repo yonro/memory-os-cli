@@ -1,6 +1,21 @@
 # XMemo Skill Change Log
 
-## Unreleased
+## 1.1.0
+
+- `scripts/xmemo-skill.mjs`: align the advertised and runtime version at `1.1.0` while preserving the `XMemo Memory` package identity and formal-account-first login policy.
+- `scripts/xmemo-skill.mjs`: add the discovery-compatible `auth-status` alias and `auth claim-deny` for the server's two-phase temporary-account bind flow.
+- `scripts/xmemo-skill.mjs`: read temporary item/expiry limits from `/.well-known/xmemo-agent.json`, disclose them immediately after registration, and use the documented production limits as a non-blocking fallback when discovery is unavailable.
+- `scripts/xmemo-skill.mjs`: route temporary `search` to `/v1/memories/search`, keep `recall` on `/v1/recall`, and retain temporary access only for `remember`, `recall`, and `search`.
+- `scripts/xmemo-skill.mjs`: parse `--metadata` as a JSON object, parse `--explain` and `--prefer_working` as strict booleans, and validate state `--ttl_seconds` against the hosted `0..604800` contract.
+- `scripts/xmemo-skill.mjs`: retain the established formal device-login scopes, including `ledger:read`; no server API contract or destructive memory command was added.
+- `SKILL.md` and references: document the formal-account default, temporary limits, status alias, bind-denial flow, and typed argument examples without exposing credential values.
+- Tests: cover dynamic temporary limits, temporary search routing, bind denial and pending-token cleanup, typed arguments, the `auth-status` alias, version output, and documentation invariants.
+
+## 1.0.9
+
+- Removed the non-runtime `skill-card.md` file. No user-facing, documentation, or runtime behavior changed in this marketplace release.
+
+## 1.0.8
 
 - `scripts/xmemo-skill.mjs`: advance the standalone runtime to `1.0.8` while preserving the existing REST operations, formal-login flow, temporary sandbox, and explicit plaintext fallback.
 - `scripts/xmemo-skill.mjs`: stop displaying token prefixes and prevent `logout` from revoking an externally managed `XMEMO_KEY` unless `--revoke-environment-token` is explicitly supplied.

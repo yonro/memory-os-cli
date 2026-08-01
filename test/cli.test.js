@@ -108,13 +108,13 @@ test('token set refuses plaintext storage unless explicit', async () => {
   });
 
   assert.equal(result.code, 2);
-  assert.match(result.stderr, /refuses plaintext token storage/i);
+  assert.match(result.stderr, /requires --allow-plaintext/i);
 });
 
 test('login from stdin stores token in user credential file without printing it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-login-'));
   const token = 'mem_os_test_token_1234567890';
-  const result = await invoke(['login', '--from-stdin', '--json'], {
+  const result = await invoke(['login', '--from-stdin', '--allow-plaintext', '--json'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
     stdin: token
   });
@@ -128,12 +128,27 @@ test('login from stdin stores token in user credential file without printing it'
   const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
   assert.equal(credential.token, token);
   assert.equal(credential.storage, 'user-scoped-credential-file');
+  assert.equal(credential.encryption, 'none');
+  assert.equal(credential.plaintextStorageConsent, true);
+  assert.equal(payload.encryption, 'none');
+});
+
+test('login from stdin rejects unencrypted storage without explicit consent', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-login-reject-'));
+  const result = await invoke(['login', '--from-stdin'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    stdin: 'mem_os_test_token_1234567890'
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /requires --allow-plaintext/i);
+  await assert.rejects(fs.access(path.join(tempDir, 'credentials.json')));
 });
 
 test('token add from stdin stores token and status sees user credential', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-add-'));
   const token = 'mem_os_test_token_1234567890';
-  const add = await invoke(['token', 'add', '--from-stdin'], {
+  const add = await invoke(['token', 'add', '--from-stdin', '--allow-plaintext'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
     stdin: token
   });
@@ -152,7 +167,7 @@ test('token add from stdin stores token and status sees user credential', async 
 test('auth status reports login state without printing tokens', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-auth-status-'));
   const token = 'mem_os_test_token_1234567890';
-  await invoke(['login', '--from-stdin'], {
+  await invoke(['login', '--from-stdin', '--allow-plaintext'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
     stdin: token
   });
@@ -174,7 +189,7 @@ test('auth status reports login state without printing tokens', async () => {
 test('auth status shows stored device-login account without token warning noise', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-auth-account-'));
   const token = 'mem_os_test_token_1234567890';
-  await invoke(['login', '--from-stdin'], {
+  await invoke(['login', '--from-stdin', '--allow-plaintext'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
     stdin: token
   });
@@ -203,7 +218,7 @@ test('auth status shows stored device-login account without token warning noise'
 test('token status verify uses stored credential without printing it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-verify-'));
   const token = 'mem_os_test_token_1234567890';
-  await invoke(['token', 'add', '--from-stdin'], {
+  await invoke(['token', 'add', '--from-stdin', '--allow-plaintext'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
     stdin: token
   });
@@ -227,7 +242,7 @@ test('device login stores issued token without printing it', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-'));
   const token = 'mem_os_device_token_1234567890';
   const requests = [];
-  const result = await invoke(['login', '--base-url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['login', '--base-url', 'https://api.example.test', '--allow-plaintext', '--json'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
     fetch: async (url, init) => {
       requests.push({ url, init });
@@ -253,6 +268,14 @@ test('device login stores issued token without printing it', async () => {
 
   assert.equal(result.code, 0);
   assert.equal(requests.length, 2);
+  const startBody = JSON.parse(requests[0].init.body);
+  assert.deepEqual(startBody.scopes, [
+    'memory:read',
+    'memory:write',
+    'memory:restore',
+    'ledger:write',
+    'ledger:read'
+  ]);
   assert.doesNotMatch(result.stdout, new RegExp(token));
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.deviceLogin, true);
@@ -276,7 +299,7 @@ test('device login waits for the service approval window by default', async () =
   let polls = 0;
   Date.now = () => nowValues.shift() ?? 31_000;
   try {
-    const result = await invoke(['login', '--base-url', 'https://api.example.test', '--json'], {
+    const result = await invoke(['login', '--base-url', 'https://api.example.test', '--allow-plaintext', '--json'], {
       env: { MEMORY_OS_CONFIG_HOME: tempDir },
       sleep: async (ms) => {
         sleeps.push(ms);
@@ -307,11 +330,12 @@ test('device login waits for the service approval window by default', async () =
   }
 });
 
-test('device login text confirms account and no extra token configuration', async () => {
+test('device login remains directly usable with interactive plaintext consent', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-text-'));
   const token = 'mem_os_device_token_1234567890';
   const result = await invoke(['login', '--base-url', 'https://api.example.test'], {
     env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    confirm: async () => true,
     fetch: async (url) => {
       if (url.endsWith('/api/v1/auth/device/start')) {
         return jsonResponse({
@@ -335,9 +359,53 @@ test('device login text confirms account and no extra token configuration', asyn
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Signed in as: Real User <real@example\.test>/);
-  assert.match(result.stdout, /No extra token configuration is required\./);
-  assert.doesNotMatch(result.stdout, /Verify with: xmemo token status --verify/);
+  assert.match(result.stdout, /Storage: unencrypted/);
+  assert.match(result.stdout, /Optional check: xmemo auth status --verify/);
+  assert.doesNotMatch(result.stdout, /stored securely/i);
   assert.doesNotMatch(result.stdout, new RegExp(token));
+});
+
+test('device login cancellation makes no network request and stores nothing', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-cancel-'));
+  let requests = 0;
+  const result = await invoke(['login'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    confirm: async () => false,
+    fetch: async () => {
+      requests += 1;
+      throw new Error('network should not be called');
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.equal(requests, 0);
+  assert.match(result.stderr, /No credential was stored/);
+  await assert.rejects(fs.access(path.join(tempDir, 'credentials.json')));
+});
+
+test('non-interactive browser login requires explicit plaintext consent', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-login-noninteractive-'));
+  let requests = 0;
+  const result = await invoke(['login', '--json'], {
+    env: { MEMORY_OS_CONFIG_HOME: tempDir },
+    fetch: async () => {
+      requests += 1;
+      throw new Error('network should not be called');
+    }
+  });
+
+  assert.equal(result.code, 2);
+  assert.equal(requests, 0);
+  assert.match(result.stderr, /requires --allow-plaintext/i);
+});
+
+test('auth-status is a compatibility alias for auth status', async () => {
+  const env = { XMEMO_KEY: 'mem_os_test_token_1234567890' };
+  const canonical = await invoke(['auth', 'status', '--json'], { env });
+  const alias = await invoke(['auth-status', '--json'], { env });
+
+  assert.equal(alias.code, canonical.code);
+  assert.deepEqual(JSON.parse(alias.stdout), JSON.parse(canonical.stdout));
 });
 
 test('mcp codex config references env var without leaking token value', async () => {
@@ -2408,6 +2476,7 @@ async function invoke(args, options = {}) {
     fetch: options.fetch,
     spawn: options.spawn,
     sleep: options.sleep,
+    confirm: options.confirm,
     nodeVersion: options.nodeVersion
   });
 

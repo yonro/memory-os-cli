@@ -306,7 +306,7 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
 
   const versionRes = await runScript(['--version']);
   assert.equal(versionRes.code, 0);
-  assert.match(versionRes.stdout, /^1\.0\.8\s*$/);
+  assert.match(versionRes.stdout, /^1\.1\.0\s*$/);
 
   const unknownRes = await runScript(['not-a-command']);
   assert.notEqual(unknownRes.code, 0);
@@ -620,16 +620,32 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.match(unconsented.stderr, /--allow-plaintext/);
     assert.equal(testServer.requests.length, 0);
 
-    testServer.setResponse({
-      agent_id: 'agent_temp_1',
-      temporary_token: 'temp_token_secret',
-      claim_code: 'claim_1',
-      bind_url: 'https://example.test/agents/bind?code=claim_1',
-      status: 'unclaimed',
-    });
+    testServer.setResponseSeq([
+      {
+        status: 200,
+        body: {
+          temporary_token: {
+            limits: { max_items: 75, ttl_seconds: 604800, max_lifetime_seconds: 1209600 },
+          },
+        },
+      },
+      {
+        status: 201,
+        body: {
+          agent_id: 'agent_temp_1',
+          temporary_token: 'temp_token_secret',
+          claim_code: 'claim_1',
+          bind_url: 'https://example.test/agents/bind?code=claim_1',
+          status: 'unclaimed',
+        },
+      },
+    ]);
     const register = await runScript(['register', '--reason', 'unattended', '--allow-plaintext'], { baseUrl, homeDir, env: {} });
     assert.equal(register.code, 0);
     assert.match(register.stdout, /Temporary XMemo memory enabled/);
+    assert.match(register.stdout, /up to 75 items/);
+    assert.match(register.stdout, /7 days without successful memory activity/);
+    assert.match(register.stdout, /maximum 14 days from registration/);
     assert.match(register.stdout, /bind\?code=claim_1/);
     assert.doesNotMatch(register.stdout, /temp_token_secret/);
     assert.match(register.stderr, /unencrypted/i);
@@ -653,17 +669,24 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.doesNotMatch(`${pending.stdout}${pending.stderr}`, /confirmation_value_must_not_print/);
 
     testServer.setResponse({ id: 'temporary_memory_1' }, 201);
-    const remember = await runScript(['remember', '--content', 'temporary note', '--path', 'scratch'], { baseUrl, homeDir, env: {} });
+    const remember = await runScript(['remember', '--content', 'temporary note', '--path', 'scratch', '--metadata', '{"mode":"temporary"}'], { baseUrl, homeDir, env: {} });
     assert.equal(remember.code, 0);
     assert.match(remember.stdout, /temporary XMemo memory/);
     assert.equal(testServer.requests.at(-1).url, '/v1/remember');
     assert.equal(testServer.requests.at(-1).headers.authorization, 'Bearer temp_token_secret');
+    assert.deepEqual(testServer.requests.at(-1).body.metadata, { mode: 'temporary' });
 
     testServer.setResponse({ results: [{ id: 'temporary_memory_1', path: 'scratch', content: 'temporary result' }] });
     const recall = await runScript(['recall', '--query', 'temporary'], { baseUrl, homeDir, env: {} });
     assert.equal(recall.code, 0);
     assert.match(recall.stdout, /temporary result/);
     assert.match(testServer.requests.at(-1).url, /^\/v1\/recall\?query=temporary/);
+
+    testServer.setResponse({ results: [{ id: 'temporary_memory_2', path: 'scratch', content: 'temporary search result' }] });
+    const search = await runScript(['search', '--query', 'temporary', '--explain', 'false'], { baseUrl, homeDir, env: {} });
+    assert.equal(search.code, 0);
+    assert.match(search.stdout, /temporary search result/);
+    assert.match(testServer.requests.at(-1).url, /^\/v1\/memories\/search\?query=temporary.*explain=false/);
 
     const unsupported = await runScript(['todo-list'], { baseUrl, homeDir, env: {} });
     assert.notEqual(unsupported.code, 0);
@@ -714,6 +737,87 @@ test('skill script confirms a claimed temporary registration and stores the form
   } finally {
     await testServer.stop();
     await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test('skill script lets the temporary-token holder deny a pending account bind', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-deny-test-'));
+  try {
+    testServer.setResponse({
+      agent_id: 'agent_temp_deny',
+      temporary_token: 'temp_deny_token',
+      bind_url: 'https://example.test/agents/bind?code=claim_deny',
+      status: 'unclaimed',
+    }, 201);
+    const register = await runScript(['register', '--reason', 'declined', '--allow-plaintext'], { baseUrl, homeDir, env: {} });
+    assert.equal(register.code, 0);
+
+    testServer.setResponse({
+      detail: {
+        errorType: 'binding_confirmation_required',
+        confirmation_token: 'deny_confirmation_must_not_print',
+      },
+    }, 428);
+    const challenged = await runScript(['remember', '--content', 'challenge'], { baseUrl, homeDir, env: {} });
+    assert.notEqual(challenged.code, 0);
+
+    testServer.setResponse({ status: 'unclaimed' });
+    const denied = await runScript(['auth', 'claim-deny'], { baseUrl, homeDir, env: {} });
+    assert.equal(denied.code, 0);
+    assert.match(denied.stdout, /binding declined/i);
+    assert.doesNotMatch(`${denied.stdout}${denied.stderr}`, /deny_confirmation_must_not_print/);
+    assert.equal(testServer.requests.at(-1).url, '/v1/agents/bind/deny-current-user');
+    assert.deepEqual(testServer.requests.at(-1).body, {});
+    const stored = JSON.parse(await fs.readFile(path.join(homeDir, '.xmemo', 'skill-credentials.json'), 'utf8'));
+    assert.equal(stored.token, 'temp_deny_token');
+    assert.equal(stored.credential_type, 'temporary');
+    assert.equal(stored.pending_confirmation_token, undefined);
+  } finally {
+    await testServer.stop();
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test('skill script normalizes JSON, boolean, and state TTL arguments to the server contract', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  try {
+    testServer.setResponse({ ok: true, result: { id: 'typed_memory' } });
+    const remember = await runScript([
+      'remember', '--content', 'typed', '--metadata', '{"source":"test","rank":2}',
+    ], { baseUrl, env });
+    assert.equal(remember.code, 0);
+    assert.deepEqual(testServer.requests.at(-1).body.arguments.metadata, { source: 'test', rank: 2 });
+
+    testServer.setResponse({ ok: true, result: { results: [] } });
+    const recall = await runScript([
+      'recall', '--query', 'typed', '--explain', 'false', '--prefer_working', 'true',
+    ], { baseUrl, env });
+    assert.equal(recall.code, 0);
+    assert.equal(testServer.requests.at(-1).body.arguments.explain, false);
+    assert.equal(testServer.requests.at(-1).body.arguments.prefer_working, true);
+
+    testServer.setResponse({ ok: true, result: 'state_saved' });
+    const ttlZero = await runScript(['save-state', '--key', 'active', '--ttl_seconds', '0'], { baseUrl, env });
+    assert.equal(ttlZero.code, 0);
+    assert.equal(testServer.requests.at(-1).body.arguments.ttl_seconds, '0');
+
+    const invalidMetadata = await runScript(['remember', '--content', 'bad', '--metadata', '[]'], { baseUrl, env });
+    assert.notEqual(invalidMetadata.code, 0);
+    assert.match(invalidMetadata.stderr, /--metadata must be a JSON object/);
+
+    const invalidBoolean = await runScript(['search', '--query', 'bad', '--explain', 'yes'], { baseUrl, env });
+    assert.notEqual(invalidBoolean.code, 0);
+    assert.match(invalidBoolean.stderr, /--explain must be true or false/);
+
+    const invalidTtl = await runScript(['save-state', '--key', 'active', '--ttl_seconds', '604801'], { baseUrl, env });
+    assert.notEqual(invalidTtl.code, 0);
+    assert.match(invalidTtl.stderr, /between 0 and 604800/);
+  } finally {
+    await testServer.stop();
   }
 });
 
@@ -803,6 +907,14 @@ test('skill script auth status verification checks endpoint', async () => {
   assert.equal(testServer.requests[0].url, '/v1/auth/token/validate');
   assert.equal(testServer.requests[0].method, 'GET');
   assert.equal(testServer.requests[0].headers.authorization, 'Bearer secret-token-key');
+
+  const aliasRes = await runScript(['auth-status', '--verify'], {
+    baseUrl,
+    env: { XMEMO_KEY: 'secret-token-key' }
+  });
+  assert.equal(aliasRes.code, 0);
+  assert.match(aliasRes.stdout, /Status: Logged in \(verified\)/);
+  assert.equal(testServer.requests.at(-1).url, '/v1/auth/token/validate');
 
   await testServer.stop();
 });

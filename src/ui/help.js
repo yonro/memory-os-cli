@@ -26,12 +26,14 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Install or update the native Hermes plugin and shared credential.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Authentication');
-  writeLine(io.stdout, `  ${COMMAND_NAME} login [--from-stdin] [--base-url <url>]`);
-  writeLine(io.stdout, '      Start browser device login or save a token from stdin.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} login [--base-url <url>] [--allow-plaintext]`);
+  writeLine(io.stdout, '      Start browser login; interactive use asks before unencrypted storage.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify]`);
+  writeLine(io.stdout, '      Check login state and optionally verify the active credential.');
   writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
   writeLine(io.stdout, '      Check the local credential without printing secrets.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin`);
-  writeLine(io.stdout, '      Store an existing XMemo token from stdin.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext`);
+  writeLine(io.stdout, '      Store an existing token after explicit consent to unencrypted storage.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Operations');
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--base-url <url>] [--json]`);
@@ -59,7 +61,7 @@ export function writeHelp(io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Safety');
   writeLine(io.stdout, '  - Dry-run first for setup and uninstall flows.');
-  writeLine(io.stdout, '  - Tokens stay in XMEMO_KEY or user-scoped credentials; they are never written to project configs.');
+  writeLine(io.stdout, '  - XMEMO_KEY is preferred; approved local credentials are unencrypted and never written to project configs.');
   writeLine(io.stdout, '  - Config writes preserve unrelated servers and settings.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Run "${COMMAND_NAME} <command> --help" for command-specific options.`);

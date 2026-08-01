@@ -69,6 +69,10 @@ export async function run(args, io = defaultIo()) {
       return await authCommand(args.slice(1), io);
     }
 
+    if (command === 'auth-status') {
+      return await authCommand(['status', ...args.slice(1)], io);
+    }
+
     if (command === 'token') {
       return await tokenCommand(args.slice(1), io);
     }

@@ -23,7 +23,8 @@
     "lint": "node scripts/check-js.mjs",
     "test": "node --test \"test/**/*.test.js\"",
     "pack:dry-run": "npm pack --dry-run",
-    "prepublishOnly": "npm run lint && npm test && npm run pack:dry-run"
+    "release:check": "node scripts/check-release-version.mjs",
+    "prepublishOnly": "npm run release:check && npm run lint && npm test && npm run pack:dry-run"
   },
   "engines": {
     "node": ">=20.0.0"
