@@ -304,9 +304,13 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
   assert.match(loginHelp.stdout, /login --allow-plaintext/);
   assert.doesNotMatch(loginHelp.stdout, /Commands:/);
 
+  const changelog = await fs.readFile(path.join(repoRoot, 'skills/xmemo/CHANGELOG.md'), 'utf8');
+  const latestRelease = changelog.match(/^##\s*(\d+\.\d+\.\d+)\s*$/m)?.[1];
+  assert.match(latestRelease ?? '', /^\d+\.\d+\.\d+$/);
+
   const versionRes = await runScript(['--version']);
   assert.equal(versionRes.code, 0);
-  assert.match(versionRes.stdout, /^1\.1\.0\s*$/);
+  assert.equal(versionRes.stdout.trim(), latestRelease);
 
   const unknownRes = await runScript(['not-a-command']);
   assert.notEqual(unknownRes.code, 0);
@@ -854,6 +858,83 @@ test('skill script state-save and state-restore commands', async () => {
   assert.match(restoreRes.stdout, /running tests/);
 
   await testServer.stop();
+});
+
+test('skill script creates and restores full restart-continuity snapshots', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  try {
+    testServer.setResponse({
+      id: 'restart_123',
+      memory_id: 'memory_123',
+      status: 'created',
+      expires_at: '2026-08-10T00:00:00Z',
+      snapshot: { active_state: { content: 'must stay out of normal output' } },
+    }, 201);
+    const snapshot = await runScript([
+      'restart-snapshot',
+      '--session_id', 'handoff-a',
+      '--timeline_limit', '10',
+      '--reminder_limit', '5',
+      '--decision_limit', '0',
+      '--ttl_seconds', '2592000',
+      '--metadata', '{"source":"skill-test"}',
+      '--scope', 'project-demo',
+    ], { baseUrl, env });
+
+    assert.equal(snapshot.code, 0);
+    assert.match(snapshot.stdout, /Restart snapshot saved/);
+    assert.match(snapshot.stdout, /restart_123/);
+    assert.doesNotMatch(snapshot.stdout, /must stay out of normal output/);
+    assert.equal(testServer.requests.at(-1).url, '/v1/restart/snapshot');
+    assert.equal(testServer.requests.at(-1).headers.authorization, 'Bearer secret-token-key');
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      session_id: 'handoff-a',
+      timeline_limit: 10,
+      reminder_limit: 5,
+      decision_limit: 0,
+      ttl_seconds: 2592000,
+      metadata: { source: 'skill-test' },
+      scope: 'project-demo',
+    });
+
+    testServer.setResponse({
+      id: 'restart_123',
+      memory_id: 'memory_123',
+      status: 'restored',
+      restored_at: '2026-08-03T00:00:00Z',
+      snapshot: {},
+      state_update: null,
+      restore_event: null,
+    });
+    const restore = await runScript([
+      'restart-restore',
+      '--source_session_id', 'handoff-a',
+      '--target_session_id', 'handoff-b',
+      '--restore_state', 'true',
+      '--record_restore_event', 'false',
+    ], { baseUrl, env });
+
+    assert.equal(restore.code, 0);
+    assert.match(restore.stdout, /Restart snapshot restored/);
+    assert.equal(testServer.requests.at(-1).url, '/v1/restart/restore');
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      source_session_id: 'handoff-a',
+      target_session_id: 'handoff-b',
+      restore_state: true,
+      record_restore_event: false,
+    });
+
+    const invalidLimit = await runScript([
+      'restart-snapshot', '--timeline_limit', '101',
+    ], { baseUrl, env });
+    assert.notEqual(invalidLimit.code, 0);
+    assert.match(invalidLimit.stderr, /--timeline_limit must be between 0 and 100/);
+  } finally {
+    await testServer.stop();
+  }
 });
 
 test('skill script expense-add command calls /v1/skill/operations with operation expense-add', async () => {

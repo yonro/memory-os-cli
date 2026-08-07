@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.0';
+const SKILL_VERSION = '1.1.1';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -22,6 +22,7 @@ const DEFAULT_BASE_URL = 'https://xmemo.dev';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 300_000;
 const MAX_RESPONSE_BYTES = 8_388_608;
+const MAX_STATE_TTL_SECONDS = 2_592_000;
 const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
   max_items: 100,
   ttl_seconds: 1_209_600,
@@ -30,6 +31,7 @@ const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
+  'restart-snapshot', 'restart-restore',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
 ]);
 const COMMAND_FLAGS = {
@@ -44,6 +46,8 @@ const COMMAND_FLAGS = {
   'state-save': new Set(['key', 'state_key', 'content', 'current_task', 'next_action', 'blocked_reason', 'ttl_seconds', 'bucket', 'scope']),
   'restore-state': new Set(['key', 'state_key', 'bucket', 'scope']),
   'state-restore': new Set(['key', 'state_key', 'bucket', 'scope']),
+  'restart-snapshot': new Set(['session_id', 'state_key', 'timeline_limit', 'reminder_limit', 'decision_limit', 'metadata', 'bucket', 'scope', 'path', 'ttl_seconds']),
+  'restart-restore': new Set(['snapshot_id', 'source_session_id', 'target_session_id', 'state_key', 'restore_state', 'record_restore_event', 'ttl_seconds', 'bucket', 'scope']),
   'todo-add': new Set(['content', 'due_at', 'bucket', 'scope', 'path']),
   'todo-list': new Set(['bucket', 'scope', 'status']),
   'todo-done': new Set(['id', 'todo_id', 'note']),
@@ -186,6 +190,8 @@ function printUsage(command) {
       'restore-state': 'restore-state --key <key>',
       'state-save': 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
       'state-restore': 'state-restore --key <key> (legacy alias)',
+      'restart-snapshot': 'restart-snapshot [--state_key <key>] [--session_id <id>] [--ttl_seconds <0..2592000>]',
+      'restart-restore': 'restart-restore [--snapshot_id <id> | --source_session_id <id>] [--target_session_id <id>]',
       'todo-add': 'todo-add --content <text>',
       'todo-list': 'todo-list',
       'todo-done': 'todo-done --id <todo_id>',
@@ -196,7 +202,7 @@ function printUsage(command) {
     return;
   }
 
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -306,10 +312,19 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
   }
 
   if (flags.limit !== undefined) parsePositiveInteger(flags.limit, '--limit', 100);
-  if (flags.ttl_seconds !== undefined) parseIntegerInRange(flags.ttl_seconds, '--ttl_seconds', 0, 604_800);
+  if (flags.ttl_seconds !== undefined) {
+    const ttlMax = command.startsWith('restart-') ? MAX_STATE_TTL_SECONDS : 604_800;
+    const parsedTtl = parseIntegerInRange(flags.ttl_seconds, '--ttl_seconds', 0, ttlMax);
+    if (command.startsWith('restart-')) flags.ttl_seconds = parsedTtl;
+  }
   if (flags.metadata !== undefined) flags.metadata = parseJsonObject(flags.metadata, '--metadata');
   if (flags.explain !== undefined) flags.explain = parseStrictBoolean(flags.explain, '--explain');
   if (flags.prefer_working !== undefined) flags.prefer_working = parseStrictBoolean(flags.prefer_working, '--prefer_working');
+  if (flags.restore_state !== undefined) flags.restore_state = parseStrictBoolean(flags.restore_state, '--restore_state');
+  if (flags.record_restore_event !== undefined) flags.record_restore_event = parseStrictBoolean(flags.record_restore_event, '--record_restore_event');
+  for (const key of ['timeline_limit', 'reminder_limit', 'decision_limit']) {
+    if (flags[key] !== undefined) flags[key] = parseIntegerInRange(flags[key], `--${key}`, 0, 100);
+  }
   if (flags.threshold !== undefined) {
     const threshold = Number(flags.threshold);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
@@ -1077,7 +1092,7 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. REST OPERATIONS (remember, recall, search, update, forget, state-save, state-restore, todo-*, expense-*, doctor)
+  // 4. REST OPERATIONS (memory, state, restart continuity, TODO, ledger, and diagnostics)
   const credential = command === 'doctor' && options.anonymous ? null : await getStoredCredential();
   const token = credential?.token;
   
@@ -1123,6 +1138,35 @@ async function main() {
     }
     console.error(`Temporary access supports only remember, recall, and search in its isolated sandbox. Complete formal registration at ${sanitizeTerminalText(credential.bind_url || 'the bind URL shown at registration')} to use ${command}.`);
     process.exit(1);
+  }
+
+  if (command === 'restart-snapshot' || command === 'restart-restore') {
+    const endpoint = command === 'restart-snapshot' ? '/v1/restart/snapshot' : '/v1/restart/restore';
+    const label = command === 'restart-snapshot' ? 'Restart snapshot' : 'Restart restore';
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', flags, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+      const data = parseJsonResponse(res, `${label} request`);
+      const succeeded = res.statusCode >= 200 && res.statusCode < 300;
+      if (options.json) {
+        console.log(safeJson(data));
+        process.exit(succeeded ? 0 : 1);
+      }
+      if (!succeeded) {
+        console.error(`${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})`);
+        process.exit(1);
+      }
+      if (command === 'restart-snapshot') {
+        console.log(`✅ Restart snapshot saved.\nID: ${sanitizeTerminalText(extractId(data))}${data.expires_at ? `\nExpires: ${sanitizeTerminalText(data.expires_at)}` : ''}`);
+      } else {
+        console.log(`✅ Restart snapshot restored.\nID: ${sanitizeTerminalText(extractId(data))}${data.restored_at ? `\nRestored: ${sanitizeTerminalText(data.restored_at)}` : ''}`);
+      }
+    } catch (e) {
+      console.error(`${label} failed:`, e.message);
+      process.exit(1);
+    }
+    return;
   }
 
   // Normalize commands for operations mapping

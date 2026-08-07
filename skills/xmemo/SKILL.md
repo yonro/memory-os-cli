@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent user-owned memory for agents with standalone runtime execution. Use when an agent should remember, recall, search memory, save or restore handoff state, manage TODOs, record expenses, diagnose XMemo auth, or operate XMemo even when MCP tools are not configured.
+description: Persistent user-owned memory for agents with standalone runtime execution. Use when an agent should remember, recall, search memory, preserve restart continuity, manage TODOs, record expenses, diagnose XMemo auth, or operate XMemo even when MCP tools are not configured.
 ---
 
 # XMemo Memory
@@ -79,8 +79,10 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   project, task, and subsystem before making decisions.
 - **Remember durable facts.** Store decisions, conventions, preferences,
   architecture notes, release procedures, and verified troubleshooting steps.
-- **Preserve handoffs.** Use `save-state` and `restore-state` at milestones or
-  before stopping.
+- **Preserve handoffs.** Use `save-state` / `restore-state` for one active
+  task slot. Use `restart-snapshot` / `restart-restore` when a restart needs
+  the broader continuity pack: active state, recent events, TODOs, and pending
+  decisions.
 - **Record concrete expenses.** Use `expense-add` when the user states a concrete
   purchase or income.
 - **Confirm destructive actions.** The bundled script does not expose memory
@@ -97,6 +99,8 @@ node scripts/xmemo-skill.mjs recall --query "..." --compact
 node scripts/xmemo-skill.mjs search --query "..." --limit 5 --compact
 node scripts/xmemo-skill.mjs save-state --key active_task
 node scripts/xmemo-skill.mjs restore-state --key active_task
+node scripts/xmemo-skill.mjs restart-snapshot
+node scripts/xmemo-skill.mjs restart-restore
 node scripts/xmemo-skill.mjs todo-add --content "..."
 node scripts/xmemo-skill.mjs todo-list
 node scripts/xmemo-skill.mjs todo-done --id <todo_id>
@@ -109,6 +113,12 @@ node scripts/xmemo-skill.mjs register --reason <unattended|declined> --allow-pla
 The script supports JSON output with `--json`, command-specific usage with
 `--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact
 recall/search output with `--compact`. It never prints token values or prefixes.
+
+When native XMemo MCP tools are present, use `create_restart_snapshot` and
+`restore_restart_snapshot` for the same full-continuity workflow. The bundled
+commands keep that capability available to standalone Skill hosts. These
+restart commands require a formal account credential; temporary sandboxes
+remain limited to `remember`, `recall`, and `search`.
 
 ## Direct CLI Commands
 
@@ -158,7 +168,9 @@ For detailed examples, read `references/operations.md`. For auth, network, and s
 
 ## Never Save
 
-- Secrets, tokens, API keys, OAuth codes, cookies, session IDs, or private keys.
+- Secrets, tokens, API keys, OAuth codes, cookies, authentication session IDs,
+  or private keys. Optional restart `session_id` values must be non-secret
+  correlation labels, never login/session credentials.
 - Private customer data or sensitive personal data unless the user explicitly asks
   and the memory tool supports the required privacy policy.
 - Temporary debugging output that will not help future work.

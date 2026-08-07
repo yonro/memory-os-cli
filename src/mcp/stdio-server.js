@@ -19,12 +19,12 @@ const STATIC_TOOL_DESCRIPTIONS = {
   get_mcp_identity: 'Check XMemo connection status and the connected account/agent.',
   remember: 'Save a memory so it can be recalled in future conversations.',
   recall: 'Recall the most relevant saved memories before answering.',
-  recall_context: 'Build a context pack from XMemo memories for complex tasks.',
+  recall_context: 'Read a multi-memory context pack. Requires memory:read and does not change content. Use when many memories need explicit budgets; use recall for lightweight answer or get_project_context for project snapshot. max_items/max_tokens bound rendered output.',
   memory_stats: 'Show aggregate statistics for XMemo memories.',
   update_memory: 'Update the content or metadata of an existing memory.',
   explain_memory: 'Explain why a memory exists or matched a query.',
   restore_memory: 'Restore a previously deleted memory.',
-  add_expense: 'Record one expense in the XMemo Ledger.',
+  add_expense: "Create one XMemo Ledger transaction and backing memory. Requires memory:write; it records a new transaction or reuses a semantic duplicate, and never deletes Ledger records. Use it for a purchase, income, refund, or transfer; use list_ledger_transactions or get_monthly_ledger_summary for reads. amount must be positive; transaction_type defaults to expense; blank transaction_date uses today's UTC date.",
   list_ledger_transactions: 'Show XMemo Ledger records.',
   get_monthly_ledger_summary: 'Summarize Ledger totals by month and currency.',
   forget: 'Permanently delete a memory by target.',
@@ -32,10 +32,10 @@ const STATIC_TOOL_DESCRIPTIONS = {
   list_memory_todos: 'List open or completed TODO/action items.',
   complete_memory_todo: 'Mark a TODO/action item completed.',
   list_memory_versions: 'List available versions for a memory.',
-  get_timeline: 'Show recent timeline events.',
+  get_timeline: 'Read authorized timeline events newest first. Requires memory:read and makes no memory changes. Use it for recent history or session resumption; use recall_context for semantic multi-memory context. limit is clamped to 1-500; session_id and event_type are exact filters.',
   record_event: 'Record a significant session event, milestone, or decision.',
-  update_state: 'Save the current working state during long-running work.',
-  get_project_context: 'Build project-scoped context from XMemo memories.'
+  update_state: 'Create or replace one scoped working-state record for resuming a task, next action, or blocker. Requires memory:write; it versions that state slot and refreshes its expiry without deleting other memories. Use remember for durable facts or record_event for history. Provide content or a structured state field; ttl_seconds=0 means no expiry.',
+  get_project_context: "Read one authorized project's bounded context pack: state, TODOs, decisions, timeline, recent memories, and optional durable recall. Requires memory:read; it does not mutate project memories, and access is audit-logged. Use an exact project_id for a whole-project snapshot; otherwise use recall_context. max_items/max_tokens bound the whole pack; recent_hours affects only timeline; durable_query requires include_durable_context."
 };
 
 const STATIC_TOOL_SCHEMAS = {
@@ -47,7 +47,19 @@ const STATIC_TOOL_SCHEMAS = {
     query: { type: 'string', description: 'Natural-language question or search text.' }
   },
   recall_context: {
-    query: { type: 'string', description: 'Natural-language question or search text.' }
+    query: { type: 'string', description: 'Natural-language query used to rank memories for the context pack.' },
+    max_items: { type: 'integer', default: 8, description: 'Maximum memories rendered in the context pack.' },
+    max_tokens: { type: 'integer', default: 1500, description: 'Approximate token budget for the rendered context pack.' },
+    limit: { type: 'integer', default: 0, description: 'Candidate-result limit; 0 derives it from the item/token budgets.' },
+    path_filter: { type: 'string', default: '%', description: 'Case-insensitive memory-path pattern; % matches all paths.' },
+    bucket: { type: 'string', default: '%', description: 'Accessible bucket filter; % includes all accessible buckets.' },
+    scope: { type: 'string', default: '', description: 'Optional authorized scope; blank uses the token default.' },
+    team_id: { type: 'string', default: '', description: 'Optional exact authorized team filter.' },
+    memory_type: { type: 'string', default: 'auto', description: 'Memory type filter; auto searches the normal mixed set.' },
+    prefer_working: { type: 'boolean', default: true, description: 'True prioritizes active working/session-state signals.' },
+    output_json: { type: 'boolean', default: false, description: 'True returns the full structured pack; false returns rendered context text.' },
+    agent_id: { type: 'string', default: '', description: 'Optional client-supplied agent label for memory attribution.' },
+    agent_instance_id: { type: 'string', default: '', description: 'Optional stable, non-secret agent instance ID for per-client attribution.' }
   },
   update_memory: {
     memory_id: { type: 'string', description: 'Exact XMemo memory reference.' },
@@ -63,8 +75,24 @@ const STATIC_TOOL_SCHEMAS = {
     reason: { type: 'string', description: 'Optional restore reason.' }
   },
   add_expense: {
-    item: { type: 'string', description: 'The purchased item or service.' },
-    amount: { type: 'number', description: 'Positive transaction amount.' }
+    item: { type: 'string', description: 'Purchased item, income source, refund, or transfer label.' },
+    amount: { type: 'number', description: 'Positive transaction amount; zero and negative values are rejected.' },
+    transaction_type: { type: 'string', default: 'expense', description: 'Transaction to create: expense, income, refund, or transfer.' },
+    currency: { type: 'string', default: 'CNY', description: 'Currency code or label; labels such as yen or RMB are normalized to codes.' },
+    transaction_date: { type: 'string', default: '', description: "YYYY-MM-DD transaction date; blank uses today's UTC date." },
+    category: { type: 'string', default: '', description: 'Optional Ledger category, such as food, transport, or electronics.' },
+    merchant: { type: 'string', default: '', description: 'Optional merchant, payer, payee, or store name.' },
+    payment_method: { type: 'string', default: '', description: 'Optional payment method, such as card, cash, Alipay, or WeChat Pay.' },
+    note: { type: 'string', default: '', description: 'Optional note stored with the transaction.' },
+    path: { type: 'string', default: 'finance/ledger/expenses', description: 'Memory path; the default follows transaction_type for non-expenses.' },
+    bucket: { type: 'string', default: 'private', description: 'Bucket for the backing memory; defaults to private.' },
+    scope: { type: 'string', default: '', description: 'Optional authorized scope; must match project_id when both are set.' },
+    team_id: { type: 'string', default: '', description: 'Optional team attribution within the authorized scope.' },
+    agent_id: { type: 'string', default: '', description: 'Optional client-supplied agent label for memory attribution.' },
+    agent_instance_id: { type: 'string', default: '', description: 'Optional stable, non-secret agent instance ID for per-client attribution.' },
+    device_id: { type: 'string', default: '', description: 'Optional client-supplied device identifier for attribution.' },
+    device_label: { type: 'string', default: '', description: 'Optional human-readable device label for attribution.' },
+    project_id: { type: 'string', default: '', description: 'Optional exact authorized project ID; stores the transaction in its private scope.' }
   },
   list_ledger_transactions: {
     query: { type: 'string', description: 'Optional ledger search text.' },
@@ -94,14 +122,36 @@ const STATIC_TOOL_SCHEMAS = {
   record_event: {
     content: { type: 'string', description: 'Text body of the event.' }
   },
+  get_timeline: {
+    limit: { type: 'integer', default: 20, description: 'Maximum events to return; values are clamped to 1-500.' },
+    bucket: { type: 'string', default: '%', description: 'Accessible bucket filter; % includes all accessible buckets.' },
+    scope: { type: 'string', default: '', description: 'Optional authorized scope; blank uses the token default.' },
+    session_id: { type: 'string', default: '', description: 'Optional exact session ID filter.' },
+    event_type: { type: 'string', default: '', description: 'Optional exact event type after lowercase normalization.' }
+  },
   update_state: {
-    state_key: { type: 'string', description: 'Working-state key to save.' },
-    current_task: { type: 'string', description: 'Current task or work item.' },
-    next_action: { type: 'string', description: 'Next action for later resume.' }
+    content: { type: 'string', default: '', description: 'Free-form state body; otherwise provide at least one structured state field.' },
+    state_key: { type: 'string', default: 'active_task', description: 'Normalized state slot; the same owner, bucket, scope, and key updates that slot.' },
+    current_task: { type: 'string', default: '', description: 'Current task; used to build the state body when content is blank.' },
+    next_action: { type: 'string', default: '', description: 'Next action; used to build the state body when content is blank.' },
+    blocked_reason: { type: 'string', default: '', description: 'Blocker; used to build the state body when content is blank.' },
+    metadata_json: { type: 'string', default: '{}', description: 'JSON object merged into the working-state metadata.' },
+    ttl_seconds: { type: 'integer', default: 86400, description: 'Expiry in seconds from 0 to 2592000; 0 means no expiry.' },
+    bucket: { type: 'string', default: 'work', description: 'Bucket containing the working-state slot; defaults to work.' },
+    scope: { type: 'string', default: '', description: 'Scope containing the working-state slot; blank uses the token default.' }
   },
   get_project_context: {
-    query: { type: 'string', description: 'Project-context query.' },
-    project_id: { type: 'string', description: 'Optional project identifier.' }
+    project_id: { type: 'string', description: 'Exact authorized project ID; project names are not accepted.' },
+    bucket: { type: 'string', default: '%', description: 'Accessible bucket filter; % includes all accessible buckets.' },
+    team_id: { type: 'string', default: '', description: 'Optional exact authorized team focus; other team rows are excluded.' },
+    max_items: { type: 'integer', default: 100, description: 'Whole-pack item budget from 1 to 1000.' },
+    max_tokens: { type: 'integer', default: 8000, description: 'Whole-pack approximate token budget from 1 to 50000.' },
+    include_durable_context: { type: 'boolean', default: true, description: 'Include semantic durable recall; false omits that section.' },
+    durable_query: { type: 'string', default: '', description: 'Query only for durable recall; ignored when include_durable_context is false.' },
+    recent_hours: { type: 'integer', default: 168, description: 'Timeline lookback from 1 to 8760 hours; other sections are unaffected.' },
+    output_json: { type: 'boolean', default: false, description: 'True returns the full structured pack; false returns a text summary.' },
+    agent_id: { type: 'string', default: '', description: 'Optional client-supplied agent label for memory attribution.' },
+    agent_instance_id: { type: 'string', default: '', description: 'Optional stable, non-secret agent instance ID for per-client attribution.' }
   }
 };
 
@@ -117,7 +167,14 @@ const STATIC_TOOL_REQUIRED = {
   complete_memory_todo: ['todo_id'],
   list_memory_versions: ['memory_id'],
   record_event: ['content'],
+  get_project_context: ['project_id'],
 };
+
+const READ_ONLY_STATIC_TOOLS = new Set([
+  'recall_context',
+  'get_project_context',
+  'get_timeline'
+]);
 
 const STATIC_TOOL_NAMES = [
   'get_mcp_identity',
@@ -149,7 +206,24 @@ export const STATIC_TOOLS = STATIC_TOOL_NAMES.map((name) => ({
     type: 'object',
     properties: STATIC_TOOL_SCHEMAS[name] || {},
     required: STATIC_TOOL_REQUIRED[name] || []
-  }
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      result: { type: 'string', description: 'Human-readable text or JSON requested by output_json.' }
+    },
+    required: ['result']
+  },
+  ...(READ_ONLY_STATIC_TOOLS.has(name) || name === 'update_state' || name === 'add_expense'
+    ? {
+        annotations: {
+          readOnlyHint: READ_ONLY_STATIC_TOOLS.has(name),
+          destructiveHint: false,
+          idempotentHint: READ_ONLY_STATIC_TOOLS.has(name),
+          openWorldHint: false
+        }
+      }
+    : {})
 }));
 
 const SERVER_INFO = {

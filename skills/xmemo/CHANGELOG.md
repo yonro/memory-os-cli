@@ -1,5 +1,19 @@
 # XMemo Skill Change Log
 
+## 1.1.1
+
+- `scripts/xmemo-skill.mjs`: add formal-account `restart-snapshot` and
+  `restart-restore` commands for the Memory OS v0.4.335 full-continuity
+  contract, without replacing the lightweight `save-state` / `restore-state`
+  workflow or widening temporary-agent permissions.
+- `scripts/xmemo-skill.mjs`: validate restart snapshot limits, TTLs, metadata,
+  and restore booleans; keep normal output bounded to IDs/timestamps while
+  retaining redacted `--json` output for trusted callers.
+- `SKILL.md` and references: explain when to use single-state handoff,
+  full restart continuity, or native MCP restart tools.
+- Tests: pin the advertised runtime version to the newest change-log heading so
+  a released section is never reopened for new work.
+
 ## 1.1.0
 
 - `scripts/xmemo-skill.mjs`: align the advertised and runtime version at `1.1.0` while preserving the `XMemo Memory` package identity and formal-account-first login policy.

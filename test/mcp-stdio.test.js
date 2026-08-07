@@ -44,6 +44,45 @@ test('offline stdio tools/list exposes current full/free XMemo tools', async () 
   assert.equal(names.includes('query_audit'), false);
   assert.equal(names.includes('update_project_todo'), false);
   assert.equal(names.includes('update_project_decision'), false);
+
+  const tools = new Map(response.result.tools.map((tool) => [tool.name, tool]));
+  const qualityTargets = {
+    recall_context: {
+      parameterCount: 13,
+      markers: ['Requires memory:read', 'use recall for lightweight answer', 'get_project_context']
+    },
+    add_expense: {
+      parameterCount: 18,
+      markers: ['Requires memory:write', 'never deletes Ledger records', 'list_ledger_transactions']
+    },
+    get_timeline: {
+      parameterCount: 5,
+      markers: ['events newest first', 'Requires memory:read', 'use recall_context']
+    },
+    update_state: {
+      parameterCount: 9,
+      markers: ['Requires memory:write', 'Use remember for durable facts', 'ttl_seconds=0']
+    },
+    get_project_context: {
+      parameterCount: 11,
+      markers: ['Requires memory:read', 'exact project_id', 'otherwise use recall_context']
+    }
+  };
+
+  for (const [name, expected] of Object.entries(qualityTargets)) {
+    const tool = tools.get(name);
+    assert.ok(tool, name);
+    assert.equal(Object.keys(tool.inputSchema.properties).length, expected.parameterCount, name);
+    for (const marker of expected.markers) {
+      assert.match(tool.description, new RegExp(escapeRegExp(marker)), `${name}: ${marker}`);
+    }
+    for (const property of Object.values(tool.inputSchema.properties)) {
+      assert.doesNotMatch(property.description, /Input value for/i, name);
+    }
+    assert.equal(tool.outputSchema.required.includes('result'), true, name);
+    assert.equal(tool.annotations.destructiveHint, false, name);
+  }
+  assert.deepEqual(tools.get('get_project_context').inputSchema.required, ['project_id']);
 });
 
 test('offline stdio initialize advertises tools, prompts, and resources', async () => {
@@ -155,4 +194,8 @@ async function callStdio(requests) {
   const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
   assert.equal(lines.length, requests.length, stdout);
   return lines.map((line) => JSON.parse(line));
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

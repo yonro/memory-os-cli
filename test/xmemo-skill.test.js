@@ -24,6 +24,10 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /search/);
   assert.match(skill, /save-state/);
   assert.match(skill, /restore-state/);
+  assert.match(skill, /restart-snapshot/);
+  assert.match(skill, /restart-restore/);
+  assert.match(skill, /create_restart_snapshot/);
+  assert.match(skill, /restore_restart_snapshot/);
   assert.match(skill, /todo-add/);
   assert.match(skill, /expense-add/);
   assert.match(skill, /--compact/);
