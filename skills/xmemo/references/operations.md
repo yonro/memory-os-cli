@@ -81,6 +81,8 @@ temporary credential and removes pending confirmation data.
 | `search` | Search memories by query |
 | `save-state` | Save current task handoff state |
 | `restore-state` | Restore current task handoff state |
+| `restart-snapshot` | Save active state, recent events, TODOs, and pending decisions as one restart snapshot |
+| `restart-restore` | Restore the latest or a selected restart snapshot |
 | `todo-add` | Create a TODO item |
 | `todo-list` | List TODO items |
 | `todo-done` | Mark a TODO done |
@@ -89,6 +91,22 @@ temporary credential and removes pending confirmation data.
 | `auth status` / `auth-status` | Show local auth state; add `--verify` for server validation |
 | `auth claim-status` / `auth claim-confirm` / `auth claim-deny` | Inspect, approve, or reject the two-phase temporary bind |
 | `logout` | Revoke/remove a local credential; externally managed `XMEMO_KEY` requires explicit revocation |
+
+## Discovery boundary
+
+The public `/.well-known/agent-discovery.json` operation list is a contract for
+the generic `POST /v1/skill/operations` dispatcher. It intentionally does not
+enumerate every direct standalone endpoint. In particular,
+`restart-snapshot` and `restart-restore` use `/v1/restart/snapshot` and
+`/v1/restart/restore` directly, so they do not appear in
+`standalone_skill.operations`.
+
+This is a routing boundary, not permission evidence. A formal account still
+needs authorization for each restart request; an unauthenticated `401` only
+proves that the protected route is reachable. Do not create a real snapshot
+just to test a deployment. Temporary-agent discovery intentionally exposes no
+restart workflow, and temporary credentials remain limited to `remember`,
+`recall`, and `search`.
 
 ## Examples
 
@@ -127,6 +145,35 @@ state behavior for that item.
 ```text
 node scripts/xmemo-skill.mjs restore-state --key active_task
 ```
+
+### Preserve full restart continuity
+
+Use a restart snapshot when the next agent/session needs more than the single
+active-state slot:
+
+```text
+node scripts/xmemo-skill.mjs restart-snapshot
+node scripts/xmemo-skill.mjs restart-restore
+```
+
+`restart-snapshot` captures the active state plus bounded recent timeline,
+TODO, and pending-decision context. `restart-restore` selects the latest
+accessible snapshot when no ID is supplied; the service may synthesize one
+from current active state when no explicit snapshot exists. Select a specific
+snapshot or session only when needed:
+
+```text
+node scripts/xmemo-skill.mjs restart-snapshot --session_id handoff-a --timeline_limit 20
+node scripts/xmemo-skill.mjs restart-restore --source_session_id handoff-a --target_session_id handoff-b
+```
+
+All limits are client-validated against the hosted contract. Snapshot item
+limits accept `0..100`; `--ttl_seconds` accepts `0..2592000` (30 days).
+The direct REST responses can contain the captured continuity pack, so normal
+human output prints only status, ID, and time fields. Use `--json` only when a
+trusted caller needs the complete redacted response. Native MCP hosts should
+use `create_restart_snapshot` and `restore_restart_snapshot` instead of
+spawning the script.
 
 ### Add a TODO
 
@@ -180,4 +227,7 @@ runtime and `--timeout-ms <ms>` to bound each network request.
 - Responses larger than 8 MiB are rejected, and requests default to a 30-second
   timeout.
 - `save-state` / `restore-state` map to `update_state` / `_get_active_state_item` under the hood; they capture/resume server-side active task state.
+- `restart-snapshot` / `restart-restore` call `/v1/restart/snapshot` and
+  `/v1/restart/restore` directly and require a formal credential with memory
+  read/write access. Temporary agent credentials cannot use them.
 - Offline memory storage or local sync is not implemented.

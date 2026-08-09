@@ -6,7 +6,7 @@
   "authorUrl": "https://github.com/yonro",
   "homepage": "https://xmemo.dev/product/mcp",
   "icon": "https://raw.githubusercontent.com/yonro/memory-os-cli/main/plugins/xmemo/assets/logo.png",
-  "version": "0.4.179",
+  "version": "0.4.180",
   "category": "productivity",
   "connectionType": "hybrid",
   "cloudEndpoint": "https://xmemo.dev/mcp",
@@ -74,7 +74,7 @@
     },
     {
       "name": "recall_context",
-      "description": "Build a context pack from XMemo memories for complex tasks."
+      "description": "Read a multi-memory context pack with explicit item/token budgets; use recall for a lightweight answer or get_project_context for a project snapshot."
     },
     {
       "name": "memory_stats",
@@ -94,7 +94,7 @@
     },
     {
       "name": "add_expense",
-      "description": "Record one expense in the XMemo Ledger."
+      "description": "Create one XMemo Ledger transaction and backing memory for an expense, income, refund, or transfer."
     },
     {
       "name": "list_ledger_transactions",
@@ -126,7 +126,7 @@
     },
     {
       "name": "get_timeline",
-      "description": "Show recent timeline events."
+      "description": "Read authorized timeline events newest first; use recall_context for semantic multi-memory context."
     },
     {
       "name": "record_event",
@@ -134,11 +134,11 @@
     },
     {
       "name": "update_state",
-      "description": "Save the current working state during long-running work."
+      "description": "Create or replace scoped working state for resuming a task; use remember for durable facts."
     },
     {
       "name": "get_project_context",
-      "description": "Build project-scoped context from XMemo memories."
+      "description": "Read one authorized project's bounded context pack when an exact project_id is known."
     }
   ],
   "prompts": [

@@ -28,3 +28,34 @@ mcp-publisher.exe
 *_REPORT.md
 *-PROGRESS.md
 *_PROGRESS.md
+
+
+# DevFlow engine
+.progress/
+
+# Agent registry & profiles
+.agents/
+
+# GitHub Copilot agents & instructions (DevFlow-specific)
+.github/agents/
+.github/instructions/
+.github/copilot-instructions.md
+
+# VS Code workspace (contains DevFlow references)
+*.code-workspace
+
+# Runtime & state files
+.telegram_bridge_state.json
+STANDBY_STATE.json
+telegram_bridge_settings.json
+.github/hooks/devflow-lifecycle.json
+
+# === DevFlow Bridge Runtime ===
+# Runtime bridge files are local transport state and should not be versioned.
+# Added by: DevFlow standard deploy/init
+
+.progress/.bridge_inbox_*.tmp
+.progress/.bridge_delivery_claims/
+.progress/CHAT_BRIDGE_INBOX.jsonl
+.progress/CHAT_BRIDGE_OUTBOX.jsonl
+.progress/bridge_media/
