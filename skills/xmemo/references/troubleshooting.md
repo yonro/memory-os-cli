@@ -111,6 +111,7 @@ If this fails:
 | `No XMemo credential found` | Not logged in | Set `XMEMO_KEY`, or run `node scripts/xmemo-skill.mjs login --allow-plaintext` |
 | `Refusing unencrypted credential storage` | Missing explicit consent | Prefer `XMEMO_KEY`, or rerun the credential-writing command with `--allow-plaintext` |
 | `Authentication failed (HTTP 401)` | Token invalid/expired | Run `login` or add a new token |
+| Restart command is missing from `agent-discovery` operations | That list covers only the generic `/v1/skill/operations` dispatcher; restart continuity uses dedicated protected routes | Use the bundled Skill command with a formal credential; do not infer access from discovery alone or test by creating a real snapshot |
 | `Restart snapshot not found` | The requested ID/session is unavailable in the current scope | Omit the selector to restore the latest accessible snapshot, or run `restart-snapshot` first |
 | Restart command reports temporary access | Temporary sandboxes expose only memory save/recall/search | Complete formal account claim/login, then retry |
 | `Remote XMemo server is not reachable` | Network or service outage | Check network/VPN/proxy |

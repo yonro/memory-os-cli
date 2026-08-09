@@ -92,6 +92,22 @@ temporary credential and removes pending confirmation data.
 | `auth claim-status` / `auth claim-confirm` / `auth claim-deny` | Inspect, approve, or reject the two-phase temporary bind |
 | `logout` | Revoke/remove a local credential; externally managed `XMEMO_KEY` requires explicit revocation |
 
+## Discovery boundary
+
+The public `/.well-known/agent-discovery.json` operation list is a contract for
+the generic `POST /v1/skill/operations` dispatcher. It intentionally does not
+enumerate every direct standalone endpoint. In particular,
+`restart-snapshot` and `restart-restore` use `/v1/restart/snapshot` and
+`/v1/restart/restore` directly, so they do not appear in
+`standalone_skill.operations`.
+
+This is a routing boundary, not permission evidence. A formal account still
+needs authorization for each restart request; an unauthenticated `401` only
+proves that the protected route is reachable. Do not create a real snapshot
+just to test a deployment. Temporary-agent discovery intentionally exposes no
+restart workflow, and temporary credentials remain limited to `remember`,
+`recall`, and `search`.
+
 ## Examples
 
 ### Remember a decision

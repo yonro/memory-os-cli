@@ -1,5 +1,16 @@
 # XMemo Skill Change Log
 
+## 1.1.2
+
+- `SKILL.md` and references: distinguish the public generic
+  `/v1/skill/operations` discovery list from the formal-account-only direct
+  restart-continuity routes. This prevents a missing restart entry in
+  `standalone_skill.operations` from being misread as an unavailable command.
+- Documentation and tests: clarify that temporary agents never receive restart
+  continuity, that discovery alone is not authorization, and that an
+  unauthenticated `401` is route reachability rather than a write-capability
+  proof.
+
 ## 1.1.1
 
 - `scripts/xmemo-skill.mjs`: add formal-account `restart-snapshot` and

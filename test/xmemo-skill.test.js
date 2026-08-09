@@ -9,6 +9,7 @@ const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'
 
 test('XMemo Skill describes standalone CLI-backed runtime selection', async () => {
   const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
+  const operations = (await readFile(path.join(repoRoot, 'skills/xmemo/references/operations.md'), 'utf8')).replace(/\r\n/g, '\n');
 
   assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
   assert.match(skill, /Runtime Selection/);
@@ -26,6 +27,10 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /restore-state/);
   assert.match(skill, /restart-snapshot/);
   assert.match(skill, /restart-restore/);
+  assert.match(skill, /Hosted Discovery Boundary/);
+  assert.match(skill, /standalone_skill\.operations/);
+  assert.match(skill, /\/v1\/restart\/snapshot/);
+  assert.match(skill, /temporary-agent manifest/i);
   assert.match(skill, /create_restart_snapshot/);
   assert.match(skill, /restore_restart_snapshot/);
   assert.match(skill, /todo-add/);
@@ -47,6 +52,9 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /references\/troubleshooting\.md/);
   assert.match(skill, /Do not simulate a successful memory read or write/i);
   assert.doesNotMatch(skill, /mos_[A-Za-z0-9_-]+:r-[A-Za-z0-9_-]+/);
+  assert.match(operations, /## Discovery boundary/);
+  assert.match(operations, /generic `POST \/v1\/skill\/operations` dispatcher/);
+  assert.match(operations, /unauthenticated `401` only\nproves that the protected route is reachable/);
 });
 
 test('npm package includes the XMemo Skill, script, and references', async () => {

@@ -6,7 +6,7 @@
   "authorUrl": "https://github.com/yonro",
   "homepage": "https://xmemo.dev/product/mcp",
   "icon": "https://raw.githubusercontent.com/yonro/memory-os-cli/main/plugins/xmemo/assets/logo.png",
-  "version": "0.4.179",
+  "version": "0.4.180",
   "category": "productivity",
   "connectionType": "hybrid",
   "cloudEndpoint": "https://xmemo.dev/mcp",

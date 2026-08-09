@@ -16,6 +16,20 @@ XMemo supports two parallel integration paths:
 
 Run bundled commands from the Skill root with Node.js 20 or newer.
 
+## Hosted Discovery Boundary
+
+The public `agent-discovery` field `standalone_skill.operations` describes the
+generic commands accepted by `POST /v1/skill/operations`; it is not the full
+standalone command catalogue. `restart-snapshot` and `restart-restore` use the
+separate direct endpoints `/v1/restart/snapshot` and `/v1/restart/restore`, so
+they are deliberately absent from that operations list.
+
+Do not infer that a restart command is available merely because a discovery
+document mentions a memory scope. It requires a formal account credential and
+the service must authorize the specific request. The temporary-agent manifest
+intentionally omits restart continuity: temporary access stays limited to
+`remember`, `recall`, and `search` in its isolated sandbox.
+
 Credential lookup always prefers the `XMEMO_KEY` environment variable. When it
 is present, the script does not copy its value into a local credential file.
 
