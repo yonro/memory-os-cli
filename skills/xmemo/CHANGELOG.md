@@ -1,5 +1,13 @@
 # XMemo Skill Change Log
 
+## 1.1.3
+
+- `scripts/xmemo-skill.mjs`: report a clear empty-state result when a successful
+  `restore-state` response contains no saved state, while preserving the
+  requested key and an explicit empty-content marker for valid state objects.
+- Tests: cover empty and partially populated state-restore responses so the
+  standalone command does not print `undefined` to users.
+
 ## 1.1.2
 
 - `SKILL.md` and references: distinguish the public generic

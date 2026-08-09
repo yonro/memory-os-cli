@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.2';
+const SKILL_VERSION = '1.1.3';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -1223,7 +1223,16 @@ async function main() {
         });
       }
     } else if (opName === 'state-restore') {
-      console.log(`Working State restored:\nKey: ${sanitizeTerminalText(data.result?.state_key)}\nContent: ${formatMemoryContent(data.result?.content, false)}`);
+      const state = data.result;
+      if (!state || typeof state !== 'object') {
+        console.log('No saved working state found for the requested key.');
+      } else {
+        const stateKey = state.state_key || flags.key || flags.state_key || '(unknown)';
+        const content = state.content === undefined || state.content === null || state.content === ''
+          ? '(empty)'
+          : state.content;
+        console.log(`Working State restored:\nKey: ${sanitizeTerminalText(stateKey)}\nContent: ${formatMemoryContent(content, false)}`);
+      }
     } else if (opName === 'remember') {
       console.log(`✅ Saved to XMemo.\nID: ${sanitizeTerminalText(extractId(data.result))}`);
     } else if (opName === 'expense-add') {

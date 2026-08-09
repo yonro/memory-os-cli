@@ -860,6 +860,29 @@ test('skill script state-save and state-restore commands', async () => {
   await testServer.stop();
 });
 
+test('skill script renders empty and partial state-restore results clearly', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  try {
+    testServer.setResponse({ ok: true, operation: 'state-restore', result: null });
+    const missing = await runScript(['restore-state', '--key', 'active_task'], { baseUrl, env });
+    assert.equal(missing.code, 0);
+    assert.match(missing.stdout, /No saved working state found/);
+    assert.doesNotMatch(missing.stdout, /undefined/);
+
+    testServer.setResponse({ ok: true, operation: 'state-restore', result: { content: '' } });
+    const partial = await runScript(['restore-state', '--key', 'active_task'], { baseUrl, env });
+    assert.equal(partial.code, 0);
+    assert.match(partial.stdout, /Key: active_task/);
+    assert.match(partial.stdout, /Content: \(empty\)/);
+    assert.doesNotMatch(partial.stdout, /undefined/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
 test('skill script creates and restores full restart-continuity snapshots', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
