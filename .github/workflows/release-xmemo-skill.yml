@@ -39,6 +39,25 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
+      - name: Verify tag matches Skill source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          skill_version="$(node --input-type=module - <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const source = readFileSync('skills/xmemo/scripts/xmemo-skill.mjs', 'utf8');
+          const version = source.match(/const SKILL_VERSION = '([^']+)'/)?.[1];
+          if (!version) throw new Error('SKILL_VERSION was not found in the checked-out Skill source');
+          console.log(version);
+          NODE
+          )"
+          expected_tag="skill-v$skill_version"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Skill Release tag $RELEASE_TAG does not match source version $skill_version; expected $expected_tag" >&2
+            exit 1
+          fi
+
       - name: Build verified Skill archives
         shell: bash
         run: |
