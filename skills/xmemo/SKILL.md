@@ -126,7 +126,11 @@ node scripts/xmemo-skill.mjs register --reason <unattended|declined> --allow-pla
 
 The script supports JSON output with `--json`, command-specific usage with
 `--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact
-recall/search output with `--compact`. It never prints token values or prefixes.
+recall/search output with `--compact`. `doctor --json` adds a bounded
+`clientDiagnostics` object: a read-only discovery summary and a `nextAction`
+command for the next credential check or formal sign-in. If discovery is
+unavailable, `clientDiagnostics.discovery.status` is `unavailable`; a successful
+doctor health check still succeeds. It never prints token values or prefixes.
 
 When native XMemo MCP tools are present, use `create_restart_snapshot` and
 `restore_restart_snapshot` for the same full-continuity workflow. The bundled
@@ -168,7 +172,9 @@ node scripts/xmemo-skill.mjs auth claim-status
 
 `doctor` retains authenticated diagnosis when a credential is available.
 `doctor --anonymous` performs the same service-health check without sending an
-Authorization header.
+Authorization header. Both forms use only an unauthenticated, read-only
+discovery request for their JSON capability summary; discovery failure does not
+block an otherwise successful health check.
 
 For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
 

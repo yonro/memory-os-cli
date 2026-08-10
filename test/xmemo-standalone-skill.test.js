@@ -133,7 +133,7 @@ test('skill script doctor command calls /v1/skill/operations with operation doct
   testServer.setResponse({
     ok: true,
     operation: 'doctor',
-    result: { status: 'ok', auth_valid: true, scopes: ['memory:read'] }
+    result: { status: 'ok', auth_valid: true, scopes: ['memory:read'] },
   });
 
   const res = await runScript(['doctor'], {
@@ -151,6 +151,43 @@ test('skill script doctor command calls /v1/skill/operations with operation doct
   assert.equal(req.headers.authorization, 'Bearer secret-token-key');
 
   await testServer.stop();
+});
+
+test('skill script doctor --json reports bounded discovery diagnostics and a next action', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponseSeq([
+    {
+      status: 200,
+      body: {
+        schema_version: '1.0',
+        protocol: 'memory-os-agent-discovery-v1',
+        service: 'memory-os',
+        standalone_skill: {
+          status: 'available',
+          runtime_model: 'standalone_skill',
+          operations: ['remember', 'recall', 'doctor'],
+          auth: { default_scopes: ['memory:read', 'memory:write'] },
+        },
+      },
+    },
+    { status: 200, body: { ok: true, operation: 'doctor', result: { auth_valid: false } } },
+  ]);
+
+  try {
+    const res = await runScript(['doctor', '--anonymous', '--json'], { baseUrl, env: {} });
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.clientDiagnostics.discovery.status, 'available');
+    assert.equal(payload.clientDiagnostics.discovery.service, 'memory-os');
+    assert.deepEqual(payload.clientDiagnostics.discovery.standaloneSkill.operations, ['remember', 'recall', 'doctor']);
+    assert.equal(payload.clientDiagnostics.nextAction.command, 'node scripts/xmemo-skill.mjs auth status --verify');
+    assert.equal(testServer.requests.length, 2);
+    assert.equal(testServer.requests[0].headers.authorization, undefined);
+    assert.equal(testServer.requests[1].headers.authorization, undefined);
+  } finally {
+    await testServer.stop();
+  }
 });
 
 
@@ -174,6 +211,28 @@ test('skill script anonymous doctor command succeeds when no credentials are pre
   assert.match(res.stdout, /Authentication: Missing\/Unauthenticated/);
 
   await testServer.stop();
+});
+
+test('skill script doctor keeps a healthy JSON result when discovery is unavailable', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponseSeq([
+    { status: 503, body: { error: 'discovery temporarily unavailable' } },
+    { status: 200, body: { ok: true, operation: 'doctor', result: { auth_valid: false } } },
+  ]);
+
+  try {
+    const res = await runScript(['doctor', '--json'], { baseUrl, env: {} });
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.clientDiagnostics.discovery.status, 'unavailable');
+    assert.equal(payload.clientDiagnostics.discovery.errorCode, 'http_error');
+    assert.equal(payload.clientDiagnostics.discovery.httpStatus, 503);
+    assert.equal(payload.clientDiagnostics.nextAction.command, 'node scripts/xmemo-skill.mjs login --allow-plaintext');
+    assert.equal(testServer.requests.length, 2);
+  } finally {
+    await testServer.stop();
+  }
 });
 
 test('skill script doctor --anonymous does not transmit an available credential', async () => {
