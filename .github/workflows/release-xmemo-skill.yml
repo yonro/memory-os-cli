@@ -2,6 +2,7 @@ name: Package XMemo Skill release assets
 
 on:
   release:
+    # Only skill-v<Skill semver> releases are packaged by the job gate below.
     types:
       - published
   workflow_dispatch:
@@ -16,10 +17,23 @@ permissions:
 
 jobs:
   package:
+    # Keep CLI v<CLI semver> npm releases and Skill releases independent.
+    if: >-
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'skill-v')) ||
+      (github.event_name == 'workflow_dispatch' && startsWith(inputs.release_tag, 'skill-v'))
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
+      - name: Validate Skill Release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^skill-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Skill releases must use a skill-v<major>.<minor>.<patch> tag; got: $RELEASE_TAG" >&2
+            exit 1
+          fi
+
       - name: Check out the released tag
         uses: actions/checkout@v4
         with:
