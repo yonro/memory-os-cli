@@ -1,0 +1,136 @@
+name: Package XMemo Skill release assets
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published Release tag to package
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Check out the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+      - name: Build verified Skill archives
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          source_dir="skills/xmemo"
+          artifact_dir="$GITHUB_WORKSPACE/release-assets"
+          staging_dir="$(mktemp -d)"
+          tar_extract_dir="$(mktemp -d)"
+          zip_extract_dir="$(mktemp -d)"
+          trap 'rm -rf "$staging_dir" "$tar_extract_dir" "$zip_extract_dir"' EXIT
+
+          test -f "$source_dir/scripts/xmemo-skill.mjs"
+          mkdir -p "$artifact_dir"
+
+          # Do not package symlinks: they could point outside the Skill root and
+          # their target bytes would not be reliably identical across formats.
+          if find "$source_dir" -type l -print -quit | grep -q .; then
+            echo "Refusing to package symlinks from $source_dir" >&2
+            exit 1
+          fi
+
+          is_sensitive_name() {
+            local name="${1,,}"
+            [[ "$name" == .env || "$name" == .env.* || "$name" == *secret* || "$name" == *token* || "$name" == *key* || "$name" == *credential* ]]
+          }
+
+          while IFS= read -r -d '' source_file; do
+            relative_path="${source_file#"$source_dir"/}"
+            filename="${relative_path##*/}"
+            if is_sensitive_name "$filename"; then
+              echo "Excluding sensitive-looking file: $relative_path"
+              continue
+            fi
+            destination="$staging_dir/$relative_path"
+            mkdir -p "$(dirname "$destination")"
+            cp --preserve=mode,timestamps -- "$source_file" "$destination"
+          done < <(find "$source_dir" -type f -print0 | LC_ALL=C sort -z)
+
+          test -f "$staging_dir/scripts/xmemo-skill.mjs"
+          if ! find "$staging_dir" -type f -print -quit | grep -q .; then
+            echo "No files were eligible for packaging" >&2
+            exit 1
+          fi
+
+          tar --create --gzip --file="$artifact_dir/xmemo-skill.tar.gz" --directory="$staging_dir" .
+          (
+            cd "$staging_dir"
+            zip --quiet --recurse-paths "$artifact_dir/xmemo-skill.zip" .
+          )
+
+          tar --extract --gzip --file="$artifact_dir/xmemo-skill.tar.gz" --directory="$tar_extract_dir"
+          unzip --quiet "$artifact_dir/xmemo-skill.zip" -d "$zip_extract_dir"
+          diff --recursive --no-dereference "$tar_extract_dir" "$zip_extract_dir"
+
+          for extracted_dir in "$tar_extract_dir" "$zip_extract_dir"; do
+            test -f "$extracted_dir/scripts/xmemo-skill.mjs"
+            while IFS= read -r -d '' extracted_file; do
+              if is_sensitive_name "${extracted_file##*/}"; then
+                echo "Sensitive-looking file found in archive: $extracted_file" >&2
+                exit 1
+              fi
+            done < <(find "$extracted_dir" -type f -print0)
+          done
+
+      - name: Upload archives to this Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            release-assets/xmemo-skill.tar.gz \
+            release-assets/xmemo-skill.zip \
+            --clobber
+
+      - name: Notify xmemo.dev after assets are available
+        env:
+          GH_TOKEN: ${{ github.token }}
+          XMEMO_SKILL_RELEASE_WEBHOOK_SECRET: ${{ secrets.XMEMO_SKILL_RELEASE_WEBHOOK_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$XMEMO_SKILL_RELEASE_WEBHOOK_SECRET" ]]; then
+            echo "Missing required repository secret: XMEMO_SKILL_RELEASE_WEBHOOK_SECRET" >&2
+            exit 1
+          fi
+
+          release_json="$(mktemp)"
+          webhook_payload="$(mktemp)"
+          trap 'rm -f "$release_json" "$webhook_payload"' EXIT
+
+          release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
+          gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id" > "$release_json"
+          node --input-type=module - "$GITHUB_EVENT_PATH" "$release_json" "$webhook_payload" <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const [eventPath, releasePath, outputPath] = process.argv.slice(2);
+          const event = JSON.parse(readFileSync(eventPath, 'utf8'));
+          event.action = 'published';
+          event.release = JSON.parse(readFileSync(releasePath, 'utf8'));
+          writeFileSync(outputPath, JSON.stringify(event));
+          NODE
+
+          signature="sha256=$(openssl dgst -sha256 -hmac "$XMEMO_SKILL_RELEASE_WEBHOOK_SECRET" -hex < "$webhook_payload" | sed 's/^.* //')"
+          curl --fail --retry 3 --retry-all-errors \
+            --header 'Content-Type: application/json' \
+            --header 'X-GitHub-Event: release' \
+            --header "X-Hub-Signature-256: $signature" \
+            --data-binary "@$webhook_payload" \
+            https://xmemo.dev/v1/skill/package/webhook
