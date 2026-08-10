@@ -77,7 +77,7 @@ jobs:
           )
 
           tar --extract --gzip --file="$artifact_dir/xmemo-skill.tar.gz" --directory="$tar_extract_dir"
-          unzip --quiet "$artifact_dir/xmemo-skill.zip" -d "$zip_extract_dir"
+          unzip -q "$artifact_dir/xmemo-skill.zip" -d "$zip_extract_dir"
           diff --recursive --no-dereference "$tar_extract_dir" "$zip_extract_dir"
 
           for extracted_dir in "$tar_extract_dir" "$zip_extract_dir"; do
