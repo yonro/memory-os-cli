@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.3';
+const SKILL_VERSION = '1.1.4';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -406,6 +406,93 @@ function formatDuration(seconds) {
   if (seconds % 86_400 === 0) return `${seconds / 86_400} days`;
   if (seconds % 3_600 === 0) return `${seconds / 3_600} hours`;
   return `${seconds} seconds`;
+}
+
+function discoveryString(value) {
+  if (typeof value !== 'string') return null;
+  const sanitized = sanitizeTerminalText(value).trim();
+  return sanitized ? sanitized.slice(0, 200) : null;
+}
+
+function discoveryStringList(value, maxItems = 24) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => typeof item === 'string')
+    .map(discoveryString)
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function summarizeDoctorDiscovery(discovery, discoveryUrl) {
+  const standalone = discovery?.standalone_skill ?? discovery?.integrations?.standalone_skill ?? {};
+  return {
+    status: 'available',
+    url: discoveryUrl,
+    schemaVersion: discoveryString(discovery?.schema_version),
+    protocol: discoveryString(discovery?.protocol),
+    service: discoveryString(discovery?.service),
+    standaloneSkill: {
+      status: discoveryString(standalone.status),
+      runtimeModel: discoveryString(standalone.runtime_model),
+      operations: discoveryStringList(standalone.operations),
+      defaultScopes: discoveryStringList(standalone.auth?.default_scopes),
+    },
+  };
+}
+
+function discoveryFailureCode(error) {
+  const message = String(error?.message ?? '').toLowerCase();
+  if (message.includes('timed out')) return 'timeout';
+  if (message.includes('non-json')) return 'invalid_response';
+  return 'request_failed';
+}
+
+async function fetchDoctorDiscovery(baseUrl, timeoutMs) {
+  const discoveryUrl = new URL('/.well-known/agent-discovery.json', baseUrl).toString();
+  try {
+    const res = await makeHttpRequest(baseUrl, '/.well-known/agent-discovery.json', 'GET', null, {}, timeoutMs);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      return {
+        status: 'unavailable',
+        url: discoveryUrl,
+        errorCode: 'http_error',
+        httpStatus: res.statusCode ?? null,
+      };
+    }
+    return summarizeDoctorDiscovery(parseJsonResponse(res, 'Doctor discovery'), discoveryUrl);
+  } catch (error) {
+    return {
+      status: 'unavailable',
+      url: discoveryUrl,
+      errorCode: discoveryFailureCode(error),
+    };
+  }
+}
+
+function doctorNextAction({ credential, anonymous }) {
+  if (!anonymous && !credential) {
+    return {
+      command: `${SCRIPT_COMMAND} login --allow-plaintext`,
+      reason: 'Sign in before using account-scoped memory operations.',
+    };
+  }
+  return {
+    command: `${SCRIPT_COMMAND} auth status --verify`,
+    reason: 'Verify the credential separately when an authenticated follow-up is needed.',
+  };
+}
+
+function withDoctorDiagnostics(data, discovery, nextAction) {
+  const report = data && typeof data === 'object' && !Array.isArray(data)
+    ? { ...data }
+    : { ok: true, result: data };
+  return {
+    ...report,
+    clientDiagnostics: {
+      discovery,
+      nextAction,
+    },
+  };
 }
 
 // HTTP request helper
@@ -1099,6 +1186,9 @@ async function main() {
   // Doctor can be anonymous
   if (command === 'doctor' && !token) {
     try {
+      const discovery = options.json
+        ? await fetchDoctorDiscovery(options.baseUrl, options.timeoutMs)
+        : null;
       const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
         operation: 'doctor',
         arguments: {}
@@ -1109,7 +1199,10 @@ async function main() {
         process.exit(1);
       }
       if (options.json) {
-        console.log(safeJson(data));
+        console.log(safeJson(withDoctorDiagnostics(data, discovery, doctorNextAction({
+          credential,
+          anonymous: options.anonymous,
+        }))));
       } else {
         console.log(`XMemo Service Status: OK\nAuthentication: Missing/Unauthenticated`);
       }
@@ -1175,6 +1268,9 @@ async function main() {
   if (command === 'restore-state' || command === 'state-restore') opName = 'state-restore';
 
   try {
+    const discovery = command === 'doctor' && options.json
+      ? await fetchDoctorDiscovery(options.baseUrl, options.timeoutMs)
+      : null;
     const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
       operation: opName,
       arguments: flags,
@@ -1185,7 +1281,10 @@ async function main() {
     const data = parseJsonResponse(res, `${opName} request`);
     const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
     if (options.json) {
-      console.log(safeJson(data));
+      const output = opName === 'doctor'
+        ? withDoctorDiagnostics(data, discovery, doctorNextAction({ credential, anonymous: false }))
+        : data;
+      console.log(safeJson(output));
       process.exit(succeeded ? 0 : 1);
     }
 

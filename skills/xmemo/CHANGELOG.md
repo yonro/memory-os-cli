@@ -1,5 +1,17 @@
 # XMemo Skill Change Log
 
+## 1.1.4
+
+- `scripts/xmemo-skill.mjs`: add a bounded, token-free `clientDiagnostics`
+  block to `doctor --json`, including read-only discovery service/capability
+  summary and a concrete next credential-check or sign-in command.
+- Diagnostics: when discovery is unavailable, report a stable degraded status
+  without failing an otherwise healthy doctor operation or changing any auth,
+  write, or restart-continuity behavior.
+- Tests and Skill documentation: cover authenticated, anonymous, and degraded
+  discovery output while preserving the no-Authorization-header guarantee for
+  `doctor --anonymous`.
+
 ## 1.1.3
 
 - `scripts/xmemo-skill.mjs`: report a clear empty-state result when a successful
