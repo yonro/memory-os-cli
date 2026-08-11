@@ -16,6 +16,25 @@ XMemo supports two parallel integration paths:
 
 Run bundled commands from the Skill root with Node.js 20 or newer.
 
+## Install The Standalone Skill
+
+For a fresh standalone installation, download the currently published Skill
+archive using the installer appropriate to the host:
+
+```text
+curl -fsSL https://xmemo.dev/v1/skill/package/install.sh | sh
+```
+
+```powershell
+irm https://xmemo.dev/v1/skill/package/install.ps1 | iex
+```
+
+Both installers require HTTPS, follow HTTPS-only redirects, and refuse to
+replace an existing destination. By default they create `xmemo-skill` in the
+current directory. Set `XMEMO_SKILL_DIR` to choose a new destination, or set
+`XMEMO_BASE_URL` only to a trusted HTTPS XMemo origin. They download and unpack
+the archive only; login and credential configuration remain explicit steps.
+
 ## Hosted Discovery Boundary
 
 The public `agent-discovery` field `standalone_skill.operations` describes the

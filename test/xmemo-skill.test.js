@@ -61,3 +61,22 @@ test('npm package includes the XMemo Skill, script, and references', async () =>
   assert.ok(packageJson.files.includes('skills'));
   assert.ok(packageJson.files.includes('plugins/xmemo'));
 });
+
+test('standalone Skill installers remain HTTPS-only and package the expected entrypoint', async () => {
+  const [posix, powershell] = await Promise.all([
+    readFile(path.join(repoRoot, 'skills/xmemo/install.sh'), 'utf8'),
+    readFile(path.join(repoRoot, 'skills/xmemo/install.ps1'), 'utf8'),
+  ]);
+
+  assert.match(posix, /XMEMO_BASE_URL:-https:\/\/xmemo\.dev/);
+  assert.match(posix, /--proto '=https'/);
+  assert.match(posix, /--proto-redir '=https'/);
+  assert.match(posix, /scripts\/xmemo-skill\.mjs/);
+  assert.doesNotMatch(posix, /XMEMO_KEY|Authorization/);
+
+  assert.match(powershell, /https:\/\/xmemo\.dev/);
+  assert.match(powershell, /AllowAutoRedirect = \$false/);
+  assert.match(powershell, /Refusing a non-HTTPS redirect/);
+  assert.match(powershell, /scripts\\xmemo-skill\.mjs/);
+  assert.doesNotMatch(powershell, /XMEMO_KEY|Authorization/);
+});
