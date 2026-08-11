@@ -1,5 +1,16 @@
 # XMemo Skill Change Log
 
+## 1.1.5
+
+- Add zero-dependency POSIX and PowerShell installers for the published
+  standalone Skill archive. Both enforce HTTPS-only download paths, reject
+  non-HTTPS redirects, verify the bundled runtime entrypoint, and never accept
+  or send XMemo credentials.
+- Document the installer commands and their destination/origin boundaries;
+  installation remains separate from explicit login and credential setup.
+- Regression coverage pins the HTTPS, redirect, entrypoint, and no-token
+  guarantees for both installer scripts.
+
 ## 1.1.4
 
 - `scripts/xmemo-skill.mjs`: add a bounded, token-free `clientDiagnostics`
