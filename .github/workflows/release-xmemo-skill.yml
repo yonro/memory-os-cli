@@ -71,6 +71,8 @@ jobs:
           trap 'rm -rf "$staging_dir" "$tar_extract_dir" "$zip_extract_dir"' EXIT
 
           test -f "$source_dir/scripts/xmemo-skill.mjs"
+          test -f "$source_dir/install.sh"
+          test -f "$source_dir/install.ps1"
           mkdir -p "$artifact_dir"
 
           # Do not package symlinks: they could point outside the Skill root and
@@ -98,6 +100,8 @@ jobs:
           done < <(find "$source_dir" -type f -print0 | LC_ALL=C sort -z)
 
           test -f "$staging_dir/scripts/xmemo-skill.mjs"
+          test -f "$staging_dir/install.sh"
+          test -f "$staging_dir/install.ps1"
           if ! find "$staging_dir" -type f -print -quit | grep -q .; then
             echo "No files were eligible for packaging" >&2
             exit 1
@@ -115,6 +119,8 @@ jobs:
 
           for extracted_dir in "$tar_extract_dir" "$zip_extract_dir"; do
             test -f "$extracted_dir/scripts/xmemo-skill.mjs"
+            test -f "$extracted_dir/install.sh"
+            test -f "$extracted_dir/install.ps1"
             while IFS= read -r -d '' extracted_file; do
               if is_sensitive_name "${extracted_file##*/}"; then
                 echo "Sensitive-looking file found in archive: $extracted_file" >&2
