@@ -317,6 +317,26 @@ xmemo smoke --client codex
 </details>
 
 <details>
+<summary><strong>Bundled XMemo Skill</strong></summary>
+
+```bash
+xmemo skill install --dry-run
+xmemo skill install
+xmemo skill install --target ~/.codex/skills/xmemo-memory
+xmemo skill install --target ~/.claude/skills/xmemo-memory
+```
+
+The command copies the Skill bundled in the current `@xmemo/client` package, so
+it also works through `npx @xmemo/client skill install`. It is offline, never
+uses XMemo credentials, refuses to overwrite an existing destination by
+default, and supports explicit atomic replacement with `--force`.
+
+The default destination is `./xmemo-skill`. Use `--target` (or
+`XMEMO_SKILL_DIR`) for an Agent-specific user or project Skill directory.
+
+</details>
+
+<details>
 <summary><strong>Safe removal</strong></summary>
 
 ```bash

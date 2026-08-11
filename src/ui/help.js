@@ -42,6 +42,8 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Probe hosted service endpoints and readiness.');
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run]`);
   writeLine(io.stdout, '      Check or apply the latest npm package update.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--target <directory>] [--dry-run] [--force] [--json]`);
+  writeLine(io.stdout, '      Install the XMemo Skill bundled in this npm package without network access.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'MCP And Profiles');
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
