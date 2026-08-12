@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -64,8 +64,8 @@ test('npm package includes the XMemo Skill, script, and references', async () =>
 
 test('standalone Skill installers remain HTTPS-only and package the expected entrypoint', async () => {
   const [posix, powershell] = await Promise.all([
-    readFile(path.join(repoRoot, 'skills/xmemo/install.sh'), 'utf8'),
-    readFile(path.join(repoRoot, 'skills/xmemo/install.ps1'), 'utf8'),
+    readFile(path.join(repoRoot, 'skills/install.sh'), 'utf8'),
+    readFile(path.join(repoRoot, 'skills/install.ps1'), 'utf8'),
   ]);
 
   assert.match(posix, /XMEMO_BASE_URL:-https:\/\/xmemo\.dev/);
@@ -79,4 +79,11 @@ test('standalone Skill installers remain HTTPS-only and package the expected ent
   assert.match(powershell, /Refusing a non-HTTPS redirect/);
   assert.match(powershell, /scripts\\xmemo-skill\.mjs/);
   assert.doesNotMatch(powershell, /XMEMO_KEY|Authorization/);
+
+  // The installers download the published Skill archive, so keeping them inside
+  // the Skill root would package them into the archive they fetch and copy them
+  // into every install destination.
+  for (const skillRootPath of ['skills/xmemo/install.sh', 'skills/xmemo/install.ps1']) {
+    await assert.rejects(access(path.join(repoRoot, skillRootPath)), { code: 'ENOENT' });
+  }
 });
