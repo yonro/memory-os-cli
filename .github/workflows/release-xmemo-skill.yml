@@ -205,24 +205,30 @@ jobs:
                 echo "Announcement accepted: HTTP $http_code"
                 break
                 ;;
-              4*)
-                echo "Announcement rejected with HTTP $http_code; not retrying." >&2
+              000 | 408 | 429 | 5*)
+                # A transport failure, a timeout, a rate limit, or a server
+                # error can each succeed later, so these share the retry
+                # handling below.
+                : ;;
+              *)
+                # Any other answer will not become a 2xx on retry, so it is
+                # reported at once instead of retried until the step times out.
+                echo "Announcement rejected with HTTP ${http_code:-none}; not retrying." >&2
                 head -c 500 "$response_body" >&2 || true
                 echo >&2
                 exit 1
                 ;;
-              *)
-                if [[ "$attempt" -ge "$max_attempts" ]]; then
-                  echo "Announcement failed after $attempt attempts (last status: ${http_code:-none})." >&2
-                  head -c 500 "$response_body" >&2 || true
-                  echo >&2
-                  exit 1
-                fi
-                echo "Announcement attempt $attempt failed (status: ${http_code:-none}); retrying." >&2
-                sleep "$((attempt * 3))"
-                attempt=$((attempt + 1))
-                ;;
             esac
+
+            if [[ "$attempt" -ge "$max_attempts" ]]; then
+              echo "Announcement failed after $attempt attempts (last status: ${http_code:-none})." >&2
+              head -c 500 "$response_body" >&2 || true
+              echo >&2
+              exit 1
+            fi
+            echo "Announcement attempt $attempt failed (status: ${http_code:-none}); retrying." >&2
+            sleep "$((attempt * 3))"
+            attempt=$((attempt + 1))
           done
 
       - name: Verify xmemo.dev serves this release
