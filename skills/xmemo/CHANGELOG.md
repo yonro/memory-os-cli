@@ -1,5 +1,11 @@
 # XMemo Skill Change Log
 
+## 1.1.6
+
+- Remove repeated standalone-installation links from `SKILL.md`; installation
+  distribution remains owned by the package and release surfaces, while this
+  Skill starts at runtime selection and explicit credential setup.
+
 ## 1.1.5
 
 - Add zero-dependency POSIX and PowerShell installers for the published
