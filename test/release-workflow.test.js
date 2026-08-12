@@ -25,7 +25,12 @@ test('the Skill release announcement fails fast instead of retrying a rejection'
   const workflow = await readFile(workflowPath, 'utf8');
 
   assert.doesNotMatch(workflow, /--retry-all-errors/);
-  assert.match(workflow, /Announcement rejected with HTTP \$http_code; not retrying\./);
+  assert.match(workflow, /Announcement rejected with HTTP \$\{http_code:-none\}; not retrying\./);
+
+  // Retrying every error turned one rejection into four identical rejections
+  // followed by an opaque failure. Only answers that can plausibly change on a
+  // second attempt are retried.
+  assert.match(workflow, /000 \| 408 \| 429 \| 5\*\)/);
 });
 
 test('the Skill release is verified against the public endpoint before it is called done', async () => {
