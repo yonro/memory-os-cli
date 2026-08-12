@@ -115,6 +115,10 @@ jobs:
 
           for extracted_dir in "$tar_extract_dir" "$zip_extract_dir"; do
             test -f "$extracted_dir/scripts/xmemo-skill.mjs"
+            # The installers live in skills/ (outside the Skill root) because their
+            # job is to download this archive; they must never ship inside it.
+            test ! -e "$extracted_dir/install.sh"
+            test ! -e "$extracted_dir/install.ps1"
             while IFS= read -r -d '' extracted_file; do
               if is_sensitive_name "${extracted_file##*/}"; then
                 echo "Sensitive-looking file found in archive: $extracted_file" >&2

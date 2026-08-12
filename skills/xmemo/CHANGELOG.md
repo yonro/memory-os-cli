@@ -1,5 +1,15 @@
 # XMemo Skill Change Log
 
+## 1.1.7
+
+- Stop shipping `install.sh` and `install.ps1` inside the published Skill. Their
+  only job is to download this archive, so packaging them within it was circular
+  and left two unused scripts in every install destination. They now live beside
+  the Skill in the source repository and remain available from the published
+  installer endpoints.
+- Skill runtime, commands, credential handling, and network behaviour are
+  unchanged; this release only removes two files that no runtime path used.
+
 ## 1.1.6
 
 - Remove repeated standalone-installation links from `SKILL.md`; installation
