@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+      XMEMO_BASE_URL: https://xmemo.dev
     steps:
       - name: Validate Skill Release tag
         shell: bash
@@ -150,24 +151,110 @@ jobs:
 
           release_json="$(mktemp)"
           webhook_payload="$(mktemp)"
-          trap 'rm -f "$release_json" "$webhook_payload"' EXIT
+          response_body="$(mktemp)"
+          trap 'rm -f "$release_json" "$webhook_payload" "$response_body"' EXIT
 
           release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
           gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id" > "$release_json"
-          node --input-type=module - "$GITHUB_EVENT_PATH" "$release_json" "$webhook_payload" <<'NODE'
+
+          # Announce only the fields the receiver reads. Release notes and other
+          # free-form text must stay out of the request body: forwarding a whole
+          # release object made the announcement depend on how the notes were
+          # worded, and a body containing a shell pipeline was rejected by the
+          # receiver's edge protection with HTTP 403.
+          node --input-type=module - "$release_json" "$webhook_payload" <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
 
-          const [eventPath, releasePath, outputPath] = process.argv.slice(2);
-          const event = JSON.parse(readFileSync(eventPath, 'utf8'));
-          event.action = 'published';
-          event.release = JSON.parse(readFileSync(releasePath, 'utf8'));
-          writeFileSync(outputPath, JSON.stringify(event));
+          const [releasePath, outputPath] = process.argv.slice(2);
+          const release = JSON.parse(readFileSync(releasePath, 'utf8'));
+
+          const tagName = release.tag_name;
+          if (typeof tagName !== 'string' || tagName === '') {
+            throw new Error('release.tag_name is missing from the release metadata');
+          }
+
+          const assets = (release.assets ?? []).map((asset) => ({
+            name: asset.name,
+            browser_download_url: asset.browser_download_url,
+          }));
+          if (assets.length === 0) {
+            throw new Error('the release has no assets to announce');
+          }
+
+          writeFileSync(
+            outputPath,
+            JSON.stringify({ action: 'published', release: { tag_name: tagName, assets } }),
+          );
           NODE
 
           signature="sha256=$(openssl dgst -sha256 -hmac "$XMEMO_SKILL_RELEASE_WEBHOOK_SECRET" -hex < "$webhook_payload" | sed 's/^.* //')"
-          curl --fail --retry 3 --retry-all-errors \
-            --header 'Content-Type: application/json' \
-            --header 'X-GitHub-Event: release' \
-            --header "X-Hub-Signature-256: $signature" \
-            --data-binary "@$webhook_payload" \
-            https://xmemo.dev/v1/skill/package/webhook
+
+          # A 4xx answer will not become a 2xx on retry, so it is reported at
+          # once instead of being retried until the step times out.
+          attempt=1
+          max_attempts=3
+          while :; do
+            http_code="$(curl --silent --show-error --output "$response_body" --write-out '%{http_code}' \
+              --header 'Content-Type: application/json' \
+              --header 'X-GitHub-Event: release' \
+              --header "X-Hub-Signature-256: $signature" \
+              --data-binary "@$webhook_payload" \
+              "$XMEMO_BASE_URL/v1/skill/package/webhook" || true)"
+            case "$http_code" in
+              2*)
+                echo "Announcement accepted: HTTP $http_code"
+                break
+                ;;
+              4*)
+                echo "Announcement rejected with HTTP $http_code; not retrying." >&2
+                head -c 500 "$response_body" >&2 || true
+                echo >&2
+                exit 1
+                ;;
+              *)
+                if [[ "$attempt" -ge "$max_attempts" ]]; then
+                  echo "Announcement failed after $attempt attempts (last status: ${http_code:-none})." >&2
+                  head -c 500 "$response_body" >&2 || true
+                  echo >&2
+                  exit 1
+                fi
+                echo "Announcement attempt $attempt failed (status: ${http_code:-none}); retrying." >&2
+                sleep "$((attempt * 3))"
+                attempt=$((attempt + 1))
+                ;;
+            esac
+          done
+
+      - name: Verify xmemo.dev serves this release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The announcement only queues a refresh, so the release is not done
+          # until the public endpoint actually serves this tag. The package cache
+          # has no expiry of its own, so an announcement that was rejected or
+          # dropped would otherwise keep the previous Skill published
+          # indefinitely, with nothing failing to show it.
+          deadline=$((SECONDS + 300))
+
+          for format in tar.gz zip; do
+            while :; do
+              location="$(curl --silent --show-error --output /dev/null --dump-header - \
+                "$XMEMO_BASE_URL/v1/skill/package?format=$format" \
+                | tr -d '\r' | sed -n 's/^[Ll]ocation:[[:space:]]*//p' | tail -n 1 || true)"
+
+              if [[ "$location" == *"/$RELEASE_TAG" ]]; then
+                echo "$format: serving $location"
+                break
+              fi
+
+              if (( SECONDS >= deadline )); then
+                echo "$format: $XMEMO_BASE_URL still does not serve $RELEASE_TAG." >&2
+                echo "$format: last redirect target was ${location:-none}." >&2
+                echo "A missing redirect can also mean the endpoint answered without a cached artifact." >&2
+                exit 1
+              fi
+
+              sleep 10
+            done
+          done
