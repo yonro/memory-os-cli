@@ -1,7 +1,7 @@
 {
   "identifier": "yonro-memory-os-cli",
   "name": "XMemo CLI",
-  "description": "Shared, governed long-term memory for AI agents — durable context across tools and sessions, exposed via MCP and REST.",
+  "description": "Shared, governed long-term memory for AI agents across tools and sessions via MCP and REST.",
   "author": "yonro",
   "authorUrl": "https://github.com/yonro",
   "homepage": "https://xmemo.dev/product/mcp",
