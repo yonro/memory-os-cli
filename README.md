@@ -488,19 +488,23 @@ Normal releases are produced by GitHub Actions from the exact tagged commit,
 not from a mutable branch checkout or a developer workstation:
 
 ```text
-develop → version sync → test → tag → GitHub Actions → npm publish --provenance
+develop → CLI version sync → test → cli-v tag → GitHub Actions → npm publish --provenance
 ```
 
-Version-bearing files must stay synchronized:
+The CLI package and hosted MCP service intentionally have separate version
+streams:
 
-- `package.json`
-- `package-lock.json`
-- `server.json`
-- `lhm.plugin.json`
+- CLI/npm version: `package.json`, `package-lock.json`, and the npm package
+  entry in `server.json`.
+- Hosted MCP/Registry version: the top-level `server.json.version` and
+  `lhm.plugin.json`. This version follows the deployed XMemo service.
 
-`node scripts/check-release-version.mjs --tag vX.Y.Z` verifies the tag and every
-version-bearing file before publication. The separate npm publish workflow is
-manual recovery only, so creating a GitHub Release cannot publish twice.
+`node scripts/check-release-version.mjs` verifies both contracts. A
+`cli-vX.Y.Z` tag must equal the CLI/npm version and publishes only npm. The
+MCP Registry is published separately with the `Publish MCP Registry metadata`
+workflow using `mcp-vX.Y.Z`, which must equal the hosted MCP/Registry version.
+The separate npm publish workflow is manual recovery only, so creating a
+GitHub Release cannot publish twice.
 
 ## Documentation and support
 

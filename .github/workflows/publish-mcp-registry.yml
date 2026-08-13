@@ -1,0 +1,45 @@
+name: Publish MCP Registry metadata
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit, branch, or mcp-v tag containing the reviewed server.json
+        required: true
+        default: main
+        type: string
+      registry_tag:
+        description: Registry release identifier, for example mcp-v0.4.345
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Verify MCP Registry metadata
+        run: node scripts/check-release-version.mjs --channel mcp --tag "${{ inputs.registry_tag }}"
+
+      - name: Install MCP Registry publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz \
+            | tar xz mcp-publisher
+          ./mcp-publisher --help
+
+      - name: Authenticate with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server metadata
+        run: ./mcp-publisher publish

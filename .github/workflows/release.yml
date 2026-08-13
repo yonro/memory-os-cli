@@ -2,9 +2,9 @@ name: Create Release
 
 on:
   push:
-    # CLI releases only: a v<CLI semver> tag publishes @xmemo/client to npm.
+    # CLI releases only: a cli-v<CLI semver> tag publishes @xmemo/client to npm.
     tags:
-      - 'v*.*.*'
+      - 'cli-v*.*.*'
 
 permissions:
   contents: write
@@ -30,7 +30,7 @@ jobs:
         run: npm ci
 
       - name: Verify tag and release metadata
-        run: node scripts/check-release-version.mjs --tag "${{ github.ref_name }}"
+        run: node scripts/check-release-version.mjs --channel cli --tag "${{ github.ref_name }}"
 
       - name: Run package gate
         run: |
