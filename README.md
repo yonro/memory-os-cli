@@ -24,7 +24,7 @@
     <a href="https://modelcontextprotocol.io/"><img alt="MCP compatible" src="https://img.shields.io/badge/MCP-compatible-2563eb?style=flat-square"></a>
     <a href="https://xmemo.dev"><img alt="XMemo Cloud" src="https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square"></a>
     <a href="#security-by-default"><img alt="Privacy first" src="https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white"></a>
-    <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="LobeHub" src="https://img.shields.io/badge/LobeHub-MCP-ec4899?style=flat-square"></a>
+    <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="MCP Badge" src="https://lobehub.com/badge/mcp/yonro-memory-os-cli?style=flat"></a>
     <a href="https://glama.ai/mcp/servers/yonro/memory-os-cli"><img alt="Glama quality score" src="https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg"></a>
   </p>
 
