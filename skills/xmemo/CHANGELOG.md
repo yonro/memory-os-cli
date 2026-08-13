@@ -1,5 +1,10 @@
 # XMemo Skill Change Log
 
+## 1.1.8
+
+- Consolidate repeated command examples in `SKILL.md`: document each canonical
+  command once, while retaining `auth-status` as a runtime compatibility alias.
+
 ## 1.1.7
 
 - Stop shipping `install.sh` and `install.ps1` inside the published Skill. Their

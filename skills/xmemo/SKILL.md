@@ -144,7 +144,6 @@ The Skill script handles all operations directly, including status checks and to
 
 ```text
 node scripts/xmemo-skill.mjs auth status [--verify]
-node scripts/xmemo-skill.mjs auth-status [--verify]
 node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
 node scripts/xmemo-skill.mjs auth claim-confirm [--allow-plaintext]
@@ -160,15 +159,10 @@ variable in the launching environment to stop using it.
 
 ## Setup And Repair
 
-If the bundled script reports auth or service errors, use the Skill diagnostics command:
-
-```text
-node scripts/xmemo-skill.mjs doctor
-node scripts/xmemo-skill.mjs doctor --anonymous
-node scripts/xmemo-skill.mjs auth status --verify
-node scripts/xmemo-skill.mjs auth-status --verify
-node scripts/xmemo-skill.mjs auth claim-status
-```
+If the bundled script reports auth or service errors, use the canonical commands
+above: `doctor`, `doctor --anonymous`, `auth status --verify`, and
+`auth claim-status`. The `auth-status` spelling remains a compatibility alias,
+but it is intentionally not repeated in this reference.
 
 `doctor` retains authenticated diagnosis when a credential is available.
 `doctor --anonymous` performs the same service-health check without sending an
