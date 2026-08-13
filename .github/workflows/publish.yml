@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Existing release tag to recover, for example v0.4.179
+        description: Existing CLI release tag to recover, for example cli-v0.4.181
         required: true
         type: string
 
@@ -27,7 +27,7 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
-      - run: node scripts/check-release-version.mjs --tag "${{ inputs.ref }}"
+      - run: node scripts/check-release-version.mjs --channel cli --tag "${{ inputs.ref }}"
       - run: npm run lint
       - run: npm test
       - run: npm run pack:dry-run

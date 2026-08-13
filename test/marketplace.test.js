@@ -20,10 +20,20 @@ test('LobeHub manifest uses the dedicated MCP server and mirrors its catalog', a
     readJson('server.json')
   ]);
 
-  assert.equal(manifest.version, packageJson.version);
-  assert.equal(serverJson.version, packageJson.version);
+  assert.equal(manifest.version, serverJson.version);
   assert.equal(serverJson.packages[0].version, packageJson.version);
   assert.equal(packageJson.bin['xmemo-mcp'], 'bin/mcp-stdio.js');
+  assert.equal(manifest.description, serverJson.description);
+  assert.deepEqual(
+    serverJson.remotes[0].headers.map((header) => header.name),
+    [
+      'Authorization',
+      'X-Memory-OS-Agent-ID',
+      'X-Memory-OS-Agent-Instance-ID',
+      'X-Memory-OS-Device-ID',
+      'X-Memory-OS-Device-Label'
+    ]
+  );
 
   const npmDeployment = manifest.deploymentOptions.find(
     (option) => option.installationMethod === 'npm'

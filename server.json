@@ -2,13 +2,13 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.yonro/xmemo",
   "title": "XMemo",
-  "description": "User-owned memory for AI agents, Copilot, Claude, IDEs, CLIs, and chat apps over remote MCP.",
+  "description": "Shared, governed long-term memory for AI agents — durable context across tools and sessions, exposed via MCP and REST.",
   "websiteUrl": "https://xmemo.dev/product/mcp",
   "repository": {
     "url": "https://github.com/yonro/memory-os-cli",
     "source": "github"
   },
-  "version": "0.4.180",
+  "version": "0.4.345",
   "remotes": [
     {
       "type": "streamable-http",
@@ -31,6 +31,18 @@
           "description": "Optional stable local installation id for attribution; XMemo hashes it server-side.",
           "isRequired": false,
           "isSecret": false
+        },
+        {
+          "name": "X-Memory-OS-Device-ID",
+          "description": "Optional stable local device id for attribution; use a non-secret machine or installation identifier.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "X-Memory-OS-Device-Label",
+          "description": "Optional human-readable local device label for attribution, for example 'MacBook Pro' or 'PC A'.",
+          "isRequired": false,
+          "isSecret": false
         }
       ]
     }
@@ -39,7 +51,7 @@
     {
       "registryType": "npm",
       "identifier": "@xmemo/client",
-      "version": "0.4.180",
+      "version": "0.4.181",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
