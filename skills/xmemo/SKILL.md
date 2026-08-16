@@ -128,9 +128,12 @@ The script supports JSON output with `--json`, command-specific usage with
 `--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact
 recall/search output with `--compact`. `doctor --json` adds a bounded
 `clientDiagnostics` object: a read-only discovery summary and a `nextAction`
-command for the next credential check or formal sign-in. If discovery is
-unavailable, `clientDiagnostics.discovery.status` is `unavailable`; a successful
-doctor health check still succeeds. It never prints token values or prefixes.
+command for the next credential check or formal sign-in. The summary includes
+the advertised service version, MCP URL, supported clients, and standalone Skill
+operations so compatibility can be checked without inspecting the raw discovery
+document. If discovery is unavailable, `clientDiagnostics.discovery.status` is
+`unavailable`; a successful doctor health check still succeeds. It never prints
+token values or prefixes.
 
 When native XMemo MCP tools are present, use `create_restart_snapshot` and
 `restore_restart_snapshot` for the same full-continuity workflow. The bundled
