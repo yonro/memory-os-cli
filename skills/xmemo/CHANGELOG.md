@@ -1,5 +1,13 @@
 # XMemo Skill Change Log
 
+## 1.1.9
+
+- Expand the bounded, read-only `doctor --json` discovery summary with the
+  advertised service version, MCP URL, and supported clients so agents can
+  diagnose compatibility without parsing the raw discovery document.
+- Preserve existing anonymous, credential, health-check, and degraded-discovery
+  behavior; the new fields come only from the public discovery response.
+
 ## 1.1.8
 
 - Consolidate repeated command examples in `SKILL.md`: document each canonical
