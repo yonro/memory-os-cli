@@ -1,5 +1,13 @@
 # XMemo Skill Change Log
 
+## 1.1.10
+
+- Clarify plain-text `doctor` output: an explicit `--anonymous` health check
+  now says authentication was not checked, while a normal no-credential check
+  prints the formal-login next command.
+- Preserve the existing read-only health request, JSON diagnostics, credential
+  lookup, authentication, scope, and degraded-discovery behavior.
+
 ## 1.1.9
 
 - Expand the bounded, read-only `doctor --json` discovery summary with the

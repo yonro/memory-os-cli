@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.9';
+const SKILL_VERSION = '1.1.10';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -1207,7 +1207,13 @@ async function main() {
           anonymous: options.anonymous,
         }))));
       } else {
-        console.log(`XMemo Service Status: OK\nAuthentication: Missing/Unauthenticated`);
+        const authentication = options.anonymous
+          ? 'Not checked (anonymous mode)'
+          : 'Missing/Unauthenticated';
+        const nextStep = options.anonymous
+          ? ''
+          : `\nNext: ${SCRIPT_COMMAND} login --allow-plaintext`;
+        console.log(`XMemo Service Status: OK\nAuthentication: ${authentication}${nextStep}`);
       }
       process.exit(0);
     } catch (e) {
