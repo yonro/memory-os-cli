@@ -215,6 +215,7 @@ test('skill script anonymous doctor command succeeds when no credentials are pre
   assert.equal(res.code, 0);
   assert.match(res.stdout, /XMemo Service Status: OK/);
   assert.match(res.stdout, /Authentication: Missing\/Unauthenticated/);
+  assert.match(res.stdout, /Next: node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
 
   await testServer.stop();
 });
@@ -256,7 +257,8 @@ test('skill script doctor --anonymous does not transmit an available credential'
   });
 
   assert.equal(res.code, 0);
-  assert.match(res.stdout, /Authentication: Missing\/Unauthenticated/);
+  assert.match(res.stdout, /Authentication: Not checked \(anonymous mode\)/);
+  assert.doesNotMatch(res.stdout, /Next:/);
   assert.equal(testServer.requests.length, 1);
   assert.equal(testServer.requests[0].headers.authorization, undefined);
 

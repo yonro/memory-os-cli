@@ -171,7 +171,9 @@ but it is intentionally not repeated in this reference.
 `doctor --anonymous` performs the same service-health check without sending an
 Authorization header. Both forms use only an unauthenticated, read-only
 discovery request for their JSON capability summary; discovery failure does not
-block an otherwise successful health check.
+block an otherwise successful health check. In terminal output, an explicit
+anonymous check says authentication was not checked; a normal no-credential
+check instead prints the formal-login next command.
 
 For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
 
