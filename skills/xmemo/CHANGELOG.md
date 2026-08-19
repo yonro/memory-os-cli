@@ -1,5 +1,13 @@
 # XMemo Skill Change Log
 
+## 1.1.11
+
+- Simplify the standalone Skill description so agents can discover its core
+  memory, continuity, TODO, expense, and diagnostics workflows without an
+  exhaustive command list.
+- Preserve the existing runtime commands, authentication, scopes, service
+  requests, and MCP fallback behavior.
+
 ## 1.1.10
 
 - Clarify plain-text `doctor` output: an explicit `--anonymous` health check
