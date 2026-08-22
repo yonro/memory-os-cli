@@ -13,6 +13,11 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
 
   assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
   assert.match(skill, /Runtime Selection/);
+  assert.match(skill, /First Successful Run/);
+  assert.match(skill, /After ClawHub installs this Skill/);
+  assert.match(skill, /doctor --anonymous/);
+  assert.match(skill, /auth status --verify/);
+  assert.match(skill, /managed\n+   secret store/);
   assert.match(skill, /scripts\/xmemo-skill\.mjs/);
   assert.doesNotMatch(skill, /node skills\/xmemo\/scripts\/xmemo-skill\.mjs/);
   assert.match(skill, /xmemo-skill\.mjs login/);

@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.11';
+const SKILL_VERSION = '1.1.12';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
