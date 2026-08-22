@@ -7,6 +7,35 @@ description: Persistent, user-owned memory for agents. Use the standalone runtim
 
 Give your agent durable memory that survives across sessions, projects, and tools.
 
+## First Successful Run
+
+After ClawHub installs this Skill, run these commands from the Skill root to
+confirm the service and choose an authentication path in a few minutes:
+
+1. Check public service reachability without sending a credential:
+
+   ```text
+   node scripts/xmemo-skill.mjs doctor --anonymous
+   ```
+
+2. For account-backed memory, prefer an `XMEMO_KEY` supplied by a managed
+   secret store. Otherwise, start the formal device-login flow only when you
+   explicitly accept local plaintext credential storage:
+
+   ```text
+   node scripts/xmemo-skill.mjs login --allow-plaintext
+   ```
+
+3. Confirm the credential before running memory operations:
+
+   ```text
+   node scripts/xmemo-skill.mjs auth status --verify
+   ```
+
+If a command fails, use the exact next action it prints, then read
+`references/troubleshooting.md`. Once the check succeeds, continue with
+**Core Workflows** below.
+
 ## Runtime Selection
 
 XMemo supports two parallel integration paths:

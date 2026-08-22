@@ -1,5 +1,12 @@
 # XMemo Skill Change Log
 
+## 1.1.12
+
+- Add a short first-successful-run path: anonymous service health check,
+  deliberate credential choice, and credential verification before memory work.
+- Preserve runtime commands, network requests, authentication, scopes,
+  credential behavior, service APIs, and MCP fallback behavior.
+
 ## 1.1.11
 
 - Simplify the standalone Skill description so agents can discover its core
