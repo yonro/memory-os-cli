@@ -1,0 +1,41 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "XMemo CLI",
+  "description": "Official CLI and MCP setup helper for XMemo (@xmemo/client). Connects editors, CLIs, and autonomous agents to a private memory layer while keeping credentials out of project files.",
+  "branch": "main",
+  "folders": [],
+  "excludeFolders": [
+    "test",
+    "tests",
+    ".github",
+    "scripts",
+    "dist",
+    "node_modules",
+    ".worktrees",
+    ".progress",
+    ".tmp-mcp-test",
+    "docs/assets"
+  ],
+  "excludeFiles": [
+    "package-lock.json",
+    "glama.json"
+  ],
+  "rules": [
+    "Use https://xmemo.dev/mcp as the canonical hosted XMemo MCP endpoint.",
+    "Install the CLI as the npm package @xmemo/client; the primary command is `xmemo`.",
+    "Use the authentication mode documented for the specific MCP client; prefer OAuth only where that client profile explicitly supports it.",
+    "Never hardcode XMEMO_KEY, bearer tokens, API keys, passwords, or other credentials in public configuration, source code, or generated client config files.",
+    "For token-based clients, read XMEMO_KEY from an environment variable or supported secret store.",
+    "Treat X-Memory-OS-Agent-ID and XMEMO_AGENT_INSTANCE_ID as attribution identifiers, not authentication credentials.",
+    "Keep XMEMO_AGENT_INSTANCE_ID stable for the same local installation or autonomous runner; generate a different value for a different local agent profile.",
+    "Prefer `xmemo mcp add <client> --write` over hand-editing a client config file, so the stable instance identity is generated correctly.",
+    "`xmemo setup` is dry-run by default; configuration is only written when --write or --yes is passed.",
+    "Use `xmemo doctor` and `xmemo status` to diagnose a connection before changing configuration.",
+    "`xmemo uninstall` removes only XMemo-owned entries and marker-scoped behavior profiles; unrelated MCP servers, credentials, and device identity are left intact.",
+    "Use only XMemo commands, flags, tools, SDK helpers, parameters, scopes, and endpoints that are explicitly documented. Never invent XMemo APIs, tool names, or CLI flags.",
+    "Store durable and reusable context in XMemo, such as project facts, decisions, preferences, corrections, and handoff information; avoid transient conversation noise.",
+    "Preserve documented project, memory scope, provenance, and attribution semantics when saving or retrieving context.",
+    "Prefer the current canonical XMemo developer documentation at https://xmemo.dev/docs/quickstart over old examples, marketing pages, third-party snippets, or deprecated configuration.",
+    "This repository is the public client. The XMemo service repository is private; do not link readers to github.com/yunze7373/memory-os, which is not publicly reachable."
+  ]
+}

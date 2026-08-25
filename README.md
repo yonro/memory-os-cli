@@ -508,9 +508,22 @@ GitHub Release cannot publish twice.
 
 ## Documentation and support
 
+Canonical service documentation lives at [xmemo.dev/docs](https://xmemo.dev/docs/quickstart).
+This repository documents the client; the pages below document the hosted service
+it connects to.
+
+| | |
+| --- | --- |
+| **Quickstart** | [xmemo.dev/docs/quickstart](https://xmemo.dev/docs/quickstart) |
+| **MCP overview and per-client setup** | [xmemo.dev/docs/mcp/overview](https://xmemo.dev/docs/mcp/overview) |
+| **Tool reference** (`remember`, `recall`, `search`, …) | [xmemo.dev/docs/tools/remember](https://xmemo.dev/docs/tools/remember) |
+| **REST API** | [xmemo.dev/docs/api/authentication](https://xmemo.dev/docs/api/authentication) |
+| **Troubleshooting** | [xmemo.dev/docs/troubleshooting](https://xmemo.dev/docs/troubleshooting) |
+| **Machine-readable index** | [xmemo.dev/llms.txt](https://xmemo.dev/llms.txt) |
+
 - [XMemo](https://xmemo.dev)
-- [XMemo MCP guide](https://xmemo.dev/product/mcp)
 - [MCP server reference](./MCP-README.md)
+- [Adding a new client](./ADDING_CLIENTS.md)
 - [Issues](https://github.com/yonro/memory-os-cli/issues)
 - [Releases](https://github.com/yonro/memory-os-cli/releases)
 

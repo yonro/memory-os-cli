@@ -142,7 +142,7 @@ To remove XMemo from Kiro, manually edit `~/.kiro/settings/mcp.json` and remove 
 - All memory content is user-owned and controlled through your XMemo account
 ## License and support
 
-This power is licensed under [LicenseRef-Proprietary](file:///h:/repos/memory-os-cli/plugins/kiro/LICENSE).
+This power is licensed under [LicenseRef-Proprietary](./LICENSE).
 This power integrates with XMemo MCP Server (LicenseRef-Proprietary).
-- [Privacy Policy](https://xmemo.dev/privacy)
+- [Privacy Policy](https://xmemo.dev/legal/privacy)
 - [Support](mailto:support@xmemo.dev)
