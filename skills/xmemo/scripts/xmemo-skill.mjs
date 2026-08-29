@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.12';
+const SKILL_VERSION = '1.1.13';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -31,7 +31,7 @@ const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
-  'restart-snapshot', 'restart-restore',
+  'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
 ]);
 const COMMAND_FLAGS = {
@@ -48,6 +48,7 @@ const COMMAND_FLAGS = {
   'state-restore': new Set(['key', 'state_key', 'bucket', 'scope']),
   'restart-snapshot': new Set(['session_id', 'state_key', 'timeline_limit', 'reminder_limit', 'decision_limit', 'metadata', 'bucket', 'scope', 'path', 'ttl_seconds']),
   'restart-restore': new Set(['snapshot_id', 'source_session_id', 'target_session_id', 'state_key', 'restore_state', 'record_restore_event', 'ttl_seconds', 'bucket', 'scope']),
+  'recall-context': new Set(['query', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'status', 'threshold', 'max_items', 'max_tokens', 'limit', 'prefer_working']),
   'todo-add': new Set(['content', 'due_at', 'bucket', 'scope', 'path']),
   'todo-list': new Set(['bucket', 'scope', 'status']),
   'todo-done': new Set(['id', 'todo_id', 'note']),
@@ -186,6 +187,7 @@ function printUsage(command) {
       remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
       recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
       search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+      'recall-context': 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>]',
       'save-state': 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
       'restore-state': 'restore-state --key <key>',
       'state-save': 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
@@ -288,7 +290,7 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     ? AUTH_FLAGS[subcommand] || new Set()
     : COMMAND_FLAGS[command] || new Set();
   for (const key of Object.keys(flags)) {
-    if (/token|api[-_]?key|bearer|authorization|cookie|secret/i.test(key) && key !== 'from-stdin') {
+    if (/^(token|api[-_]?key|bearer|authorization|cookie|secret)$/i.test(key) && key !== 'from-stdin') {
       throw new Error(`Refusing sensitive command-line option --${key}. Use XMEMO_KEY or --from-stdin where documented.`);
     }
     if (!allowedFlags.has(key)) {
@@ -300,6 +302,7 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     remember: ['content'],
     recall: ['query'],
     search: ['query'],
+    'recall-context': ['query'],
     'todo-add': ['content'],
     'todo-done': ['id|todo_id'],
     'expense-add': ['item', 'amount'],
@@ -312,6 +315,9 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
   }
 
   if (flags.limit !== undefined) parsePositiveInteger(flags.limit, '--limit', 100);
+  for (const key of ['max_items', 'max_tokens']) {
+    if (flags[key] !== undefined) flags[key] = parsePositiveInteger(flags[key], `--${key}`, key === 'max_items' ? 100 : 50_000);
+  }
   if (flags.ttl_seconds !== undefined) {
     const ttlMax = command.startsWith('restart-') ? MAX_STATE_TTL_SECONDS : 604_800;
     const parsedTtl = parseIntegerInRange(flags.ttl_seconds, '--ttl_seconds', 0, ttlMax);
@@ -1266,6 +1272,46 @@ async function main() {
       }
     } catch (e) {
       console.error(`${label} failed:`, e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'recall-context') {
+    const body = {
+      query: flags.query,
+      path: flags.path || '%',
+      bucket: flags.bucket || '%',
+      scope: flags.scope,
+      team_id: flags.team_id,
+      memory_type: flags.memory_type || 'auto',
+      status: flags.status || 'active',
+      threshold: flags.threshold === undefined ? undefined : Number(flags.threshold),
+      max_items: flags.max_items,
+      max_tokens: flags.max_tokens,
+      limit: flags.limit,
+      prefer_working: flags.prefer_working === undefined ? true : flags.prefer_working,
+    };
+    Object.keys(body).forEach((key) => body[key] === undefined && delete body[key]);
+    try {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/recall/context', 'POST', body, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+      const data = parseJsonResponse(res, 'Recall context request');
+      const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
+      if (options.json) {
+        console.log(safeJson(data));
+        process.exit(succeeded ? 0 : 1);
+      }
+      if (!succeeded) {
+        console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
+        process.exit(1);
+      }
+      const items = Array.isArray(data.items) ? data.items.length : 0;
+      const contextText = sanitizeTerminalText(data.context_text || '');
+      console.log(`XMemo Context: ${items} item${items === 1 ? '' : 's'}\n${contextText || 'No matching memories found.'}`);
+    } catch (e) {
+      console.error('Recall context failed:', e.message);
       process.exit(1);
     }
     return;

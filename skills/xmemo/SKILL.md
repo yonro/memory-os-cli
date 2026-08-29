@@ -182,7 +182,14 @@ node scripts/xmemo-skill.mjs auth claim-confirm [--allow-plaintext]
 node scripts/xmemo-skill.mjs auth claim-deny [--allow-plaintext]
 node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 node scripts/xmemo-skill.mjs doctor
+node scripts/xmemo-skill.mjs recall-context --query "recent project progress" --max_items 5 --max_tokens 1000
 ```
+
+`recall-context` is a read-only prompt-context helper backed by
+`/v1/recall/context`. It returns the service's bounded `context_text` and, with
+`--json`, the structured context items. It requires a formal read-capable
+credential; temporary sandboxes remain limited to `remember`, `recall`, and
+`search`.
 
 `logout` revokes and removes a user credential file. When `XMEMO_KEY` supplies
 the active credential, logout leaves that externally managed token unchanged
