@@ -1,5 +1,12 @@
 # XMemo Skill Change Log
 
+## 1.1.13
+
+- Add the read-only `recall-context` command for the service's bounded,
+  prompt-ready `/v1/recall/context` response, with client-side budget validation.
+- Preserve existing authentication, scopes, temporary-sandbox limits, and all
+  other runtime commands.
+
 ## 1.1.12
 
 - Add a short first-successful-run path: anonymous service health check,

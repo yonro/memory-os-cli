@@ -10,6 +10,41 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills/xmemo/scripts/xmemo-skill.mjs');
 
+test('skill script recall-context calls the bounded direct REST endpoint', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({
+    context_text: 'Recent project progress',
+    items: [{ id: 'memory-1', content: 'Recent project progress' }],
+  });
+
+  try {
+    const res = await runScript([
+      'recall-context', '--query', 'recent project progress', '--max_items', '5', '--max_tokens', '1000', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.context_text, 'Recent project progress');
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.url, '/v1/recall/context');
+    assert.equal(req.method, 'POST');
+    assert.deepEqual(req.body, {
+      query: 'recent project progress',
+      path: '%',
+      bucket: '%',
+      memory_type: 'auto',
+      status: 'active',
+      max_items: 5,
+      max_tokens: 1000,
+      prefer_working: true,
+    });
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+  } finally {
+    await testServer.stop();
+  }
+});
+
 // Helper to run the script in a child process
 async function runScript(args, options = {}) {
   return new Promise((resolve, reject) => {
