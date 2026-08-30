@@ -1,5 +1,12 @@
 # XMemo Skill Change Log
 
+## 1.1.14
+
+- Align the documented standalone Skill runtime with the MemoryOS Node.js
+  baseline: Node.js 22.22.0 or newer.
+- Keep the runtime behavior, authentication, scopes, service APIs, and package
+  metadata unchanged.
+
 ## 1.1.13
 
 - Add the read-only `recall-context` command for the service's bounded,

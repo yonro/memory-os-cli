@@ -43,7 +43,8 @@ XMemo supports two parallel integration paths:
 1. **Bundled Skill script** at `scripts/xmemo-skill.mjs` (primary standalone direct REST API integration, fully self-contained and zero-dependency).
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
-Run bundled commands from the Skill root with Node.js 20 or newer.
+Run bundled commands from the Skill root with Node.js 22.22.0 or newer. This
+matches the MemoryOS service and repository runtime baseline.
 
 ## Hosted Discovery Boundary
 

@@ -17,7 +17,7 @@ bundled `xmemo` Skill. This is the primary standalone runtime for direct REST ac
 
 XMemo supports two parallel integration paths:
 
-1. **Bundled Skill script** (`node scripts/xmemo-skill.mjs <command>`), which directly integrates with the XMemo REST API using stored credentials. Run commands from the Skill root with Node.js 20 or newer.
+1. **Bundled Skill script** (`node scripts/xmemo-skill.mjs <command>`), which directly integrates with the XMemo REST API using stored credentials. Run commands from the Skill root with Node.js 22.22.0 or newer, matching the MemoryOS service and repository runtime baseline.
 2. **XMemo MCP tools** (when running in environments that natively host the XMemo MCP server).
 
 Credential resolution is `XMEMO_KEY` first, then the user-scoped credential
