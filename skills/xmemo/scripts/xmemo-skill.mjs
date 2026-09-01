@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.14';
+const SKILL_VERSION = '1.1.15';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -48,7 +48,7 @@ const COMMAND_FLAGS = {
   'state-restore': new Set(['key', 'state_key', 'bucket', 'scope']),
   'restart-snapshot': new Set(['session_id', 'state_key', 'timeline_limit', 'reminder_limit', 'decision_limit', 'metadata', 'bucket', 'scope', 'path', 'ttl_seconds']),
   'restart-restore': new Set(['snapshot_id', 'source_session_id', 'target_session_id', 'state_key', 'restore_state', 'record_restore_event', 'ttl_seconds', 'bucket', 'scope']),
-  'recall-context': new Set(['query', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'status', 'threshold', 'max_items', 'max_tokens', 'limit', 'prefer_working']),
+  'recall-context': new Set(['query', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'status', 'threshold', 'max_items', 'max_tokens', 'limit', 'prefer_working', 'include_knowledge']),
   'todo-add': new Set(['content', 'due_at', 'bucket', 'scope', 'path']),
   'todo-list': new Set(['bucket', 'scope', 'status']),
   'todo-done': new Set(['id', 'todo_id', 'note']),
@@ -164,6 +164,10 @@ function readOptionValue(args, index, key, inlineValue) {
 
 function printUsage(command) {
   const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
+  if (command === undefined) {
+    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+    return;
+  }
   if (command === 'auth') {
     console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-deny [--allow-plaintext]\n\nAlias: ${SCRIPT_COMMAND} auth-status [--verify]\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
     return;
@@ -187,7 +191,7 @@ function printUsage(command) {
       remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
       recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
       search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
-      'recall-context': 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>]',
+      'recall-context': 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
       'save-state': 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
       'restore-state': 'restore-state --key <key>',
       'state-save': 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
@@ -326,6 +330,7 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
   if (flags.metadata !== undefined) flags.metadata = parseJsonObject(flags.metadata, '--metadata');
   if (flags.explain !== undefined) flags.explain = parseStrictBoolean(flags.explain, '--explain');
   if (flags.prefer_working !== undefined) flags.prefer_working = parseStrictBoolean(flags.prefer_working, '--prefer_working');
+  if (flags.include_knowledge !== undefined) flags.include_knowledge = parseStrictBoolean(flags.include_knowledge, '--include_knowledge');
   if (flags.restore_state !== undefined) flags.restore_state = parseStrictBoolean(flags.restore_state, '--restore_state');
   if (flags.record_restore_event !== undefined) flags.record_restore_event = parseStrictBoolean(flags.record_restore_event, '--record_restore_event');
   for (const key of ['timeline_limit', 'reminder_limit', 'decision_limit']) {
@@ -840,7 +845,7 @@ async function main() {
         surface: 'standalone_skill',
         token_type: 'skill_token',
         client_version: SKILL_VERSION,
-        scopes: ['memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read']
+        scopes: ['memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read', 'knowledge:read']
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Device login start');
       if (res.statusCode !== 200) {
@@ -1291,6 +1296,7 @@ async function main() {
       max_tokens: flags.max_tokens,
       limit: flags.limit,
       prefer_working: flags.prefer_working === undefined ? true : flags.prefer_working,
+      include_knowledge: flags.include_knowledge,
     };
     Object.keys(body).forEach((key) => body[key] === undefined && delete body[key]);
     try {

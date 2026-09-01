@@ -77,6 +77,15 @@ If verification fails:
 - The token may be expired. Run the `login` command to refresh it.
 - A proxy or firewall may block HTTPS traffic to `xmemo.dev`.
 
+For Knowledge access, a successful token verification is necessary but not
+sufficient. Run `auth status --verify` and confirm that the reported scopes
+include `knowledge:read` (or an explicitly supported wildcard). Enabling the
+server feature does not expand an already-issued token. Reissue or reauthorize
+the formal credential when the scope is absent; update the external
+`XMEMO_KEY` secret when it is environment-managed, or run a new formal `login`
+for a file-backed credential. Temporary credentials cannot be upgraded in
+place and never support `recall-context`.
+
 ## 4. Network and service
 
 Check the hosted service and current credential together:
@@ -121,6 +130,7 @@ If this fails:
 | `--metadata must be a JSON object` | Metadata is invalid JSON, an array, or a scalar | Pass one JSON object, for example `'{"source":"review"}'` |
 | `--explain must be true or false` | A boolean parameter used another spelling | Pass the literal `true` or `false` |
 | `Method not found` | Server does not expose the requested operation | Server-side capability gap |
+| `Knowledge requested but unavailable` | Knowledge runtime is disabled, the credential lacks `knowledge:read`, or the current owner/scope is unsupported | Check `auth status --verify`, reauthorize the formal credential if the scope is missing, then retry `recall-context --include_knowledge true`; do not broaden scope or inspect another owner |
 
 ## Security reminders
 

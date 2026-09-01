@@ -45,6 +45,31 @@ test('skill script recall-context calls the bounded direct REST endpoint', async
   }
 });
 
+test('skill script opts recall-context into Knowledge only when requested', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  try {
+    testServer.setResponse({
+      context_text: 'Memory and Knowledge context',
+      items: [{ id: 'memory-1', type: 'memory' }, { id: 'knowledge-1', type: 'knowledge' }],
+    });
+    const res = await runScript([
+      'recall-context', '--query', 'release conventions', '--include_knowledge', 'true', '--json'
+    ], { baseUrl, env });
+    assert.equal(res.code, 0);
+    assert.equal(testServer.requests.at(-1).body.include_knowledge, true);
+
+    const invalid = await runScript([
+      'recall-context', '--query', 'release conventions', '--include_knowledge', 'yes'
+    ], { baseUrl, env });
+    assert.notEqual(invalid.code, 0);
+    assert.match(invalid.stderr, /--include_knowledge must be true or false/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
 // Helper to run the script in a child process
 async function runScript(args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -406,6 +431,14 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
   assert.match(loginHelp.stdout, /login --allow-plaintext/);
   assert.doesNotMatch(loginHelp.stdout, /Commands:/);
 
+  const rootHelp = await runScript(['--help']);
+  assert.equal(rootHelp.code, 0);
+  assert.match(rootHelp.stdout, /recall-context --query <text>/);
+
+  const contextHelp = await runScript(['recall-context', '--help']);
+  assert.equal(contextHelp.code, 0);
+  assert.match(contextHelp.stdout, /--include_knowledge <true\|false>/);
+
   const changelog = await fs.readFile(path.join(repoRoot, 'skills/xmemo/CHANGELOG.md'), 'utf8');
   const latestRelease = changelog.match(/^##\s*(\d+\.\d+\.\d+)\s*$/m)?.[1];
   assert.match(latestRelease ?? '', /^\d+\.\d+\.\d+$/);
@@ -587,7 +620,7 @@ test('skill script device login preserves formal-account scopes and respects aut
     });
     assert.equal(success.code, 0);
     assert.deepEqual(successServer.requests[0].body.scopes, [
-      'memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read'
+      'memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read', 'knowledge:read'
     ]);
   } finally {
     await successServer.stop();
