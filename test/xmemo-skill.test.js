@@ -27,6 +27,10 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /unencrypted/i);
   assert.match(skill, /remember/);
   assert.match(skill, /recall/);
+  assert.match(skill, /recall-context/);
+  assert.match(skill, /--include_knowledge true/);
+  assert.match(skill, /knowledge:read/);
+  assert.match(skill, /not retroactive/i);
   assert.match(skill, /search/);
   assert.match(skill, /save-state/);
   assert.match(skill, /restore-state/);
@@ -60,6 +64,9 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(operations, /## Discovery boundary/);
   assert.match(operations, /generic `POST \/v1\/skill\/operations` dispatcher/);
   assert.match(operations, /unauthenticated `401` only\nproves that the protected route is reachable/);
+  assert.match(operations, /`recall-context`/);
+  assert.match(operations, /Knowledge/);
+  assert.match(operations, /knowledge:read/);
 });
 
 test('npm package includes the XMemo Skill, script, and references', async () => {

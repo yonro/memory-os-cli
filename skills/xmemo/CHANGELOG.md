@@ -1,5 +1,18 @@
 # XMemo Skill Change Log
 
+## 1.1.15
+
+- Add explicit read-only Knowledge support to `recall-context` through the
+  opt-in `--include_knowledge true` flag; the default request remains
+  Memory-only for backward compatibility.
+- Request the least-privilege `knowledge:read` scope during new formal Skill
+  device login. Existing credentials are never expanded automatically; use
+  verified reauthorization when Knowledge access is needed.
+- Include `recall-context` in top-level help and document the Knowledge scope,
+  service feature, temporary-token, and untrusted-context boundaries.
+- Tests cover the opt-in request field, strict boolean parsing, login scope,
+  top-level help, and Knowledge authorization documentation.
+
 ## 1.1.14
 
 - Align the documented standalone Skill runtime with the MemoryOS Node.js
