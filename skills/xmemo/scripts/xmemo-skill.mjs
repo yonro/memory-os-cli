@@ -290,7 +290,7 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     ? AUTH_FLAGS[subcommand] || new Set()
     : COMMAND_FLAGS[command] || new Set();
   for (const key of Object.keys(flags)) {
-    if (/^(token|api[-_]?key|bearer|authorization|cookie|secret)$/i.test(key) && key !== 'from-stdin') {
+    if (/^(token|api[-_]?key|bearer|authorization|cookie|secret|password|passwd|credential|client[-_]?secret|refresh[-_]?token|access[-_]?token|private[-_]?key|xmemo[-_]?key)$/i.test(key) && key !== 'from-stdin') {
       throw new Error(`Refusing sensitive command-line option --${key}. Use XMEMO_KEY or --from-stdin where documented.`);
     }
     if (!allowedFlags.has(key)) {
