@@ -108,13 +108,13 @@ xmemo setup cursor --dry-run
 | Client | Recommended command | Connection |
 | --- | --- | --- |
 | **Codex** | `xmemo setup codex` | Hosted MCP + behavior profile |
-| **Cursor** | `xmemo setup cursor` | Hosted MCP + behavior profile |
+| **Cursor** | `xmemo setup cursor` | Hosted MCP + Bearer Token + behavior profile |
 | **Copilot CLI** | `xmemo setup copilot` | Local authenticated proxy |
 | **Gemini CLI** | `xmemo setup gemini` | Hosted MCP + OAuth |
 | **Antigravity** | `xmemo setup antigravity` | Hosted MCP + OAuth |
 | **OpenClaw** | `xmemo setup openclaw` | Native memory plugin + Skill |
 | **Hermes** | `xmemo setup hermes` | Native memory provider |
-| **Kiro** | `xmemo setup kiro` | Hosted MCP |
+| **Kiro** | `xmemo setup kiro` | Hosted MCP + Bearer Token |
 | **Grok** | `xmemo setup grok` | Hosted MCP |
 | **Other MCP clients** | `xmemo mcp config --client generic` | Generated template |
 
@@ -295,6 +295,58 @@ xmemo setup <client> --dry-run
 xmemo setup --all
 xmemo setup openclaw [--with-mcp|--mcp-only]
 xmemo setup hermes [--with-mcp|--mcp-only]
+```
+
+</details>
+
+<details>
+<summary><strong>Direct XMemo service client</strong></summary>
+
+```bash
+xmemo memory add --content "Remember this" --path notes/example --json
+xmemo memory search "example" --json
+xmemo context recall "resume this task" --include-knowledge --json
+xmemo state save --current-task "ship the client" --next-action "run tests" --json
+xmemo state restore --json
+xmemo restart snapshot --json
+xmemo restart restore --snapshot-id <snapshot-id> --json
+
+xmemo knowledge add --base <base-id> --file ./guide.pdf --title "Guide" --json
+xmemo knowledge search "setup" --base <base-id> --json
+xmemo knowledge read <item-id> --json > knowledge-view.json
+xmemo knowledge update <item-id> --text "Updated" --from knowledge-view.json --publish --yes --json
+
+xmemo dream preview --wait --json
+xmemo dream show <run-id> --json > dream-view.json
+xmemo dream apply <run-id> --item <candidate-id> --from dream-view.json --yes --json
+
+xmemo cloud-skill list --json
+xmemo cloud-skill add --file ./SKILL.md --json
+xmemo cloud-skill show <skill-id> --json > skill-view.json
+xmemo cloud-skill update <skill-id> --from skill-view.json --file ./SKILL.md --json
+xmemo cloud-skill run <skill-id> --input ./args.json --from skill-view.json --yes --json
+```
+
+All direct service commands support a single machine-readable JSON envelope.
+Knowledge update, Dream apply, and Cloud Skill run use the `readReceipt` from a
+saved read/show result so the CLI never silently substitutes a newer revision.
+Set `XMEMO_KNOWLEDGE_BASE_ID` for a non-interactive default knowledge base.
+For a long knowledge item, continue the same fixed revision with
+`xmemo knowledge read <item-id> --from knowledge-view.json --offset <n>`.
+Run `xmemo doctor --services --json` for read-only Knowledge, Dream, and Cloud
+Skill diagnostics; it deliberately does not claim write or production readiness.
+
+Cloud Skill add/update already target the safe create-only and content-CAS
+contracts. They fail with `SERVER_CONTRACT_REQUIRED` on older services and do
+not fall back to legacy upsert routes. Binary Knowledge item updates similarly
+require a new version of the same server Document; use `--document` and
+`--document-version` after that version has been uploaded.
+
+The normal login scopes remain unchanged. Request additional service scopes
+explicitly when needed, for example:
+
+```bash
+xmemo login --scopes memory:read,memory:write,memory:restore,knowledge:read,knowledge:write
 ```
 
 </details>

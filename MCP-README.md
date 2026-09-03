@@ -107,9 +107,9 @@ XMemo MCP 服务器提供以下 20 个工具，每个工具都有清晰的名称
 
 获取 Token：访问 [https://xmemo.dev](https://xmemo.dev) 注册并获取 API Key。
 
-### 方式二：OAuth 客户端（部分客户端支持）
+### 方式二：MCP OAuth 客户端（仅部分客户端）
 
-Cursor、Gemini CLI、Antigravity、OpenCode 等客户端支持 MCP OAuth 流程，无需手动配置 `XMEMO_KEY`：
+当前 CLI 将 Gemini CLI、Antigravity 系列、OpenCode 和 Qwen 生成为 MCP OAuth 配置；这些客户端无需在 MCP 配置中手动配置 `XMEMO_KEY`：
 
 ```json
 {
@@ -138,7 +138,7 @@ xmemo-mcp
 `xmemo-mcp` 是专用的 stdio MCP 入口；`xmemo mcp serve` 与它等价。
 能力发现（Tools、Prompts、Resources）不需要 Token，实际工具执行仍需认证。
 
-支持的客户端：`codex`、`cursor`、`copilot`、`gemini`、`antigravity`、`grok`、`kiro`、`claude-desktop`、`windsurf`、`cline`、`kimi`、`qwen`、`trae` 等。
+支持的 `xmemo setup` 客户端包括：`codex`、`cursor`、`copilot`、`gemini`、`antigravity`、`grok`、`kiro`、`claude-desktop`、`windsurf`、`cline`、`kimi-code`、`qwen`、`trae`、`zed` 和 `opencode`。底层 `xmemo mcp add` 使用注册表 ID（例如 `gemini-cli`、`copilot-cli`）；Copilot CLI 的推荐入口仍是 `xmemo setup copilot`。
 
 ---
 
@@ -187,8 +187,8 @@ xmemo-mcp
 ```json
 {
   "tool": "create_memory_todo",
-  "title": "重构 auth 模块：将 JWT 改为 Session + Redis",
-  "due": "next-week"
+  "content": "重构 auth 模块：将 JWT 改为 Session + Redis",
+  "due_at": "<ISO-8601 时间>"
 }
 ```
 
@@ -210,18 +210,20 @@ xmemo-mcp
 
 | 客户端 | 支持方式 | 配置命令 |
 |--------|----------|----------|
-| **Kimi Code** | Streamable HTTP + Bearer Token | `xmemo setup kiro` |
-| **Claude Desktop** | Streamable HTTP + OAuth | `xmemo setup claude-desktop` |
-| **Cursor** | Streamable HTTP + OAuth | `xmemo setup cursor` |
+| **Kimi Code** | Streamable HTTP + Bearer Token（`XMEMO_KEY`） | `xmemo setup kimi-code` |
+| **Kiro** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup kiro` |
+| **Claude Desktop** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup claude-desktop` |
+| **Cursor** | Streamable HTTP + Bearer Token（`XMEMO_KEY`） | `xmemo setup cursor` |
 | **Copilot CLI** | Local Proxy + Bearer Token | `xmemo setup copilot` |
-| **Gemini CLI** | Streamable HTTP + OAuth | `xmemo setup gemini` |
+| **Gemini CLI** | Streamable HTTP + MCP OAuth | `xmemo setup gemini` |
 | **Grok (xAI)** | Streamable HTTP + Bearer Token | `xmemo setup grok` |
-| **Antigravity** | Streamable HTTP + OAuth | `xmemo setup antigravity` |
+| **Antigravity 系列** | Streamable HTTP + MCP OAuth | `xmemo setup antigravity` |
 | **Windsurf** | Streamable HTTP + Bearer Token | `xmemo setup windsurf` |
 | **Cline** | Streamable HTTP + Bearer Token | `xmemo setup cline` |
-| **Trae** | Streamable HTTP + Bearer Token | `xmemo setup trae` |
-| **Qwen CLI** | Streamable HTTP + OAuth | `xmemo setup qwen` |
-| **Zed** | Streamable HTTP + Bearer Token | `xmemo setup zed` |
+| **Trae / Trae Solo** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup trae` |
+| **Qwen CLI** | Streamable HTTP + MCP OAuth | `xmemo setup qwen` |
+| **Zed** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup zed` |
+| **OpenCode** | Remote MCP + MCP OAuth | `xmemo setup opencode` |
 
 ---
 
@@ -229,7 +231,7 @@ xmemo-mcp
 
 - **无遥测**：CLI 和 MCP 服务均不发送任何遥测或分析数据
 - **Token 安全**：生成的配置文件仅引用环境变量（如 `${XMEMO_KEY}`），从不嵌入真实 token 值
-- **OAuth 优先**：支持的客户端优先使用 OAuth 流程，避免手动管理密钥
+- **认证方式以表格为准**：只有标记为 MCP OAuth 的客户端走 OAuth；其余远程客户端从 `XMEMO_KEY` 环境变量读取 Bearer Token
 - **设备级标识**：`XMEMO_AGENT_INSTANCE_ID` 为设备级非敏感标识符，用于归因分析，不暴露个人信息
 - **数据归属**：用户完全拥有记忆数据，支持随时导出、删除或脱敏
 

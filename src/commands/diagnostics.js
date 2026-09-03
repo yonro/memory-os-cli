@@ -29,8 +29,13 @@ import {
 import { writeLine } from '../core/io.js';
 import { codexSmokeReport } from '../mcp/formats/toml.js';
 import { defaultCodexConfigPath } from '../config/paths.js';
+import { serviceContext } from '../api/service-context.js';
+import { assertKnownOptions } from '../api/input.js';
+import { ServiceClientError, errorToExitCode } from '../api/errors.js';
+import { writeFailure, writeSuccess } from '../api/envelope.js';
 
 export async function doctorCommand(args, io) {
+  if (hasFlag(args, '--services')) return await serviceDoctor(args, io);
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');
   const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
@@ -88,6 +93,37 @@ export async function doctorCommand(args, io) {
     writeLine(io.stdout, `${check.ok ? 'OK' : 'FAIL'} ${check.name}: ${check.detail}`);
   }
   return report.ok ? 0 : 1;
+}
+
+async function serviceDoctor(args, io) {
+  try {
+    assertKnownOptions(args, ['--services', '--team', '--json', '--base-url', '--url', '--timeout-ms', '--allow-legacy-credential']);
+    const context = await serviceContext(args, io);
+    const teamId = optionValue(args, '--team');
+    const checks = [];
+    for (const [name, endpoint, query] of [
+      ['knowledge', '/api/v1/knowledge-bases', { limit: 1, include_archived: false }],
+      ['dream', '/api/v1/me/dream/settings', {}],
+      ['cloud-skill', '/v1/skills', {}]
+    ]) {
+      try {
+        const response = await context.client.request({ method: 'GET', path: endpoint, query: { ...query, team_id: teamId }, retry: 'bounded' });
+        checks.push({ name, readable: true, ...(name === 'dream' ? { enabled: response.data?.enabled ?? null, mode: response.data?.mode ?? null, canPreview: response.data?.entitlement?.can_preview ?? null, canApply: response.data?.entitlement?.can_apply ?? null } : {}) });
+      } catch (error) {
+        checks.push({ name, readable: false, code: error.code, httpStatus: error.httpStatus, nextAction: error.nextAction, exitCode: errorToExitCode(error) });
+      }
+    }
+    const report = { baseUrl: context.baseUrl, checks, writeReadiness: 'not-tested', cloudSkillWriteContract: 'MOS-01 deployment not verified', notes: ['Read-only checks do not prove write permission, queue health, sandbox readiness, or production availability.'] };
+    const failed = checks.find((check) => !check.readable);
+    if (failed) throw new ServiceClientError('One or more service read checks failed.', { code: failed.code, httpStatus: failed.httpStatus, data: report, nextAction: failed.nextAction });
+    if (hasFlag(args, '--json')) writeSuccess(io, 'doctor.services', report);
+    else writeLine(io.stdout, JSON.stringify(report, null, 2));
+    return 0;
+  } catch (error) {
+    if (hasFlag(args, '--json')) writeFailure(io, 'doctor.services', error);
+    else writeLine(io.stderr, `Error: ${error.message}`);
+    return errorToExitCode(error);
+  }
 }
 
 export async function discoveryCommand(args, io) {

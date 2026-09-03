@@ -22,6 +22,13 @@ import { envCommand, writePrivacy } from './config/env.js';
 import { UsageError } from './core/errors.js';
 import { writeHelp } from './ui/help.js';
 import { defaultIo, writeLine } from './core/io.js';
+import { contextCommand, memoryCommand, restartCommand, stateCommand } from './commands/service.js';
+import { knowledgeCommand } from './commands/knowledge.js';
+import { dreamCommand } from './commands/dream.js';
+import { cloudSkillCommand } from './commands/cloud-skill.js';
+import { hasFlag } from './core/args.js';
+import { errorToExitCode } from './api/errors.js';
+import { writeFailure } from './api/envelope.js';
 
 export async function run(args, io = defaultIo()) {
   try {
@@ -98,8 +105,41 @@ export async function run(args, io = defaultIo()) {
       return 0;
     }
 
+    if (command === 'memory') {
+      return await memoryCommand(args.slice(1), io);
+    }
+
+    if (command === 'context') {
+      return await contextCommand(args.slice(1), io);
+    }
+
+    if (command === 'state') {
+      return await stateCommand(args.slice(1), io);
+    }
+
+    if (command === 'restart') {
+      return await restartCommand(args.slice(1), io);
+    }
+
+    if (command === 'knowledge') {
+      return await knowledgeCommand(args.slice(1), io);
+    }
+
+    if (command === 'dream') {
+      return await dreamCommand(args.slice(1), io);
+    }
+
+    if (command === 'cloud-skill') {
+      return await cloudSkillCommand(args.slice(1), io);
+    }
+
     throw new UsageError(`Unknown command: ${command}`);
   } catch (error) {
+    if (hasFlag(args, '--json') && ['memory', 'context', 'state', 'restart', 'knowledge', 'dream', 'cloud-skill'].includes(args[0])) {
+      const command = [args[0] ?? 'help', args[1]].filter(Boolean).join('.');
+      writeFailure(io, command, error);
+      return errorToExitCode(error);
+    }
     if (error instanceof UsageError) {
       writeLine(io.stderr, `Error: ${error.message}`);
       writeLine(io.stderr, `Run \`${COMMAND_NAME} help\` for usage.`);

@@ -7,6 +7,7 @@ export function defaultIo() {
     stdout: process.stdout,
     stderr: process.stderr,
     fetch: globalThis.fetch,
+    signal: undefined,
     spawn
   };
 }

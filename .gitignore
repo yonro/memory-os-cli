@@ -32,6 +32,7 @@ mcp-publisher.exe
 
 # DevFlow engine
 .progress/
+.npm-cache-review/
 
 # Agent registry & profiles
 .agents/
