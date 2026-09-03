@@ -29,13 +29,13 @@ npm install -g @xmemo/client
 
 Kiro requires the `XMEMO_KEY` environment variable to be set. Choose one of these methods:
 
-#### Option A: OAuth Login (Recommended)
+#### Option A: Browser Login for the CLI Credential (Recommended)
 
 ```bash
 xmemo login
 ```
 
-This opens your browser for secure OAuth authentication and automatically stores your token.
+This opens your browser for secure device login and stores the CLI credential. It does not change Kiro's MCP authentication mode: Kiro still reads `XMEMO_KEY` from its launch environment.
 
 #### Option B: Direct Token
 

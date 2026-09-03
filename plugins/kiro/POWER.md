@@ -22,14 +22,14 @@ xmemo setup kiro
 
 This command:
 1. Merges XMemo MCP server configuration into `~/.kiro/settings/mcp.json`
-2. Sets up OAuth or environment-variable-based authentication
+2. Configures Kiro to read Bearer authentication from the `XMEMO_KEY` environment variable
 3. Adds agent identity headers for attribution
 
 ## Authentication
 
 ### Environment Variable (Required)
 
-Kiro requires the `XMEMO_KEY` environment variable to be set for authentication. 
+Kiro requires the `XMEMO_KEY` environment variable to be set for MCP authentication.
 
 First, authenticate with XMemo:
 
@@ -55,7 +55,7 @@ export XMEMO_KEY=$(xmemo token show --format raw)
 
 ### Why Environment Variable?
 
-Kiro currently has a known issue with OAuth token persistence. Using an environment variable ensures reliable authentication across all sessions.
+Kiro currently has a known issue with MCP OAuth token persistence. `xmemo login` may use a browser to obtain the CLI credential, but Kiro itself still reads `XMEMO_KEY`; using the environment variable ensures reliable authentication across sessions.
 
 ## Usage
 

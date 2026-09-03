@@ -8,7 +8,9 @@ import {
   storeTokenFromStdin,
   storeTokenValue,
   validateToken,
-  credentialsPath
+  credentialsPath,
+  parseRequestedScopes,
+  DEVICE_LOGIN_SCOPES
 } from '../network/auth.js';
 import { baseUrlOption } from '../network/base-url.js';
 import {
@@ -18,7 +20,8 @@ import {
   TOKEN_ENV_VAR
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
-import { normalizeBaseUrl, verifyTokenWithMcp } from '../network/http.js';
+import { verifyTokenWithMcp } from '../network/http.js';
+import { assertServiceOrigin } from '../api/client.js';
 import { writeLine } from '../core/io.js';
 import { readAll } from '../core/runtime.js';
 import { createInterface } from 'node:readline/promises';
@@ -30,10 +33,11 @@ export async function loginCommand(args, io) {
   }
   const outputJson = hasFlag(args, '--json');
   const fromStdin = hasFlag(args, '--from-stdin') || hasFlag(args, '--token-stdin');
-  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+  const baseUrl = assertServiceOrigin(baseUrlOption(args, io.env));
   const httpTimeoutMs = parsePositiveInteger(optionValue(args, '--http-timeout-ms') ?? '30000', '--http-timeout-ms');
   const loginTimeoutOption = optionValue(args, '--timeout-ms');
   const pollOnce = hasFlag(args, '--poll-once');
+  const requestedScopes = parseRequestedScopes(optionValue(args, '--scopes'));
 
   if (fromStdin) {
     const consented = await authorizePlaintextStorage(args, io, {
@@ -43,7 +47,7 @@ export async function loginCommand(args, io) {
     if (!consented) {
       return 0;
     }
-    const result = await storeTokenFromStdin(io, { source: 'stdin' }, { allowPlaintext: true });
+    const result = await storeTokenFromStdin(io, { source: 'stdin', baseUrl }, { allowPlaintext: true });
     if (outputJson) {
       writeLine(io.stdout, JSON.stringify(result, null, 2));
     } else {
@@ -63,7 +67,7 @@ export async function loginCommand(args, io) {
     return 0;
   }
 
-  const start = await startDeviceLogin(baseUrl, httpTimeoutMs, io);
+  const start = await startDeviceLogin(baseUrl, httpTimeoutMs, io, requestedScopes);
   const loginTimeoutMs = loginTimeoutOption
     ? parsePositiveInteger(loginTimeoutOption, '--timeout-ms')
     : Math.max(1000, start.expiresIn * 1000);
@@ -79,7 +83,7 @@ export async function loginCommand(args, io) {
   const token = await pollDeviceLogin(baseUrl, start, loginTimeoutMs, httpTimeoutMs, io, { pollOnce });
   const result = await storeTokenValue(
     token.accessToken,
-    { source: 'device-login', account: token.account },
+    { source: 'device-login', account: token.account, baseUrl, scopes: requestedScopes ?? start.scopes },
     io.env,
     { allowPlaintext: true }
   );
@@ -87,6 +91,7 @@ export async function loginCommand(args, io) {
     ...result,
     baseUrl,
     verificationUri: start.verificationUri,
+    scopes: requestedScopes ?? start.scopes ?? null,
     account: token.account,
     deviceLogin: true
   };
@@ -129,8 +134,8 @@ export async function tokenCommand(args, io) {
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'Token commands:');
     writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext [--base-url <url>]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext] [--base-url <url>]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, `${COMMAND_NAME} login is the recommended personal-user path.`);
     writeLine(io.stdout, `${COMMAND_NAME} token add --from-stdin requires explicit consent to unencrypted user-file storage.`);
@@ -149,7 +154,8 @@ export async function tokenCommand(args, io) {
       action: 'Adding an existing token',
       interactive: false
     });
-    const result = await storeTokenFromStdin(io, { source: 'token-add' }, { allowPlaintext: true });
+    const baseUrl = assertServiceOrigin(baseUrlOption(args, io.env));
+    const result = await storeTokenFromStdin(io, { source: 'token-add', baseUrl }, { allowPlaintext: true });
     if (hasFlag(args, '--json')) {
       writeLine(io.stdout, JSON.stringify(result, null, 2));
     } else {
@@ -168,9 +174,10 @@ export async function tokenCommand(args, io) {
       action: 'Setting a token',
       interactive: false
     });
+    const baseUrl = assertServiceOrigin(baseUrlOption(args, io.env));
     const token = (await readAll(io.stdin)).trim();
     validateToken(token);
-    const result = await storeTokenValue(token, { source: 'token-set' }, io.env, { allowPlaintext: true });
+    const result = await storeTokenValue(token, { source: 'token-set', baseUrl }, io.env, { allowPlaintext: true });
     writeLine(io.stdout, `Credential stored in the approved user file: ${result.credentialPath}`);
     writeLine(io.stdout, 'Storage: unencrypted; file access is restricted to the current OS user where supported.');
     writeLine(io.stdout, 'Token value was not printed. Do not commit this file.');
@@ -184,7 +191,7 @@ async function credentialStatusCommand(args, io, { mode }) {
   const outputJson = hasFlag(args, '--json');
   const verify = hasFlag(args, '--verify');
   const credential = await readStoredCredential(io.env);
-  const environmentToken = io.env[TOKEN_ENV_VAR] ?? io.env[LEGACY_TOKEN_ENV_VAR] ?? '';
+  const environmentToken = io.env[TOKEN_ENV_VAR] || io.env[LEGACY_TOKEN_ENV_VAR] || '';
   const hasEnvironmentToken = Boolean(environmentToken);
   const hasUserCredential = Boolean(credential.token);
   const tokenSource = hasEnvironmentToken ? 'environment' : hasUserCredential ? 'user-credential-file' : 'missing';
@@ -203,6 +210,7 @@ async function credentialStatusCommand(args, io, { mode }) {
       plaintextStorageConsent: credential.plaintextStorageConsent ?? false
     },
     account: credential.account ?? null,
+    credentialMetadata: safeCredentialMetadata(credential.metadata),
     privacy: {
       tokenPrinted: false,
       projectFilesModified: false
@@ -220,7 +228,8 @@ async function credentialStatusCommand(args, io, { mode }) {
       }
       return 1;
     }
-    const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
+    const baseUrl = assertServiceOrigin(baseUrlOption(args, io.env));
+    if (!hasEnvironmentToken) assertCredentialVerificationOrigin(credential, baseUrl);
     const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '10000', '--timeout-ms');
     const verification = await verifyTokenWithMcp(baseUrl, token, timeoutMs, io);
     report.verification = verification;
@@ -239,6 +248,36 @@ async function credentialStatusCommand(args, io, { mode }) {
     writeCredentialStatus(report, io, { mode });
   }
   return report.loggedIn ? 0 : 1;
+}
+
+function safeCredentialMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object') return {};
+  let baseUrl;
+  try {
+    if (typeof metadata.baseUrl === 'string') baseUrl = assertServiceOrigin(metadata.baseUrl);
+  } catch {
+    baseUrl = undefined;
+  }
+  return {
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(Array.isArray(metadata.scopes) ? { scopes: metadata.scopes.filter((scope) => DEVICE_LOGIN_SCOPES.includes(scope)) } : {})
+  };
+}
+
+function assertCredentialVerificationOrigin(credential, baseUrl) {
+  const storedOrigin = credential?.metadata?.baseUrl ?? credential?.metadata?.origin;
+  if (!storedOrigin) {
+    throw new UsageError(`Stored credential has no service origin binding. Run \`${COMMAND_NAME} login --base-url ${baseUrl}\` to migrate it.`);
+  }
+  let normalizedStoredOrigin;
+  try {
+    normalizedStoredOrigin = assertServiceOrigin(storedOrigin);
+  } catch {
+    throw new UsageError(`Stored credential has an invalid service origin binding. Run \`${COMMAND_NAME} login --base-url ${baseUrl}\` again.`);
+  }
+  if (new URL(normalizedStoredOrigin).origin !== new URL(baseUrl).origin) {
+    throw new UsageError('Stored credential is bound to a different service origin; verification was not sent.');
+  }
 }
 
 function writeCredentialStatus(report, io, { mode }) {
@@ -269,11 +308,12 @@ function hasHelpFlag(args) {
 
 function writeLoginHelp(io) {
   writeLine(io.stdout, 'Login command:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} login [--base-url <url>] [--allow-plaintext]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} login [--base-url <url>] [--scopes <scope,...>] [--allow-plaintext]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login --from-stdin --allow-plaintext [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Interactive browser login asks once before storing the issued token unencrypted.');
   writeLine(io.stdout, 'Use --allow-plaintext to record that consent non-interactively. XMEMO_KEY remains preferred for managed environments.');
+  writeLine(io.stdout, 'Supported scopes: memory:read, memory:write, memory:restore, ledger:read, ledger:write, knowledge:read, knowledge:write.');
 }
 
 async function authorizePlaintextStorage(args, io, { action, interactive }) {

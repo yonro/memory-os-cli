@@ -21,18 +21,41 @@ import {
   sleep
 } from '../core/runtime.js';
 
-export async function startDeviceLogin(baseUrl, timeoutMs, io) {
+export const DEVICE_LOGIN_SCOPES = Object.freeze([
+  'memory:read',
+  'memory:write',
+  'memory:restore',
+  'ledger:write',
+  'ledger:read',
+  'knowledge:read',
+  'knowledge:write'
+]);
+export const DEFAULT_DEVICE_LOGIN_SCOPES = Object.freeze([
+  'memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read'
+]);
+
+export function parseRequestedScopes(value) {
+  if (!value) return null;
+  const scopes = String(value)
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  const unique = [...new Set(scopes)];
+  const unsupported = unique.filter((scope) => !DEVICE_LOGIN_SCOPES.includes(scope));
+  if (unsupported.length > 0) {
+    throw new UsageError(`Unsupported login scope(s): ${unsupported.join(', ')}. Supported scopes: ${DEVICE_LOGIN_SCOPES.join(', ')}.`);
+  }
+  if (unique.length === 0) throw new UsageError('At least one login scope is required when --scopes is provided.');
+  return unique;
+}
+
+export async function startDeviceLogin(baseUrl, timeoutMs, io, requestedScopes = null) {
+  const scopes = requestedScopes ?? DEFAULT_DEVICE_LOGIN_SCOPES;
   const payload = await postJson(endpointUrl(baseUrl, DEVICE_LOGIN_START_PATH), {
     client_id: PACKAGE_NAME,
     cli_version: CLI_VERSION,
     token_type: 'mcp_token',
-    scopes: [
-      'memory:read',
-      'memory:write',
-      'memory:restore',
-      'ledger:write',
-      'ledger:read'
-    ]
+    scopes
   }, timeoutMs, io);
 
   const deviceCode = stringValue(payload, ['device_code']);
@@ -46,6 +69,7 @@ export async function startDeviceLogin(baseUrl, timeoutMs, io) {
     userCode: stringValue(payload, ['user_code']),
     verificationUri,
     verificationUriComplete: stringValue(payload, ['verification_uri_complete']),
+    scopes,
     expiresIn: Number.isFinite(Number(payload.expires_in)) ? Number(payload.expires_in) : 600,
     interval: Number.isFinite(Number(payload.interval)) ? Math.max(1, Number(payload.interval)) : 5
   };
@@ -122,7 +146,8 @@ export async function readStoredCredential(env) {
     storage: stringValue(parsed, ['storage']),
     encryption: stringValue(parsed, ['encryption']),
     plaintextStorageConsent: parsed.plaintextStorageConsent === true,
-    account: accountFromPayload(parsed.metadata)
+    account: accountFromPayload(parsed.metadata),
+    metadata: parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : {}
   };
 }
 

@@ -27,6 +27,7 @@ export async function verifyTokenWithMcp(baseUrl, token, timeoutMs, io) {
           clientInfo: { name: COMMAND_NAME, version: CLI_VERSION }
         }
       }),
+      redirect: 'error',
       signal: controller.signal
     });
     return {
@@ -54,6 +55,7 @@ export async function probe(url, timeoutMs, io) {
   try {
     const response = await io.fetch(url, {
       headers: { accept: 'application/json' },
+      redirect: 'error',
       signal: controller.signal
     });
     return { url, ok: response.ok, status: response.status };
@@ -79,6 +81,7 @@ export async function fetchJson(url, timeoutMs, io) {
   try {
     const response = await io.fetch(url, {
       headers: { accept: 'application/json' },
+      redirect: 'error',
       signal: controller.signal
     });
     if (!response.ok) {
@@ -112,6 +115,7 @@ export async function postJson(url, payload, timeoutMs, io, options = {}) {
         'content-type': 'application/json'
       },
       body: JSON.stringify(payload),
+      redirect: 'error',
       signal: controller.signal
     });
     const responsePayload = await response.json();

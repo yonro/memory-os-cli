@@ -195,7 +195,7 @@ export async function hermesSetupPlan({ setupPlan, optionArgs, io, dryRun, ident
   if (shouldBackfillSharedCredential && !mcpOnly) {
     await storeTokenValue(
       credential.token,
-      { source: 'hermes-env-sync', existingPlaintextSource: hermesEnvPath },
+      { source: 'hermes-env-sync', existingPlaintextSource: hermesEnvPath, baseUrl: setupPlan.baseUrl },
       io.env,
       { allowPlaintext: true }
     );

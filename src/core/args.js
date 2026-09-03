@@ -58,6 +58,14 @@ export function parsePositiveInteger(value, name) {
   return parsed;
 }
 
+export function parseIntegerInRange(value, name, { min, max }) {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' && /^-?\d+$/.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new UsageError(`${name} must be an integer from ${min} to ${max}.`);
+  }
+  return parsed;
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
