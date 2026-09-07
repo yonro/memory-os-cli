@@ -1,6 +1,6 @@
 {
   "name": "@xmemo/client",
-  "version": "0.4.181",
+  "version": "0.4.182",
   "description": "Privacy-first CLI client and MCP setup tool for XMemo.",
   "mcpName": "io.github.yonro/xmemo",
   "type": "module",
@@ -12,6 +12,7 @@
   "files": [
     "bin",
     "docs/assets",
+    "scripts",
     "src",
     "skills",
     "plugins/kiro",
@@ -21,7 +22,7 @@
   ],
   "scripts": {
     "lint": "node scripts/check-js.mjs",
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node scripts/run-tests.mjs",
     "pack:dry-run": "npm pack --dry-run",
     "release:check": "node scripts/check-release-version.mjs",
     "prepublishOnly": "npm run release:check && npm run lint && npm test && npm run pack:dry-run"

@@ -237,4 +237,3 @@ export function validateToken(token) {
     throw new UsageError('Token is too short to be a production credential.');
   }
 }
-

@@ -1,6 +1,7 @@
 const definitions = {
   'memory.add': ['content path bucket scope team_id metadata:object memory_type', { content: 'Synthetic memory', path: 'examples/cli' }],
   'memory.search': ['query limit:integer team_id bucket path prefer_working:boolean', { query: 'Synthetic', limit: 5 }],
+  'memory.read': ['memory_id team_id', { memory_id: 'memory-id' }],
   'context.recall': ['query include_knowledge:boolean team_id scope limit:integer max_items:integer max_tokens:integer path bucket memory_type status threshold:number prefer_working:boolean', { query: 'Synthetic', max_items: 5, include_knowledge: false }],
   'state.save': ['state_key content current_task next_action blocked_reason metadata:object source bucket scope path ttl_seconds:integer', { state_key: 'active_task', current_task: 'Review changes', next_action: 'Run checks' }],
   'state.restore': ['state_key bucket scope', { state_key: 'active_task' }],

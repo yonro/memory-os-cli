@@ -33,6 +33,15 @@ export const COMMAND_REGISTRY = Object.freeze([
     ...read
   },
   {
+    command: 'memory.read',
+    domain: 'memory',
+    method: 'GET',
+    path: '/api/v1/memories/{memory_id}/explain',
+    scopes: ['memory:read'],
+    availability: 'current',
+    ...read
+  },
+  {
     command: 'context.recall',
     domain: 'context',
     method: 'POST',

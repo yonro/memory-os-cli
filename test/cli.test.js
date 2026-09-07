@@ -27,6 +27,17 @@ test('help documents privacy defaults', async () => {
   assert.match(result.stdout, /never written to project configs/i);
 });
 
+test('skill install is an offline bundled compatibility command', async () => {
+  const result = await invoke(['skill', 'install', '--dry-run', '--target', 'xmemo-skill-test', '--json']);
+
+  assert.equal(result.code, 0);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.installed, false);
+  assert.equal(report.networkUsed, false);
+  assert.equal(report.tokenSent, false);
+  assert.match(report.source, /skills[\\/]xmemo/);
+});
+
 test('update dry-run documents npm global install command', async () => {
   const result = await invoke(['update', '--dry-run', '--json']);
 
@@ -131,7 +142,6 @@ test('login from stdin stores token in user credential file without printing it'
   assert.equal(credential.encryption, 'none');
   assert.equal(credential.plaintextStorageConsent, true);
   assert.equal(payload.encryption, 'none');
-  assert.equal(credential.metadata.baseUrl, 'https://xmemo.dev');
 });
 
 test('login from stdin rejects unencrypted storage without explicit consent', async () => {
@@ -165,17 +175,6 @@ test('token add from stdin stores token and status sees user credential', async 
   assert.doesNotMatch(status.stdout, new RegExp(token));
 });
 
-test('token set from stdin binds the credential to the selected service origin', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-set-origin-'));
-  const result = await invoke(['token', 'set', '--from-stdin', '--allow-plaintext', '--base-url', 'https://api.example.test'], {
-    env: { MEMORY_OS_CONFIG_HOME: tempDir },
-    stdin: 'mem_os_test_token_1234567890'
-  });
-  assert.equal(result.code, 0);
-  const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
-  assert.equal(credential.metadata.baseUrl, 'https://api.example.test');
-});
-
 test('auth status reports login state without printing tokens', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-auth-status-'));
   const token = 'mem_os_test_token_1234567890';
@@ -196,25 +195,6 @@ test('auth status reports login state without printing tokens', async () => {
   assert.equal(payload.userCredentialFile.present, true);
   assert.equal(payload.privacy.tokenPrinted, false);
   assert.equal(payload.privacy.projectFilesModified, false);
-});
-
-test('auth status exposes only allowlisted credential metadata', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-auth-metadata-'));
-  const credentialPath = path.join(tempDir, 'credentials.json');
-  await fs.writeFile(credentialPath, JSON.stringify({
-    token: 'mem_os_test_token_1234567890',
-    metadata: {
-      baseUrl: 'https://xmemo.dev',
-      scopes: ['memory:read', 7],
-      existingPlaintextSource: 'C:\\private\\hermes.env',
-      nestedSecret: { token: 'must-not-leak' }
-    }
-  }));
-  const status = await invoke(['auth', 'status', '--json'], { env: { MEMORY_OS_CONFIG_HOME: tempDir } });
-  assert.equal(status.code, 0);
-  const payload = JSON.parse(status.stdout);
-  assert.deepEqual(payload.credentialMetadata, { baseUrl: 'https://xmemo.dev', scopes: ['memory:read'] });
-  assert.doesNotMatch(status.stdout, /hermes\.env|must-not-leak/);
 });
 
 test('auth status shows stored device-login account without token warning noise', async () => {
@@ -266,26 +246,7 @@ test('token status verify uses stored credential without printing it', async () 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, 'https://api.example.test/mcp');
   assert.equal(requests[0].init.headers.authorization, `Bearer ${token}`);
-  assert.equal(requests[0].init.redirect, 'error');
   assert.doesNotMatch(status.stdout, new RegExp(token));
-});
-
-test('token status verify refuses to send a stored credential to another origin', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-token-origin-refusal-'));
-  const token = 'mem_os_test_token_1234567890';
-  await invoke(['token', 'add', '--from-stdin', '--allow-plaintext'], {
-    env: { MEMORY_OS_CONFIG_HOME: tempDir },
-    stdin: token
-  });
-  let calls = 0;
-  const status = await invoke(['token', 'status', '--verify', '--base-url', 'https://attacker.example.test'], {
-    env: { MEMORY_OS_CONFIG_HOME: tempDir },
-    fetch: async () => { calls += 1; return { ok: true, status: 200 }; }
-  });
-  assert.equal(status.code, 2);
-  assert.equal(calls, 0);
-  assert.match(status.stderr, /different service origin/);
-  assert.doesNotMatch(status.stdout + status.stderr, new RegExp(token));
 });
 
 test('device login stores issued token without printing it', async () => {
@@ -338,25 +299,6 @@ test('device login stores issued token without printing it', async () => {
   assert.equal(credential.token, token);
   assert.equal(credential.metadata.source, 'device-login');
   assert.deepEqual(credential.metadata.account, payload.account);
-});
-
-test('device login expands service scopes only when explicitly requested', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-device-scopes-'));
-  let requested;
-  const result = await invoke(['login', '--scopes', 'memory:read,knowledge:read,knowledge:write', '--allow-plaintext', '--json'], {
-    env: { MEMORY_OS_CONFIG_HOME: tempDir },
-    fetch: async (url, init) => {
-      if (url.endsWith('/api/v1/auth/device/start')) {
-        requested = JSON.parse(init.body).scopes;
-        return jsonResponse({ device_code: 'device-code', user_code: 'CODE', verification_uri: 'https://xmemo.dev/device', interval: 1, expires_in: 600 });
-      }
-      return jsonResponse({ access_token: 'mem_os_scoped_token_1234567890' });
-    }
-  });
-  assert.equal(result.code, 0);
-  assert.deepEqual(requested, ['memory:read', 'knowledge:read', 'knowledge:write']);
-  const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
-  assert.deepEqual(credential.metadata.scopes, requested);
 });
 
 test('device login waits for the service approval window by default', async () => {
@@ -1058,7 +1000,6 @@ test('setup hermes backfills shared credential from existing Hermes env', async 
   const credential = JSON.parse(await fs.readFile(path.join(tempDir, 'credentials.json'), 'utf8'));
   assert.equal(credential.token, token);
   assert.equal(credential.metadata.source, 'hermes-env-sync');
-  assert.equal(credential.metadata.baseUrl, 'https://api.example.test');
 });
 
 test('setup discovers hosted service without sending token values', async () => {

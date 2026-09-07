@@ -5,22 +5,24 @@ import { hasFlag, optionValue, parseIntegerInRange, parsePositiveInteger } from 
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
 import { booleanInput, readJsonInput, rejectInputFlagConflicts } from '../api/input.js';
-import { createReadReceipt, readAndValidateReceipt } from '../api/read-receipt.js';
+import { createReadReceipt, prepareReadReceiptOut, readAndValidateReceipt, writeReadReceipt } from '../api/read-receipt.js';
 import { InterruptedError, PartialCompletionError, ServiceClientError, UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 import { serviceContext } from '../api/service-context.js';
 import { readDocumentInput } from '../api/upload-input.js';
 import { readTextFileBounded } from '../api/text-input.js';
-import { writeServiceHelpSchema } from '../api/contracts/help-schema.js';
+import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
 import { sleep } from '../core/runtime.js';
 import { assertKnownOptions, assertNoUnknownInputFields } from '../api/input.js';
-import { writeHumanServiceResult } from '../api/service-output.js';
+import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/service-output.js';
 import { confirmRemoteAction } from '../api/confirmation.js';
+import { preflightServiceHandler } from '../api/local-preflight.js';
 
 export async function knowledgeCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || hasFlag(args, '--help')) {
+  if (subcommand === 'help' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     if (subcommand !== 'help' && hasFlag(args, '--json') && writeServiceHelpSchema(io, `knowledge.${subcommand}`)) return 0;
+    if (subcommand !== 'help' && writeHumanServiceHelp(io, `knowledge.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Knowledge commands:');
     writeLine(io.stdout, '  xmemo knowledge add --base <id> (--text <text>|--file <path>|--document <id>) [--publish --yes] [--json]');
     writeLine(io.stdout, '  xmemo knowledge search <query> [--base <id>] [--cursor <cursor>] [--json]');
@@ -30,7 +32,7 @@ export async function knowledgeCommand(args, io) {
   }
   if (subcommand === 'add') return await run('knowledge.add', args.slice(1), io, addKnowledge);
   if (subcommand === 'search') return await run('knowledge.search', args.slice(1), io, searchKnowledge);
-  if (subcommand === 'read') return await run('knowledge.read', args.slice(1), io, readKnowledge);
+  if (subcommand === 'read') return await run('knowledge.read', args.slice(1), io, readKnowledge, preflightReceiptOut);
   if (subcommand === 'update') return await run('knowledge.update', args.slice(1), io, updateKnowledge);
   throw new UsageError(`Unknown knowledge command: ${subcommand}`);
 }
@@ -131,7 +133,7 @@ async function searchKnowledge(args, io, context) {
 }
 
 async function readKnowledge(args, io, context) {
-  assertKnownOptions(args, ['--from', '--team', '--offset', '--limit-chars', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--from', '--team', '--offset', '--limit-chars', '--receipt-out', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
   assertNoUnknownInputFields(input, ['item_id', 'from', 'team_id', 'offset', 'limit_chars']);
   rejectInputFlagConflicts(input, [['--from', 'from'], ['--team', 'team_id'], ['--offset', 'offset'], ['--limit-chars', 'limit_chars']], args);
@@ -151,6 +153,7 @@ async function readKnowledge(args, io, context) {
   const revisionResponse = await context.client.request({ method: 'GET', path: `/api/v1/knowledge-items/${encodeURIComponent(itemId)}/revisions/${encodeURIComponent(revisionId)}`, query: compact({ offset, limit_chars: limitChars, team_id: teamId }), retry: 'bounded' });
   const revision = revisionResponse.data;
   const receipt = createReadReceipt({ baseUrl: context.baseUrl, resource: `knowledge-item:${itemId}`, scope: teamId ?? 'personal', revision: revisionId, version: item.version, itemStatus: item.status, content: revision?.canonical_content, sourceType: item.source_type, sourceRef: revision?.source_ref ?? previous?.sourceRef });
+  if (optionValue(args, '--receipt-out')) await writeReadReceipt(optionValue(args, '--receipt-out'), receipt);
   return { data: { item, revision }, meta: { readReceipt: receipt } };
 }
 
@@ -262,9 +265,11 @@ async function waitForDocumentExtraction(context, document, args, teamId) {
   throw new ServiceClientError('Local extraction wait timed out; the uploaded Document remains available.', { code: 'LOCAL_WAIT_TIMEOUT', outcome: 'known-failure', data: { document: current }, nextAction: `Run knowledge add again with --document ${document.document_id} --document-version ${current?.version ?? document.version ?? 1} after extraction completes.` });
 }
 
-async function run(command, args, io, handler) {
+async function run(command, args, io, handler, preflight = null) {
   const outputJson = hasFlag(args, '--json');
   try {
+    if (preflight) await preflight(args);
+    await preflightServiceHandler(handler, args, io);
     const context = await serviceContext(args, io);
     const response = await handler(args, io, context);
     const data = Object.hasOwn(response, 'data') ? response.data : response;
@@ -274,18 +279,29 @@ async function run(command, args, io, handler) {
     return 0;
   } catch (error) {
     if (outputJson) writeFailure(io, command, error);
-    else writeLine(io.stderr, `Error: ${error.message}`);
+    else writeHumanServiceFailure(io, error);
     return errorToExitCode(error);
   }
 }
 
 function positional(args) {
-  const optionsWithValue = new Set(['--input', '--base', '--title', '--text', '--file', '--document', '--document-version', '--team', '--limit', '--cursor', '--offset', '--limit-chars', '--from', '--timeout-ms', '--base-url', '--url']);
+  const optionsWithValue = new Set(['--input', '--base', '--title', '--text', '--file', '--document', '--document-version', '--team', '--limit', '--cursor', '--offset', '--limit-chars', '--from', '--receipt-out', '--timeout-ms', '--deadline', '--base-url', '--url']);
+  const values = [];
+  let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {
-    if (!args[index].startsWith('--')) return args[index];
-    if (optionsWithValue.has(args[index])) index += 1;
+    const token = args[index];
+    if (token === '--' && !endOfOptions) { endOfOptions = true; continue; }
+    if (!endOfOptions && token.startsWith('-') && !token.startsWith('--') && token !== '-') throw new UsageError(`Unsupported short option: ${token}.`);
+    if (endOfOptions || (!token.startsWith('--') && token !== '-')) values.push(token);
+    if (!endOfOptions && optionsWithValue.has(token)) index += 1;
   }
-  return null;
+  if (values.length > 1) throw new UsageError('knowledge command accepts exactly one positional argument.');
+  return values[0] ?? null;
+}
+
+async function preflightReceiptOut(args) {
+  const receiptPath = optionValue(args, '--receipt-out');
+  if (receiptPath) await prepareReadReceiptOut(receiptPath);
 }
 
 async function selectKnowledgeBase(context, io, teamId, outputJson) {

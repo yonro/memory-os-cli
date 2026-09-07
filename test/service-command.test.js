@@ -441,7 +441,7 @@ test('CLI-03 basic REST calls cover memory, context, state, and restart routes',
     ['state', 'save', '--current-task', 'testing', '--json'],
     ['state', 'restore', '--json'],
     ['restart', 'snapshot', '--json'],
-    ['restart', 'restore', '--snapshot-id', 'snapshot-1', '--json']
+    ['restart', 'restore', '--snapshot-id', 'snapshot-1', '--preview', '--json']
   ];
   for (const args of commands) {
     io.stdout.value = '';
@@ -509,4 +509,81 @@ test('CLI-08 Cloud Skill run rejects a view from another origin before execution
   assert.equal(code, 2);
   assert.equal(calls, 0);
   assert.match(envelope.error.message, /origin/);
+});
+
+test('UX-01 memory search help and invalid input never create a service request', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('[]'); }, { XMEMO_KEY: '' });
+  assert.equal(await run(['--json', 'memory', 'search', '-h'], io), 0);
+  assert.equal(JSON.parse(io.stdout.value).command, 'memory.search');
+  assert.equal(calls, 0);
+
+  io.stdout.value = '';
+  assert.equal(await run(['memory', 'search', 'first', 'second', '--json'], io), 2);
+  assert.equal(JSON.parse(io.stdout.value).error.code, 'INPUT_ERROR');
+  assert.equal(calls, 0);
+
+  io.stdout.value = '';
+  assert.equal(await run(['memory', 'search', 'query', '--limit=oops', '--json'], io), 2);
+  assert.equal(JSON.parse(io.stdout.value).error.code, 'INPUT_ERROR');
+  assert.equal(calls, 0);
+});
+
+test('UX-02 memory add requires a confirmed resource ID after a write', async () => {
+  const io = makeIo(async () => new Response('', { status: 201 }));
+  const code = await run(['memory', 'add', '--content', 'synthetic', '--path', 'tests/ux', '--json'], io);
+  assert.equal(code, 11);
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.error.code, 'WRITE_RECEIPT_MISSING');
+  assert.equal(envelope.error.outcome, 'unknown');
+});
+
+test('UX-03 restart restore needs an explicit safe preview or confirmed apply intent', async () => {
+  const calls = [];
+  const io = makeIo(async (_url, init) => {
+    calls.push(JSON.parse(init.body));
+    return new Response(JSON.stringify({ snapshot_id: 'snapshot-1' }), { status: 200 });
+  });
+  assert.equal(await run(['restart', 'restore', '--snapshot-id', 'snapshot-1', '--json'], io), 2);
+  assert.equal(calls.length, 0);
+  io.stdout.value = '';
+  assert.equal(await run(['restart', 'restore', '--snapshot-id', 'snapshot-1', '--preview', '--json'], io), 0);
+  assert.deepEqual(calls[0], { snapshot_id: 'snapshot-1', restore_state: false, record_restore_event: false });
+  io.stdout.value = '';
+  assert.equal(await run(['restart', 'restore', '--snapshot-id', 'snapshot-1', '--apply', '--yes', '--json'], io), 0);
+  assert.deepEqual(calls[1], { snapshot_id: 'snapshot-1', restore_state: true, record_restore_event: true });
+});
+
+test('UX-05 accepts global duration syntax and forwards context budgets', async () => {
+  let request;
+  const io = makeIo(async (url, init) => {
+    request = { url, init };
+    return new Response(JSON.stringify({ context_text: 'synthetic', items: [] }), { status: 200 });
+  });
+  const code = await run(['context', 'recall', 'continue', '--max-tokens', '2000', '--max-items=8', '--timeout', '15s', '--deadline', '30s', '--json'], io);
+  assert.equal(code, 0);
+  assert.equal(JSON.parse(request.init.body).max_tokens, 2000);
+  assert.equal(JSON.parse(request.init.body).max_items, 8);
+});
+
+test('UX-06 memory search has a compact human result instead of a raw JSON dump', async () => {
+  const io = makeIo(async () => new Response(JSON.stringify([{ memory_id: 'memory-1', path: 'projects/demo', content: 'Release checklist for the demo project.' }]), { status: 200 }));
+  assert.equal(await run(['memory', 'search', 'checklist'], io), 0);
+  assert.match(io.stdout.value, /Found 1 matching memory/);
+  assert.match(io.stdout.value, /projects\/demo.*memory-1/);
+  assert.doesNotMatch(io.stdout.value, /^\[/m);
+});
+
+test('UX-07 read commands write a minimal receipt without overwriting an existing file', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-cli-receipt-'));
+  const receiptPath = path.join(tempDir, 'knowledge-view.json');
+  const io = makeIo(async (url) => new Response(JSON.stringify(new URL(url).pathname.includes('/revisions/')
+    ? { canonical_content: 'private body must not be saved in receipt' }
+    : { current_revision_id: 'revision-1', version: 2, status: 'draft' }), { status: 200 }));
+  assert.equal(await run(['knowledge', 'read', 'item-1', '--receipt-out', receiptPath, '--json'], io), 0);
+  const receipt = JSON.parse(await fs.readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.resource, 'knowledge-item:item-1');
+  assert.equal(receipt.displayedRevision, 'revision-1');
+  assert.equal(receipt.canonical_content, undefined);
+  assert.equal(await run(['knowledge', 'read', 'item-1', '--receipt-out', receiptPath, '--json'], io), 2);
 });

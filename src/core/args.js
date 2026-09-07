@@ -66,6 +66,17 @@ export function parseIntegerInRange(value, name, { min, max }) {
   return parsed;
 }
 
+export function parseDurationMs(value, name) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  const match = typeof value === 'string' ? /^(\d+)(ms|s|m)?$/u.exec(value.trim()) : null;
+  if (!match) throw new UsageError(`${name} must be a positive duration such as 250ms, 15s, or 2m.`);
+  const amount = Number(match[1]);
+  const multiplier = match[2] === 'm' ? 60_000 : match[2] === 's' ? 1_000 : 1;
+  const milliseconds = amount * multiplier;
+  if (!Number.isSafeInteger(milliseconds) || milliseconds <= 0) throw new UsageError(`${name} is out of range.`);
+  return milliseconds;
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

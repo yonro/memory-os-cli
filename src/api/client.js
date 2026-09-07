@@ -42,8 +42,9 @@ export function createServiceClient({
     throw new UsageError('timeoutMs must be a positive integer.');
   }
 
-  async function request({ method, path, query, body, sideEffect = false, retry = 'none', operation, timeoutMs: requestTimeoutMs = timeoutMs }) {
+  async function request({ method, path, query, body, sideEffect = false, retry = 'none', operation, timeoutMs: requestTimeoutMs = timeoutMs, deadlineMs }) {
     if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) throw new UsageError('Request timeout must be a positive integer.');
+    if (deadlineMs !== undefined && (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0)) throw new UsageError('Request deadline must be a positive integer.');
     if (io.signal?.aborted) throw new InterruptedError('Local request interrupted before transmission.');
     const url = buildUrl(serviceBaseUrl, path, query);
     const headers = {
@@ -64,10 +65,13 @@ export function createServiceClient({
     }
 
     const attempts = retry === 'bounded' && !sideEffect ? 2 : 1;
+    const deadline = deadlineMs === undefined ? null : Date.now() + deadlineMs;
     let lastError;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
-        const { response, payload } = await fetchWithTimeout(url, init, requestTimeoutMs, io, async (response) => {
+        const remaining = deadline === null ? requestTimeoutMs : deadline - Date.now();
+        if (remaining <= 0) throw new ServiceClientError(`Service request deadline exceeded: ${method} ${path}.`, { code: 'REQUEST_DEADLINE_EXCEEDED' });
+        const { response, payload } = await fetchWithTimeout(url, init, Math.min(requestTimeoutMs, remaining), io, async (response) => {
           let payload;
           try { payload = await readJsonResponse(response, maxResponseBytes); }
           catch (error) {
@@ -79,7 +83,14 @@ export function createServiceClient({
         if (!response.ok) {
           const safePayload = safeErrorData(payload, token);
           const details = classifyHttpFailure(response.status, safePayload);
-          if (details.retryable && attempt + 1 < attempts) continue;
+          if (details.retryable && attempt + 1 < attempts) {
+            const retryAfterMs = retryDelayMs(response.headers?.get?.('retry-after'), attempt);
+            if (deadline !== null && retryAfterMs >= deadline - Date.now()) {
+              throw new ServiceClientError(`Service request deadline exceeded while waiting to retry: ${method} ${path}.`, { code: 'REQUEST_DEADLINE_EXCEEDED', data: { retryAfterMs } });
+            }
+            await waitForRetry(retryAfterMs, io);
+            continue;
+          }
           if ((details.httpStatus === 404 || details.httpStatus === 405) && operation?.contractRequired) {
             throw new ContractRequiredError(`Server contract is unavailable for ${operation.name ?? path}.`, details);
           }
@@ -114,6 +125,36 @@ export function createServiceClient({
   }
 
   return Object.freeze({ baseUrl: serviceBaseUrl, request });
+}
+
+function retryDelayMs(retryAfter, attempt) {
+  if (typeof retryAfter === 'string' && /^\d+(?:\.\d+)?$/u.test(retryAfter.trim())) return Math.ceil(Number(retryAfter) * 1000);
+  if (typeof retryAfter === 'string') {
+    const dateMs = Date.parse(retryAfter);
+    if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
+  }
+  const baseMs = attempt === 0 ? 250 : 1000;
+  return Math.round(baseMs * (0.8 + Math.random() * 0.4));
+}
+
+async function waitForRetry(delayMs, io) {
+  if (delayMs <= 0) return;
+  if (io.signal?.aborted) throw new InterruptedError('Local request interrupted while waiting to retry.');
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      io.signal?.removeEventListener?.('abort', abort);
+      callback();
+    };
+    const timer = setTimeout(() => finish(resolve), delayMs);
+    const abort = () => {
+      clearTimeout(timer);
+      finish(() => reject(new InterruptedError('Local request interrupted while waiting to retry.')));
+    };
+    io.signal?.addEventListener?.('abort', abort, { once: true });
+  });
 }
 
 function buildUrl(baseUrl, path, query) {

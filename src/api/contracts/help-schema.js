@@ -6,11 +6,13 @@ const common = Object.freeze({
   '--json': { type: 'boolean', description: '输出单个 JSON envelope。' },
   '--base-url': { type: 'https-url', description: '目标 XMemo 服务地址。' },
   '--timeout-ms': { type: 'integer>0', description: '单次 HTTP 请求超时。' },
+  '--timeout': { type: 'duration', description: '单次 HTTP 请求超时；兼容 --timeout-ms。' },
+  '--deadline': { type: 'duration', description: '整个服务调用的总预算，例如 30s。' },
   '--allow-legacy-credential': { type: 'boolean', description: '仅允许无 origin 元数据的旧凭证连接默认服务；推荐重新登录迁移。' }
 });
 
 const INPUT_COMMANDS = new Set([
-  'memory.add', 'memory.search', 'context.recall', 'state.save', 'state.restore',
+  'memory.add', 'memory.search', 'memory.read', 'context.recall', 'state.save', 'state.restore',
   'restart.snapshot', 'restart.restore', 'knowledge.add', 'knowledge.search',
   'knowledge.read', 'knowledge.update', 'dream.preview', 'dream.show', 'dream.apply',
   'cloud-skill.add', 'cloud-skill.list', 'cloud-skill.show', 'cloud-skill.update', 'cloud-skill.run'
@@ -20,23 +22,24 @@ const option = (type, description) => ({ type, description });
 const COMMAND_OPTIONS = Object.freeze({
   'memory.add': { '--content': option('string', '记忆正文。'), '--path': option('string', '记忆路径。'), '--bucket': option('string', '数据桶。'), '--scope': option('string', '空间。'), '--team': option('id', '团队 ID。') },
   'memory.search': { '<query>': option('string', '检索文本。'), '--limit': option('integer>0', '结果上限。'), '--team': option('id', '团队 ID。'), '--bucket': option('string', '数据桶。'), '--path': option('string', '路径过滤。'), '--prefer-working': option('boolean', '优先 working 记忆。') },
-  'context.recall': { '<query>': option('string', '召回目标。'), '--include-knowledge': option('boolean', '包含知识库结果。'), '--team': option('id', '团队 ID。') },
+  'memory.read': { '<memory-id>': option('id', '完整记忆 ID。'), '--team': option('id', '团队 ID。') },
+  'context.recall': { '<query>': option('string', '召回目标。'), '--max-tokens': option('integer>0', '上下文 token 预算。'), '--max-items': option('integer>0', '最大记忆条目数。'), '--include-knowledge': option('boolean', '包含知识库结果。'), '--team': option('id', '团队 ID。') },
   'state.save': { '--state-key': option('string', '状态槽。'), '--content': option('string', '状态正文。'), '--current-task': option('string', '当前任务。'), '--next-action': option('string', '下一动作。'), '--blocked-reason': option('string', '阻塞原因。'), '--ttl-seconds': option('integer>=0', '存活时间。') },
   'state.restore': { '--state-key': option('string', '状态槽。'), '--bucket': option('string', '数据桶。'), '--scope': option('string', '空间。') },
   'restart.snapshot': { '--state-key': option('string', '状态槽。'), '--bucket': option('string', '数据桶。'), '--scope': option('string', '空间。') },
-  'restart.restore': { '--snapshot-id': option('id', '快照 ID。'), '--state-key': option('string', '状态槽。'), '--bucket': option('string', '数据桶。'), '--scope': option('string', '空间。') },
+  'restart.restore': { '--snapshot-id': option('id', '快照 ID。'), '--state-key': option('string', '状态槽。'), '--bucket': option('string', '数据桶。'), '--scope': option('string', '空间。'), '--preview': option('boolean', '只读取恢复结果，不修改工作状态。'), '--apply': option('boolean', '恢复工作状态并记录事件；需要 --yes。'), '--yes': option('boolean', '确认应用恢复。') },
   'knowledge.add': { '--base': option('id', '知识库 ID。'), '--create-base': option('string', '显式新建知识库。'), '--title': option('string', '条目标题。'), '--text': option('string', '文本内容。'), '--file': option('path', '文本或文档文件。'), '--document': option('id', '已有 Document ID。'), '--document-version': option('integer>0', 'Document 版本。'), '--publish': option('boolean', '创建为发布状态。'), '--yes': option('boolean', '确认发布。'), '--team': option('id', '团队 ID。') },
   'knowledge.search': { '<query>': option('string', '检索文本。'), '--base': option('id', '知识库 ID。'), '--limit': option('integer>0', '结果上限。'), '--cursor': option('string', '服务端游标。'), '--team': option('id', '团队 ID。') },
-  'knowledge.read': { '<item-id>': option('id', '知识条目 ID。'), '--offset': option('integer>=0', '正文偏移。'), '--limit-chars': option('integer>0', '本页字符数。'), '--team': option('id', '团队 ID。') },
+  'knowledge.read': { '<item-id>': option('id', '知识条目 ID。'), '--offset': option('integer>=0', '正文偏移。'), '--limit-chars': option('integer>0', '本页字符数。'), '--receipt-out': option('path', '只保存版本回执，不含正文或凭证。'), '--team': option('id', '团队 ID。') },
   'knowledge.update': { '<item-id>': option('id', '知识条目 ID。'), '--from': option('path', 'knowledge read JSON。'), '--text': option('string', '新文本。'), '--file': option('path', '新文本文件。'), '--document': option('id', '同一来源 Document ID。'), '--document-version': option('integer>0', 'Document 版本。'), '--publish': option('boolean', '修改线上内容或发布草稿。'), '--yes': option('boolean', '确认发布。'), '--team': option('id', '团队 ID。') },
   'dream.preview': { '--window-days': option('1..365', '回看天数。'), '--wait': option('boolean', '本地等待完成。'), '--wait-timeout': option('integer>0', '本地等待上限。'), '--idempotency-key': option('string', '复用同一预览意图。'), '--team': option('id', '团队 ID。') },
-  'dream.show': { '<run-id>': option('id', 'Dream run ID。'), '--wait': option('boolean', '本地等待完成。'), '--wait-timeout': option('integer>0', '本地等待上限。'), '--team': option('id', '团队 ID。') },
+  'dream.show': { '<run-id>': option('id', 'Dream run ID。'), '--wait': option('boolean', '本地等待完成。'), '--wait-timeout': option('integer>0', '本地等待上限。'), '--receipt-out': option('path', '只保存版本回执，不含正文或凭证。'), '--team': option('id', '团队 ID。') },
   'dream.apply': { '<run-id>': option('id', 'Dream run ID。'), '--item': option('id', '单个候选 ID。'), '--from': option('path', 'dream show JSON。'), '--yes': option('boolean', '确认写入。'), '--team': option('id', '团队 ID。') },
   'cloud-skill.add': { '--file': option('SKILL.md', '单文件技能。'), '--dir': option('directory', '技能目录。'), '--name': option('string', '显示名。'), '--slug': option('string', '唯一 slug。'), '--publish': option('boolean', '请求发布。'), '--yes': option('boolean', '确认发布。'), '--team': option('id', '团队 ID。') },
   'cloud-skill.list': { '--team': option('id', '团队 ID。') },
-  'cloud-skill.show': { '<skill-id>': option('id', '技能 ID。'), '--draft': option('boolean', '读取最新维护版本。'), '--team': option('id', '团队 ID。') },
+  'cloud-skill.show': { '<skill-id>': option('id', '技能 ID。'), '--draft': option('boolean', '读取最新维护版本。'), '--receipt-out': option('path', '只保存版本回执，不含正文或凭证。'), '--team': option('id', '团队 ID。') },
   'cloud-skill.update': { '<skill-id>': option('id', '技能 ID。'), '--file': option('SKILL.md', '单文件技能。'), '--dir': option('directory', '技能目录。'), '--from': option('path', 'cloud-skill show JSON。'), '--publish': option('boolean', '请求发布。'), '--yes': option('boolean', '确认发布。'), '--team': option('id', '团队 ID。') },
-  'cloud-skill.run': { '<skill-id>': option('id', '技能 ID。'), '--script': option('logical-path', '明确脚本入口。'), '--input': option('path', '包含 input_args 的 JSON。'), '--from': option('path', 'published show JSON。'), '--yes': option('boolean', '确认远端执行。'), '--timeout-seconds': option('1..60', '脚本运行上限。'), '--team': option('id', '团队 ID。') }
+  'cloud-skill.run': { '<skill-id>': option('id', '技能 ID。'), '--script': option('logical-path', '明确脚本入口。'), '--input': option('path', '包含 input_args 的 JSON。'), '--from': option('path', 'published show JSON。'), '--yes': option('boolean', '确认远端执行。'), '--timeout-seconds': option('1..60', '脚本运行上限；兼容 --execution-timeout 30s。'), '--team': option('id', '团队 ID。') }
 });
 
 const CONFIRMATION = Object.freeze({
@@ -84,5 +87,21 @@ export function writeServiceHelpSchema(io, command) {
   const schema = serviceHelpSchema(command);
   if (!schema) return false;
   writeLine(io.stdout, JSON.stringify(schema));
+  return true;
+}
+
+export function writeHumanServiceHelp(io, command) {
+  const schema = serviceHelpSchema(command);
+  if (!schema) return false;
+  writeLine(io.stdout, `Usage: xmemo ${command.replace('.', ' ')} [options]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Options:');
+  for (const [name, details] of Object.entries(schema.options)) {
+    writeLine(io.stdout, `  ${name.padEnd(22)} ${details.description}`);
+  }
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `Example: ${schema.examples[0].invocation}`);
+  if (schema.confirmation) writeLine(io.stdout, `Impact: confirmation required (${schema.confirmation.flag}).`);
+  writeLine(io.stdout, 'Exit codes: 0 success; 2 input; 3 authentication; 4 permission; 6 conflict; 7 service; 10 confirmation; 11 unknown outcome.');
   return true;
 }

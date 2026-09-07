@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import { access, link, unlink, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { UsageError } from '../core/errors.js';
 import { readTextFileBounded } from './text-input.js';
@@ -49,4 +51,40 @@ export async function readAndValidateReceipt(filePath, { baseUrl, resource, scop
   }
   if (typeof receipt.displayedRevision !== 'string' || !receipt.displayedRevision.trim()) throw new UsageError('Read receipt has no valid displayed revision; read the resource again.');
   return receipt;
+}
+
+export async function writeReadReceipt(filePath, receipt) {
+  await prepareReadReceiptOut(filePath);
+  const temporaryPath = path.join(path.dirname(path.resolve(filePath)), `.${path.basename(filePath)}.${crypto.randomUUID()}.tmp`);
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(receipt)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    await link(temporaryPath, filePath);
+  } catch (error) {
+    if (error?.code === 'EEXIST') throw new UsageError(`Receipt file already exists: ${filePath}. Choose a new path; XMemo will not overwrite it.`);
+    throw new UsageError(`Could not save receipt to ${filePath}: ${error.message}`);
+  } finally {
+    await unlink(temporaryPath).catch(() => {});
+  }
+}
+
+// Validate the user-selected destination before an otherwise successful read
+// performs remote work. The final write remains no-clobber and atomic, so a
+// file created by another process after this probe is still never replaced.
+export async function prepareReadReceiptOut(filePath) {
+  if (typeof filePath !== 'string' || !filePath.trim()) throw new UsageError('--receipt-out requires a file path.');
+  try {
+    await access(filePath);
+    throw new UsageError(`Receipt file already exists: ${filePath}. Choose a new path; XMemo will not overwrite it.`);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  const directory = path.dirname(path.resolve(filePath));
+  const probePath = path.join(directory, `.${path.basename(filePath)}.${crypto.randomUUID()}.probe`);
+  try {
+    await writeFile(probePath, '', { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    throw new UsageError(`Could not save receipt to ${filePath}: ${error.message}`);
+  } finally {
+    await unlink(probePath).catch(() => {});
+  }
 }

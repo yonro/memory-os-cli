@@ -4,18 +4,20 @@ import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
 import { sleep } from '../core/runtime.js';
 import { assertKnownOptions, assertNoUnknownInputFields, booleanInput, readJsonInput, rejectInputFlagConflicts } from '../api/input.js';
-import { createReadReceipt, readAndValidateReceipt } from '../api/read-receipt.js';
+import { createReadReceipt, prepareReadReceiptOut, readAndValidateReceipt, writeReadReceipt } from '../api/read-receipt.js';
 import { InterruptedError, PrerequisiteRequiredError, ServiceClientError, UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 import { serviceContext } from '../api/service-context.js';
-import { writeServiceHelpSchema } from '../api/contracts/help-schema.js';
-import { writeHumanServiceResult } from '../api/service-output.js';
+import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
+import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/service-output.js';
 import { confirmRemoteAction } from '../api/confirmation.js';
+import { preflightServiceHandler } from '../api/local-preflight.js';
 
 export async function dreamCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || hasFlag(args, '--help')) {
+  if (subcommand === 'help' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     if (subcommand !== 'help' && hasFlag(args, '--json') && writeServiceHelpSchema(io, `dream.${subcommand}`)) return 0;
+    if (subcommand !== 'help' && writeHumanServiceHelp(io, `dream.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Dream commands:');
     writeLine(io.stdout, '  xmemo dream preview [--window-days <n>] [--wait] [--json]');
     writeLine(io.stdout, '  xmemo dream show <run-id> [--wait] [--json]');
@@ -23,7 +25,7 @@ export async function dreamCommand(args, io) {
     return 0;
   }
   if (subcommand === 'preview') return await run('dream.preview', args.slice(1), io, previewDream);
-  if (subcommand === 'show') return await run('dream.show', args.slice(1), io, showDream);
+  if (subcommand === 'show') return await run('dream.show', args.slice(1), io, showDream, preflightReceiptOut);
   if (subcommand === 'apply') return await run('dream.apply', args.slice(1), io, applyDream);
   throw new UsageError(`Unknown dream command: ${subcommand}`);
 }
@@ -69,7 +71,7 @@ async function previewDream(args, io, context) {
 }
 
 async function showDream(args, io, context) {
-  assertKnownOptions(args, ['--wait', '--wait-timeout', '--team', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--wait', '--wait-timeout', '--team', '--receipt-out', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
   assertNoUnknownInputFields(input, ['run_id', 'wait', 'wait_timeout', 'team_id']);
   rejectInputFlagConflicts(input, [['--wait', 'wait'], ['--wait-timeout', 'wait_timeout'], ['--team', 'team_id']], args);
@@ -85,6 +87,7 @@ async function showDream(args, io, context) {
   const run = response.data?.run;
   const candidateItemIds = Array.isArray(response.data?.items) ? response.data.items.map((item) => item?.id).filter(Boolean) : [];
   const receipt = createReadReceipt({ baseUrl: context.baseUrl, resource: `dream-run:${runId}`, scope: teamId ?? 'personal', revision: run?.confirmation_version, settingsVersion: run?.settings_version ?? response.data?.settings_version, candidateItemIds });
+  if (optionValue(args, '--receipt-out')) await writeReadReceipt(optionValue(args, '--receipt-out'), receipt);
   return { data: response.data, meta: { readReceipt: receipt } };
 }
 
@@ -144,9 +147,11 @@ async function waitForDream(context, runId, args, initial = null, timeoutOverrid
   throw new ServiceClientError(`Dream wait timed out; run ${runId} remains available for show.`, { code: 'LOCAL_WAIT_TIMEOUT', outcome: 'known-failure', data: { run_id: runId }, nextAction: `Run \`xmemo dream show ${runId}\` to continue checking.` });
 }
 
-async function run(command, args, io, handler) {
+async function run(command, args, io, handler, preflight = null) {
   const outputJson = hasFlag(args, '--json');
   try {
+    if (preflight) await preflight(args);
+    await preflightServiceHandler(handler, args, io);
     const context = await serviceContext(args, io);
     const response = await handler(args, io, context);
     if (outputJson) writeSuccess(io, command, response?.data ?? response, response?.meta ?? {});
@@ -154,18 +159,29 @@ async function run(command, args, io, handler) {
     return 0;
   } catch (error) {
     if (outputJson) writeFailure(io, command, error);
-    else writeLine(io.stderr, `Error: ${error.message}`);
+    else writeHumanServiceFailure(io, error);
     return errorToExitCode(error);
   }
 }
 
 function positional(args) {
-  const optionsWithValue = new Set(['--input', '--window-days', '--idempotency-key', '--wait-timeout', '--team', '--from', '--item', '--timeout-ms', '--base-url', '--url']);
+  const optionsWithValue = new Set(['--input', '--window-days', '--idempotency-key', '--wait-timeout', '--team', '--from', '--item', '--receipt-out', '--timeout-ms', '--deadline', '--base-url', '--url']);
+  const values = [];
+  let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {
-    if (!args[index].startsWith('--')) return args[index];
-    if (optionsWithValue.has(args[index])) index += 1;
+    const token = args[index];
+    if (token === '--' && !endOfOptions) { endOfOptions = true; continue; }
+    if (!endOfOptions && token.startsWith('-') && !token.startsWith('--') && token !== '-') throw new UsageError(`Unsupported short option: ${token}.`);
+    if (endOfOptions || (!token.startsWith('--') && token !== '-')) values.push(token);
+    if (!endOfOptions && optionsWithValue.has(token)) index += 1;
   }
-  return null;
+  if (values.length > 1) throw new UsageError('dream command accepts exactly one positional argument.');
+  return values[0] ?? null;
+}
+
+async function preflightReceiptOut(args) {
+  const receiptPath = optionValue(args, '--receipt-out');
+  if (receiptPath) await prepareReadReceiptOut(receiptPath);
 }
 
 function compact(value) {
