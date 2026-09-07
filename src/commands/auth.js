@@ -352,4 +352,3 @@ async function authorizePlaintextStorage(args, io, { action, interactive }) {
   }
   return true;
 }
-

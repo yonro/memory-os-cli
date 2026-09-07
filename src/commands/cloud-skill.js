@@ -1,20 +1,22 @@
 import { hasFlag, optionValue, parseIntegerInRange } from '../core/args.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { readAndValidateReceipt, createReadReceipt } from '../api/read-receipt.js';
+import { readAndValidateReceipt, createReadReceipt, prepareReadReceiptOut, writeReadReceipt } from '../api/read-receipt.js';
 import { assertKnownOptions, assertNoUnknownInputFields, booleanInput, readJsonInput, rejectInputFlagConflicts } from '../api/input.js';
 import { ServiceClientError, UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 import { serviceContext } from '../api/service-context.js';
-import { writeServiceHelpSchema } from '../api/contracts/help-schema.js';
+import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
 import { collectSkillFiles, readSkillFile } from '../api/upload-input.js';
-import { writeHumanServiceResult } from '../api/service-output.js';
+import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/service-output.js';
 import { confirmRemoteAction } from '../api/confirmation.js';
+import { preflightServiceHandler } from '../api/local-preflight.js';
 
 export async function cloudSkillCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || hasFlag(args, '--help')) {
+  if (subcommand === 'help' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     if (subcommand !== 'help' && hasFlag(args, '--json') && writeServiceHelpSchema(io, `cloud-skill.${subcommand}`)) return 0;
+    if (subcommand !== 'help' && writeHumanServiceHelp(io, `cloud-skill.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Cloud Skill commands:');
     writeLine(io.stdout, '  xmemo cloud-skill add --file SKILL.md|--dir <folder> [--publish --yes] [--json]');
     writeLine(io.stdout, '  xmemo cloud-skill list [--team <id>] [--json]');
@@ -25,7 +27,7 @@ export async function cloudSkillCommand(args, io) {
   }
   if (subcommand === 'add') return await run('cloud-skill.add', args.slice(1), io, addSkill);
   if (subcommand === 'list') return await run('cloud-skill.list', args.slice(1), io, listSkills);
-  if (subcommand === 'show') return await run('cloud-skill.show', args.slice(1), io, showSkill);
+  if (subcommand === 'show') return await run('cloud-skill.show', args.slice(1), io, showSkill, preflightReceiptOut);
   if (subcommand === 'update') return await run('cloud-skill.update', args.slice(1), io, updateSkill);
   if (subcommand === 'run') return await run('cloud-skill.run', args.slice(1), io, runSkill);
   throw new UsageError(`Unknown cloud-skill command: ${subcommand}`);
@@ -103,7 +105,7 @@ async function listSkills(args, io, context) {
 }
 
 async function showSkill(args, io, context) {
-  assertKnownOptions(args, ['--draft', '--team', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--draft', '--team', '--receipt-out', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
   assertNoUnknownInputFields(input, ['skill_id', 'draft', 'team_id']);
   rejectInputFlagConflicts(input, [['--draft', 'draft'], ['--team', 'team_id']], args);
@@ -125,6 +127,7 @@ async function showSkill(args, io, context) {
   const displayedRevision = targetRevision ?? null;
   const displayedRevisionData = showDraft ? latestRevision : publishedRevision;
   const receipt = createReadReceipt({ baseUrl: context.baseUrl, resource: `cloud-skill:${skillId}`, scope: teamId ?? 'personal', revision: displayedRevision, latestRevision: latestRevision?.revision_id ?? detail.data?.skill?.latest_revision_id, revisionStatus: String(displayedRevisionData?.status ?? (showDraft ? 'draft' : 'published')).toLowerCase(), revisionKind: showDraft ? 'draft' : 'published' });
+  if (optionValue(args, '--receipt-out')) await writeReadReceipt(optionValue(args, '--receipt-out'), receipt);
   return { data: { skill: detail.data?.skill, displayed_revision: displayedRevisionData, components: components.data, executable: !showDraft && scriptCandidates(components.data).length > 0 }, meta: { readReceipt: receipt, warnings: showDraft ? ['This is a maintenance view; run requires a published view.'] : latestRevision?.revision_id !== targetRevision ? ['A newer maintenance revision exists; use show --draft before update.'] : [] } };
 }
 
@@ -171,9 +174,11 @@ function scriptCandidates(components) {
   return [...new Set(scripts.map((component) => String(component?.logical_path ?? '').trim()).filter(Boolean))];
 }
 
-async function run(command, args, io, handler) {
+async function run(command, args, io, handler, preflight = null) {
   const outputJson = hasFlag(args, '--json');
   try {
+    if (preflight) await preflight(args);
+    await preflightServiceHandler(handler, args, io);
     const context = await serviceContext(args, io);
     const response = await handler(args, io, context);
     const data = Object.hasOwn(response, 'data') ? response.data : response;
@@ -183,18 +188,29 @@ async function run(command, args, io, handler) {
     return 0;
   } catch (error) {
     if (outputJson) writeFailure(io, command, error);
-    else writeLine(io.stderr, `Error: ${error.message}`);
+    else writeHumanServiceFailure(io, error);
     return errorToExitCode(error);
   }
 }
 
 function positional(args) {
-  const optionsWithValue = new Set(['--team', '--script', '--input', '--from', '--file', '--dir', '--name', '--slug', '--timeout-seconds', '--timeout-ms', '--base-url', '--url']);
+  const optionsWithValue = new Set(['--team', '--script', '--input', '--from', '--file', '--dir', '--name', '--slug', '--receipt-out', '--timeout-seconds', '--timeout-ms', '--deadline', '--base-url', '--url']);
+  const values = [];
+  let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {
-    if (!args[index].startsWith('--')) return args[index];
-    if (optionsWithValue.has(args[index])) index += 1;
+    const token = args[index];
+    if (token === '--' && !endOfOptions) { endOfOptions = true; continue; }
+    if (!endOfOptions && token.startsWith('-') && !token.startsWith('--') && token !== '-') throw new UsageError(`Unsupported short option: ${token}.`);
+    if (endOfOptions || (!token.startsWith('--') && token !== '-')) values.push(token);
+    if (!endOfOptions && optionsWithValue.has(token)) index += 1;
   }
-  return null;
+  if (values.length > 1) throw new UsageError('cloud-skill command accepts exactly one positional argument.');
+  return values[0] ?? null;
+}
+
+async function preflightReceiptOut(args) {
+  const receiptPath = optionValue(args, '--receipt-out');
+  if (receiptPath) await prepareReadReceiptOut(receiptPath);
 }
 
 async function readSkillSource(args) {

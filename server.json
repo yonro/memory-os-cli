@@ -51,7 +51,7 @@
     {
       "registryType": "npm",
       "identifier": "@xmemo/client",
-      "version": "0.4.181",
+      "version": "0.4.182",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

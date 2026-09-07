@@ -59,6 +59,31 @@ test('CLI-01 retries bounded read-only POST requests but never side effects', as
   assert.equal(calls, 2);
 });
 
+test('UX-04 honors Retry-After and never starts a retry beyond the operation deadline', async () => {
+  let calls = 0;
+  const client = createServiceClient({
+    baseUrl: 'https://api.example.test', token: 'synthetic-token-value',
+    io: ioWith(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response(JSON.stringify({ detail: 'slow down' }), { status: 429, headers: { 'retry-after': '1' } })
+        : new Response(JSON.stringify({ results: [] }), { status: 200 });
+    })
+  });
+  const started = Date.now();
+  const response = await client.request({ method: 'GET', path: '/api/v1/recall', retry: 'bounded', deadlineMs: 2000 });
+  assert.deepEqual(response.data, { results: [] });
+  assert.equal(calls, 2);
+  assert.ok(Date.now() - started >= 900);
+
+  calls = 0;
+  await assert.rejects(
+    () => client.request({ method: 'GET', path: '/api/v1/recall', retry: 'bounded', deadlineMs: 20 }),
+    (error) => error.code === 'REQUEST_DEADLINE_EXCEEDED'
+  );
+  assert.equal(calls, 1);
+});
+
 test('CLI-02 rejects credential-file origin mismatch and provides migration boundary', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-cli-origin-'));
   await fs.writeFile(path.join(tempDir, 'credentials.json'), JSON.stringify({

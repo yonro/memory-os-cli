@@ -5,6 +5,7 @@ import { ConfirmationRequiredError } from './errors.js';
 
 export async function confirmRemoteAction(args, io, message) {
   if (hasFlag(args, '--yes')) return;
+  if (io.preflightOnly) throw new ConfirmationRequiredError(message);
   if (hasFlag(args, '--json') || !io.stdin?.isTTY) throw new ConfirmationRequiredError(message);
   let accepted;
   if (typeof io.confirm === 'function') {

@@ -98,14 +98,17 @@ export async function doctorCommand(args, io) {
 async function serviceDoctor(args, io) {
   try {
     assertKnownOptions(args, ['--services', '--team', '--json', '--base-url', '--url', '--timeout-ms', '--allow-legacy-credential']);
+    const requested = requestedServices(args);
     const context = await serviceContext(args, io);
     const teamId = optionValue(args, '--team');
     const checks = [];
     for (const [name, endpoint, query] of [
+      ['memory', '/api/v1/recall', { query: '__xmemo_cli_doctor_read_probe__', limit: 1 }],
       ['knowledge', '/api/v1/knowledge-bases', { limit: 1, include_archived: false }],
       ['dream', '/api/v1/me/dream/settings', {}],
       ['cloud-skill', '/v1/skills', {}]
     ]) {
+      if (!requested.has(name)) continue;
       try {
         const response = await context.client.request({ method: 'GET', path: endpoint, query: { ...query, team_id: teamId }, retry: 'bounded' });
         checks.push({ name, readable: true, ...(name === 'dream' ? { enabled: response.data?.enabled ?? null, mode: response.data?.mode ?? null, canPreview: response.data?.entitlement?.can_preview ?? null, canApply: response.data?.entitlement?.can_apply ?? null } : {}) });
@@ -113,7 +116,7 @@ async function serviceDoctor(args, io) {
         checks.push({ name, readable: false, code: error.code, httpStatus: error.httpStatus, nextAction: error.nextAction, exitCode: errorToExitCode(error) });
       }
     }
-    const report = { baseUrl: context.baseUrl, checks, writeReadiness: 'not-tested', cloudSkillWriteContract: 'MOS-01 deployment not verified', notes: ['Read-only checks do not prove write permission, queue health, sandbox readiness, or production availability.'] };
+    const report = { baseUrl: context.baseUrl, requestedServices: [...requested], checks, writeReadiness: 'unknown (not tested)', cloudSkillWriteContract: 'unknown (MOS-01 deployment not verified)', notes: ['Read-only checks do not prove write permission, queue health, sandbox readiness, or production availability.'] };
     const failed = checks.find((check) => !check.readable);
     if (failed) throw new ServiceClientError('One or more service read checks failed.', { code: failed.code, httpStatus: failed.httpStatus, data: report, nextAction: failed.nextAction });
     if (hasFlag(args, '--json')) writeSuccess(io, 'doctor.services', report);
@@ -124,6 +127,23 @@ async function serviceDoctor(args, io) {
     else writeLine(io.stderr, `Error: ${error.message}`);
     return errorToExitCode(error);
   }
+}
+
+function requestedServices(args) {
+  const supported = new Set(['memory', 'knowledge', 'dream', 'cloud-skill']);
+  const index = args.indexOf('--services');
+  const selector = index === -1 ? null : args[index + 1];
+  if (selector && !selector.startsWith('-')) {
+    const names = selector.split(',').map((name) => name.trim()).filter(Boolean);
+    if (names.length === 0 || names.some((name) => !supported.has(name))) {
+      throw new UsageError(`--services accepts a comma-separated subset of: ${[...supported].join(', ')}.`);
+    }
+    for (let position = 0; position < args.length; position += 1) {
+      if (!args[position].startsWith('-') && position !== index + 1) throw new UsageError(`Unexpected positional argument: ${args[position]}.`);
+    }
+    return new Set(names);
+  }
+  return supported;
 }
 
 export async function discoveryCommand(args, io) {
@@ -230,4 +250,3 @@ export async function smokeCommand(args, io) {
   }
   return report.ok ? 0 : 1;
 }
-

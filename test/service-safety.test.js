@@ -76,8 +76,8 @@ test('CLI-02 explicit domain doctor only reads and never claims write readiness'
   const methods = [];
   const streams = io(async (url, init) => { methods.push(init.method); return new Response(JSON.stringify(url.endsWith('/settings') ? { enabled: true, mode: 'preview_only', entitlement: { can_apply: false } } : [])); });
   assert.equal(await run(['doctor', '--services', '--json'], streams), 0);
-  assert.deepEqual(methods, ['GET', 'GET', 'GET']);
-  assert.equal(JSON.parse(streams.stdout.value).data.writeReadiness, 'not-tested');
+  assert.deepEqual(methods, ['GET', 'GET', 'GET', 'GET']);
+  assert.equal(JSON.parse(streams.stdout.value).data.writeReadiness, 'unknown (not tested)');
   const denied = io(async () => new Response('{"detail":"scope missing"}', { status: 403 }));
   assert.equal(await run(['doctor', '--services', '--json'], denied), 4);
   assert.equal(JSON.parse(denied.stdout.value).ok, false);

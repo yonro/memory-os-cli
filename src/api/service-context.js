@@ -1,4 +1,4 @@
-import { hasFlag, optionValue, parseIntegerInRange } from '../core/args.js';
+import { hasFlag, optionValue, parseDurationMs, parseIntegerInRange } from '../core/args.js';
 import { DEFAULT_SERVICE_URL, TOKEN_ENV_VAR, LEGACY_TOKEN_ENV_VAR, AGENT_ID_ENV_VAR, AGENT_INSTANCE_ENV_VAR } from '../core/constants.js';
 import { readStoredCredential, resolveCredentialToken } from '../network/auth.js';
 import { baseUrlOption } from '../network/base-url.js';
@@ -50,5 +50,10 @@ export async function serviceContext(args, io) {
     agentId: io.env[AGENT_ID_ENV_VAR] ?? 'xmemo-cli',
     agentInstanceId: io.env[AGENT_INSTANCE_ENV_VAR]
   });
-  return { client, baseUrl: client.baseUrl, tokenSource: environmentToken ? 'environment' : 'credential-file', signal: io.signal };
+  const deadlineMs = optionValue(args, '--deadline') ? parseDurationMs(optionValue(args, '--deadline'), '--deadline') : undefined;
+  const deadlineClient = Object.freeze({
+    ...client,
+    request: (request) => client.request({ ...request, ...(deadlineMs === undefined || request.deadlineMs !== undefined ? {} : { deadlineMs }) })
+  });
+  return { client: deadlineClient, baseUrl: client.baseUrl, tokenSource: environmentToken ? 'environment' : 'credential-file', signal: io.signal };
 }

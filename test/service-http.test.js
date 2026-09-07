@@ -77,6 +77,7 @@ test('CLI-09 actual HTTP + child CLI exercise all 19 frozen commands and pinned 
     const p = r.url.pathname, b = r.body;
     if (p === '/api/v1/remember') { assert.equal(b.content, '中文 synthetic'); return respond(res, { memory_id: 'm1' }, 201); }
     if (p === '/api/v1/recall') return respond(res, [{ memory_id: 'm1', content: '中文 synthetic' }]);
+    if (p === '/api/v1/memories/m1/explain') return respond(res, { memory: { memory_id: 'm1', content: '中文 synthetic', version: 1 } });
     if (p === '/api/v1/recall/context') { assert.equal(b.max_items, 3); assert.equal(b.memory_limit, undefined); return respond(res, { items: [{ memory_id: 'm1' }] }); }
     if (p === '/api/v1/update_state') return respond(res, { state_key: b.state_key, content: b.content });
     if (p === '/api/v1/skill/operations') { assert.equal(b.operation, 'state-restore'); return respond(res, { state_key: 'active_task' }); }
@@ -112,11 +113,12 @@ test('CLI-09 actual HTTP + child CLI exercise all 19 frozen commands and pinned 
   }
   await call(['memory', 'add'], { content: '中文 synthetic', path: 'fixture/test' });
   await call(['memory', 'search', '中文']);
+  await call(['memory', 'read', 'm1']);
   await call(['context', 'recall'], { query: 'synthetic', max_items: 3 });
   await call(['state', 'save'], { state_key: 'active_task', content: 'synthetic' });
   await call(['state', 'restore']);
   await call(['restart', 'snapshot']);
-  await call(['restart', 'restore'], { snapshot_id: 'snap1', restore_state: false, record_restore_event: false });
+  await call(['restart', 'restore', '--preview'], { snapshot_id: 'snap1' });
   await call(['knowledge', 'add', '--base', 'b1', '--text', 'synthetic']);
   assert.equal((await call(['knowledge', 'search', 'synthetic'])).meta.nextCursor, 'cursor-2');
   const knowledgeView = path.join(directory, 'knowledge view 中文.json');
@@ -153,7 +155,8 @@ test('CLI-09 actual HTTP + child CLI exercise all 19 frozen commands and pinned 
     assert.equal(schema.command, spec.command);
     assert.ok(schema.inputSchema.examples.length);
     const failure = await child(process.execPath, [binary, ...spec.command.split('.'), '--json'], { cwd: directory, env: { ...env, XMEMO_KEY: '' } });
-    assert.equal(failure.code, 3, failure.stdout);
+    const commandsWithNoRequiredLocalInput = new Set(['state.restore', 'restart.snapshot', 'dream.preview', 'cloud-skill.list']);
+    assert.equal(failure.code, commandsWithNoRequiredLocalInput.has(spec.command) ? 3 : 2, failure.stdout);
     assert.equal(JSON.parse(failure.stdout).ok, false);
   }
   assert.equal(api.requests.length, count, 'help and missing credentials must not send HTTP requests');
@@ -177,7 +180,20 @@ test('CLI-09 real HTTP covers delayed body, unknown writes, redaction and missin
 test('CLI-09 actual npm archive runs outside repo with CLI and independent Skill separated', async (t) => {
   const directory = await temp(t);
   const env = environment(directory, 'http://127.0.0.1:1');
-  const npm = process.env.npm_execpath ?? path.join(path.dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+  const npmCandidates = [
+    process.env.npm_execpath,
+    path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.resolve(path.dirname(process.execPath), '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  ].filter(Boolean);
+  let npm;
+  for (const candidate of npmCandidates) {
+    try {
+      await fs.access(candidate);
+      npm = candidate;
+      break;
+    } catch {}
+  }
+  assert.ok(npm, `Could not locate npm-cli.js from: ${npmCandidates.join(', ')}`);
   const packed = await child(process.execPath, [npm, 'pack', '--json', '--ignore-scripts', '--offline', '--pack-destination', directory, '--cache', path.join(directory, 'npm-cache')], { cwd: root, env });
   assert.equal(packed.code, 0, packed.stderr);
   const info = JSON.parse(packed.stdout)[0];
