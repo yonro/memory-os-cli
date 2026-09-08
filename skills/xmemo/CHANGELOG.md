@@ -1,5 +1,13 @@
 # XMemo Skill Change Log
 
+## 1.1.16
+
+- Preserve the read-only `doctor --json` discovery summary when a service omits
+  top-level `service_version`: expose the separately advertised standalone Skill
+  package version without inferring it is a service version.
+- Preserve existing requests, authentication, scopes, service APIs, and all
+  runtime command behavior.
+
 ## 1.1.15
 
 - Add explicit read-only Knowledge support to `recall-context` through the

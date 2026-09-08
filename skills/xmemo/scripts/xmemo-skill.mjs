@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.15';
+const SKILL_VERSION = '1.1.16';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -448,6 +448,7 @@ function summarizeDoctorDiscovery(discovery, discoveryUrl) {
     standaloneSkill: {
       status: discoveryString(standalone.status),
       runtimeModel: discoveryString(standalone.runtime_model),
+      packageVersion: discoveryString(standalone.package?.version),
       operations: discoveryStringList(standalone.operations),
       defaultScopes: discoveryStringList(standalone.auth?.default_scopes),
     },
