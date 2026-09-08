@@ -223,12 +223,12 @@ test('skill script doctor --json reports bounded discovery diagnostics and a nex
         schema_version: '1.0',
         protocol: 'memory-os-agent-discovery-v1',
         service: 'memory-os',
-        service_version: '0.4.346',
         mcp_url: 'https://xmemo.dev/mcp',
         supported_clients: ['codex', 'claude-code', 'openclaw'],
         standalone_skill: {
           status: 'available',
           runtime_model: 'standalone_skill',
+          package: { version: 'skill-v1.1.16' },
           operations: ['remember', 'recall', 'doctor'],
           auth: { default_scopes: ['memory:read', 'memory:write'] },
         },
@@ -243,9 +243,10 @@ test('skill script doctor --json reports bounded discovery diagnostics and a nex
     const payload = JSON.parse(res.stdout);
     assert.equal(payload.clientDiagnostics.discovery.status, 'available');
     assert.equal(payload.clientDiagnostics.discovery.service, 'memory-os');
-    assert.equal(payload.clientDiagnostics.discovery.serviceVersion, '0.4.346');
+    assert.equal(payload.clientDiagnostics.discovery.serviceVersion, null);
     assert.equal(payload.clientDiagnostics.discovery.mcpUrl, 'https://xmemo.dev/mcp');
     assert.deepEqual(payload.clientDiagnostics.discovery.supportedClients, ['codex', 'claude-code', 'openclaw']);
+    assert.equal(payload.clientDiagnostics.discovery.standaloneSkill.packageVersion, 'skill-v1.1.16');
     assert.deepEqual(payload.clientDiagnostics.discovery.standaloneSkill.operations, ['remember', 'recall', 'doctor']);
     assert.equal(payload.clientDiagnostics.nextAction.command, 'node scripts/xmemo-skill.mjs auth status --verify');
     assert.equal(testServer.requests.length, 2);

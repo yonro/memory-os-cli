@@ -163,9 +163,10 @@ The script supports JSON output with `--json`, command-specific usage with
 recall/search output with `--compact`. `doctor --json` adds a bounded
 `clientDiagnostics` object: a read-only discovery summary and a `nextAction`
 command for the next credential check or formal sign-in. The summary includes
-the advertised service version, MCP URL, supported clients, and standalone Skill
-operations so compatibility can be checked without inspecting the raw discovery
-document. If discovery is unavailable, `clientDiagnostics.discovery.status` is
+the advertised service version when present, MCP URL, supported clients, and
+standalone Skill package version and operations so compatibility can be checked
+without inspecting the raw discovery document. If discovery is unavailable,
+`clientDiagnostics.discovery.status` is
 `unavailable`; a successful doctor health check still succeeds. It never prints
 token values or prefixes.
 
