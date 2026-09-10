@@ -3,8 +3,6 @@
 !bin/**
 !src/
 !src/**
-!plugins/kiro/
-!plugins/kiro/**
 !README.md
 !LICENSE
 !.npmignore

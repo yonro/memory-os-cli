@@ -15,7 +15,6 @@
     "scripts",
     "src",
     "skills",
-    "plugins/kiro",
     "plugins/xmemo",
     "README.md",
     "LICENSE"

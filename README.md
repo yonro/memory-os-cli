@@ -492,7 +492,6 @@ bin/
 docs/assets/
 src/
 skills/
-plugins/kiro/
 plugins/xmemo/
 README.md
 LICENSE
@@ -504,6 +503,7 @@ Not published:
 .github/
 docs/analysis/
 docs/architecture/
+docs/design/
 test/
 coverage/
 server code

@@ -11,7 +11,6 @@ const root = path.join(__dirname, '..');
 test('official XMemo logo is consistent across published integrations', async () => {
   const logoPaths = [
     'plugins/xmemo/assets/logo.png',
-    'plugins/kiro/assets/logo.png',
     'extensions/vscode/media/icon.png'
   ];
   const hashes = await Promise.all(
@@ -24,20 +23,17 @@ test('official XMemo logo is consistent across published integrations', async ()
 
   assert.equal(new Set(hashes).size, 1);
 
-  const [cursorManifest, kiroManifest, lobeManifest, readme] = await Promise.all([
+  const [cursorManifest, lobeManifest, readme] = await Promise.all([
     readJson('plugins/xmemo/.cursor-plugin/plugin.json'),
-    readJson('plugins/kiro/.kiro-plugin/power.json'),
     readJson('lhm.plugin.json'),
     readFile(path.join(root, 'README.md'), 'utf8')
   ]);
 
   assert.equal(cursorManifest.logo, 'assets/logo.png');
-  assert.equal(kiroManifest.logo, 'assets/logo.png');
   assert.match(lobeManifest.icon, /plugins\/xmemo\/assets\/logo\.png$/);
   assert.match(readme, /plugins\/xmemo\/assets\/logo\.png/);
 
   await assert.rejects(access(path.join(root, 'plugins/xmemo/assets/logo.svg')));
-  await assert.rejects(access(path.join(root, 'plugins/kiro/assets/logo.svg')));
 });
 
 async function readJson(relativePath) {
