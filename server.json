@@ -51,14 +51,20 @@
     {
       "registryType": "npm",
       "identifier": "@xmemo/client",
-      "version": "0.4.182",
+      "version": "0.4.183",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
       },
       "packageArguments": [
-        { "type": "positional", "value": "mcp" },
-        { "type": "positional", "value": "serve" }
+        {
+          "type": "positional",
+          "value": "mcp"
+        },
+        {
+          "type": "positional",
+          "value": "serve"
+        }
       ],
       "environmentVariables": [
         {

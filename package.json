@@ -1,6 +1,6 @@
 {
   "name": "@xmemo/client",
-  "version": "0.4.182",
+  "version": "0.4.183",
   "description": "Privacy-first CLI client and MCP setup tool for XMemo.",
   "mcpName": "io.github.yonro/xmemo",
   "type": "module",
