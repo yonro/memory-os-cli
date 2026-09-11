@@ -211,7 +211,7 @@ xmemo-mcp
 | 客户端 | 支持方式 | 配置命令 |
 |--------|----------|----------|
 | **Kimi Code** | Streamable HTTP + Bearer Token（`XMEMO_KEY`） | `xmemo setup kimi-code` |
-| **Kiro** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup kiro` |
+| **Kiro** | 原生 HTTP OAuth（默认）；`--auth key` 使用 `XMEMO_KEY` | `xmemo setup kiro` |
 | **Claude Desktop** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup claude-desktop` |
 | **Cursor** | Streamable HTTP + Bearer Token（`XMEMO_KEY`） | `xmemo setup cursor` |
 | **Copilot CLI** | Local Proxy + Bearer Token | `xmemo setup copilot` |

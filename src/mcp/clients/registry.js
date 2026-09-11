@@ -39,8 +39,8 @@ function jsonClient(definition, deps) {
   return {
     label: definition.label,
     defaultConfigPath: deps[definition.defaultConfigPath],
-    buildSnippet: (mcpUrl, identity) => deps.jsonClientSnippet(definition.id, mcpUrl, identity),
-    writeConfig: (configPath, mcpUrl, identity, options = {}) => deps.mergeJsonClientMcpConfig(definition.id, configPath, mcpUrl, identity, options.force),
+    buildSnippet: (mcpUrl, identity, options = {}) => deps.jsonClientSnippet(definition.id, mcpUrl, identity, options),
+    writeConfig: (configPath, mcpUrl, identity, options = {}) => deps.mergeJsonClientMcpConfig(definition.id, configPath, mcpUrl, identity, options.force, options),
     removeConfig: (configPath, options = {}) => deps.removeJsonClientMcpConfig(definition.id, configPath, options),
     configKind: definition.configKind,
     authentication: definition.authentication

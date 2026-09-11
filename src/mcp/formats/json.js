@@ -30,7 +30,7 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   nestedTransportClientDefinition('continue', 'Continue', 'defaultContinueConfigPath'),
   commandClientDefinition('claude-desktop', 'Claude Desktop', 'defaultClaudeConfigPath'),
   httpClientDefinition('openclaw', 'OpenClaw', 'defaultOpenclawConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
-  commandClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath'),
+  httpClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath', { urlKey: 'url', authentication: 'oauth' }),
   httpClientDefinition('kimi-code', 'Kimi Code', 'defaultKimiCodeConfigPath', { urlKey: 'url', authentication: 'bearer-token-env-var', bearerTokenEnvVar: 'XMEMO_KEY' }),
   commandClientDefinition('zed', 'Zed', 'defaultZedConfigPath', { section: 'context_servers' }),
   nestedTransportClientDefinition('jetbrains', 'JetBrains', 'defaultJetbrainsConfigPath'),
@@ -103,24 +103,24 @@ export function jsonMcpClientIds() {
   return JSON_MCP_CLIENT_DEFINITIONS.map((definition) => definition.id);
 }
 
-export function jsonClientConfig(clientId, mcpUrl, identity) {
+export function jsonClientConfig(clientId, mcpUrl, identity, options = {}) {
   const definition = requireJsonMcpClientDefinition(clientId);
-  return sectionConfig(definition.section, jsonClientServerConfig(clientId, mcpUrl, identity));
+  return sectionConfig(definition.section, jsonClientServerConfig(clientId, mcpUrl, identity, options));
 }
 
-export function jsonClientSnippet(clientId, mcpUrl, identity) {
-  return `${JSON.stringify(jsonClientConfig(clientId, mcpUrl, identity), null, 2)}\n`;
+export function jsonClientSnippet(clientId, mcpUrl, identity, options = {}) {
+  return `${JSON.stringify(jsonClientConfig(clientId, mcpUrl, identity, options), null, 2)}\n`;
 }
 
-export function jsonClientServerConfig(clientId, mcpUrl, identity) {
+export function jsonClientServerConfig(clientId, mcpUrl, identity, options = {}) {
   const definition = requireJsonMcpClientDefinition(clientId);
   const resolvedIdentity = identity ?? envReferenceIdentity(definition.defaultIdentityId ?? definition.id);
-  return serverConfigFromDefinition(definition, mcpUrl, resolvedIdentity);
+  return serverConfigFromDefinition(definition, mcpUrl, resolvedIdentity, options);
 }
 
-export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, identity, force = false) {
+export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, identity, force = false, options = {}) {
   const definition = requireJsonMcpClientDefinition(clientId);
-  const serverConfig = serverConfigFromDefinition(definition, mcpUrl, identity);
+  const serverConfig = serverConfigFromDefinition(definition, mcpUrl, identity, options);
   await mergeJsonSectionConfig(configPath, definition.section, serverConfig, definition.section, (parsed) => {
     if (definition.mergeExperimentalModelContextProtocolServers && isPlainObject(parsed.experimental)) {
       mergeExperimentalModelContextProtocolServers(parsed, serverConfig, mcpUrl);
@@ -144,7 +144,15 @@ function sectionConfig(sectionName, serverConfig) {
   };
 }
 
-function serverConfigFromDefinition(definition, mcpUrl, identity) {
+function serverConfigFromDefinition(definition, mcpUrl, identity, options = {}) {
+  if (definition.id === 'kiro') {
+    const auth = options.auth ?? 'oauth';
+    if (!['oauth', 'key'].includes(auth)) throw new UsageError('Kiro --auth must be oauth or key.');
+    const headers = headersForDefinition(definition, identity);
+    return auth === 'key'
+      ? { url: mcpUrl, headers: { ...headers, Authorization: 'Bearer ${XMEMO_KEY}' } }
+      : { url: mcpUrl, headers, oauth: { oauthScopes: ['memory:read', 'knowledge:read'] } };
+  }
   if (definition.serverKind === 'mcp-remote-command') {
     return mcpRemoteCommandJsonServerConfig(mcpUrl, identity);
   }
