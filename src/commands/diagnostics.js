@@ -1,3 +1,4 @@
+import { kiroDoctor } from './kiro-doctor.js';
 import {
   booleanValue,
   hasFlag,
@@ -35,6 +36,12 @@ import { ServiceClientError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 
 export async function doctorCommand(args, io) {
+  const client = optionValue(args, '--client');
+  if (client === 'kiro') {
+    if (hasFlag(args, '--services')) throw new UsageError('--client kiro cannot be combined with --services.');
+    return await kiroDoctor(args, io);
+  }
+  if (client || hasFlag(args, '--fix')) throw new UsageError('Local config repair requires --client kiro.');
   if (hasFlag(args, '--services')) return await serviceDoctor(args, io);
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');

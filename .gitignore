@@ -22,6 +22,7 @@ AGENTS.md
 mcp-publisher.exe
 
 # Internal planning/review artifacts. Keep product docs in README/docs instead.
+docs/design/
 *-PLAN.md
 *_PLAN.md
 *-REPORT.md
@@ -33,6 +34,7 @@ mcp-publisher.exe
 # DevFlow engine
 .progress/
 .npm-cache-review/
+.tmp-npm-cache/
 
 # Agent registry & profiles
 .agents/

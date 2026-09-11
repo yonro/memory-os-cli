@@ -40,6 +40,8 @@ export async function mcpCommand(args, io) {
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
     writeLine(io.stdout, 'MCP commands:');
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp serve`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client kiro [--auth oauth|key] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add kiro [--auth oauth|key] [--write] [--force] [--config <path>]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
     writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
@@ -75,7 +77,9 @@ export async function mcpCommand(args, io) {
     const useLocalProxy = clientId === 'copilot-cli' && !hasFlag(args, '--remote-env');
     const proxyPort = parsePositiveInteger(optionValue(args, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
     const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
-    const templateOptions = { mcpClients: MCP_CLIENTS };
+    const auth = optionValue(args, '--auth');
+    if (auth && (clientId !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key is supported only for Kiro.');
+    const templateOptions = { mcpClients: MCP_CLIENTS, auth };
     const template = useLocalProxy
       ? mcpLocalProxyTemplate(clientId, proxyUrl, templateOptions)
       : mcpConfigTemplate(clientId, mcpUrl, templateOptions);
@@ -135,6 +139,8 @@ export async function mcpCommand(args, io) {
   }
 
   const target = args[1] ?? '';
+  const auth = optionValue(args, '--auth');
+  if (auth && (target !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key is supported only for Kiro.');
   const client = MCP_CLIENTS.get(target);
 
   if (subcommand !== 'add' || !client) {
@@ -147,7 +153,7 @@ export async function mcpCommand(args, io) {
 
   if (hasFlag(args, '--json')) {
     const identity = envReferenceIdentity(target);
-    const oauthClient = usesClientOAuth(target);
+    const oauthClient = (usesClientOAuth(target) && auth !== 'key');
     writeLine(io.stdout, JSON.stringify({
       client: target,
       label: client.label,
@@ -168,9 +174,9 @@ export async function mcpCommand(args, io) {
 
   const identity = hasFlag(args, '--write') ? await agentIdentity(target, io.env) : envReferenceIdentity(target);
   if (hasFlag(args, '--write')) {
-    await client.writeConfig(configPath, mcpUrl, identity);
+    await client.writeConfig(configPath, mcpUrl, identity, { auth, force: hasFlag(args, '--force') });
     writeLine(io.stdout, `Updated ${client.label} MCP config: ${configPath}`);
-    if (usesClientOAuth(target)) {
+    if ((usesClientOAuth(target) && auth !== 'key')) {
       writeLine(io.stdout, `Token value was not written. ${client.label} will complete MCP OAuth on first use.`);
     } else {
       writeLine(io.stdout, `Token value was not written. ${client.label} will read ${TOKEN_ENV_VAR} from the environment.`);
@@ -179,12 +185,12 @@ export async function mcpCommand(args, io) {
     return 0;
   }
 
-  const snippet = client.buildSnippet(mcpUrl, identity);
+  const snippet = client.buildSnippet(mcpUrl, identity, { auth });
   writeLine(io.stdout, `Add this to your ${client.label} config (${configPath}):`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, snippet.trimEnd());
   writeLine(io.stdout, '');
-  if (usesClientOAuth(target)) {
+  if ((usesClientOAuth(target) && auth !== 'key')) {
     writeLine(io.stdout, `Restart ${client.label} and complete its MCP OAuth flow. No token value is included here.`);
   } else {
     writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);

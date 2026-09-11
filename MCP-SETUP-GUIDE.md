@@ -67,13 +67,28 @@ set XMEMO_AGENT_INSTANCE_ID=random-guid-here
 
 配置文件：`~/.kiro/settings/mcp.json`
 
-Kiro 使用 `mcp-remote` 连接 Hosted MCP，并从 `XMEMO_KEY` 读取 Bearer Token。推荐运行：
+Kiro 默认使用原生 HTTP OAuth，配置不包含固定 Authorization，也不再启动 `mcp-remote`：
 
 ```bash
 xmemo setup kiro
+# 或选择 Key；启动 Kiro 的进程需要继承 XMEMO_KEY
+xmemo setup kiro --auth key
 ```
 
-不要把 Kiro 与 MCP OAuth 客户端混为一谈：`xmemo login` 可以通过浏览器获取 CLI 凭据，但 Kiro 的 MCP 请求仍由环境变量认证。
+OAuth 默认只请求 `memory:read` 和 `knowledge:read`。需要写入时，在 Kiro OAuth 配置中加入对应 write scope 并重新授权。Key 模式使用 `Bearer ${XMEMO_KEY}`；Key 权限由服务端签发时确定。`xmemo login` 的 CLI 凭据不会自动导入 Kiro。
+
+已有配置出现反复弹出授权页面、认证成功后仍超时，可先离线检查，再修复：
+
+```bash
+xmemo doctor --client kiro --json
+xmemo doctor --client kiro --fix
+# 明确保留 Key 认证时：
+xmemo doctor --client kiro --fix --auth key
+```
+
+检查默认不修改文件；`--fix` 对识别出的旧代理或认证冲突先创建同目录备份，再替换 XMemo 连接，保留其他 MCP、Power 配置、审批和禁用设置。可用 `--config <path>` 指定配置。未知自定义命令、无效 JSON、非 HTTPS MCP 地址不会自动修复。
+
+修复后重新加载 Kiro；OAuth 需要完成正常授权，Key 需要启动环境中的凭证。doctor 不读取 OAuth 缓存、不终止代理进程、不访问服务、不验证真实认证和刷新；旧代理仍运行时重新启动 Kiro。原来的 `${env:XMEMO_KEY}` 代理环境赋值可能成为字面文本，其固定 Authorization 又会覆盖 OAuth 令牌，造成重复认证。
 
 ---
 

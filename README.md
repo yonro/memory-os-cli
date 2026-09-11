@@ -114,7 +114,7 @@ xmemo setup cursor --dry-run
 | **Antigravity** | `xmemo setup antigravity` | Hosted MCP + OAuth |
 | **OpenClaw** | `xmemo setup openclaw` | Native memory plugin + Skill |
 | **Hermes** | `xmemo setup hermes` | Native memory provider |
-| **Kiro** | `xmemo setup kiro` | Hosted MCP + Bearer Token |
+| **Kiro** | `xmemo setup kiro` | Native HTTP OAuth; `--auth key` for API Key |
 | **Grok** | `xmemo setup grok` | Hosted MCP |
 | **Other MCP clients** | `xmemo mcp config --client generic` | Generated template |
 
@@ -492,7 +492,6 @@ bin/
 docs/assets/
 src/
 skills/
-plugins/kiro/
 plugins/xmemo/
 README.md
 LICENSE
@@ -504,6 +503,7 @@ Not published:
 .github/
 docs/analysis/
 docs/architecture/
+docs/design/
 test/
 coverage/
 server code
@@ -582,3 +582,12 @@ it connects to.
 ## License
 
 [MIT](./LICENSE) © 2025–2026 Yonro
+
+### Repairing an existing Kiro MCP configuration
+
+Run `xmemo doctor --client kiro --json` to inspect local configuration without network requests.
+Use `xmemo doctor --client kiro --fix` to migrate recognized legacy proxy configurations to native
+HTTP OAuth, or add `--auth key` for native HTTP with `Bearer ${XMEMO_KEY}`. Repairs create a
+backup, retain unrelated servers and client preferences, and never copy credentials into the
+replacement. Reload Kiro and verify a real tool call afterwards; a configuration pass is not an
+authentication or token-refresh result. Fresh installs use `xmemo setup kiro [--auth oauth|key]`.

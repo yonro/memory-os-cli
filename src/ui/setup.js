@@ -87,7 +87,7 @@ export function normalizeSetupClientId(candidate, mcpClients) {
   return normalized;
 }
 
-export function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
+export function clientSetupPlan(clientId, client, mcpUrl, env, identity, options = {}) {
   return {
     id: clientId,
     label: client.label,
@@ -95,7 +95,8 @@ export function clientSetupPlan(clientId, client, mcpUrl, env, identity) {
     configPath: client.defaultConfigPath(env),
     serverName: MCP_SERVER_NAME,
     mcpUrl,
-    tokenEnvVar: TOKEN_ENV_VAR,
+    tokenEnvVar: usesClientOAuth(clientId) && options.auth !== 'key' ? null : TOKEN_ENV_VAR,
+    authentication: usesClientOAuth(clientId) && options.auth !== 'key' ? 'oauth' : 'env-bearer',
     agentId: identity.agentId,
     agentInstanceId: identity.agentInstanceId,
     agentInstanceIdPath: identity.path,
@@ -297,7 +298,7 @@ export function writeSetupSummary(plan, io) {
         if (plan.tokenPortalUrl) {
           writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
         }
-      } else if (usesClientOAuth(cid)) {
+      } else if (usesClientOAuth(cid) && plan.selectedClient.authentication !== 'env-bearer') {
         writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
         writeLine(io.stdout, '  1. When the agent starts or first makes an XMemo tool call, a browser window will automatically pop up requesting OAuth authorization.');
         writeLine(io.stdout, '  2. Follow the page prompts to sign in and click "Authorize".');

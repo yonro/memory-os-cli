@@ -71,6 +71,8 @@ export async function setupCommand(args, io) {
     throw new UsageError('Cannot specify both --all and a specific client.');
   }
 
+  const auth = optionValue(optionArgs, '--auth');
+  if (auth && (clientId !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key requires setup kiro.');
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
   const force = hasFlag(optionArgs, '--force');
   const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup || (setupAll && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes'))));
@@ -169,9 +171,9 @@ export async function setupCommand(args, io) {
       }
 
       const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
-      setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity);
+      setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity, { auth });
       if (writeConfig) {
-        await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity, { force });
+        await client.writeConfig(setupPlan.selectedClient.configPath, setupPlan.mcpUrl, identity, { force, auth });
         setupPlan.selectedClient.written = true;
       }
 

@@ -46,6 +46,8 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Store an existing token after explicit consent to unencrypted storage.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Operations');
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client kiro [--config <path>] [--auth oauth|key] [--fix] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup kiro [--auth oauth|key]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]`);
   writeLine(io.stdout, '      Validate runtime, service reachability, and integration readiness.');
   writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <url>] [--json]`);

@@ -2138,20 +2138,47 @@ test('setup kiro shorthand writes config by default', async () => {
   assert.equal(plan.selectedClient.behaviorProfile.writesTokenValue, false);
 
   const config = JSON.parse(await fs.readFile(path.join(tempDir, '.kiro', 'settings', 'mcp.json'), 'utf8'));
-  assert.equal(config.mcpServers.XMemo.command, 'npx');
-  assert.deepEqual(config.mcpServers.XMemo.args, [
-    '-y',
-    'mcp-remote',
-    'https://mcp.example.test/mcp',
-    '--header',
-    'Authorization:Bearer ${XMEMO_KEY}',
-    '--header',
-    'X-Memory-OS-Agent-ID:kiro',
-    '--header',
-    'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
-  ]);
-  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
-  assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.command, undefined);
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, undefined);
+  assert.deepEqual(config.mcpServers.XMemo.oauth.oauthScopes, ['memory:read', 'knowledge:read']);
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
+  assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
+
+  const profile = await fs.readFile(path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'), 'utf8');
+  assert.match(profile, /XMemo Agent profile/);
+  assert.match(profile, /recall\/search/);
+  assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
+test('setup kiro Key mode writes native headers and reports Key authentication', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kiro-'));
+  const result = await invoke(['setup', 'kiro', '--auth', 'key', '--url', 'https://api.example.test', '--json'], {
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.id, 'kiro');
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'));
+  assert.equal(plan.selectedClient.behaviorProfile.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.writesTokenValue, false);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.kiro', 'settings', 'mcp.json'), 'utf8'));
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.command, undefined);
+  assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.oauth, undefined);
+  assert.equal(plan.selectedClient.authentication, 'env-bearer');
+  assert.equal(plan.selectedClient.tokenEnvVar, 'XMEMO_KEY');
+  assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'), 'utf8');

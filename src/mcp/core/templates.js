@@ -36,9 +36,9 @@ export function mcpConfigTemplate(clientId, mcpUrl, options = {}) {
   const jsonDefinition = jsonMcpClientDefinition(clientId);
   if (jsonDefinition) {
     const identityClientId = jsonDefinition.defaultIdentityId ?? clientId;
-    return jsonDefinition.authentication === 'oauth'
-      ? oauthJsonMcpTemplate(clientId, identityClientId, mcpUrl, jsonClientConfig(clientId, mcpUrl), options)
-      : bearerJsonMcpTemplate(clientId, identityClientId, mcpUrl, jsonClientConfig(clientId, mcpUrl), options);
+    return jsonDefinition.authentication === 'oauth' && !(clientId === 'kiro' && options.auth === 'key')
+      ? oauthJsonMcpTemplate(clientId, identityClientId, mcpUrl, jsonClientConfig(clientId, mcpUrl, undefined, options), options)
+      : bearerJsonMcpTemplate(clientId, identityClientId, mcpUrl, jsonClientConfig(clientId, mcpUrl, undefined, options), options);
   }
 
   return {
