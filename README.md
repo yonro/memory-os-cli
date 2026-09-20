@@ -1,41 +1,25 @@
-<div align="center">
-  <a href="https://xmemo.dev">
-    <img src="./plugins/xmemo/assets/logo.png" width="132" alt="XMemo logo">
-  </a>
+# XMemo CLI
 
-  <h1>XMemo CLI</h1>
+[![XMemo logo](./plugins/xmemo/assets/logo.png)](https://xmemo.dev)
 
-  <p><strong>One private memory layer for every AI agent.</strong></p>
-  <p>
-    Install, authenticate, diagnose, and connect XMemo across editors,
-    CLIs, and autonomous agents from one production-ready command line.
-  </p>
+**One private memory layer for every AI agent.**
 
-  <p>
-    <a href="https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/yonro/memory-os-cli/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI"></a>
-    <a href="https://www.npmjs.com/package/@xmemo/client"><img alt="npm version" src="https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm"></a>
-    <a href="https://www.npmjs.com/package/@xmemo/client"><img alt="npm downloads" src="https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads"></a>
-    <a href="https://www.npmjs.com/package/@xmemo/client"><img alt="Node.js version" src="https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node"></a>
-    <a href="./LICENSE"><img alt="MIT license" src="https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license"></a>
-    <a href="https://github.com/yonro/memory-os-cli/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/yonro/memory-os-cli?style=flat-square&logo=github&label=stars"></a>
-  </p>
+Install, authenticate, diagnose, and connect XMemo across editors,
+CLIs, and autonomous agents from one production-ready command line.
 
-  <p>
-    <a href="https://modelcontextprotocol.io/"><img alt="MCP compatible" src="https://img.shields.io/badge/MCP-compatible-2563eb?style=flat-square"></a>
-    <a href="https://xmemo.dev"><img alt="XMemo Cloud" src="https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square"></a>
-    <a href="#security-by-default"><img alt="Privacy first" src="https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white"></a>
-    <a href="https://lobehub.com/mcp/yonro-memory-os-cli"><img alt="MCP Badge" src="https://lobehub.com/badge/mcp/yonro-memory-os-cli?style=flat"></a>
-    <a href="https://glama.ai/mcp/servers/yonro/memory-os-cli"><img alt="Glama quality score" src="https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg"></a>
-  </p>
+[![CI](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@xmemo/client)
+[![npm downloads](https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/@xmemo/client)
+[![Node.js version](https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/@xmemo/client)
+[![MIT license](https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license)](./LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/yonro/memory-os-cli?style=flat-square&logo=github&label=stars)](https://github.com/yonro/memory-os-cli/stargazers)
+[![MCP compatible](https://img.shields.io/badge/MCP-compatible-2563eb?style=flat-square)](https://modelcontextprotocol.io/)
+[![XMemo Cloud](https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square)](https://xmemo.dev)
+[![Privacy first](https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white)](#security-by-default)
+[![MCP Badge](https://lobehub.com/badge/mcp/yonro-memory-os-cli?style=flat)](https://lobehub.com/mcp/yonro-memory-os-cli)
+[![Glama quality score](https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg)](https://glama.ai/mcp/servers/yonro/memory-os-cli)
 
-  <p>
-    <a href="#quick-start">Quick start</a> ·
-    <a href="#supported-integrations">Integrations</a> ·
-    <a href="#connection-modes">Connection modes</a> ·
-    <a href="#command-reference">Commands</a> ·
-    <a href="#security-by-default">Security</a>
-  </p>
-</div>
+[Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Commands](#command-reference) · [Security](#security-by-default)
 
 ---
 
@@ -51,9 +35,7 @@ npm distribution.
 
 ## Architecture
 
-<p align="center">
-  <img src="./docs/assets/xmemo-cli-architecture.svg" width="100%" alt="XMemo CLI architecture">
-</p>
+![XMemo CLI architecture](./docs/assets/xmemo-cli-architecture.svg)
 
 | | |
 | --- | --- |
@@ -95,9 +77,7 @@ Replace `codex` with your client. Preview a configuration before writing it:
 xmemo setup cursor --dry-run
 ```
 
-<p align="center">
-  <img src="./docs/assets/xmemo-cli-workflow.svg" width="100%" alt="XMemo CLI setup workflow">
-</p>
+![XMemo CLI setup workflow](./docs/assets/xmemo-cli-workflow.svg)
 
 > [!TIP]
 > Start with `xmemo login`, `xmemo doctor`, and `xmemo setup <client>`.
