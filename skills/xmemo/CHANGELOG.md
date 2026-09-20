@@ -1,5 +1,14 @@
 # XMemo Skill Change Log
 
+## 1.1.17
+
+- Clarify TODO completion and creation terminal feedback by extracting and
+  displaying confirmed resource IDs on `todo-add` and `todo-done`.
+- Improve `restart-restore` terminal reporting when no active restart snapshot
+  exists to restore.
+- Preserve existing requests, authentication, scopes, service APIs, and all
+  runtime command behavior.
+
 ## 1.1.16
 
 - Preserve the read-only `doctor --json` discovery summary when a service omits

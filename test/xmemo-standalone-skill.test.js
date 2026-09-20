@@ -735,11 +735,15 @@ test('skill script smoke-covers todo add and todo done operations', async () => 
   testServer.setResponse({ ok: true, result: { id: 'todo_new' } });
   const addRes = await runScript(['todo-add', '--content', 'follow up'], { baseUrl, env });
   assert.equal(addRes.code, 0);
+  assert.match(addRes.stdout, /TODO added/);
+  assert.match(addRes.stdout, /todo_new/);
   assert.equal(testServer.requests.at(-1).body.operation, 'todo-add');
 
   testServer.setResponse({ ok: true, result: { id: 'todo_new' } });
   const doneRes = await runScript(['todo-done', '--id', 'todo_new'], { baseUrl, env });
   assert.equal(doneRes.code, 0);
+  assert.match(doneRes.stdout, /TODO completed/);
+  assert.match(doneRes.stdout, /todo_new/);
   assert.equal(testServer.requests.at(-1).body.operation, 'todo-done');
 
   await testServer.stop();
@@ -1085,6 +1089,19 @@ test('skill script creates and restores full restart-continuity snapshots', asyn
       restore_state: true,
       record_restore_event: false,
     });
+
+    testServer.setResponse({
+      ok: true,
+      id: null,
+      status: 'not_found',
+      restored: false,
+    });
+    const emptyRestore = await runScript([
+      'restart-restore',
+      '--source_session_id', 'handoff-empty',
+    ], { baseUrl, env });
+    assert.equal(emptyRestore.code, 0);
+    assert.match(emptyRestore.stdout, /No active restart snapshot found to restore/);
 
     const invalidLimit = await runScript([
       'restart-snapshot', '--timeline_limit', '101',

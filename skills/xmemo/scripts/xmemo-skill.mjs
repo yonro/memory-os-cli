@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.16';
+const SKILL_VERSION = '1.1.17';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -1274,7 +1274,12 @@ async function main() {
       if (command === 'restart-snapshot') {
         console.log(`✅ Restart snapshot saved.\nID: ${sanitizeTerminalText(extractId(data))}${data.expires_at ? `\nExpires: ${sanitizeTerminalText(data.expires_at)}` : ''}`);
       } else {
-        console.log(`✅ Restart snapshot restored.\nID: ${sanitizeTerminalText(extractId(data))}${data.restored_at ? `\nRestored: ${sanitizeTerminalText(data.restored_at)}` : ''}`);
+        const isNotRestored = data.restored === false || data.status === 'not_found' || (!extractId(data) && !data.restored_at);
+        if (isNotRestored) {
+          console.log('ℹ️ No active restart snapshot found to restore.');
+        } else {
+          console.log(`✅ Restart snapshot restored.\nID: ${sanitizeTerminalText(extractId(data))}${data.restored_at ? `\nRestored: ${sanitizeTerminalText(data.restored_at)}` : ''}`);
+        }
       }
     } catch (e) {
       console.error(`${label} failed:`, e.message);
@@ -1398,6 +1403,12 @@ async function main() {
       console.log(`✅ Saved to XMemo.\nID: ${sanitizeTerminalText(extractId(data.result))}`);
     } else if (opName === 'expense-add') {
       console.log(`✅ Expense recorded.\nID: ${sanitizeTerminalText(extractId(data.result))}`);
+    } else if (opName === 'todo-add') {
+      const id = extractId(data.result);
+      console.log(`✅ TODO added.${id ? `\nID: ${sanitizeTerminalText(id)}` : ''}`);
+    } else if (opName === 'todo-done') {
+      const id = flags.id || flags.todo_id || extractId(data.result);
+      console.log(`✅ TODO completed.${id ? `\nID: ${sanitizeTerminalText(id)}` : ''}`);
     } else {
       console.log(`✅ Operation succeeded.`);
     }
