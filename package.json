@@ -17,6 +17,7 @@
     "skills",
     "plugins/xmemo",
     "README.md",
+    "README_CN.md",
     "LICENSE"
   ],
   "scripts": {

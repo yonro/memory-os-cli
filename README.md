@@ -19,6 +19,8 @@ CLIs, and autonomous agents from one production-ready command line.
 [![MCP Badge](https://lobehub.com/badge/mcp/yonro-memory-os-cli?style=flat)](https://lobehub.com/mcp/yonro-memory-os-cli)
 [![Glama quality score](https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg)](https://glama.ai/mcp/servers/yonro/memory-os-cli)
 
+[English](README.md) · [简体中文](README_CN.md)
+
 [Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Commands](#command-reference) · [Security](#security-by-default)
 
 ---
