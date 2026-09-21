@@ -139,6 +139,10 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   `ledger-summary` for strictly read-only personal bookkeeping queries backed
   by `GET /v1/me/ledger/transactions` and `GET /v1/me/ledger/monthly-summary`.
   Neither command modifies or deletes records.
+- **Inspect account overview, activity, and memory statistics.** Use `overview`,
+  `activity`, and `stats` for strictly read-only diagnostics and aggregations
+  backed by `GET /v1/me/overview`, `GET /v1/me/activity`, and `GET /v1/memories/stats`.
+  None of these commands modify or delete records.
 - **Update existing memories in place.** Use `update --id <id>` with `--content`,
   `--path`, `--metadata` (JSON), `--bucket`, and/or `--scope` to modify a
   memory record via `PATCH /v1/memories/{id}`.
@@ -160,6 +164,9 @@ node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."] [
 node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
 node scripts/xmemo-skill.mjs ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]
 node scripts/xmemo-skill.mjs ledger-summary [--months <n>] [--currency <code>] [--type <type>]
+node scripts/xmemo-skill.mjs overview
+node scripts/xmemo-skill.mjs activity [--limit <n>]
+node scripts/xmemo-skill.mjs stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]
 node scripts/xmemo-skill.mjs remember --content "..." --path "..."
 node scripts/xmemo-skill.mjs recall --query "..." --compact
 node scripts/xmemo-skill.mjs recall-context --query "..." --include_knowledge true
@@ -261,6 +268,36 @@ It does not accept or transmit any write/modification options.
 Empty monthly aggregates terminate cleanly with exit code 0.
 Terminal output formats each monthly period and category with explicit currency designations.
 `--json` returns `{ ok: true, summary: [...], months: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`overview` is a strictly read-only command backed by `GET /v1/me/overview`.
+It retrieves account-level memory and resource metrics (total memories, active/archived/forgotten counts,
+active agent count, storage usage in MB, and 30-day token consumption).
+It accepts zero arguments or parameters.
+Terminal mode formats exact counts and measurements without precision loss; empty data (0 memories)
+exits cleanly with code 0.
+`--json` returns `{ ok: true, memories_total: ..., memories_active: ..., ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`activity` is a strictly read-only command backed by `GET /v1/me/activity`.
+It inspects recent account-level events and memory activities.
+It accepts only `--limit <n>` (positive integer up to 100).
+Zero activity entries exits cleanly with exit code 0.
+Terminal mode displays sequential timestamped activity entries with type tags and summaries.
+`--json` returns `{ ok: true, activity: [...], total: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`stats` is a strictly read-only command backed by `GET /v1/memories/stats`.
+It retrieves comprehensive multidimensional memory statistics and breakdown counts.
+It maps command-line flags directly to server query parameters:
+`--scope`, `--path`, `--bucket`, `--memory-type` (`memory_type`), `--status`, `--source`,
+`--since`, `--until`, `--group-by` (`group_by`), `--top-n` (`top_n`, range 1..200 with local range enforcement),
+and `--team-id` (`team_id`).
+Parameters outside the server's accepted signature or `--top-n` values outside 1..200 are rejected locally
+before issuing any network request.
+Empty data sets exit cleanly with code 0 without being disguised as errors or `not_found`.
+Terminal mode renders total/filtered counts, latest/oldest dates, category breakdowns, and grouped dimensions.
+`--json` returns `{ ok: true, total_count: ..., filtered_count: ..., ... }`.
 404 returns `not_found`, and 401/403 errors are preserved without downgrade.
 
 `recall-context` is a read-only prompt-context helper backed by

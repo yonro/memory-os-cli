@@ -32,6 +32,7 @@ const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'read', 'update', 'forget',
   'ledger-list', 'ledger-summary',
+  'overview', 'activity', 'stats',
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
@@ -46,6 +47,9 @@ const COMMAND_FLAGS = {
   forget: new Set(['id', 'reason', 'confirm']),
   'ledger-list': new Set(['limit', 'offset', 'currency', 'from', 'to', 'category', 'min-amount', 'max-amount', 'type', 'month']),
   'ledger-summary': new Set(['months', 'currency', 'type']),
+  overview: new Set(),
+  activity: new Set(['limit']),
+  stats: new Set(['scope', 'path', 'bucket', 'memory-type', 'memory_type', 'status', 'source', 'since', 'until', 'group-by', 'group_by', 'top-n', 'top_n', 'team-id', 'team_id']),
   remember: new Set(['content', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
   recall: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   search: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
@@ -184,7 +188,7 @@ function readOptionValue(args, index, key, inlineValue) {
 function printUsage(command) {
   const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
   if (command === undefined) {
-    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  overview | activity [--limit <n>] | stats [options]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
     return;
   }
   if (command === 'auth') {
@@ -212,6 +216,9 @@ function printUsage(command) {
       forget: 'forget --id <id> [--reason <text>] --confirm',
       'ledger-list': 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
       'ledger-summary': 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
+      overview: 'overview',
+      activity: 'activity [--limit <n>]',
+      stats: 'stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]',
       remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
       recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
       search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
@@ -232,7 +239,7 @@ function printUsage(command) {
     return;
   }
 
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  overview                           Show account overview (memories, storage, agents)\n  activity [--limit <n>]             Show recent account activity\n  stats [options]                    Show memory statistics and breakdown\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -349,8 +356,14 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     if (command === 'read') {
       flags.limit = parsePositiveInteger(flags.limit, '--limit', 1_000_000);
     } else {
-      parsePositiveInteger(flags.limit, '--limit', 100);
+      flags.limit = parsePositiveInteger(flags.limit, '--limit', 100);
     }
+  }
+  if (flags['top-n'] !== undefined || flags.top_n !== undefined) {
+    const rawVal = flags['top-n'] !== undefined ? flags['top-n'] : flags.top_n;
+    const parsed = parseIntegerInRange(rawVal, '--top-n', 1, 200);
+    flags['top-n'] = parsed;
+    flags.top_n = parsed;
   }
   if (flags.offset !== undefined) {
     flags.offset = parseIntegerInRange(flags.offset, '--offset', 0, Number.MAX_SAFE_INTEGER);
@@ -1652,7 +1665,7 @@ async function main() {
       console.log(`XMemo Ledger Transactions (${transactions.length}${totalInfo}):`);
       transactions.forEach((tx, idx) => {
         const date = tx.transaction_date || tx.date || tx.created_at || '(unknown date)';
-        const amount = tx.amount !== undefined ? tx.amount : 0;
+        const amount = (tx.amount !== undefined && tx.amount !== null) ? tx.amount : '(unknown)';
         const curr = tx.currency || 'UNKNOWN';
         const type = tx.transaction_type || tx.type || 'expense';
         const cat = tx.category ? ` [${tx.category}]` : '';
@@ -1730,6 +1743,178 @@ async function main() {
       process.exit(0);
     } catch (e) {
       console.error('Get ledger monthly summary failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'overview') {
+    try {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/me/overview', 'GET', null, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: 'Account overview not found.',
+        context: 'Get overview request',
+        options,
+      });
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          ...data,
+        }));
+        process.exit(0);
+      }
+
+      console.log('XMemo Account Overview:');
+      console.log(`- Memories: ${data.memories_total ?? 0} total (${data.memories_active ?? 0} active, ${data.memories_archived ?? 0} archived, ${data.memories_forgotten ?? 0} forgotten)`);
+      console.log(`- Active Agents: ${data.agents_active ?? 0}`);
+      console.log(`- Storage: ${data.storage_mb ?? 0} MB`);
+      console.log(`- Tokens (30d): ${data.tokens_30d ?? 0}`);
+      process.exit(0);
+    } catch (e) {
+      console.error('Get overview failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'activity') {
+    const queryParams = [];
+    if (flags.limit !== undefined) {
+      queryParams.push(`limit=${encodeURIComponent(flags.limit)}`);
+    }
+
+    let endpoint = '/v1/me/activity';
+    if (queryParams.length > 0) {
+      endpoint += `?${queryParams.join('&')}`;
+    }
+
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: 'Account activity not found.',
+        context: 'Get activity request',
+        options,
+      });
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          ...data,
+        }));
+        process.exit(0);
+      }
+
+      const activityList = Array.isArray(data.activity) ? data.activity : [];
+      if (activityList.length === 0) {
+        console.log('No recent activity found.');
+        process.exit(0);
+      }
+
+      const totalInfo = data.total !== undefined ? ` (total: ${data.total})` : '';
+      console.log(`XMemo Recent Activity (${activityList.length}${totalInfo}):`);
+      activityList.forEach((item, idx) => {
+        const ts = item.ts || '(unknown date)';
+        const type = item.type || 'unknown';
+        const summary = item.summary || '';
+        const ref = item.ref_id ? ` [ref: ${item.ref_id}]` : '';
+        console.log(`[${idx + 1}] ${sanitizeTerminalText(ts)} | ${type.toUpperCase()} | ${sanitizeTerminalText(summary)}${ref}`);
+      });
+      process.exit(0);
+    } catch (e) {
+      console.error('Get activity failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'stats') {
+    const scope = flags.scope;
+    const path = flags.path;
+    const bucket = flags.bucket;
+    const memoryType = flags['memory-type'] !== undefined ? flags['memory-type'] : flags.memory_type;
+    const status = flags.status;
+    const source = flags.source;
+    const since = flags.since;
+    const until = flags.until;
+    const groupBy = flags['group-by'] !== undefined ? flags['group-by'] : flags.group_by;
+    const topN = flags['top-n'] !== undefined ? flags['top-n'] : flags.top_n;
+    const teamId = flags['team-id'] !== undefined ? flags['team-id'] : flags.team_id;
+
+    const queryParams = [];
+    if (scope) queryParams.push(`scope=${encodeURIComponent(scope)}`);
+    if (path) queryParams.push(`path=${encodeURIComponent(path)}`);
+    if (bucket) queryParams.push(`bucket=${encodeURIComponent(bucket)}`);
+    if (memoryType) queryParams.push(`memory_type=${encodeURIComponent(memoryType)}`);
+    if (status) queryParams.push(`status=${encodeURIComponent(status)}`);
+    if (source) queryParams.push(`source=${encodeURIComponent(source)}`);
+    if (since) queryParams.push(`since=${encodeURIComponent(since)}`);
+    if (until) queryParams.push(`until=${encodeURIComponent(until)}`);
+    if (groupBy) queryParams.push(`group_by=${encodeURIComponent(groupBy)}`);
+    if (topN !== undefined) queryParams.push(`top_n=${encodeURIComponent(topN)}`);
+    if (teamId) queryParams.push(`team_id=${encodeURIComponent(teamId)}`);
+
+    let endpoint = '/v1/memories/stats';
+    if (queryParams.length > 0) {
+      endpoint += `?${queryParams.join('&')}`;
+    }
+
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: 'Memory stats not found.',
+        context: 'Get memory stats request',
+        options,
+      });
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          ...data,
+        }));
+        process.exit(0);
+      }
+
+      if ((data.total_count ?? 0) === 0 && (data.filtered_count ?? 0) === 0) {
+        console.log('No memory statistics available.');
+        process.exit(0);
+      }
+
+      console.log('XMemo Memory Statistics:');
+      console.log(`- Total Memories: ${data.total_count ?? 0} (filtered: ${data.filtered_count ?? 0}, scanned: ${data.scanned_count ?? 0})`);
+      if (data.latest_at) console.log(`- Latest Memory: ${data.latest_at}`);
+      if (data.oldest_at) console.log(`- Oldest Memory: ${data.oldest_at}`);
+      if (data.type_counts && Object.keys(data.type_counts).length > 0) {
+        const counts = Object.entries(data.type_counts).map(([k, v]) => `${k}: ${v}`).join(', ');
+        console.log(`- Types: ${counts}`);
+      }
+      if (data.status_counts && Object.keys(data.status_counts).length > 0) {
+        const counts = Object.entries(data.status_counts).map(([k, v]) => `${k}: ${v}`).join(', ');
+        console.log(`- Status: ${counts}`);
+      }
+      if (data.bucket_counts && Object.keys(data.bucket_counts).length > 0) {
+        const counts = Object.entries(data.bucket_counts).map(([k, v]) => `${k}: ${v}`).join(', ');
+        console.log(`- Buckets: ${counts}`);
+      }
+      if (Array.isArray(data.groups) && data.groups.length > 0) {
+        console.log(`- Groups (${data.groups.length}):`);
+        data.groups.forEach((g) => {
+          const dims = g.group_by ? Object.entries(g.group_by).map(([k, v]) => `${k}=${v}`).join(', ') : '';
+          console.log(`  * [${dims}]: ${g.count}`);
+        });
+      }
+      process.exit(0);
+    } catch (e) {
+      console.error('Get memory stats failed:', e.message);
       process.exit(1);
     }
     return;

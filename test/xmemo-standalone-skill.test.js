@@ -1713,6 +1713,9 @@ test('skill script top-level help lists read, update, and forget commands', asyn
   assert.match(res.stdout, /forget --id <id> \[--reason <text>\] --confirm/);
   assert.match(res.stdout, /ledger-list \[--month <YYYY-MM>\]/);
   assert.match(res.stdout, /ledger-summary \[--months <n>\]/);
+  assert.match(res.stdout, /overview/);
+  assert.match(res.stdout, /activity/);
+  assert.match(res.stdout, /stats/);
 });
 
 test('skill script ledger-list success path sends GET /v1/me/ledger/transactions with allow-listed query params', async () => {
@@ -2133,5 +2136,600 @@ test('skill script ledger-summary 400 without error.code defaults to invalid_req
     await testServer.stop();
   }
 });
+
+test('skill script ledger-list displays (unknown) when tx.amount is missing', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [
+      {
+        id: 'tx_missing_amount',
+        currency: 'CNY',
+        transaction_date: '2026-09-15',
+        category: 'Food',
+        transaction_type: 'expense',
+        description: 'Unknown Price Meal'
+      }
+    ],
+    total: 1
+  });
+
+  try {
+    const res = await runScript([
+      'ledger-list', '--limit', '10', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /\(unknown\) CNY/);
+    assert.doesNotMatch(res.stdout, /\b0 CNY\b/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview success path sends GET /v1/me/overview with zero query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    memories_total: 42,
+    memories_active: 35,
+    memories_archived: 5,
+    memories_forgotten: 2,
+    agents_active: 3,
+    storage_mb: 1.25,
+    tokens_30d: 15400,
+    demo: false,
+    dev_mode: false
+  });
+
+  try {
+    const resJson = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.memories_total, 42);
+    assert.equal(payload.memories_active, 35);
+    assert.equal(payload.memories_archived, 5);
+    assert.equal(payload.memories_forgotten, 2);
+    assert.equal(payload.agents_active, 3);
+    assert.equal(payload.storage_mb, 1.25);
+    assert.equal(payload.tokens_30d, 15400);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/overview');
+    // Strict allow-list: zero query params accepted by GET /v1/me/overview
+    assert.equal(reqUrl.search, '', 'GET /v1/me/overview must not have query parameters');
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'overview'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Account Overview:/);
+    assert.match(resTerm.stdout, /Memories: 42 total \(35 active, 5 archived, 2 forgotten\)/);
+    assert.match(resTerm.stdout, /Active Agents: 3/);
+    assert.match(resTerm.stdout, /Storage: 1\.25 MB/);
+    assert.match(resTerm.stdout, /Tokens \(30d\): 15400/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview handles empty/zero data cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    memories_total: 0,
+    memories_active: 0,
+    memories_archived: 0,
+    memories_forgotten: 0,
+    agents_active: 0,
+    storage_mb: 0.0,
+    tokens_30d: 0,
+    demo: false,
+    dev_mode: false
+  });
+
+  try {
+    const resTerm = await runScript([
+      'overview'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Account Overview:/);
+    assert.match(resTerm.stdout, /Memories: 0 total \(0 active, 0 archived, 0 forgotten\)/);
+    assert.match(resTerm.stdout, /Active Agents: 0/);
+    assert.match(resTerm.stdout, /Storage: 0 MB/);
+    assert.match(resTerm.stdout, /Tokens \(30d\): 0/);
+
+    const resJson = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.memories_total, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'not_found', message: 'Overview endpoint not found' } }, 404);
+    const res = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token required' } }, 401);
+    const res401 = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Read scope required' } }, 403);
+    const res403 = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad query' }, 400);
+    const res = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity success path sends GET /v1/me/activity with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    activity: [
+      {
+        ts: '2026-09-21T10:00:00Z',
+        type: 'memory_created',
+        summary: 'Stored system architecture decision',
+        ref_id: 'mem_123'
+      }
+    ],
+    total: 1,
+    dev_mode: false
+  });
+
+  const ALLOWED_ACTIVITY_PARAMS = new Set(['limit']);
+
+  try {
+    const resJson = await runScript([
+      'activity', '--limit', '15', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total, 1);
+    assert.equal(payload.activity.length, 1);
+    assert.equal(payload.activity[0].type, 'memory_created');
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/activity');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_ACTIVITY_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed activity set`);
+    }
+    assert.equal(reqUrl.searchParams.get('limit'), '15');
+    assert.equal(reqUrl.searchParams.has('scope'), false);
+    assert.equal(reqUrl.searchParams.has('bucket'), false);
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'activity', '--limit', '15'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Recent Activity \(1 \(total: 1\)\):/);
+    assert.match(resTerm.stdout, /2026-09-21T10:00:00Z/);
+    assert.match(resTerm.stdout, /MEMORY_CREATED/);
+    assert.match(resTerm.stdout, /Stored system architecture decision/);
+    assert.match(resTerm.stdout, /\[ref: mem_123\]/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity handles empty result cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    activity: [],
+    total: 0,
+    dev_mode: false
+  });
+
+  try {
+    const resTerm = await runScript([
+      'activity'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No recent activity found\./);
+
+    const resJson = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total, 0);
+    assert.deepEqual(payload.activity, []);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'not_found', message: 'Activity endpoint not found' } }, 404);
+    const res = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token required' } }, 401);
+    const res401 = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Activity read forbidden' } }, 403);
+    const res403 = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad limit parameter' }, 400);
+    const res = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats success path sends GET /v1/memories/stats with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    total_count: 100,
+    filtered_count: 85,
+    scanned_count: 100,
+    truncated: false,
+    latest_at: '2026-09-20T12:00:00Z',
+    oldest_at: '2026-09-01T08:00:00Z',
+    type_counts: { episodic: 60, semantic: 25 },
+    status_counts: { active: 80, archived: 5 },
+    bucket_counts: { main: 85 },
+    path_counts: { 'projects/test': 50 },
+    groups: [
+      {
+        group_by: { type: 'episodic', status: 'active' },
+        count: 55,
+        latest_at: '2026-09-20T12:00:00Z'
+      }
+    ]
+  });
+
+  const ALLOWED_STATS_PARAMS = new Set([
+    'owner', 'team_id', 'scope', 'path', 'bucket', 'memory_type', 'status', 'source', 'since', 'until', 'metadata', 'group_by', 'top_n'
+  ]);
+
+  try {
+    const resJson = await runScript([
+      'stats',
+      '--scope', 'team',
+      '--path', 'projects/%',
+      '--bucket', 'main',
+      '--memory-type', 'episodic',
+      '--status', 'active',
+      '--source', 'cli',
+      '--since', '2026-09-01T00:00:00Z',
+      '--until', '2026-09-20T00:00:00Z',
+      '--group-by', 'type,status',
+      '--top-n', '50',
+      '--team-id', 'team_abc',
+      '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total_count, 100);
+    assert.equal(payload.filtered_count, 85);
+    assert.equal(payload.type_counts.episodic, 60);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/memories/stats');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_STATS_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed stats set`);
+    }
+    assert.equal(reqUrl.searchParams.get('scope'), 'team');
+    assert.equal(reqUrl.searchParams.get('path'), 'projects/%');
+    assert.equal(reqUrl.searchParams.get('bucket'), 'main');
+    assert.equal(reqUrl.searchParams.get('memory_type'), 'episodic');
+    assert.equal(reqUrl.searchParams.get('status'), 'active');
+    assert.equal(reqUrl.searchParams.get('source'), 'cli');
+    assert.equal(reqUrl.searchParams.get('since'), '2026-09-01T00:00:00Z');
+    assert.equal(reqUrl.searchParams.get('until'), '2026-09-20T00:00:00Z');
+    assert.equal(reqUrl.searchParams.get('group_by'), 'type,status');
+    assert.equal(reqUrl.searchParams.get('top_n'), '50');
+    assert.equal(reqUrl.searchParams.get('team_id'), 'team_abc');
+    assert.equal(reqUrl.searchParams.has('month'), false);
+    assert.equal(reqUrl.searchParams.has('currency'), false);
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'stats', '--path', 'projects/%'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Memory Statistics:/);
+    assert.match(resTerm.stdout, /Total Memories: 100 \(filtered: 85, scanned: 100\)/);
+    assert.match(resTerm.stdout, /Latest Memory: 2026-09-20T12:00:00Z/);
+    assert.match(resTerm.stdout, /Oldest Memory: 2026-09-01T08:00:00Z/);
+    assert.match(resTerm.stdout, /Types: episodic: 60, semantic: 25/);
+    assert.match(resTerm.stdout, /Status: active: 80, archived: 5/);
+    assert.match(resTerm.stdout, /Buckets: main: 85/);
+    assert.match(resTerm.stdout, /Groups \(1\):/);
+    assert.match(resTerm.stdout, /\[type=episodic, status=active\]: 55/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats handles empty result cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    total_count: 0,
+    filtered_count: 0,
+    scanned_count: 0,
+    truncated: false,
+    latest_at: null,
+    oldest_at: null,
+    type_counts: {},
+    status_counts: {},
+    bucket_counts: {},
+    path_counts: {},
+    groups: []
+  });
+
+  try {
+    const resTerm = await runScript([
+      'stats'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No memory statistics available\./);
+
+    const resJson = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total_count, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats rejects --top-n out of bounds locally with zero network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    const res0 = await runScript([
+      'stats', '--top-n', '0'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(res0.code, 0);
+    assert.match(res0.stderr, /--top-n must be between 1 and 200/);
+    assert.equal(testServer.requests.length, 0, 'Zero requests must be sent on local validation error');
+
+    const res201 = await runScript([
+      'stats', '--top-n', '201'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(res201.code, 0);
+    assert.match(res201.stderr, /--top-n must be between 1 and 200/);
+    assert.equal(testServer.requests.length, 0, 'Zero requests must be sent on local validation error');
+
+    const resAbc = await runScript([
+      'stats', '--top-n', 'abc'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(resAbc.code, 0);
+    assert.match(resAbc.stderr, /--top-n must be an integer between 1 and 200/);
+    assert.equal(testServer.requests.length, 0, 'Zero requests must be sent on local validation error');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'not_found', message: 'Stats endpoint not found' } }, 404);
+    const res = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token required' } }, 401);
+    const res401 = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Stats read forbidden' } }, 403);
+    const res403 = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad stats query' }, 400);
+    const res = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
 
 

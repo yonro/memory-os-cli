@@ -81,6 +81,9 @@ temporary credential and removes pending confirmation data.
 | `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
 | `ledger-list` | List financial/expense transactions via `GET /v1/me/ledger/transactions` (strictly read-only) |
 | `ledger-summary` | Retrieve monthly transaction summary via `GET /v1/me/ledger/monthly-summary` (strictly read-only) |
+| `overview` | Display account-level memory count, storage, and token consumption via `GET /v1/me/overview` (strictly read-only) |
+| `activity` | Display recent personal activity and events via `GET /v1/me/activity` (strictly read-only) |
+| `stats` | Retrieve multidimensional memory statistics and breakdown counts via `GET /v1/memories/stats` (strictly read-only) |
 | `remember` | Save a durable memory |
 | `recall` | Recall the most relevant memories |
 | `search` | Search memories by query |
@@ -215,6 +218,80 @@ Behavior and error classification:
 - Authentication (401) and authorization (403) errors are preserved without downgrade.
 - Unexpected 400 responses default to `invalid_request`.
 - Terminal output renders structured monthly periods and breakdown totals with explicit currency labels.
+
+### Inspect account overview (read-only)
+
+```text
+node scripts/xmemo-skill.mjs overview
+node scripts/xmemo-skill.mjs overview --json
+```
+
+`overview` queries account-level memory and storage metrics via `GET /v1/me/overview`.
+This command is strictly read-only, takes zero parameters, and possesses zero write or deletion capabilities.
+It reports:
+- Total, active, archived, and forgotten memory counts
+- Active registered agent count
+- Total storage usage in MB
+- 30-day token consumption
+
+Behavior and error classification:
+- Zero memories exit cleanly with code 0.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders exact counts and metrics without precision loss.
+
+### Inspect recent account activity (read-only)
+
+```text
+node scripts/xmemo-skill.mjs activity
+node scripts/xmemo-skill.mjs activity --limit 10
+node scripts/xmemo-skill.mjs activity --limit 20 --json
+```
+
+`activity` queries recent account events and activity items via `GET /v1/me/activity`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--limit <n>`: Count of recent activities to retrieve (default 20, positive integer up to 100).
+
+Behavior and error classification:
+- Zero activity items return `{ ok: true, activity: [], total: 0 }` (or clean terminal notice) with exit code 0.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders sequential timestamped records with type and summary fields.
+
+### Inspect memory statistics and breakdown (read-only)
+
+```text
+node scripts/xmemo-skill.mjs stats
+node scripts/xmemo-skill.mjs stats --path "projects/%" --bucket main
+node scripts/xmemo-skill.mjs stats --group-by "type,status" --top-n 10
+node scripts/xmemo-skill.mjs stats --memory-type episodic --status active --json
+```
+
+`stats` queries aggregated memory metrics and dimensional counts via `GET /v1/memories/stats`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--scope <scope>`: Filter by scope.
+- `--path <path>`: Filter by path (supports wildcards, default `%`).
+- `--bucket <bucket>`: Filter by bucket (default `%`).
+- `--memory-type <type>`: Filter by memory type (`memory_type`, default `%`).
+- `--status <status>`: Filter by status (default `%`).
+- `--source <source>`: Filter by memory source.
+- `--since <iso>`: Filter memories created/updated after ISO 8601 timestamp.
+- `--until <iso>`: Filter memories created/updated before ISO 8601 timestamp.
+- `--group-by <dims>`: Comma-separated grouping dimensions (`path,type,status,source,bucket,day,metadata:<key>`).
+- `--top-n <n>`: Limit top grouped entries (1..200, strictly enforced locally before sending requests).
+- `--team-id <id>`: Filter by team ID.
+
+Behavior and error classification:
+- Zero memories exit cleanly with code 0.
+- Values of `--top-n` outside 1..200 or unrecognized options are rejected locally without issuing network requests.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders total/filtered counts, timestamps, type/status/bucket distributions, and group aggregates.
 
 ### Remember a decision
 
