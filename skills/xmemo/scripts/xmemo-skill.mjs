@@ -30,6 +30,7 @@ const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
 });
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
+  'read', 'update', 'forget',
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
@@ -39,6 +40,9 @@ const COMMAND_FLAGS = {
   register: new Set(['reason']),
   logout: new Set(),
   doctor: new Set(),
+  read: new Set(['id', 'offset', 'limit', 'bucket', 'scope']),
+  update: new Set(['id', 'content', 'path', 'metadata', 'bucket', 'scope']),
+  forget: new Set(['id', 'reason', 'confirm']),
   remember: new Set(['content', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
   recall: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   search: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
@@ -107,6 +111,18 @@ function parseArgs(args) {
       } else if (key === 'from-stdin') {
         rejectBooleanValue(key, inlineValue);
         flags[key] = true;
+      } else if (key === 'confirm') {
+        if (inlineValue !== undefined) {
+          flags.confirm = parseStrictBoolean(inlineValue, '--confirm');
+        } else {
+          const nextArg = args[i + 1];
+          if (nextArg === 'true' || nextArg === 'false') {
+            flags.confirm = nextArg === 'true';
+            i++;
+          } else {
+            flags.confirm = true;
+          }
+        }
       } else if (key === 'anonymous') {
         rejectBooleanValue(key, inlineValue);
         options.anonymous = true;
@@ -165,7 +181,7 @@ function readOptionValue(args, index, key, inlineValue) {
 function printUsage(command) {
   const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
   if (command === undefined) {
-    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
     return;
   }
   if (command === 'auth') {
@@ -188,6 +204,9 @@ function printUsage(command) {
 
   if (REST_COMMANDS.has(command)) {
     const commandUsage = {
+      read: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
+      update: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
+      forget: 'forget --id <id> [--reason <text>] --confirm',
       remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
       recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
       search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
@@ -208,7 +227,7 @@ function printUsage(command) {
     return;
   }
 
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -303,6 +322,9 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
   }
 
   const required = {
+    read: ['id'],
+    update: ['id'],
+    forget: ['id'],
     remember: ['content'],
     recall: ['query'],
     search: ['query'],
@@ -318,7 +340,16 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     }
   }
 
-  if (flags.limit !== undefined) parsePositiveInteger(flags.limit, '--limit', 100);
+  if (flags.limit !== undefined) {
+    if (command === 'read') {
+      flags.limit = parsePositiveInteger(flags.limit, '--limit', 1_000_000);
+    } else {
+      parsePositiveInteger(flags.limit, '--limit', 100);
+    }
+  }
+  if (flags.offset !== undefined) {
+    flags.offset = parseIntegerInRange(flags.offset, '--offset', 0, Number.MAX_SAFE_INTEGER);
+  }
   for (const key of ['max_items', 'max_tokens']) {
     if (flags[key] !== undefined) flags[key] = parsePositiveInteger(flags[key], `--${key}`, key === 'max_items' ? 100 : 50_000);
   }
@@ -380,6 +411,41 @@ function apiErrorMessage(data, fallback = 'Operation failed') {
   if (typeof candidate === 'string') return sanitizeTerminalText(candidate);
   if (candidate !== undefined && candidate !== null) return safeJson(candidate);
   return fallback;
+}
+
+function outputRestError(code, message, options) {
+  if (options && options.json) {
+    console.log(safeJson({ ok: false, error: { code, message } }));
+  } else {
+    console.error(`Error: ${message} (Code: ${code})`);
+  }
+  process.exit(1);
+}
+
+function handleRestError(res, { notFoundMessage, context = 'REST request', options }) {
+  if (res.statusCode === 401 || res.statusCode === 403) {
+    let errData = null;
+    try { errData = parseJsonResponse(res, context); } catch {}
+    const code = errData?.error?.code || (res.statusCode === 401 ? 'unauthorized' : 'forbidden');
+    const msg = apiErrorMessage(errData, res.statusCode === 401 ? 'Authentication required or token invalid.' : 'Access denied.');
+    outputRestError(code, msg, options);
+  }
+
+  if (res.statusCode === 404) {
+    let errData = null;
+    try { errData = parseJsonResponse(res, context); } catch {}
+    const code = 'not_found';
+    const msg = apiErrorMessage(errData, notFoundMessage || 'Resource not found.');
+    outputRestError(code, msg, options);
+  }
+
+  const data = parseJsonResponse(res, context);
+  if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
+    const code = data?.error?.code || `HTTP ${res.statusCode}`;
+    const msg = apiErrorMessage(data);
+    outputRestError(code, msg, options);
+  }
+  return data;
 }
 
 function redactSensitiveResponse(value) {
@@ -1324,6 +1390,180 @@ async function main() {
       console.log(`XMemo Context: ${items} item${items === 1 ? '' : 's'}\n${contextText || 'No matching memories found.'}`);
     } catch (e) {
       console.error('Recall context failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'read') {
+    let endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/explain?include_embedding=false`;
+    const queryParams = [];
+    if (flags.bucket) queryParams.push(`bucket=${encodeURIComponent(flags.bucket)}`);
+    if (flags.scope) queryParams.push(`scope=${encodeURIComponent(flags.scope)}`);
+    if (queryParams.length > 0) {
+      endpoint += `&${queryParams.join('&')}`;
+    }
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: `Memory '${flags.id}' not found.`,
+        context: 'Read memory request',
+        options,
+      });
+
+      const record = (data && typeof data === 'object' && data.result && typeof data.result === 'object')
+        ? data.result
+        : (data && typeof data === 'object' && data.memory && typeof data.memory === 'object')
+          ? data.memory
+          : data;
+
+      if (record && record.status && String(record.status).toLowerCase() === 'deleted') {
+        outputRestError('not_found', `Memory '${flags.id}' not found or deleted.`, options);
+      }
+
+      if (!record || typeof record.content !== 'string') {
+        outputRestError('not_found', `Memory '${flags.id}' not found.`, options);
+      }
+
+      const fullContent = record.content;
+      const totalLength = fullContent.length;
+      const offset = flags.offset !== undefined ? Number(flags.offset) : 0;
+      const hasLimit = flags.limit !== undefined && flags.limit !== null;
+      const limit = hasLimit ? Number(flags.limit) : totalLength;
+      const slicedContent = fullContent.slice(offset, offset + limit);
+      const truncated = offset > 0 || (offset + slicedContent.length < totalLength);
+
+      const projected = {
+        id: record.id || record.memory_id || flags.id,
+        path: record.path || record.canonical_path || '',
+        content: slicedContent,
+        version: record.version || record.updated_at || record.created_at || null,
+        truncated,
+      };
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          ...projected,
+        }));
+        process.exit(0);
+      }
+
+      console.log(`Memory: ${sanitizeTerminalText(projected.id)} | Path: ${sanitizeTerminalText(projected.path || '(unknown)')} | Version: ${sanitizeTerminalText(projected.version || '(unknown)')}${projected.truncated ? ' [truncated]' : ''}`);
+      console.log(`Content: ${formatMemoryContent(projected.content, options.compact)}`);
+      process.exit(0);
+    } catch (e) {
+      console.error('Read memory failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'update') {
+    let endpoint = `/v1/memories/${encodeURIComponent(flags.id)}`;
+    const body = {};
+    if (flags.content !== undefined) body.content = flags.content;
+    if (flags.path !== undefined) body.path = flags.path;
+    if (flags.metadata !== undefined) body.metadata = flags.metadata;
+    if (flags.bucket !== undefined) body.bucket = flags.bucket;
+    if (flags.scope !== undefined) body.scope = flags.scope;
+
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'PATCH', body, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      if (res.statusCode === 400) {
+        let errData = null;
+        try { errData = parseJsonResponse(res, 'Update memory request'); } catch {}
+        const code = errData?.error?.code || 'invalid_request';
+        const fallbackMsg = code === 'invalid_memory_id'
+          ? `Invalid memory ID: '${flags.id}'.`
+          : 'Invalid update request.';
+        const msg = apiErrorMessage(errData, fallbackMsg);
+        outputRestError(code, msg, options);
+      }
+
+      const data = handleRestError(res, {
+        notFoundMessage: `Memory '${flags.id}' not found.`,
+        context: 'Update memory request',
+        options,
+      });
+
+      const record = (data && typeof data === 'object' && data.result && typeof data.result === 'object')
+        ? data.result
+        : (data && typeof data === 'object' && data.memory && typeof data.memory === 'object')
+          ? data.memory
+          : data;
+
+      const memoryId = record?.id || record?.memory_id || flags.id;
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          id: memoryId,
+          path: record?.path || flags.path || '',
+          updated: true,
+          ...(typeof record === 'object' ? record : {}),
+        }));
+        process.exit(0);
+      }
+
+      console.log(`✅ Memory updated.\nID: ${sanitizeTerminalText(memoryId)}${flags.path ? `\nPath: ${sanitizeTerminalText(flags.path)}` : ''}`);
+      process.exit(0);
+    } catch (e) {
+      console.error('Update memory failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'forget') {
+    if (!flags.confirm) {
+      const msg = `Confirmation required to forget memory '${flags.id}'. Pass --confirm to proceed.`;
+      if (options.json) {
+        console.log(safeJson({ ok: false, error: { code: 'confirmation_required', message: msg, target_id: flags.id } }));
+      } else {
+        console.error(`Error: ${msg}\nTarget: ${sanitizeTerminalText(flags.id)}`);
+      }
+      process.exit(1);
+    }
+
+    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/forget`;
+    const body = {
+      mode: 'soft_delete',
+    };
+    if (flags.reason !== undefined && String(flags.reason).trim() !== '') {
+      body.reason = String(flags.reason);
+    }
+
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', body, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: `Memory '${flags.id}' not found.`,
+        context: 'Forget memory request',
+        options,
+      });
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          id: flags.id,
+          mode: 'soft_delete',
+          forgotten: true,
+        }));
+        process.exit(0);
+      }
+
+      console.log(`✅ Memory forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
+      process.exit(0);
+    } catch (e) {
+      console.error('Forget memory failed:', e.message);
       process.exit(1);
     }
     return;

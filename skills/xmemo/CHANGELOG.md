@@ -1,5 +1,20 @@
 # XMemo Skill Change Log
 
+## [Unreleased]
+
+### Added
+
+- Add read-only `read` command to retrieve a single memory by ID via `GET /v1/memories/{id}/explain?include_embedding=false` with character-window pagination (`--offset`, `--limit`) and minimal projection.
+- Add write-side `update` command to modify an existing memory via `PATCH /v1/memories/{id}` with `--content`, `--path`, `--metadata`, `--bucket`, and `--scope`.
+- Add write-side `forget` command for soft deletion via `POST /v1/memories/{id}/forget` with mode `soft_delete` and mandatory `--confirm` protection against accidental deletion.
+
+### Fixed
+
+- Harmonize `read --json` output envelope with `ok: true`.
+- Replace fallback literal `'v1'` version string in `read` projection with `null` (rendered as `(unknown)` in terminal mode).
+- Pass through server 400 `invalid_memory_id` responses on `update` and default unexpected 400s to `invalid_request`.
+- Preserve all existing command contracts, requests, authentication, scopes, and runtime behavior.
+
 ## 1.1.17
 
 - Clarify TODO completion and creation terminal feedback by extracting and

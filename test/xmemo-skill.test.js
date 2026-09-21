@@ -56,7 +56,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /100 items/);
   assert.match(skill, /14 days/);
   assert.match(skill, /30 days/);
-  assert.doesNotMatch(skill, /`forget`/);
+  assert.match(skill, /`forget`/);
   assert.match(skill, /references\/operations\.md/);
   assert.match(skill, /references\/troubleshooting\.md/);
   assert.match(skill, /Do not simulate a successful memory read or write/i);

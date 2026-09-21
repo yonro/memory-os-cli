@@ -121,6 +121,9 @@ Never ask the user to paste a raw token into chat, logs, or project files.
 
 - **Recall before non-trivial work.** Call `recall` or `search` with the repo,
   project, task, and subsystem before making decisions.
+- **Read exact memories directly.** Use `read --id <id>` when you have a specific
+  memory ID to inspect its full or paginated content, rather than semantic
+  `recall` or `search`.
 - **Opt into Knowledge deliberately.** Use `recall-context` with
   `--include_knowledge true` when the task benefits from the user-owned
   Knowledge base; omit the flag to preserve the existing Memory-only context.
@@ -132,15 +135,25 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   decisions.
 - **Record concrete expenses.** Use `expense-add` when the user states a concrete
   purchase or income.
-- **Confirm destructive actions.** The bundled script does not expose memory
-  deletion or overwrite commands. Use an authorized product surface with an
-  explicit target and user confirmation if such an operation is required.
+- **Update existing memories in place.** Use `update --id <id>` with `--content`,
+  `--path`, `--metadata` (JSON), `--bucket`, and/or `--scope` to modify a
+  memory record via `PATCH /v1/memories/{id}`.
+- **Safely forget obsolete memories.** Use `forget --id <id> --confirm` to
+  request soft deletion via `POST /v1/memories/{id}/forget`. To guard against
+  accidental deletion, `--confirm` is mandatory; omitting it displays the target
+  ID and terminates with non-zero exit code without issuing any network request.
+- **Confirm destructive actions.** An authorized credential with memory write
+  scope is required for `update` and `forget`. Pass explicit target IDs and
+  confirm intentions before removing knowledge.
 - **Read provenance correctly.** `agent_id`, `agent_instance_id`, and
   `agent_boundary` are attribution signals, not authorization boundaries.
 
 ## Bundled Script Commands
 
 ```text
+node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>]
+node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."] [--metadata '{"k":"v"}']
+node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
 node scripts/xmemo-skill.mjs remember --content "..." --path "..."
 node scripts/xmemo-skill.mjs recall --query "..." --compact
 node scripts/xmemo-skill.mjs recall-context --query "..." --include_knowledge true
@@ -181,6 +194,9 @@ remain limited to `remember`, `recall`, and `search`.
 The Skill script handles all operations directly, including status checks and token management:
 
 ```text
+node scripts/xmemo-skill.mjs read --id <id> [--offset 0] [--limit 500]
+node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."]
+node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
 node scripts/xmemo-skill.mjs auth status [--verify]
 node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
@@ -190,6 +206,30 @@ node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 node scripts/xmemo-skill.mjs doctor
 node scripts/xmemo-skill.mjs recall-context --query "recent project progress" --max_items 5 --max_tokens 1000
 ```
+
+`read` is a read-only command backed by `GET /v1/memories/{id}/explain?include_embedding=false`.
+It retrieves a specific memory record by its exact ID with a minimal projection (`id`, `path`,
+`content`, `version`, `truncated`). `read --json` returns a harmonized `{ ok: true, id, path, content, version, truncated }`
+envelope, where `version` is `null` when unversioned (rendered as `(unknown)` in terminal text).
+Unlike `recall` or `search` which perform semantic queries, `read` fetches the targeted memory
+record directly. It supports character-level pagination via `--offset` and `--limit`, setting
+`truncated: true` when text extends beyond the window. Empty content is a valid memory value.
+Soft-deleted or missing records return `not_found`, and authentication/authorization errors (401/403)
+are preserved without downgrade.
+
+`update` modifies an existing memory in place backed by `PATCH /v1/memories/{id}`.
+It accepts `--id` (required), `--content`, `--path`, `--metadata` (JSON string), `--bucket`, and
+`--scope`. The server validates the request: client errors such as 400 `invalid_memory_id` are
+transparently reported as parameter errors and are never downgraded to `not_found`. Non-existent
+memories return 404 `not_found`, and authorization errors (401/403) remain properly classified.
+`update --json` returns `{ ok: true, id, path, updated: true, ... }`.
+
+`forget` performs a soft-deletion of an existing memory backed by `POST /v1/memories/{id}/forget`.
+It accepts `--id` (required), `--reason` (optional explanation), and mandatory `--confirm`.
+**Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately prints the target
+ID and exits with non-zero exit code without dispatching any network request. When confirmed, it
+sends `{ mode: 'soft_delete', reason }`. Successful execution outputs `{ ok: true, id, mode: 'soft_delete', forgotten: true }`
+under `--json`. Missing records return 404 `not_found`, and 401/403 errors are preserved.
 
 `recall-context` is a read-only prompt-context helper backed by
 `/v1/recall/context`. It returns the service's bounded `context_text` and, with

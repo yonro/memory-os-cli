@@ -76,6 +76,9 @@ temporary credential and removes pending confirmation data.
 
 | Skill script | Purpose |
 |--------------|---------|
+| `read` | Read a specific memory by ID with minimal projection and optional character pagination |
+| `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
+| `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
 | `remember` | Save a durable memory |
 | `recall` | Recall the most relevant memories |
 | `search` | Search memories by query |
@@ -110,6 +113,53 @@ restart workflow, and temporary credentials remain limited to `remember`,
 `recall`, and `search`.
 
 ## Examples
+
+### Read a specific memory by ID
+
+```text
+node scripts/xmemo-skill.mjs read --id <memory_id>
+node scripts/xmemo-skill.mjs read --id <memory_id> --offset 0 --limit 500
+node scripts/xmemo-skill.mjs read --id <memory_id> --json
+```
+
+`read` performs an exact-ID lookup backed by `GET /v1/memories/{id}/explain?include_embedding=false`.
+Unlike semantic `recall` or query `search`, `read` requires a known `--id` and retrieves the targeted memory record directly.
+Optional `--offset` and `--limit` paginate the text content by character offset and window size, setting `truncated: true` when content extends beyond the requested window.
+Empty content is treated as a valid memory value. Soft-deleted or missing memories return `not_found`.
+Authentication and permission errors (401/403) are preserved and never downgraded to `not_found`.
+Under `--json`, it returns `{ ok: true, id, path, content, version, truncated }` (`version` is `null` if unversioned or absent).
+
+### Update an existing memory
+
+```text
+node scripts/xmemo-skill.mjs update --id <memory_id> --content "Updated content text"
+node scripts/xmemo-skill.mjs update --id <memory_id> --path "projects/demo/architecture"
+node scripts/xmemo-skill.mjs update --id <memory_id> --metadata '{"revised":true}' --bucket "docs"
+node scripts/xmemo-skill.mjs update --id <memory_id> --content "New text" --json
+```
+
+`update` sends a `PATCH /v1/memories/{id}` request with fields specified in `--content`, `--path`,
+`--metadata` (parsed JSON object), `--bucket`, and `--scope`.
+Validation and authorization:
+- A 400 response with `invalid_memory_id` is passed through cleanly as a parameter/validation error and is never downgraded to `not_found`.
+- Missing target memories return 404 `not_found`.
+- Authentication (401) and permission (403) rejections remain accurately categorized.
+- Under `--json`, successful update returns `{ ok: true, id, path, updated: true, ... }`.
+
+### Forget a memory with confirmation
+
+```text
+node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm
+node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --reason "Deprecated convention"
+node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --json
+```
+
+`forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }` to perform a safe soft deletion.
+**Accidental Deletion Guard**:
+- If `--confirm` is not passed, the script exits immediately with code 1, prints the target ID, and **issues 0 HTTP requests**.
+- When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
+- A 404 response reports `not_found`.
+- 401/403 errors are reported without downgrade.
 
 ### Remember a decision
 
