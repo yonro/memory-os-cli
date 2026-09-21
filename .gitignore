@@ -29,6 +29,19 @@ docs/design/
 *_REPORT.md
 *-PROGRESS.md
 *_PROGRESS.md
+*-AUDIT.md
+*_AUDIT.md
+*-NOTES.md
+*_NOTES.md
+*-DESIGN.md
+*_DESIGN.md
+*-RETRO.md
+*_RETRO.md
+docs/plans/
+docs/reviews/
+docs/internal/
+docs/evidence/
+.review-worktrees/
 
 
 # DevFlow engine

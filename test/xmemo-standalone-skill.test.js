@@ -1175,3 +1175,1561 @@ test('skill script auth status verification checks endpoint', async () => {
 
   await testServer.stop();
 });
+
+test('skill script read queries explain endpoint and returns minimal projection', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    id: 'mem_12345',
+    path: 'docs/architecture',
+    content: 'Memory content for architecture design.',
+    version: 'v2'
+  });
+
+  try {
+    const res = await runScript([
+      'read', '--id', 'mem_12345', '--bucket', 'my-bucket', '--scope', 'my-scope', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: true,
+      id: 'mem_12345',
+      path: 'docs/architecture',
+      content: 'Memory content for architecture design.',
+      version: 'v2',
+      truncated: false
+    });
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/v1/memories/mem_12345/explain?include_embedding=false&bucket=my-bucket&scope=my-scope');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    // Terminal mode check
+    const termRes = await runScript(['read', '--id', 'mem_12345'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(termRes.code, 0);
+    assert.match(termRes.stdout, /Memory: mem_12345/);
+    assert.match(termRes.stdout, /Path: docs\/architecture/);
+    assert.match(termRes.stdout, /Version: v2/);
+    assert.match(termRes.stdout, /Content: Memory content for architecture design\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script read handles empty content as a valid result', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    id: 'mem_empty',
+    path: 'docs/empty',
+    content: '',
+    version: 'v1'
+  });
+
+  try {
+    const res = await runScript(['read', '--id', 'mem_empty', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.id, 'mem_empty');
+    assert.equal(payload.content, '');
+    assert.equal(payload.truncated, false);
+
+    const termRes = await runScript(['read', '--id', 'mem_empty'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(termRes.code, 0);
+    assert.match(termRes.stdout, /Memory: mem_empty/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script read returns not_found on 404 and soft-deleted status', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 404 status
+    testServer.setResponse({ error: { code: 'not_found', message: 'Memory not found' } }, 404);
+    const notFoundRes = await runScript(['read', '--id', 'missing_mem', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(notFoundRes.code, 1);
+    const notFoundPayload = JSON.parse(notFoundRes.stdout);
+    assert.equal(notFoundPayload.ok, false);
+    assert.equal(notFoundPayload.error.code, 'not_found');
+
+    // Soft-deleted status (HTTP 200 with status: 'deleted')
+    testServer.setResponse({
+      id: 'deleted_mem',
+      path: 'docs/del',
+      content: 'soft deleted content',
+      status: 'deleted'
+    }, 200);
+    const deletedRes = await runScript(['read', '--id', 'deleted_mem', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(deletedRes.code, 1);
+    const deletedPayload = JSON.parse(deletedRes.stdout);
+    assert.equal(deletedPayload.ok, false);
+    assert.equal(deletedPayload.error.code, 'not_found');
+    assert.match(deletedPayload.error.message, /not found or deleted/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script read preserves 401 and 403 errors without downgrade to 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 401 Unauthorized
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Invalid or expired token' } }, 401);
+    const authRes = await runScript(['read', '--id', 'any_mem', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'expired-token' }
+    });
+    assert.equal(authRes.code, 1);
+    const authPayload = JSON.parse(authRes.stdout);
+    assert.equal(authPayload.ok, false);
+    assert.equal(authPayload.error.code, 'unauthorized');
+    assert.notEqual(authPayload.error.code, 'not_found');
+
+    // 403 Forbidden
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Insufficient scope' } }, 403);
+    const forbiddenRes = await runScript(['read', '--id', 'any_mem', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'scoped-token' }
+    });
+    assert.equal(forbiddenRes.code, 1);
+    const forbiddenPayload = JSON.parse(forbiddenRes.stdout);
+    assert.equal(forbiddenPayload.ok, false);
+    assert.equal(forbiddenPayload.error.code, 'forbidden');
+    assert.notEqual(forbiddenPayload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script read handles character pagination via offset and limit', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    id: 'mem_paged',
+    path: 'docs/paged',
+    content: '0123456789ABCDEF',
+    version: 'v1'
+  });
+
+  try {
+    // Window from 0 with limit 5 (offset=0, limit=5, truncated=true)
+    const page1 = await runScript([
+      'read', '--id', 'mem_paged', '--offset', '0', '--limit', '5', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(page1.code, 0);
+    const payload1 = JSON.parse(page1.stdout);
+    assert.equal(payload1.content, '01234');
+    assert.equal(payload1.truncated, true);
+
+    // Window from 5 with limit 5 (offset=5, limit=5, truncated=true)
+    const page2 = await runScript([
+      'read', '--id', 'mem_paged', '--offset', '5', '--limit', '5', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(page2.code, 0);
+    const payload2 = JSON.parse(page2.stdout);
+    assert.equal(payload2.content, '56789');
+    assert.equal(payload2.truncated, true);
+
+    // Full window (offset=0, limit=16, truncated=false)
+    const full = await runScript([
+      'read', '--id', 'mem_paged', '--offset', '0', '--limit', '16', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(full.code, 0);
+    const payloadFull = JSON.parse(full.stdout);
+    assert.equal(payloadFull.content, '0123456789ABCDEF');
+    assert.equal(payloadFull.truncated, false);
+
+    // Terminal mode with truncation flag
+    const termTrunc = await runScript([
+      'read', '--id', 'mem_paged', '--offset', '0', '--limit', '5'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(termTrunc.code, 0);
+    assert.match(termTrunc.stdout, /\[truncated\]/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script read defaults version to null when absent and renders unknown in terminal', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    id: 'mem_unversioned',
+    path: 'docs/raw',
+    content: 'unversioned memory content'
+  });
+
+  try {
+    const res = await runScript(['read', '--id', 'mem_unversioned', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.version, null);
+
+    const termRes = await runScript(['read', '--id', 'mem_unversioned'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(termRes.code, 0);
+    assert.match(termRes.stdout, /Version: \(unknown\)/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script update sends PATCH /v1/memories/{id} with flags and returns projection', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    id: 'mem_upd_1',
+    path: 'projects/new-path',
+    content: 'Updated content here',
+    metadata: { key: 'value' },
+    bucket: 'custom-bucket',
+    scope: 'custom-scope'
+  });
+
+  try {
+    const res = await runScript([
+      'update', '--id', 'mem_upd_1',
+      '--content', 'Updated content here',
+      '--path', 'projects/new-path',
+      '--metadata', '{"key":"value"}',
+      '--bucket', 'custom-bucket',
+      '--scope', 'custom-scope',
+      '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.id, 'mem_upd_1');
+    assert.equal(payload.path, 'projects/new-path');
+    assert.equal(payload.updated, true);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'PATCH');
+    assert.equal(req.url, '/v1/memories/mem_upd_1');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+    assert.deepEqual(req.body, {
+      content: 'Updated content here',
+      path: 'projects/new-path',
+      metadata: { key: 'value' },
+      bucket: 'custom-bucket',
+      scope: 'custom-scope'
+    });
+
+    // Terminal mode check
+    const termRes = await runScript([
+      'update', '--id', 'mem_upd_1', '--path', 'projects/new-path'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(termRes.code, 0);
+    assert.match(termRes.stdout, /Memory updated\./);
+    assert.match(termRes.stdout, /ID: mem_upd_1/);
+    assert.match(termRes.stdout, /Path: projects\/new-path/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script update passes through 400 invalid_memory_id without downgrade to 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 400 with invalid_memory_id
+    testServer.setResponse({
+      error: { code: 'invalid_memory_id', message: "Invalid memory ID syntax: '!@#$'" }
+    }, 400);
+
+    const res = await runScript([
+      'update', '--id', '!@#$', '--content', 'new content', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_memory_id');
+    assert.notEqual(payload.error.code, 'not_found');
+    assert.match(payload.error.message, /Invalid memory ID/);
+
+    const termRes = await runScript([
+      'update', '--id', '!@#$', '--content', 'new content'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(termRes.code, 1);
+    assert.match(termRes.stderr, /Code: invalid_memory_id/);
+
+    // 400 with a different code (e.g. invalid_metadata) does NOT get overwritten as invalid_memory_id
+    testServer.setResponse({
+      error: { code: 'invalid_metadata', message: 'Metadata schema validation failed' }
+    }, 400);
+    const resOther = await runScript([
+      'update', '--id', 'mem_1', '--metadata', '{"bad":true}', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(resOther.code, 1);
+    const payloadOther = JSON.parse(resOther.stdout);
+    assert.equal(payloadOther.error.code, 'invalid_metadata');
+    assert.notEqual(payloadOther.error.code, 'invalid_memory_id');
+
+    // 400 without code defaults to invalid_request
+    testServer.setResponse({
+      error: { message: 'Malformed payload' }
+    }, 400);
+    const resNoCode = await runScript([
+      'update', '--id', 'mem_1', '--content', 'new content', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(resNoCode.code, 1);
+    const payloadNoCode = JSON.parse(resNoCode.stdout);
+    assert.equal(payloadNoCode.error.code, 'invalid_request');
+    assert.notEqual(payloadNoCode.error.code, 'invalid_memory_id');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script update returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({
+      error: { code: 'not_found', message: 'Memory does not exist' }
+    }, 404);
+
+    const res = await runScript([
+      'update', '--id', 'non_existing_mem', '--content', 'new content', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script update preserves 401 and 403 errors without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Missing token' } }, 401);
+    const res401 = await runScript([
+      'update', '--id', 'mem_1', '--content', 'new content', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-token' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Read-only token' } }, 403);
+    const res403 = await runScript([
+      'update', '--id', 'mem_1', '--content', 'new content', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'readonly-token' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget without --confirm exits non-zero and makes zero network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // Under JSON mode
+    const resJson = await runScript([
+      'forget', '--id', 'mem_to_delete', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 1);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'confirmation_required');
+    assert.equal(payload.error.target_id, 'mem_to_delete');
+    assert.match(payload.error.message, /Confirmation required/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Under terminal mode
+    const resTerm = await runScript([
+      'forget', '--id', 'mem_to_delete'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 1);
+    assert.match(resTerm.stderr, /Confirmation required to forget memory 'mem_to_delete'/);
+    assert.match(resTerm.stderr, /Target: mem_to_delete/);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget with --confirm sends POST /v1/memories/{id}/forget with mode soft_delete', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    result: { id: 'mem_to_delete', status: 'deleted' }
+  });
+
+  const ALLOWED_SERVICE_MODES = new Set(['soft_delete', 'hard_delete', 'redact']);
+
+  try {
+    const res = await runScript([
+      'forget', '--id', 'mem_to_delete', '--confirm', '--reason', 'outdated info', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.id, 'mem_to_delete');
+    assert.equal(payload.mode, 'soft_delete');
+    assert.equal(payload.forgotten, true);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'POST');
+    assert.equal(req.url, '/v1/memories/mem_to_delete/forget');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+    assert.deepEqual(req.body, {
+      mode: 'soft_delete',
+      reason: 'outdated info'
+    });
+    assert.ok(ALLOWED_SERVICE_MODES.has(req.body.mode), `Outgoing mode '${req.body.mode}' must be a valid service enum`);
+
+    // Terminal mode check without --reason: confirms reason is omitted from body
+    const termRes = await runScript([
+      'forget', '--id', 'mem_to_delete', '--confirm'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(termRes.code, 0);
+    assert.match(termRes.stdout, /Memory forgotten \(soft-deleted\)\./);
+    assert.match(termRes.stdout, /ID: mem_to_delete/);
+    assert.equal(testServer.requests.length, 2);
+    const req2 = testServer.requests[1];
+    assert.equal(req2.body.mode, 'soft_delete');
+    assert.equal('reason' in req2.body, false, 'reason field must be omitted when --reason flag is absent');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({
+      error: { code: 'not_found', message: 'Memory not found' }
+    }, 404);
+
+    const res = await runScript([
+      'forget', '--id', 'missing_mem', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget preserves 401 and 403 errors without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Missing token' } }, 401);
+    const res401 = await runScript([
+      'forget', '--id', 'mem_1', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-token' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Read-only token' } }, 403);
+    const res403 = await runScript([
+      'forget', '--id', 'mem_1', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'readonly-token' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script top-level help lists read, update, and forget commands', async () => {
+  const res = await runScript(['--help']);
+  assert.equal(res.code, 0);
+  assert.match(res.stdout, /read --id <id> \[--offset <n>\] \[--limit <n>\]/);
+  assert.match(res.stdout, /update --id <id> \[--content <text>\]/);
+  assert.match(res.stdout, /forget --id <id> \[--reason <text>\] --confirm/);
+  assert.match(res.stdout, /ledger-list \[--month <YYYY-MM>\]/);
+  assert.match(res.stdout, /ledger-summary \[--months <n>\]/);
+  assert.match(res.stdout, /overview/);
+  assert.match(res.stdout, /activity/);
+  assert.match(res.stdout, /stats/);
+});
+
+test('skill script ledger-list success path sends GET /v1/me/ledger/transactions with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [
+      {
+        id: 'tx_1',
+        amount: 100.5,
+        currency: 'CNY',
+        transaction_date: '2026-09-15',
+        category: 'Food',
+        transaction_type: 'expense',
+        description: 'Team Lunch'
+      }
+    ],
+    total: 1
+  });
+
+  const ALLOWED_LEDGER_LIST_PARAMS = new Set([
+    'limit', 'offset', 'currency', 'date_from', 'date_to', 'category', 'min_amount', 'max_amount', 'transaction_type'
+  ]);
+
+  try {
+    const resJson = await runScript([
+      'ledger-list',
+      '--limit', '10',
+      '--offset', '0',
+      '--currency', 'CNY',
+      '--category', 'Food',
+      '--min-amount', '10',
+      '--max-amount', '200',
+      '--type', 'expense',
+      '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total, 1);
+    assert.equal(payload.transactions.length, 1);
+    assert.equal(payload.transactions[0].id, 'tx_1');
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/ledger/transactions');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_LEDGER_LIST_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
+    }
+    assert.equal(reqUrl.searchParams.get('limit'), '10');
+    assert.equal(reqUrl.searchParams.get('offset'), '0');
+    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+    assert.equal(reqUrl.searchParams.get('category'), 'Food');
+    assert.equal(reqUrl.searchParams.get('min_amount'), '10');
+    assert.equal(reqUrl.searchParams.get('max_amount'), '200');
+    assert.equal(reqUrl.searchParams.get('transaction_type'), 'expense');
+    assert.equal(reqUrl.searchParams.has('month'), false);
+    assert.equal(reqUrl.searchParams.has('bucket'), false);
+    assert.equal(reqUrl.searchParams.has('scope'), false);
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'ledger-list', '--limit', '10', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Ledger Transactions \(1/);
+    assert.match(resTerm.stdout, /100\.5 CNY/);
+    assert.match(resTerm.stdout, /\[Food\]/);
+    assert.match(resTerm.stdout, /Team Lunch/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list converts --month locally to date_from and date_to without transmitting month', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [],
+    total: 0
+  });
+
+  const ALLOWED_LEDGER_LIST_PARAMS = new Set([
+    'limit', 'offset', 'currency', 'date_from', 'date_to', 'category', 'min_amount', 'max_amount', 'transaction_type'
+  ]);
+
+  try {
+    const res = await runScript([
+      'ledger-list', '--month', '2026-09', '--currency', 'CNY', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    assert.equal(testServer.requests.length, 1);
+
+    const reqUrl = new URL(testServer.requests[0].url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/ledger/transactions');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_LEDGER_LIST_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
+    }
+
+    assert.equal(reqUrl.searchParams.has('month'), false, 'Server does not accept month; must not be sent');
+    assert.equal(reqUrl.searchParams.has('bucket'), false, 'Server does not accept bucket; must not be sent');
+    assert.equal(reqUrl.searchParams.has('scope'), false, 'Server does not accept scope; must not be sent');
+    assert.equal(reqUrl.searchParams.get('date_from'), '2026-09-01');
+    assert.equal(reqUrl.searchParams.get('date_to'), '2026-09-30');
+    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list handles empty result cleanly as exit code 0 without not_found error', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [],
+    total: 0
+  });
+
+  try {
+    const resJson = await runScript([
+      'ledger-list', '--month', '2026-09', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.deepEqual(payload.transactions, []);
+    assert.equal(payload.total, 0);
+
+    const resTerm = await runScript([
+      'ledger-list', '--month', '2026-09'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No ledger transactions found\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { message: 'Not found' } }, 404);
+    const res = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Auth required' } }, 401);
+    const res401 = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Scope missing' } }, 403);
+    const res403 = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Malformed parameters' }, 400);
+    const res = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary success path sends GET /v1/me/ledger/monthly-summary with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    summary: [
+      {
+        month: '2026-09',
+        currency: 'CNY',
+        expense_total: 500,
+        income_total: 1000,
+        refund_total: 0,
+        net_total: 500,
+        transaction_count: 5
+      }
+    ],
+    months: 6,
+    total_months: 1,
+    total_transactions: 5
+  });
+
+  const ALLOWED_LEDGER_SUMMARY_PARAMS = new Set([
+    'months', 'currency', 'transaction_type'
+  ]);
+
+  try {
+    const resJson = await runScript([
+      'ledger-summary', '--months', '6', '--currency', 'CNY', '--type', 'expense', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.months, 6);
+    assert.equal(payload.summary.length, 1);
+    assert.equal(payload.summary[0].month, '2026-09');
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/ledger/monthly-summary');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_LEDGER_SUMMARY_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
+    }
+    assert.equal(reqUrl.searchParams.get('months'), '6');
+    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+    assert.equal(reqUrl.searchParams.get('transaction_type'), 'expense');
+    assert.equal(reqUrl.searchParams.has('month'), false, 'Must not send month');
+    assert.equal(reqUrl.searchParams.has('bucket'), false, 'Must not send bucket');
+    assert.equal(reqUrl.searchParams.has('scope'), false, 'Must not send scope');
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'ledger-summary', '--months', '6', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Ledger Monthly Summary \(1 month\):/);
+    assert.match(resTerm.stdout, /2026-09 \(CNY\):/);
+    assert.match(resTerm.stdout, /Expense: 500 CNY/);
+    assert.match(resTerm.stdout, /Income: 1000 CNY/);
+    assert.match(resTerm.stdout, /Net: 500 CNY/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary handles legacy single-month object response in terminal mode', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    month: '2026-09',
+    currency: 'CNY',
+    total: 1250.5,
+    count: 5
+  });
+
+  try {
+    const resTerm = await runScript([
+      'ledger-summary', '--months', '3', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo ledger summary for 2026-09: 1250\.5 CNY across 5 transactions\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary handles empty/zero result cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    summary: [],
+    months: 6,
+    total_months: 0,
+    total_transactions: 0
+  });
+
+  try {
+    const resJson = await runScript([
+      'ledger-summary', '--months', '6', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.deepEqual(payload.summary, []);
+
+    const resTerm = await runScript([
+      'ledger-summary', '--months', '6'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No ledger monthly summary available\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { message: 'Not found' } }, 404);
+    const res = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Session required' } }, 401);
+    const res401 = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Ledger scope required' } }, 403);
+    const res403 = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad query' }, 400);
+    const res = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list displays (unknown) when tx.amount is missing', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [
+      {
+        id: 'tx_missing_amount',
+        currency: 'CNY',
+        transaction_date: '2026-09-15',
+        category: 'Food',
+        transaction_type: 'expense',
+        description: 'Unknown Price Meal'
+      }
+    ],
+    total: 1
+  });
+
+  try {
+    const res = await runScript([
+      'ledger-list', '--limit', '10', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /\(unknown\) CNY/);
+    assert.doesNotMatch(res.stdout, /\b0 CNY\b/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview success path sends GET /v1/me/overview with zero query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    memories_total: 42,
+    memories_active: 35,
+    memories_archived: 5,
+    memories_forgotten: 2,
+    agents_active: 3,
+    storage_mb: 1.25,
+    tokens_30d: 15400,
+    demo: false,
+    dev_mode: false
+  });
+
+  try {
+    const resJson = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.memories_total, 42);
+    assert.equal(payload.memories_active, 35);
+    assert.equal(payload.memories_archived, 5);
+    assert.equal(payload.memories_forgotten, 2);
+    assert.equal(payload.agents_active, 3);
+    assert.equal(payload.storage_mb, 1.25);
+    assert.equal(payload.tokens_30d, 15400);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/overview');
+    // Strict allow-list: zero query params accepted by GET /v1/me/overview
+    assert.equal(reqUrl.search, '', 'GET /v1/me/overview must not have query parameters');
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'overview'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Account Overview:/);
+    assert.match(resTerm.stdout, /Memories: 42 total \(35 active, 5 archived, 2 forgotten\)/);
+    assert.match(resTerm.stdout, /Active Agents: 3/);
+    assert.match(resTerm.stdout, /Storage: 1\.25 MB/);
+    assert.match(resTerm.stdout, /Tokens \(30d\): 15400/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview handles empty/zero data cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    memories_total: 0,
+    memories_active: 0,
+    memories_archived: 0,
+    memories_forgotten: 0,
+    agents_active: 0,
+    storage_mb: 0.0,
+    tokens_30d: 0,
+    demo: false,
+    dev_mode: false
+  });
+
+  try {
+    const resTerm = await runScript([
+      'overview'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Account Overview:/);
+    assert.match(resTerm.stdout, /Memories: 0 total \(0 active, 0 archived, 0 forgotten\)/);
+    assert.match(resTerm.stdout, /Active Agents: 0/);
+    assert.match(resTerm.stdout, /Storage: 0 MB/);
+    assert.match(resTerm.stdout, /Tokens \(30d\): 0/);
+
+    const resJson = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.memories_total, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'not_found', message: 'Overview endpoint not found' } }, 404);
+    const res = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token required' } }, 401);
+    const res401 = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Read scope required' } }, 403);
+    const res403 = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script overview 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad query' }, 400);
+    const res = await runScript([
+      'overview', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity success path sends GET /v1/me/activity with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    activity: [
+      {
+        ts: '2026-09-21T10:00:00Z',
+        type: 'memory_created',
+        summary: 'Stored system architecture decision',
+        ref_id: 'mem_123'
+      }
+    ],
+    total: 1,
+    dev_mode: false
+  });
+
+  const ALLOWED_ACTIVITY_PARAMS = new Set(['limit']);
+
+  try {
+    const resJson = await runScript([
+      'activity', '--limit', '15', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total, 1);
+    assert.equal(payload.activity.length, 1);
+    assert.equal(payload.activity[0].type, 'memory_created');
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/activity');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_ACTIVITY_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed activity set`);
+    }
+    assert.equal(reqUrl.searchParams.get('limit'), '15');
+    assert.equal(reqUrl.searchParams.has('scope'), false);
+    assert.equal(reqUrl.searchParams.has('bucket'), false);
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'activity', '--limit', '15'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Recent Activity \(1 \(total: 1\)\):/);
+    assert.match(resTerm.stdout, /2026-09-21T10:00:00Z/);
+    assert.match(resTerm.stdout, /MEMORY_CREATED/);
+    assert.match(resTerm.stdout, /Stored system architecture decision/);
+    assert.match(resTerm.stdout, /\[ref: mem_123\]/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity handles empty result cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    activity: [],
+    total: 0,
+    dev_mode: false
+  });
+
+  try {
+    const resTerm = await runScript([
+      'activity'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No recent activity found\./);
+
+    const resJson = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total, 0);
+    assert.deepEqual(payload.activity, []);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'not_found', message: 'Activity endpoint not found' } }, 404);
+    const res = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token required' } }, 401);
+    const res401 = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Activity read forbidden' } }, 403);
+    const res403 = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script activity 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad limit parameter' }, 400);
+    const res = await runScript([
+      'activity', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats success path sends GET /v1/memories/stats with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    total_count: 100,
+    filtered_count: 85,
+    scanned_count: 100,
+    truncated: false,
+    latest_at: '2026-09-20T12:00:00Z',
+    oldest_at: '2026-09-01T08:00:00Z',
+    type_counts: { episodic: 60, semantic: 25 },
+    status_counts: { active: 80, archived: 5 },
+    bucket_counts: { main: 85 },
+    path_counts: { 'projects/test': 50 },
+    groups: [
+      {
+        group_by: { type: 'episodic', status: 'active' },
+        count: 55,
+        latest_at: '2026-09-20T12:00:00Z'
+      }
+    ]
+  });
+
+  const ALLOWED_STATS_PARAMS = new Set([
+    'owner', 'team_id', 'scope', 'path', 'bucket', 'memory_type', 'status', 'source', 'since', 'until', 'metadata', 'group_by', 'top_n'
+  ]);
+
+  try {
+    const resJson = await runScript([
+      'stats',
+      '--scope', 'team',
+      '--path', 'projects/%',
+      '--bucket', 'main',
+      '--memory-type', 'episodic',
+      '--status', 'active',
+      '--source', 'cli',
+      '--since', '2026-09-01T00:00:00Z',
+      '--until', '2026-09-20T00:00:00Z',
+      '--group-by', 'type,status',
+      '--top-n', '50',
+      '--team-id', 'team_abc',
+      '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total_count, 100);
+    assert.equal(payload.filtered_count, 85);
+    assert.equal(payload.type_counts.episodic, 60);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/memories/stats');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_STATS_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed stats set`);
+    }
+    assert.equal(reqUrl.searchParams.get('scope'), 'team');
+    assert.equal(reqUrl.searchParams.get('path'), 'projects/%');
+    assert.equal(reqUrl.searchParams.get('bucket'), 'main');
+    assert.equal(reqUrl.searchParams.get('memory_type'), 'episodic');
+    assert.equal(reqUrl.searchParams.get('status'), 'active');
+    assert.equal(reqUrl.searchParams.get('source'), 'cli');
+    assert.equal(reqUrl.searchParams.get('since'), '2026-09-01T00:00:00Z');
+    assert.equal(reqUrl.searchParams.get('until'), '2026-09-20T00:00:00Z');
+    assert.equal(reqUrl.searchParams.get('group_by'), 'type,status');
+    assert.equal(reqUrl.searchParams.get('top_n'), '50');
+    assert.equal(reqUrl.searchParams.get('team_id'), 'team_abc');
+    assert.equal(reqUrl.searchParams.has('month'), false);
+    assert.equal(reqUrl.searchParams.has('currency'), false);
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'stats', '--path', 'projects/%'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Memory Statistics:/);
+    assert.match(resTerm.stdout, /Total Memories: 100 \(filtered: 85, scanned: 100\)/);
+    assert.match(resTerm.stdout, /Latest Memory: 2026-09-20T12:00:00Z/);
+    assert.match(resTerm.stdout, /Oldest Memory: 2026-09-01T08:00:00Z/);
+    assert.match(resTerm.stdout, /Types: episodic: 60, semantic: 25/);
+    assert.match(resTerm.stdout, /Status: active: 80, archived: 5/);
+    assert.match(resTerm.stdout, /Buckets: main: 85/);
+    assert.match(resTerm.stdout, /Groups \(1\):/);
+    assert.match(resTerm.stdout, /\[type=episodic, status=active\]: 55/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats handles empty result cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    total_count: 0,
+    filtered_count: 0,
+    scanned_count: 0,
+    truncated: false,
+    latest_at: null,
+    oldest_at: null,
+    type_counts: {},
+    status_counts: {},
+    bucket_counts: {},
+    path_counts: {},
+    groups: []
+  });
+
+  try {
+    const resTerm = await runScript([
+      'stats'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No memory statistics available\./);
+
+    const resJson = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total_count, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats rejects --top-n out of bounds locally with zero network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    const res0 = await runScript([
+      'stats', '--top-n', '0'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(res0.code, 0);
+    assert.match(res0.stderr, /--top-n must be between 1 and 200/);
+    assert.equal(testServer.requests.length, 0, 'Zero requests must be sent on local validation error');
+
+    const res201 = await runScript([
+      'stats', '--top-n', '201'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(res201.code, 0);
+    assert.match(res201.stderr, /--top-n must be between 1 and 200/);
+    assert.equal(testServer.requests.length, 0, 'Zero requests must be sent on local validation error');
+
+    const resAbc = await runScript([
+      'stats', '--top-n', 'abc'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(resAbc.code, 0);
+    assert.match(resAbc.stderr, /--top-n must be an integer between 1 and 200/);
+    assert.equal(testServer.requests.length, 0, 'Zero requests must be sent on local validation error');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'not_found', message: 'Stats endpoint not found' } }, 404);
+    const res = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token required' } }, 401);
+    const res401 = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Stats read forbidden' } }, 403);
+    const res403 = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script stats 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad stats query' }, 400);
+    const res = await runScript([
+      'stats', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+
+

@@ -76,6 +76,14 @@ temporary credential and removes pending confirmation data.
 
 | Skill script | Purpose |
 |--------------|---------|
+| `read` | Read a specific memory by ID with minimal projection and optional character pagination |
+| `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
+| `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
+| `ledger-list` | List financial/expense transactions via `GET /v1/me/ledger/transactions` (strictly read-only) |
+| `ledger-summary` | Retrieve monthly transaction summary via `GET /v1/me/ledger/monthly-summary` (strictly read-only) |
+| `overview` | Display account-level memory count, storage, and token consumption via `GET /v1/me/overview` (strictly read-only) |
+| `activity` | Display recent personal activity and events via `GET /v1/me/activity` (strictly read-only) |
+| `stats` | Retrieve multidimensional memory statistics and breakdown counts via `GET /v1/memories/stats` (strictly read-only) |
 | `remember` | Save a durable memory |
 | `recall` | Recall the most relevant memories |
 | `search` | Search memories by query |
@@ -110,6 +118,180 @@ restart workflow, and temporary credentials remain limited to `remember`,
 `recall`, and `search`.
 
 ## Examples
+
+### Read a specific memory by ID
+
+```text
+node scripts/xmemo-skill.mjs read --id <memory_id>
+node scripts/xmemo-skill.mjs read --id <memory_id> --offset 0 --limit 500
+node scripts/xmemo-skill.mjs read --id <memory_id> --json
+```
+
+`read` performs an exact-ID lookup backed by `GET /v1/memories/{id}/explain?include_embedding=false`.
+Unlike semantic `recall` or query `search`, `read` requires a known `--id` and retrieves the targeted memory record directly.
+Optional `--offset` and `--limit` paginate the text content by character offset and window size, setting `truncated: true` when content extends beyond the requested window.
+Empty content is treated as a valid memory value. Soft-deleted or missing memories return `not_found`.
+Authentication and permission errors (401/403) are preserved and never downgraded to `not_found`.
+Under `--json`, it returns `{ ok: true, id, path, content, version, truncated }` (`version` is `null` if unversioned or absent).
+
+### Update an existing memory
+
+```text
+node scripts/xmemo-skill.mjs update --id <memory_id> --content "Updated content text"
+node scripts/xmemo-skill.mjs update --id <memory_id> --path "projects/demo/architecture"
+node scripts/xmemo-skill.mjs update --id <memory_id> --metadata '{"revised":true}' --bucket "docs"
+node scripts/xmemo-skill.mjs update --id <memory_id> --content "New text" --json
+```
+
+`update` sends a `PATCH /v1/memories/{id}` request with fields specified in `--content`, `--path`,
+`--metadata` (parsed JSON object), `--bucket`, and `--scope`.
+Validation and authorization:
+- A 400 response with `invalid_memory_id` is passed through cleanly as a parameter/validation error and is never downgraded to `not_found`.
+- Missing target memories return 404 `not_found`.
+- Authentication (401) and permission (403) rejections remain accurately categorized.
+- Under `--json`, successful update returns `{ ok: true, id, path, updated: true, ... }`.
+
+### Forget a memory with confirmation
+
+```text
+node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm
+node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --reason "Deprecated convention"
+node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --json
+```
+
+`forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }` to perform a safe soft deletion.
+**Accidental Deletion Guard**:
+- If `--confirm` is not passed, the script exits immediately with code 1, prints the target ID, and **issues 0 HTTP requests**.
+- When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
+- A 404 response reports `not_found`.
+- 401/403 errors are reported without downgrade.
+
+### Query ledger transactions (read-only)
+
+```text
+node scripts/xmemo-skill.mjs ledger-list
+node scripts/xmemo-skill.mjs ledger-list --month 2026-09
+node scripts/xmemo-skill.mjs ledger-list --from 2026-09-01 --to 2026-09-30 --currency CNY
+node scripts/xmemo-skill.mjs ledger-list --category "Dining" --type expense --limit 20
+node scripts/xmemo-skill.mjs ledger-list --month 2026-09 --json
+```
+
+`ledger-list` queries personal financial transactions via `GET /v1/me/ledger/transactions`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--limit <n>`: Page limit (default 30, max 50).
+- `--offset <n>`: Pagination offset (default 0).
+- `--currency <code>`: Filter by 3-letter currency code (e.g. `CNY`, `USD`).
+- `--from <date>`: Filter transactions from start date (`date_from`).
+- `--to <date>`: Filter transactions up to end date (`date_to`).
+- `--category <name>`: Filter by expense/income category.
+- `--min-amount <n>` / `--max-amount <n>`: Filter by amount range.
+- `--type <type>`: Filter by transaction type (`transaction_type`, e.g. `expense`, `income`, `refund`).
+- `--month <YYYY-MM>`: Convenience flag. Resolved locally to start-of-month (`YYYY-MM-01`) and end-of-month dates (`date_from` and `date_to`) before dispatching, avoiding passing unsupported query parameters.
+
+Behavior and error classification:
+- Zero matching transactions return `{ ok: true, transactions: [], total: 0 }` (or clean terminal notice) with exit code 0.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output always formats amounts with explicit currency units without loss of precision.
+
+### Query monthly ledger summary (read-only)
+
+```text
+node scripts/xmemo-skill.mjs ledger-summary
+node scripts/xmemo-skill.mjs ledger-summary --months 6
+node scripts/xmemo-skill.mjs ledger-summary --months 3 --currency USD
+node scripts/xmemo-skill.mjs ledger-summary --months 12 --type expense --json
+```
+
+`ledger-summary` aggregates monthly financial transaction figures via `GET /v1/me/ledger/monthly-summary`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--months <n>`: Integer count of preceding months to aggregate (default 6, range 1..24).
+- `--currency <code>`: Filter aggregation by currency code.
+- `--type <type>`: Filter aggregation by transaction type (`transaction_type`).
+
+Behavior and error classification:
+- Empty aggregations return `{ ok: true, summary: [], months: ... }` with exit code 0.
+- Missing endpoints report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders structured monthly periods and breakdown totals with explicit currency labels.
+
+### Inspect account overview (read-only)
+
+```text
+node scripts/xmemo-skill.mjs overview
+node scripts/xmemo-skill.mjs overview --json
+```
+
+`overview` queries account-level memory and storage metrics via `GET /v1/me/overview`.
+This command is strictly read-only, takes zero parameters, and possesses zero write or deletion capabilities.
+It reports:
+- Total, active, archived, and forgotten memory counts
+- Active registered agent count
+- Total storage usage in MB
+- 30-day token consumption
+
+Behavior and error classification:
+- Zero memories exit cleanly with code 0.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders exact counts and metrics without precision loss.
+
+### Inspect recent account activity (read-only)
+
+```text
+node scripts/xmemo-skill.mjs activity
+node scripts/xmemo-skill.mjs activity --limit 10
+node scripts/xmemo-skill.mjs activity --limit 20 --json
+```
+
+`activity` queries recent account events and activity items via `GET /v1/me/activity`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--limit <n>`: Count of recent activities to retrieve (default 20, positive integer up to 100).
+
+Behavior and error classification:
+- Zero activity items return `{ ok: true, activity: [], total: 0 }` (or clean terminal notice) with exit code 0.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders sequential timestamped records with type and summary fields.
+
+### Inspect memory statistics and breakdown (read-only)
+
+```text
+node scripts/xmemo-skill.mjs stats
+node scripts/xmemo-skill.mjs stats --path "projects/%" --bucket main
+node scripts/xmemo-skill.mjs stats --group-by "type,status" --top-n 10
+node scripts/xmemo-skill.mjs stats --memory-type episodic --status active --json
+```
+
+`stats` queries aggregated memory metrics and dimensional counts via `GET /v1/memories/stats`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--scope <scope>`: Filter by scope.
+- `--path <path>`: Filter by path (supports wildcards, default `%`).
+- `--bucket <bucket>`: Filter by bucket (default `%`).
+- `--memory-type <type>`: Filter by memory type (`memory_type`, default `%`).
+- `--status <status>`: Filter by status (default `%`).
+- `--source <source>`: Filter by memory source.
+- `--since <iso>`: Filter memories created/updated after ISO 8601 timestamp.
+- `--until <iso>`: Filter memories created/updated before ISO 8601 timestamp.
+- `--group-by <dims>`: Comma-separated grouping dimensions (`path,type,status,source,bucket,day,metadata:<key>`).
+- `--top-n <n>`: Limit top grouped entries (1..200, strictly enforced locally before sending requests).
+- `--team-id <id>`: Filter by team ID.
+
+Behavior and error classification:
+- Zero memories exit cleanly with code 0.
+- Values of `--top-n` outside 1..200 or unrecognized options are rejected locally without issuing network requests.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders total/filtered counts, timestamps, type/status/bucket distributions, and group aggregates.
 
 ### Remember a decision
 

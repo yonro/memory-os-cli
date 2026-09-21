@@ -121,6 +121,9 @@ Never ask the user to paste a raw token into chat, logs, or project files.
 
 - **Recall before non-trivial work.** Call `recall` or `search` with the repo,
   project, task, and subsystem before making decisions.
+- **Read exact memories directly.** Use `read --id <id>` when you have a specific
+  memory ID to inspect its full or paginated content, rather than semantic
+  `recall` or `search`.
 - **Opt into Knowledge deliberately.** Use `recall-context` with
   `--include_knowledge true` when the task benefits from the user-owned
   Knowledge base; omit the flag to preserve the existing Memory-only context.
@@ -132,15 +135,38 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   decisions.
 - **Record concrete expenses.** Use `expense-add` when the user states a concrete
   purchase or income.
-- **Confirm destructive actions.** The bundled script does not expose memory
-  deletion or overwrite commands. Use an authorized product surface with an
-  explicit target and user confirmation if such an operation is required.
+- **Inspect ledger transactions and monthly summaries.** Use `ledger-list` and
+  `ledger-summary` for strictly read-only personal bookkeeping queries backed
+  by `GET /v1/me/ledger/transactions` and `GET /v1/me/ledger/monthly-summary`.
+  Neither command modifies or deletes records.
+- **Inspect account overview, activity, and memory statistics.** Use `overview`,
+  `activity`, and `stats` for strictly read-only diagnostics and aggregations
+  backed by `GET /v1/me/overview`, `GET /v1/me/activity`, and `GET /v1/memories/stats`.
+  None of these commands modify or delete records.
+- **Update existing memories in place.** Use `update --id <id>` with `--content`,
+  `--path`, `--metadata` (JSON), `--bucket`, and/or `--scope` to modify a
+  memory record via `PATCH /v1/memories/{id}`.
+- **Safely forget obsolete memories.** Use `forget --id <id> --confirm` to
+  request soft deletion via `POST /v1/memories/{id}/forget`. To guard against
+  accidental deletion, `--confirm` is mandatory; omitting it displays the target
+  ID and terminates with non-zero exit code without issuing any network request.
+- **Confirm destructive actions.** An authorized credential with memory write
+  scope is required for `update` and `forget`. Pass explicit target IDs and
+  confirm intentions before removing knowledge.
 - **Read provenance correctly.** `agent_id`, `agent_instance_id`, and
   `agent_boundary` are attribution signals, not authorization boundaries.
 
 ## Bundled Script Commands
 
 ```text
+node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>]
+node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."] [--metadata '{"k":"v"}']
+node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
+node scripts/xmemo-skill.mjs ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]
+node scripts/xmemo-skill.mjs ledger-summary [--months <n>] [--currency <code>] [--type <type>]
+node scripts/xmemo-skill.mjs overview
+node scripts/xmemo-skill.mjs activity [--limit <n>]
+node scripts/xmemo-skill.mjs stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]
 node scripts/xmemo-skill.mjs remember --content "..." --path "..."
 node scripts/xmemo-skill.mjs recall --query "..." --compact
 node scripts/xmemo-skill.mjs recall-context --query "..." --include_knowledge true
@@ -181,6 +207,11 @@ remain limited to `remember`, `recall`, and `search`.
 The Skill script handles all operations directly, including status checks and token management:
 
 ```text
+node scripts/xmemo-skill.mjs read --id <id> [--offset 0] [--limit 500]
+node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."]
+node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
+node scripts/xmemo-skill.mjs ledger-list [--month 2026-09] [--limit 30] [--currency CNY]
+node scripts/xmemo-skill.mjs ledger-summary [--months 6] [--currency CNY]
 node scripts/xmemo-skill.mjs auth status [--verify]
 node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
@@ -190,6 +221,84 @@ node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 node scripts/xmemo-skill.mjs doctor
 node scripts/xmemo-skill.mjs recall-context --query "recent project progress" --max_items 5 --max_tokens 1000
 ```
+
+`read` is a read-only command backed by `GET /v1/memories/{id}/explain?include_embedding=false`.
+It retrieves a specific memory record by its exact ID with a minimal projection (`id`, `path`,
+`content`, `version`, `truncated`). `read --json` returns a harmonized `{ ok: true, id, path, content, version, truncated }`
+envelope, where `version` is `null` when unversioned (rendered as `(unknown)` in terminal text).
+Unlike `recall` or `search` which perform semantic queries, `read` fetches the targeted memory
+record directly. It supports character-level pagination via `--offset` and `--limit`, setting
+`truncated: true` when text extends beyond the window. Empty content is a valid memory value.
+Soft-deleted or missing records return `not_found`, and authentication/authorization errors (401/403)
+are preserved without downgrade.
+
+`update` modifies an existing memory in place backed by `PATCH /v1/memories/{id}`.
+It accepts `--id` (required), `--content`, `--path`, `--metadata` (JSON string), `--bucket`, and
+`--scope`. The server validates the request: client errors such as 400 `invalid_memory_id` are
+transparently reported as parameter errors and are never downgraded to `not_found`. Non-existent
+memories return 404 `not_found`, and authorization errors (401/403) remain properly classified.
+`update --json` returns `{ ok: true, id, path, updated: true, ... }`.
+
+`forget` performs a soft-deletion of an existing memory backed by `POST /v1/memories/{id}/forget`.
+It accepts `--id` (required), `--reason` (optional explanation), and mandatory `--confirm`.
+**Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately prints the target
+ID and exits with non-zero exit code without dispatching any network request. When confirmed, it
+sends `{ mode: 'soft_delete', reason }`. Successful execution outputs `{ ok: true, id, mode: 'soft_delete', forgotten: true }`
+under `--json`. Missing records return 404 `not_found`, and 401/403 errors are preserved.
+
+`ledger-list` is a strictly read-only command backed by `GET /v1/me/ledger/transactions`.
+It retrieves financial/expense transactions without any write or delete capabilities.
+It accepts `--limit <n>`, `--offset <n>`, `--currency <code>`, `--from <date>` (`date_from`),
+`--to <date>` (`date_to`), `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and
+`--type <type>` (`transaction_type`).
+As a convenience, `--month <YYYY-MM>` can be specified to query an entire month; it is resolved locally
+into exact first-day and last-day dates (`date_from` and `date_to`) before transmission, ensuring full
+compatibility with server query parsing without leaking unsupported parameters.
+Empty result sets (`[]`) represent valid empty states and terminate cleanly with exit code 0 rather
+than an error or `not_found`.
+Terminal output renders line items with currency units and exact amounts, avoiding precision loss.
+`--json` returns `{ ok: true, transactions: [...], total: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`ledger-summary` is a strictly read-only command backed by `GET /v1/me/ledger/monthly-summary`.
+It aggregates transaction activity over preceding months.
+It accepts `--months <n>` (integer count of preceding months to summarize, default 6),
+`--currency <code>`, and `--type <type>` (`transaction_type`).
+It does not accept or transmit any write/modification options.
+Empty monthly aggregates terminate cleanly with exit code 0.
+Terminal output formats each monthly period and category with explicit currency designations.
+`--json` returns `{ ok: true, summary: [...], months: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`overview` is a strictly read-only command backed by `GET /v1/me/overview`.
+It retrieves account-level memory and resource metrics (total memories, active/archived/forgotten counts,
+active agent count, storage usage in MB, and 30-day token consumption).
+It accepts zero arguments or parameters.
+Terminal mode formats exact counts and measurements without precision loss; empty data (0 memories)
+exits cleanly with code 0.
+`--json` returns `{ ok: true, memories_total: ..., memories_active: ..., ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`activity` is a strictly read-only command backed by `GET /v1/me/activity`.
+It inspects recent account-level events and memory activities.
+It accepts only `--limit <n>` (positive integer up to 100).
+Zero activity entries exits cleanly with exit code 0.
+Terminal mode displays sequential timestamped activity entries with type tags and summaries.
+`--json` returns `{ ok: true, activity: [...], total: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`stats` is a strictly read-only command backed by `GET /v1/memories/stats`.
+It retrieves comprehensive multidimensional memory statistics and breakdown counts.
+It maps command-line flags directly to server query parameters:
+`--scope`, `--path`, `--bucket`, `--memory-type` (`memory_type`), `--status`, `--source`,
+`--since`, `--until`, `--group-by` (`group_by`), `--top-n` (`top_n`, range 1..200 with local range enforcement),
+and `--team-id` (`team_id`).
+Parameters outside the server's accepted signature or `--top-n` values outside 1..200 are rejected locally
+before issuing any network request.
+Empty data sets exit cleanly with code 0 without being disguised as errors or `not_found`.
+Terminal mode renders total/filtered counts, latest/oldest dates, category breakdowns, and grouped dimensions.
+`--json` returns `{ ok: true, total_count: ..., filtered_count: ..., ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
 
 `recall-context` is a read-only prompt-context helper backed by
 `/v1/recall/context`. It returns the service's bounded `context_text` and, with

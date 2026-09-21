@@ -1,5 +1,26 @@
 # XMemo Skill Change Log
 
+## 1.1.18
+
+### Added
+
+- Add read-only `read` command to retrieve a single memory by ID via `GET /v1/memories/{id}/explain?include_embedding=false` with character-window pagination (`--offset`, `--limit`) and minimal projection.
+- Add write-side `update` command to modify an existing memory via `PATCH /v1/memories/{id}` with `--content`, `--path`, `--metadata`, `--bucket`, and `--scope`.
+- Add write-side `forget` command for soft deletion via `POST /v1/memories/{id}/forget` with mode `soft_delete` and mandatory `--confirm` protection against accidental deletion.
+- Add strictly read-only `ledger-list` command to retrieve personal financial transactions via `GET /v1/me/ledger/transactions` with filtering and local `--month` date-range resolution.
+- Add strictly read-only `ledger-summary` command to aggregate monthly financial totals via `GET /v1/me/ledger/monthly-summary`.
+- Add strictly read-only `overview` command to view personal account metrics (memory counts, storage usage, active agents, tokens) via `GET /v1/me/overview`.
+- Add strictly read-only `activity` command to inspect recent account activity via `GET /v1/me/activity` with optional `--limit`.
+- Add strictly read-only `stats` command to inspect memory statistics and dimensional aggregations via `GET /v1/memories/stats` with strict query filtering and `--top-n` bounds.
+
+### Fixed
+
+- Harmonize `read --json` output envelope with `ok: true`.
+- Replace fallback literal `'v1'` version string in `read` projection with `null` (rendered as `(unknown)` in terminal mode).
+- Pass through server 400 `invalid_memory_id` responses on `update` and default unexpected 400s to `invalid_request`.
+- Display `(unknown)` instead of `0` in `ledger-list` terminal rendering when transaction amount is missing.
+- Preserve all existing command contracts, requests, authentication, scopes, and runtime behavior.
+
 ## 1.1.17
 
 - Clarify TODO completion and creation terminal feedback by extracting and
