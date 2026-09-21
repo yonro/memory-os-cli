@@ -79,6 +79,8 @@ temporary credential and removes pending confirmation data.
 | `read` | Read a specific memory by ID with minimal projection and optional character pagination |
 | `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
 | `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
+| `ledger-list` | List financial/expense transactions via `GET /v1/me/ledger/transactions` (strictly read-only) |
+| `ledger-summary` | Retrieve monthly transaction summary via `GET /v1/me/ledger/monthly-summary` (strictly read-only) |
 | `remember` | Save a durable memory |
 | `recall` | Recall the most relevant memories |
 | `search` | Search memories by query |
@@ -160,6 +162,59 @@ node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --json
 - When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
 - A 404 response reports `not_found`.
 - 401/403 errors are reported without downgrade.
+
+### Query ledger transactions (read-only)
+
+```text
+node scripts/xmemo-skill.mjs ledger-list
+node scripts/xmemo-skill.mjs ledger-list --month 2026-09
+node scripts/xmemo-skill.mjs ledger-list --from 2026-09-01 --to 2026-09-30 --currency CNY
+node scripts/xmemo-skill.mjs ledger-list --category "Dining" --type expense --limit 20
+node scripts/xmemo-skill.mjs ledger-list --month 2026-09 --json
+```
+
+`ledger-list` queries personal financial transactions via `GET /v1/me/ledger/transactions`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--limit <n>`: Page limit (default 30, max 50).
+- `--offset <n>`: Pagination offset (default 0).
+- `--currency <code>`: Filter by 3-letter currency code (e.g. `CNY`, `USD`).
+- `--from <date>`: Filter transactions from start date (`date_from`).
+- `--to <date>`: Filter transactions up to end date (`date_to`).
+- `--category <name>`: Filter by expense/income category.
+- `--min-amount <n>` / `--max-amount <n>`: Filter by amount range.
+- `--type <type>`: Filter by transaction type (`transaction_type`, e.g. `expense`, `income`, `refund`).
+- `--month <YYYY-MM>`: Convenience flag. Resolved locally to start-of-month (`YYYY-MM-01`) and end-of-month dates (`date_from` and `date_to`) before dispatching, avoiding passing unsupported query parameters.
+
+Behavior and error classification:
+- Zero matching transactions return `{ ok: true, transactions: [], total: 0 }` (or clean terminal notice) with exit code 0.
+- Missing resources report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output always formats amounts with explicit currency units without loss of precision.
+
+### Query monthly ledger summary (read-only)
+
+```text
+node scripts/xmemo-skill.mjs ledger-summary
+node scripts/xmemo-skill.mjs ledger-summary --months 6
+node scripts/xmemo-skill.mjs ledger-summary --months 3 --currency USD
+node scripts/xmemo-skill.mjs ledger-summary --months 12 --type expense --json
+```
+
+`ledger-summary` aggregates monthly financial transaction figures via `GET /v1/me/ledger/monthly-summary`.
+This command is strictly read-only and possesses zero write or deletion capabilities.
+Allowed server parameters:
+- `--months <n>`: Integer count of preceding months to aggregate (default 6, range 1..24).
+- `--currency <code>`: Filter aggregation by currency code.
+- `--type <type>`: Filter aggregation by transaction type (`transaction_type`).
+
+Behavior and error classification:
+- Empty aggregations return `{ ok: true, summary: [], months: ... }` with exit code 0.
+- Missing endpoints report 404 `not_found`.
+- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Unexpected 400 responses default to `invalid_request`.
+- Terminal output renders structured monthly periods and breakdown totals with explicit currency labels.
 
 ### Remember a decision
 

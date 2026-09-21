@@ -31,6 +31,7 @@ const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'read', 'update', 'forget',
+  'ledger-list', 'ledger-summary',
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
@@ -43,6 +44,8 @@ const COMMAND_FLAGS = {
   read: new Set(['id', 'offset', 'limit', 'bucket', 'scope']),
   update: new Set(['id', 'content', 'path', 'metadata', 'bucket', 'scope']),
   forget: new Set(['id', 'reason', 'confirm']),
+  'ledger-list': new Set(['limit', 'offset', 'currency', 'from', 'to', 'category', 'min-amount', 'max-amount', 'type', 'month']),
+  'ledger-summary': new Set(['months', 'currency', 'type']),
   remember: new Set(['content', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
   recall: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   search: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
@@ -181,7 +184,7 @@ function readOptionValue(args, index, key, inlineValue) {
 function printUsage(command) {
   const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
   if (command === undefined) {
-    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
     return;
   }
   if (command === 'auth') {
@@ -207,6 +210,8 @@ function printUsage(command) {
       read: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
       update: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
       forget: 'forget --id <id> [--reason <text>] --confirm',
+      'ledger-list': 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
+      'ledger-summary': 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
       remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
       recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
       search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
@@ -227,7 +232,7 @@ function printUsage(command) {
     return;
   }
 
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -367,6 +372,26 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
   for (const key of ['timeline_limit', 'reminder_limit', 'decision_limit']) {
     if (flags[key] !== undefined) flags[key] = parseIntegerInRange(flags[key], `--${key}`, 0, 100);
   }
+  if (flags.months !== undefined) {
+    flags.months = parsePositiveInteger(flags.months, '--months', 24);
+  }
+  if (flags.month !== undefined) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(flags.month))) {
+      throw new Error('--month must be formatted as YYYY-MM.');
+    }
+  }
+  if (flags['min-amount'] !== undefined) {
+    const val = Number(flags['min-amount']);
+    if (Number.isNaN(val) || val < 0) {
+      throw new Error('--min-amount must be a non-negative number.');
+    }
+  }
+  if (flags['max-amount'] !== undefined) {
+    const val = Number(flags['max-amount']);
+    if (Number.isNaN(val) || val < 0) {
+      throw new Error('--max-amount must be a non-negative number.');
+    }
+  }
   if (flags.threshold !== undefined) {
     const threshold = Number(flags.threshold);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
@@ -441,7 +466,7 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
 
   const data = parseJsonResponse(res, context);
   if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
-    const code = data?.error?.code || `HTTP ${res.statusCode}`;
+    const code = data?.error?.code || (res.statusCode === 400 ? 'invalid_request' : `HTTP ${res.statusCode}`);
     const msg = apiErrorMessage(data);
     outputRestError(code, msg, options);
   }
@@ -1564,6 +1589,147 @@ async function main() {
       process.exit(0);
     } catch (e) {
       console.error('Forget memory failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'ledger-list') {
+    let dateFrom = flags.from;
+    let dateTo = flags.to;
+    if (flags.month) {
+      const [y, m] = flags.month.split('-').map(Number);
+      const lastDayNum = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      if (!dateFrom) dateFrom = `${flags.month}-01`;
+      if (!dateTo) dateTo = `${flags.month}-${String(lastDayNum).padStart(2, '0')}`;
+    }
+
+    const queryParams = [];
+    if (flags.limit !== undefined) queryParams.push(`limit=${encodeURIComponent(flags.limit)}`);
+    if (flags.offset !== undefined) queryParams.push(`offset=${encodeURIComponent(flags.offset)}`);
+    if (flags.currency) queryParams.push(`currency=${encodeURIComponent(flags.currency)}`);
+    if (dateFrom) queryParams.push(`date_from=${encodeURIComponent(dateFrom)}`);
+    if (dateTo) queryParams.push(`date_to=${encodeURIComponent(dateTo)}`);
+    if (flags.category) queryParams.push(`category=${encodeURIComponent(flags.category)}`);
+    if (flags['min-amount'] !== undefined) queryParams.push(`min_amount=${encodeURIComponent(flags['min-amount'])}`);
+    if (flags['max-amount'] !== undefined) queryParams.push(`max_amount=${encodeURIComponent(flags['max-amount'])}`);
+    if (flags.type) queryParams.push(`transaction_type=${encodeURIComponent(flags.type)}`);
+
+    let endpoint = '/v1/me/ledger/transactions';
+    if (queryParams.length > 0) {
+      endpoint += `?${queryParams.join('&')}`;
+    }
+
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: 'Ledger transactions not found.',
+        context: 'List ledger transactions request',
+        options,
+      });
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          ...data,
+        }));
+        process.exit(0);
+      }
+
+      const transactions = Array.isArray(data.transactions)
+        ? data.transactions
+        : (Array.isArray(data.result) ? data.result : []);
+
+      if (transactions.length === 0) {
+        console.log('No ledger transactions found.');
+        process.exit(0);
+      }
+
+      const totalInfo = data.total !== undefined ? ` (total: ${data.total})` : '';
+      console.log(`XMemo Ledger Transactions (${transactions.length}${totalInfo}):`);
+      transactions.forEach((tx, idx) => {
+        const date = tx.transaction_date || tx.date || tx.created_at || '(unknown date)';
+        const amount = tx.amount !== undefined ? tx.amount : 0;
+        const curr = tx.currency || 'UNKNOWN';
+        const type = tx.transaction_type || tx.type || 'expense';
+        const cat = tx.category ? ` [${tx.category}]` : '';
+        const desc = tx.description || tx.item || tx.note || '';
+        console.log(`[${idx + 1}] ${sanitizeTerminalText(date)} | ${type.toUpperCase()} | ${amount} ${curr}${sanitizeTerminalText(cat)}${desc ? ` | ${sanitizeTerminalText(desc)}` : ''}`);
+      });
+      process.exit(0);
+    } catch (e) {
+      console.error('List ledger transactions failed:', e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (command === 'ledger-summary') {
+    const queryParams = [];
+    if (flags.months !== undefined) queryParams.push(`months=${encodeURIComponent(flags.months)}`);
+    if (flags.currency) queryParams.push(`currency=${encodeURIComponent(flags.currency)}`);
+    if (flags.type) queryParams.push(`transaction_type=${encodeURIComponent(flags.type)}`);
+
+    let endpoint = '/v1/me/ledger/monthly-summary';
+    if (queryParams.length > 0) {
+      endpoint += `?${queryParams.join('&')}`;
+    }
+
+    try {
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+        'Authorization': `Bearer ${token}`
+      }, options.timeoutMs);
+
+      const data = handleRestError(res, {
+        notFoundMessage: 'Ledger monthly summary not found.',
+        context: 'Get ledger monthly summary request',
+        options,
+      });
+
+      if (options.json) {
+        console.log(safeJson({
+          ok: true,
+          ...data,
+        }));
+        process.exit(0);
+      }
+
+      const summaryList = Array.isArray(data.summary) ? data.summary : [];
+      if (summaryList.length === 0 && data.total === undefined && data.count === undefined) {
+        console.log('No ledger monthly summary available.');
+        process.exit(0);
+      }
+
+      if (summaryList.length > 0) {
+        console.log(`XMemo Ledger Monthly Summary (${summaryList.length} month${summaryList.length === 1 ? '' : 's'}):`);
+        summaryList.forEach((item) => {
+          const month = item.month || '(unknown month)';
+          const curr = item.currency || 'UNKNOWN';
+          const expense = item.expense_total !== undefined ? `${item.expense_total} ${curr}` : null;
+          const income = item.income_total !== undefined ? `${item.income_total} ${curr}` : null;
+          const net = item.net_total !== undefined ? `${item.net_total} ${curr}` : null;
+          const count = item.transaction_count !== undefined ? `${item.transaction_count} tx` : '';
+          const parts = [];
+          if (expense !== null) parts.push(`Expense: ${expense}`);
+          if (income !== null) parts.push(`Income: ${income}`);
+          if (net !== null) parts.push(`Net: ${net}`);
+          if (count) parts.push(count);
+          console.log(`- ${month} (${curr}): ${parts.join(' | ')}`);
+        });
+        process.exit(0);
+      }
+
+      const month = data.month || '(unknown month)';
+      const curr = data.currency || 'UNKNOWN';
+      const total = data.total !== undefined ? data.total : 0;
+      const count = data.count !== undefined ? data.count : 0;
+      console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${total} ${curr} across ${count} transaction${count === 1 ? '' : 's'}.`);
+      process.exit(0);
+    } catch (e) {
+      console.error('Get ledger monthly summary failed:', e.message);
       process.exit(1);
     }
     return;

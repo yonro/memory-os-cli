@@ -1711,6 +1711,427 @@ test('skill script top-level help lists read, update, and forget commands', asyn
   assert.match(res.stdout, /read --id <id> \[--offset <n>\] \[--limit <n>\]/);
   assert.match(res.stdout, /update --id <id> \[--content <text>\]/);
   assert.match(res.stdout, /forget --id <id> \[--reason <text>\] --confirm/);
+  assert.match(res.stdout, /ledger-list \[--month <YYYY-MM>\]/);
+  assert.match(res.stdout, /ledger-summary \[--months <n>\]/);
+});
+
+test('skill script ledger-list success path sends GET /v1/me/ledger/transactions with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [
+      {
+        id: 'tx_1',
+        amount: 100.5,
+        currency: 'CNY',
+        transaction_date: '2026-09-15',
+        category: 'Food',
+        transaction_type: 'expense',
+        description: 'Team Lunch'
+      }
+    ],
+    total: 1
+  });
+
+  const ALLOWED_LEDGER_LIST_PARAMS = new Set([
+    'limit', 'offset', 'currency', 'date_from', 'date_to', 'category', 'min_amount', 'max_amount', 'transaction_type'
+  ]);
+
+  try {
+    const resJson = await runScript([
+      'ledger-list',
+      '--limit', '10',
+      '--offset', '0',
+      '--currency', 'CNY',
+      '--category', 'Food',
+      '--min-amount', '10',
+      '--max-amount', '200',
+      '--type', 'expense',
+      '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.total, 1);
+    assert.equal(payload.transactions.length, 1);
+    assert.equal(payload.transactions[0].id, 'tx_1');
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/ledger/transactions');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_LEDGER_LIST_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
+    }
+    assert.equal(reqUrl.searchParams.get('limit'), '10');
+    assert.equal(reqUrl.searchParams.get('offset'), '0');
+    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+    assert.equal(reqUrl.searchParams.get('category'), 'Food');
+    assert.equal(reqUrl.searchParams.get('min_amount'), '10');
+    assert.equal(reqUrl.searchParams.get('max_amount'), '200');
+    assert.equal(reqUrl.searchParams.get('transaction_type'), 'expense');
+    assert.equal(reqUrl.searchParams.has('month'), false);
+    assert.equal(reqUrl.searchParams.has('bucket'), false);
+    assert.equal(reqUrl.searchParams.has('scope'), false);
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'ledger-list', '--limit', '10', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Ledger Transactions \(1/);
+    assert.match(resTerm.stdout, /100\.5 CNY/);
+    assert.match(resTerm.stdout, /\[Food\]/);
+    assert.match(resTerm.stdout, /Team Lunch/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list converts --month locally to date_from and date_to without transmitting month', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [],
+    total: 0
+  });
+
+  const ALLOWED_LEDGER_LIST_PARAMS = new Set([
+    'limit', 'offset', 'currency', 'date_from', 'date_to', 'category', 'min_amount', 'max_amount', 'transaction_type'
+  ]);
+
+  try {
+    const res = await runScript([
+      'ledger-list', '--month', '2026-09', '--currency', 'CNY', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    assert.equal(testServer.requests.length, 1);
+
+    const reqUrl = new URL(testServer.requests[0].url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/ledger/transactions');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_LEDGER_LIST_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
+    }
+
+    assert.equal(reqUrl.searchParams.has('month'), false, 'Server does not accept month; must not be sent');
+    assert.equal(reqUrl.searchParams.has('bucket'), false, 'Server does not accept bucket; must not be sent');
+    assert.equal(reqUrl.searchParams.has('scope'), false, 'Server does not accept scope; must not be sent');
+    assert.equal(reqUrl.searchParams.get('date_from'), '2026-09-01');
+    assert.equal(reqUrl.searchParams.get('date_to'), '2026-09-30');
+    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list handles empty result cleanly as exit code 0 without not_found error', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    transactions: [],
+    total: 0
+  });
+
+  try {
+    const resJson = await runScript([
+      'ledger-list', '--month', '2026-09', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.deepEqual(payload.transactions, []);
+    assert.equal(payload.total, 0);
+
+    const resTerm = await runScript([
+      'ledger-list', '--month', '2026-09'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No ledger transactions found\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { message: 'Not found' } }, 404);
+    const res = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Auth required' } }, 401);
+    const res401 = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Scope missing' } }, 403);
+    const res403 = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-list 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Malformed parameters' }, 400);
+    const res = await runScript([
+      'ledger-list', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary success path sends GET /v1/me/ledger/monthly-summary with allow-listed query params', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    summary: [
+      {
+        month: '2026-09',
+        currency: 'CNY',
+        expense_total: 500,
+        income_total: 1000,
+        refund_total: 0,
+        net_total: 500,
+        transaction_count: 5
+      }
+    ],
+    months: 6,
+    total_months: 1,
+    total_transactions: 5
+  });
+
+  const ALLOWED_LEDGER_SUMMARY_PARAMS = new Set([
+    'months', 'currency', 'transaction_type'
+  ]);
+
+  try {
+    const resJson = await runScript([
+      'ledger-summary', '--months', '6', '--currency', 'CNY', '--type', 'expense', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.months, 6);
+    assert.equal(payload.summary.length, 1);
+    assert.equal(payload.summary[0].month, '2026-09');
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/me/ledger/monthly-summary');
+
+    // Strict parameter allow-list check
+    for (const key of reqUrl.searchParams.keys()) {
+      assert.ok(ALLOWED_LEDGER_SUMMARY_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
+    }
+    assert.equal(reqUrl.searchParams.get('months'), '6');
+    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+    assert.equal(reqUrl.searchParams.get('transaction_type'), 'expense');
+    assert.equal(reqUrl.searchParams.has('month'), false, 'Must not send month');
+    assert.equal(reqUrl.searchParams.has('bucket'), false, 'Must not send bucket');
+    assert.equal(reqUrl.searchParams.has('scope'), false, 'Must not send scope');
+
+    // Terminal mode rendering check
+    const resTerm = await runScript([
+      'ledger-summary', '--months', '6', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo Ledger Monthly Summary \(1 month\):/);
+    assert.match(resTerm.stdout, /2026-09 \(CNY\):/);
+    assert.match(resTerm.stdout, /Expense: 500 CNY/);
+    assert.match(resTerm.stdout, /Income: 1000 CNY/);
+    assert.match(resTerm.stdout, /Net: 500 CNY/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary handles legacy single-month object response in terminal mode', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    month: '2026-09',
+    currency: 'CNY',
+    total: 1250.5,
+    count: 5
+  });
+
+  try {
+    const resTerm = await runScript([
+      'ledger-summary', '--months', '3', '--currency', 'CNY'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /XMemo ledger summary for 2026-09: 1250\.5 CNY across 5 transactions\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary handles empty/zero result cleanly as exit code 0', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    summary: [],
+    months: 6,
+    total_months: 0,
+    total_transactions: 0
+  });
+
+  try {
+    const resJson = await runScript([
+      'ledger-summary', '--months', '6', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 0);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, true);
+    assert.deepEqual(payload.summary, []);
+
+    const resTerm = await runScript([
+      'ledger-summary', '--months', '6'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /No ledger monthly summary available\./);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary returns not_found on 404', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { message: 'Not found' } }, 404);
+    const res = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary preserves 401 and 403 without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Session required' } }, 401);
+    const res401 = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res401.code, 1);
+    const payload401 = JSON.parse(res401.stdout);
+    assert.equal(payload401.ok, false);
+    assert.equal(payload401.error.code, 'unauthorized');
+    assert.notEqual(payload401.error.code, 'not_found');
+
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Ledger scope required' } }, 403);
+    const res403 = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
+    assert.equal(res403.code, 1);
+    const payload403 = JSON.parse(res403.stdout);
+    assert.equal(payload403.ok, false);
+    assert.equal(payload403.error.code, 'forbidden');
+    assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger-summary 400 without error.code defaults to invalid_request', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ message: 'Bad query' }, 400);
+    const res = await runScript([
+      'ledger-summary', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
 });
 
 

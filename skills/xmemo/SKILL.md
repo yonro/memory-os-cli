@@ -135,6 +135,10 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   decisions.
 - **Record concrete expenses.** Use `expense-add` when the user states a concrete
   purchase or income.
+- **Inspect ledger transactions and monthly summaries.** Use `ledger-list` and
+  `ledger-summary` for strictly read-only personal bookkeeping queries backed
+  by `GET /v1/me/ledger/transactions` and `GET /v1/me/ledger/monthly-summary`.
+  Neither command modifies or deletes records.
 - **Update existing memories in place.** Use `update --id <id>` with `--content`,
   `--path`, `--metadata` (JSON), `--bucket`, and/or `--scope` to modify a
   memory record via `PATCH /v1/memories/{id}`.
@@ -154,6 +158,8 @@ Never ask the user to paste a raw token into chat, logs, or project files.
 node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>]
 node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."] [--metadata '{"k":"v"}']
 node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
+node scripts/xmemo-skill.mjs ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]
+node scripts/xmemo-skill.mjs ledger-summary [--months <n>] [--currency <code>] [--type <type>]
 node scripts/xmemo-skill.mjs remember --content "..." --path "..."
 node scripts/xmemo-skill.mjs recall --query "..." --compact
 node scripts/xmemo-skill.mjs recall-context --query "..." --include_knowledge true
@@ -197,6 +203,8 @@ The Skill script handles all operations directly, including status checks and to
 node scripts/xmemo-skill.mjs read --id <id> [--offset 0] [--limit 500]
 node scripts/xmemo-skill.mjs update --id <id> [--content "..."] [--path "..."]
 node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "..."]
+node scripts/xmemo-skill.mjs ledger-list [--month 2026-09] [--limit 30] [--currency CNY]
+node scripts/xmemo-skill.mjs ledger-summary [--months 6] [--currency CNY]
 node scripts/xmemo-skill.mjs auth status [--verify]
 node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 node scripts/xmemo-skill.mjs auth claim-status [--allow-plaintext]
@@ -230,6 +238,30 @@ It accepts `--id` (required), `--reason` (optional explanation), and mandatory `
 ID and exits with non-zero exit code without dispatching any network request. When confirmed, it
 sends `{ mode: 'soft_delete', reason }`. Successful execution outputs `{ ok: true, id, mode: 'soft_delete', forgotten: true }`
 under `--json`. Missing records return 404 `not_found`, and 401/403 errors are preserved.
+
+`ledger-list` is a strictly read-only command backed by `GET /v1/me/ledger/transactions`.
+It retrieves financial/expense transactions without any write or delete capabilities.
+It accepts `--limit <n>`, `--offset <n>`, `--currency <code>`, `--from <date>` (`date_from`),
+`--to <date>` (`date_to`), `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and
+`--type <type>` (`transaction_type`).
+As a convenience, `--month <YYYY-MM>` can be specified to query an entire month; it is resolved locally
+into exact first-day and last-day dates (`date_from` and `date_to`) before transmission, ensuring full
+compatibility with server query parsing without leaking unsupported parameters.
+Empty result sets (`[]`) represent valid empty states and terminate cleanly with exit code 0 rather
+than an error or `not_found`.
+Terminal output renders line items with currency units and exact amounts, avoiding precision loss.
+`--json` returns `{ ok: true, transactions: [...], total: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+
+`ledger-summary` is a strictly read-only command backed by `GET /v1/me/ledger/monthly-summary`.
+It aggregates transaction activity over preceding months.
+It accepts `--months <n>` (integer count of preceding months to summarize, default 6),
+`--currency <code>`, and `--type <type>` (`transaction_type`).
+It does not accept or transmit any write/modification options.
+Empty monthly aggregates terminate cleanly with exit code 0.
+Terminal output formats each monthly period and category with explicit currency designations.
+`--json` returns `{ ok: true, summary: [...], months: ... }`.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade.
 
 `recall-context` is a read-only prompt-context helper backed by
 `/v1/recall/context`. It returns the service's bounded `context_text` and, with
