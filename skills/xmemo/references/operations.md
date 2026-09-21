@@ -437,3 +437,25 @@ runtime and `--timeout-ms <ms>` to bound each network request.
   `--include_knowledge true` requests the bounded mixed context only when the
   service feature and `knowledge:read` authorization are both present.
 - Offline memory storage or local sync is not implemented.
+
+## Publishing to ClawHub
+
+When publishing updates for `skills/xmemo` to ClawHub:
+
+1. **Explicit Publisher Handle**:
+   Always pass `--owner xmemo` to target the official organizational publisher namespace:
+   ```bash
+   clawhub publish skills/xmemo --owner xmemo --version <semver> --slug xmemo --name "XMemo Memory"
+   ```
+2. **Pre-Publish Namespace Assertion**:
+   Before executing the publish command, verify that the active token belongs to or is authorized by the `@xmemo` organization. Do not rely solely on `clawhub whoami` returning success:
+   - Verify `clawhub whoami` identity.
+   - Assert that the effective publishing namespace matches `ownerHandle=xmemo`.
+   - Ensure the token is not a personal account token without `@xmemo` publisher permissions to prevent publishing accidental duplicate skills under personal namespaces.
+3. **Post-Publish Verification**:
+   Query the public API to verify the release without ambiguity:
+   ```bash
+   curl -s "https://clawhub.ai/api/skill?slug=xmemo"
+   ```
+   Ensure the response returns HTTP 200 with `latestVersion.version` matching the release version and `owner.handle` equals `"xmemo"`. If the endpoint returns HTTP 409 (`AMBIGUOUS_SKILL_SLUG`), verify whether duplicate slugs exist across publishers.
+
