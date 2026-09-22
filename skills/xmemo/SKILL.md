@@ -137,11 +137,12 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   purchase or income.
 - **Inspect ledger transactions and monthly summaries.** Use `ledger-list` and
   `ledger-summary` for strictly read-only personal bookkeeping queries backed
-  by `GET /v1/me/ledger/transactions` and `GET /v1/me/ledger/monthly-summary`.
-  Neither command modifies or deletes records.
-- **Inspect account overview, activity, and memory statistics.** Use `overview`,
-  `activity`, and `stats` for strictly read-only diagnostics and aggregations
-  backed by `GET /v1/me/overview`, `GET /v1/me/activity`, and `GET /v1/memories/stats`.
+  by `POST /v1/skill/operations` (`operation: "ledger-list"` and `operation: "ledger-summary"`).
+  Requires `ledger:read` scope. Neither command modifies or deletes records.
+- **Inspect account overview, activity, and memory statistics.** Use `overview` and
+  `activity` for strictly read-only diagnostics and aggregations backed by
+  `POST /v1/skill/operations` (`operation: "overview"` and `operation: "activity"`, requiring `memory:read` scope),
+  and `stats` backed by `GET /v1/memories/stats`.
   None of these commands modify or delete records.
 - **Update existing memories in place.** Use `update --id <id>` with `--content`,
   `--path`, `--metadata` (JSON), `--bucket`, and/or `--scope` to modify a
@@ -246,7 +247,7 @@ ID and exits with non-zero exit code without dispatching any network request. Wh
 sends `{ mode: 'soft_delete', reason }`. Successful execution outputs `{ ok: true, id, mode: 'soft_delete', forgotten: true }`
 under `--json`. Missing records return 404 `not_found`, and 401/403 errors are preserved.
 
-`ledger-list` is a strictly read-only command backed by `GET /v1/me/ledger/transactions`.
+`ledger-list` is a strictly read-only command backed by `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring `ledger:read` scope).
 It retrieves financial/expense transactions without any write or delete capabilities.
 It accepts `--limit <n>`, `--offset <n>`, `--currency <code>`, `--from <date>` (`date_from`),
 `--to <date>` (`date_to`), `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and
@@ -258,9 +259,9 @@ Empty result sets (`[]`) represent valid empty states and terminate cleanly with
 than an error or `not_found`.
 Terminal output renders line items with currency units and exact amounts, avoiding precision loss.
 `--json` returns `{ ok: true, transactions: [...], total: ... }`.
-404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade (403 clearly prompts for re-authorization).
 
-`ledger-summary` is a strictly read-only command backed by `GET /v1/me/ledger/monthly-summary`.
+`ledger-summary` is a strictly read-only command backed by `POST /v1/skill/operations` (`operation: "ledger-summary"`, requiring `ledger:read` scope).
 It aggregates transaction activity over preceding months.
 It accepts `--months <n>` (integer count of preceding months to summarize, default 6),
 `--currency <code>`, and `--type <type>` (`transaction_type`).
@@ -268,24 +269,24 @@ It does not accept or transmit any write/modification options.
 Empty monthly aggregates terminate cleanly with exit code 0.
 Terminal output formats each monthly period and category with explicit currency designations.
 `--json` returns `{ ok: true, summary: [...], months: ... }`.
-404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade (403 clearly prompts for re-authorization).
 
-`overview` is a strictly read-only command backed by `GET /v1/me/overview`.
+`overview` is a strictly read-only command backed by `POST /v1/skill/operations` (`operation: "overview"`, requiring `memory:read` scope).
 It retrieves account-level memory and resource metrics (total memories, active/archived/forgotten counts,
 active agent count, storage usage in MB, and 30-day token consumption).
 It accepts zero arguments or parameters.
 Terminal mode formats exact counts and measurements without precision loss; empty data (0 memories)
 exits cleanly with code 0.
 `--json` returns `{ ok: true, memories_total: ..., memories_active: ..., ... }`.
-404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade (403 clearly prompts for re-authorization).
 
-`activity` is a strictly read-only command backed by `GET /v1/me/activity`.
+`activity` is a strictly read-only command backed by `POST /v1/skill/operations` (`operation: "activity"`, requiring `memory:read` scope).
 It inspects recent account-level events and memory activities.
 It accepts only `--limit <n>` (positive integer up to 100).
 Zero activity entries exits cleanly with exit code 0.
 Terminal mode displays sequential timestamped activity entries with type tags and summaries.
 `--json` returns `{ ok: true, activity: [...], total: ... }`.
-404 returns `not_found`, and 401/403 errors are preserved without downgrade.
+404 returns `not_found`, and 401/403 errors are preserved without downgrade (403 clearly prompts for re-authorization).
 
 `stats` is a strictly read-only command backed by `GET /v1/memories/stats`.
 It retrieves comprehensive multidimensional memory statistics and breakdown counts.

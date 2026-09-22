@@ -1749,24 +1749,27 @@ test('skill script top-level help lists read, update, and forget commands', asyn
   assert.match(res.stdout, /stats/);
 });
 
-test('skill script ledger-list success path sends GET /v1/me/ledger/transactions with allow-listed query params', async () => {
+test('skill script ledger-list success path sends POST /v1/skill/operations with allow-listed arguments', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
 
   testServer.setResponse({
     ok: true,
-    transactions: [
-      {
-        id: 'tx_1',
-        amount: 100.5,
-        currency: 'CNY',
-        transaction_date: '2026-09-15',
-        category: 'Food',
-        transaction_type: 'expense',
-        description: 'Team Lunch'
-      }
-    ],
-    total: 1
+    operation: 'ledger-list',
+    result: {
+      transactions: [
+        {
+          id: 'tx_1',
+          amount: 100.5,
+          currency: 'CNY',
+          transaction_date: '2026-09-15',
+          category: 'Food',
+          transaction_type: 'expense',
+          description: 'Team Lunch'
+        }
+      ],
+      total: 1
+    }
   });
 
   const ALLOWED_LEDGER_LIST_PARAMS = new Set([
@@ -1795,26 +1798,30 @@ test('skill script ledger-list success path sends GET /v1/me/ledger/transactions
 
     assert.equal(testServer.requests.length, 1);
     const req = testServer.requests[0];
-    assert.equal(req.method, 'GET');
+    assert.equal(req.method, 'POST');
     assert.equal(req.headers.authorization, 'Bearer secret-token-key');
 
     const reqUrl = new URL(req.url, 'http://localhost');
-    assert.equal(reqUrl.pathname, '/v1/me/ledger/transactions');
+    assert.equal(reqUrl.pathname, '/v1/skill/operations');
 
     // Strict parameter allow-list check
-    for (const key of reqUrl.searchParams.keys()) {
+    const args = req.body?.arguments || {};
+    assert.equal(req.body?.operation, 'ledger-list');
+    for (const key of Object.keys(args)) {
       assert.ok(ALLOWED_LEDGER_LIST_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
     }
-    assert.equal(reqUrl.searchParams.get('limit'), '10');
-    assert.equal(reqUrl.searchParams.get('offset'), '0');
-    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
-    assert.equal(reqUrl.searchParams.get('category'), 'Food');
-    assert.equal(reqUrl.searchParams.get('min_amount'), '10');
-    assert.equal(reqUrl.searchParams.get('max_amount'), '200');
-    assert.equal(reqUrl.searchParams.get('transaction_type'), 'expense');
-    assert.equal(reqUrl.searchParams.has('month'), false);
-    assert.equal(reqUrl.searchParams.has('bucket'), false);
-    assert.equal(reqUrl.searchParams.has('scope'), false);
+    assert.equal('owner_id' in args, false, 'Server resolves owner identity from key; must not send owner_id');
+    assert.equal('user_id' in args, false, 'Server resolves owner identity from key; must not send user_id');
+    assert.equal(args.limit, 10);
+    assert.equal(args.offset, 0);
+    assert.equal(args.currency, 'CNY');
+    assert.equal(args.category, 'Food');
+    assert.equal(args.min_amount, 10);
+    assert.equal(args.max_amount, 200);
+    assert.equal(args.transaction_type, 'expense');
+    assert.equal('month' in args, false);
+    assert.equal('bucket' in args, false);
+    assert.equal('scope' in args, false);
 
     // Terminal mode rendering check
     const resTerm = await runScript([
@@ -1837,8 +1844,11 @@ test('skill script ledger-list converts --month locally to date_from and date_to
 
   testServer.setResponse({
     ok: true,
-    transactions: [],
-    total: 0
+    operation: 'ledger-list',
+    result: {
+      transactions: [],
+      total: 0
+    }
   });
 
   const ALLOWED_LEDGER_LIST_PARAMS = new Set([
@@ -1852,21 +1862,28 @@ test('skill script ledger-list converts --month locally to date_from and date_to
 
     assert.equal(res.code, 0);
     assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'POST');
 
-    const reqUrl = new URL(testServer.requests[0].url, 'http://localhost');
-    assert.equal(reqUrl.pathname, '/v1/me/ledger/transactions');
+    const reqUrl = new URL(req.url, 'http://localhost');
+    assert.equal(reqUrl.pathname, '/v1/skill/operations');
+
+    const args = req.body?.arguments || {};
+    assert.equal(req.body?.operation, 'ledger-list');
 
     // Strict parameter allow-list check
-    for (const key of reqUrl.searchParams.keys()) {
+    for (const key of Object.keys(args)) {
       assert.ok(ALLOWED_LEDGER_LIST_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
     }
 
-    assert.equal(reqUrl.searchParams.has('month'), false, 'Server does not accept month; must not be sent');
-    assert.equal(reqUrl.searchParams.has('bucket'), false, 'Server does not accept bucket; must not be sent');
-    assert.equal(reqUrl.searchParams.has('scope'), false, 'Server does not accept scope; must not be sent');
-    assert.equal(reqUrl.searchParams.get('date_from'), '2026-09-01');
-    assert.equal(reqUrl.searchParams.get('date_to'), '2026-09-30');
-    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
+    assert.equal('owner_id' in args, false, 'Server resolves owner identity from key; must not send owner_id');
+    assert.equal('user_id' in args, false, 'Server resolves owner identity from key; must not send user_id');
+    assert.equal('month' in args, false, 'Server does not accept month; must not be sent');
+    assert.equal('bucket' in args, false, 'Server does not accept bucket; must not be sent');
+    assert.equal('scope' in args, false, 'Server does not accept scope; must not be sent');
+    assert.equal(args.date_from, '2026-09-01');
+    assert.equal(args.date_to, '2026-09-30');
+    assert.equal(args.currency, 'CNY');
   } finally {
     await testServer.stop();
   }
@@ -1878,8 +1895,11 @@ test('skill script ledger-list handles empty result cleanly as exit code 0 witho
 
   testServer.setResponse({
     ok: true,
-    transactions: [],
-    total: 0
+    operation: 'ledger-list',
+    result: {
+      transactions: [],
+      total: 0
+    }
   });
 
   try {
@@ -1947,6 +1967,7 @@ test('skill script ledger-list preserves 401 and 403 without downgrade', async (
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
     assert.notEqual(payload403.error.code, 'not_found');
+    assert.match(payload403.error.message, /re-?authorization/i);
   } finally {
     await testServer.stop();
   }
@@ -1971,26 +1992,29 @@ test('skill script ledger-list 400 without error.code defaults to invalid_reques
   }
 });
 
-test('skill script ledger-summary success path sends GET /v1/me/ledger/monthly-summary with allow-listed query params', async () => {
+test('skill script ledger-summary success path sends POST /v1/skill/operations with allow-listed arguments', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
 
   testServer.setResponse({
     ok: true,
-    summary: [
-      {
-        month: '2026-09',
-        currency: 'CNY',
-        expense_total: 500,
-        income_total: 1000,
-        refund_total: 0,
-        net_total: 500,
-        transaction_count: 5
-      }
-    ],
-    months: 6,
-    total_months: 1,
-    total_transactions: 5
+    operation: 'ledger-summary',
+    result: {
+      summary: [
+        {
+          month: '2026-09',
+          currency: 'CNY',
+          expense_total: 500,
+          income_total: 1000,
+          refund_total: 0,
+          net_total: 500,
+          transaction_count: 5
+        }
+      ],
+      months: 6,
+      total_months: 1,
+      total_transactions: 5
+    }
   });
 
   const ALLOWED_LEDGER_SUMMARY_PARAMS = new Set([
@@ -2011,22 +2035,27 @@ test('skill script ledger-summary success path sends GET /v1/me/ledger/monthly-s
 
     assert.equal(testServer.requests.length, 1);
     const req = testServer.requests[0];
-    assert.equal(req.method, 'GET');
+    assert.equal(req.method, 'POST');
     assert.equal(req.headers.authorization, 'Bearer secret-token-key');
 
     const reqUrl = new URL(req.url, 'http://localhost');
-    assert.equal(reqUrl.pathname, '/v1/me/ledger/monthly-summary');
+    assert.equal(reqUrl.pathname, '/v1/skill/operations');
+
+    const args = req.body?.arguments || {};
+    assert.equal(req.body?.operation, 'ledger-summary');
 
     // Strict parameter allow-list check
-    for (const key of reqUrl.searchParams.keys()) {
+    for (const key of Object.keys(args)) {
       assert.ok(ALLOWED_LEDGER_SUMMARY_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed server set`);
     }
-    assert.equal(reqUrl.searchParams.get('months'), '6');
-    assert.equal(reqUrl.searchParams.get('currency'), 'CNY');
-    assert.equal(reqUrl.searchParams.get('transaction_type'), 'expense');
-    assert.equal(reqUrl.searchParams.has('month'), false, 'Must not send month');
-    assert.equal(reqUrl.searchParams.has('bucket'), false, 'Must not send bucket');
-    assert.equal(reqUrl.searchParams.has('scope'), false, 'Must not send scope');
+    assert.equal('owner_id' in args, false, 'Must not send owner_id');
+    assert.equal('user_id' in args, false, 'Must not send user_id');
+    assert.equal(args.months, 6);
+    assert.equal(args.currency, 'CNY');
+    assert.equal(args.transaction_type, 'expense');
+    assert.equal('month' in args, false, 'Must not send month');
+    assert.equal('bucket' in args, false, 'Must not send bucket');
+    assert.equal('scope' in args, false, 'Must not send scope');
 
     // Terminal mode rendering check
     const resTerm = await runScript([
@@ -2050,10 +2079,13 @@ test('skill script ledger-summary handles legacy single-month object response in
 
   testServer.setResponse({
     ok: true,
-    month: '2026-09',
-    currency: 'CNY',
-    total: 1250.5,
-    count: 5
+    operation: 'ledger-summary',
+    result: {
+      month: '2026-09',
+      currency: 'CNY',
+      total: 1250.5,
+      count: 5
+    }
   });
 
   try {
@@ -2074,10 +2106,13 @@ test('skill script ledger-summary handles empty/zero result cleanly as exit code
 
   testServer.setResponse({
     ok: true,
-    summary: [],
-    months: 6,
-    total_months: 0,
-    total_transactions: 0
+    operation: 'ledger-summary',
+    result: {
+      summary: [],
+      months: 6,
+      total_months: 0,
+      total_transactions: 0
+    }
   });
 
   try {
@@ -2144,6 +2179,7 @@ test('skill script ledger-summary preserves 401 and 403 without downgrade', asyn
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
     assert.notEqual(payload403.error.code, 'not_found');
+    assert.match(payload403.error.message, /re-?authorization/i);
   } finally {
     await testServer.stop();
   }
@@ -2174,17 +2210,20 @@ test('skill script ledger-list displays (unknown) when tx.amount is missing', as
 
   testServer.setResponse({
     ok: true,
-    transactions: [
-      {
-        id: 'tx_missing_amount',
-        currency: 'CNY',
-        transaction_date: '2026-09-15',
-        category: 'Food',
-        transaction_type: 'expense',
-        description: 'Unknown Price Meal'
-      }
-    ],
-    total: 1
+    operation: 'ledger-list',
+    result: {
+      transactions: [
+        {
+          id: 'tx_missing_amount',
+          currency: 'CNY',
+          transaction_date: '2026-09-15',
+          category: 'Food',
+          transaction_type: 'expense',
+          description: 'Unknown Price Meal'
+        }
+      ],
+      total: 1
+    }
   });
 
   try {
@@ -2200,20 +2239,24 @@ test('skill script ledger-list displays (unknown) when tx.amount is missing', as
   }
 });
 
-test('skill script overview success path sends GET /v1/me/overview with zero query params', async () => {
+test('skill script overview success path sends POST /v1/skill/operations with zero arguments', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
 
   testServer.setResponse({
-    memories_total: 42,
-    memories_active: 35,
-    memories_archived: 5,
-    memories_forgotten: 2,
-    agents_active: 3,
-    storage_mb: 1.25,
-    tokens_30d: 15400,
-    demo: false,
-    dev_mode: false
+    ok: true,
+    operation: 'overview',
+    result: {
+      memories_total: 42,
+      memories_active: 35,
+      memories_archived: 5,
+      memories_forgotten: 2,
+      agents_active: 3,
+      storage_mb: 1.25,
+      tokens_30d: 15400,
+      demo: false,
+      dev_mode: false
+    }
   });
 
   try {
@@ -2234,13 +2277,18 @@ test('skill script overview success path sends GET /v1/me/overview with zero que
 
     assert.equal(testServer.requests.length, 1);
     const req = testServer.requests[0];
-    assert.equal(req.method, 'GET');
+    assert.equal(req.method, 'POST');
     assert.equal(req.headers.authorization, 'Bearer secret-token-key');
 
     const reqUrl = new URL(req.url, 'http://localhost');
-    assert.equal(reqUrl.pathname, '/v1/me/overview');
-    // Strict allow-list: zero query params accepted by GET /v1/me/overview
-    assert.equal(reqUrl.search, '', 'GET /v1/me/overview must not have query parameters');
+    assert.equal(reqUrl.pathname, '/v1/skill/operations');
+    assert.equal(reqUrl.search, '', 'POST /v1/skill/operations must not have query parameters');
+
+    const args = req.body?.arguments || {};
+    assert.equal(req.body?.operation, 'overview');
+    assert.deepEqual(args, {});
+    assert.equal('owner_id' in args, false, 'Must not send owner_id');
+    assert.equal('user_id' in args, false, 'Must not send user_id');
 
     // Terminal mode rendering check
     const resTerm = await runScript([
@@ -2263,15 +2311,19 @@ test('skill script overview handles empty/zero data cleanly as exit code 0', asy
   const baseUrl = await testServer.start();
 
   testServer.setResponse({
-    memories_total: 0,
-    memories_active: 0,
-    memories_archived: 0,
-    memories_forgotten: 0,
-    agents_active: 0,
-    storage_mb: 0.0,
-    tokens_30d: 0,
-    demo: false,
-    dev_mode: false
+    ok: true,
+    operation: 'overview',
+    result: {
+      memories_total: 0,
+      memories_active: 0,
+      memories_archived: 0,
+      memories_forgotten: 0,
+      agents_active: 0,
+      storage_mb: 0.0,
+      tokens_30d: 0,
+      demo: false,
+      dev_mode: false
+    }
   });
 
   try {
@@ -2342,6 +2394,7 @@ test('skill script overview preserves 401 and 403 without downgrade', async () =
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
     assert.notEqual(payload403.error.code, 'not_found');
+    assert.match(payload403.error.message, /re-?authorization/i);
   } finally {
     await testServer.stop();
   }
@@ -2366,21 +2419,25 @@ test('skill script overview 400 without error.code defaults to invalid_request',
   }
 });
 
-test('skill script activity success path sends GET /v1/me/activity with allow-listed query params', async () => {
+test('skill script activity success path sends POST /v1/skill/operations with allow-listed arguments', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
 
   testServer.setResponse({
-    activity: [
-      {
-        ts: '2026-09-21T10:00:00Z',
-        type: 'memory_created',
-        summary: 'Stored system architecture decision',
-        ref_id: 'mem_123'
-      }
-    ],
-    total: 1,
-    dev_mode: false
+    ok: true,
+    operation: 'activity',
+    result: {
+      activity: [
+        {
+          ts: '2026-09-21T10:00:00Z',
+          type: 'memory_created',
+          summary: 'Stored system architecture decision',
+          ref_id: 'mem_123'
+        }
+      ],
+      total: 1,
+      dev_mode: false
+    }
   });
 
   const ALLOWED_ACTIVITY_PARAMS = new Set(['limit']);
@@ -2399,19 +2456,24 @@ test('skill script activity success path sends GET /v1/me/activity with allow-li
 
     assert.equal(testServer.requests.length, 1);
     const req = testServer.requests[0];
-    assert.equal(req.method, 'GET');
+    assert.equal(req.method, 'POST');
     assert.equal(req.headers.authorization, 'Bearer secret-token-key');
 
     const reqUrl = new URL(req.url, 'http://localhost');
-    assert.equal(reqUrl.pathname, '/v1/me/activity');
+    assert.equal(reqUrl.pathname, '/v1/skill/operations');
+
+    const args = req.body?.arguments || {};
+    assert.equal(req.body?.operation, 'activity');
 
     // Strict parameter allow-list check
-    for (const key of reqUrl.searchParams.keys()) {
+    for (const key of Object.keys(args)) {
       assert.ok(ALLOWED_ACTIVITY_PARAMS.has(key), `Outgoing parameter '${key}' must be within allowed activity set`);
     }
-    assert.equal(reqUrl.searchParams.get('limit'), '15');
-    assert.equal(reqUrl.searchParams.has('scope'), false);
-    assert.equal(reqUrl.searchParams.has('bucket'), false);
+    assert.equal('owner_id' in args, false, 'Must not send owner_id');
+    assert.equal('user_id' in args, false, 'Must not send user_id');
+    assert.equal(args.limit, 15);
+    assert.equal('scope' in args, false);
+    assert.equal('bucket' in args, false);
 
     // Terminal mode rendering check
     const resTerm = await runScript([
@@ -2434,9 +2496,13 @@ test('skill script activity handles empty result cleanly as exit code 0', async 
   const baseUrl = await testServer.start();
 
   testServer.setResponse({
-    activity: [],
-    total: 0,
-    dev_mode: false
+    ok: true,
+    operation: 'activity',
+    result: {
+      activity: [],
+      total: 0,
+      dev_mode: false
+    }
   });
 
   try {
@@ -2504,6 +2570,7 @@ test('skill script activity preserves 401 and 403 without downgrade', async () =
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
     assert.notEqual(payload403.error.code, 'not_found');
+    assert.match(payload403.error.message, /re-?authorization/i);
   } finally {
     await testServer.stop();
   }
@@ -2523,6 +2590,33 @@ test('skill script activity 400 without error.code defaults to invalid_request',
     const payload = JSON.parse(res.stdout);
     assert.equal(payload.ok, false);
     assert.equal(payload.error.code, 'invalid_request');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script read-only commands reject undeclared flags locally with zero network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    const resOverview = await runScript(['overview', '--unexpected-flag', 'val'], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(resOverview.code, 0);
+    assert.match(resOverview.stderr, /Unknown option for overview: --unexpected-flag/);
+
+    const resActivity = await runScript(['activity', '--owner_id', 'user_1'], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(resActivity.code, 0);
+    assert.match(resActivity.stderr, /Unknown option for activity: --owner_id/);
+
+    const resLedgerList = await runScript(['ledger-list', '--user_id', 'user_1'], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(resLedgerList.code, 0);
+    assert.match(resLedgerList.stderr, /Unknown option for ledger-list: --user_id/);
+
+    const resLedgerSummary = await runScript(['ledger-summary', '--extra', '123'], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.notEqual(resLedgerSummary.code, 0);
+    assert.match(resLedgerSummary.stderr, /Unknown option for ledger-summary: --extra/);
+
+    assert.equal(testServer.requests.length, 0, 'Must not send any network requests when invalid flags are provided');
   } finally {
     await testServer.stop();
   }

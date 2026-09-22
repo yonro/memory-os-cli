@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Route `overview`, `activity`, `ledger-list`, and `ledger-summary` commands to key-authenticated `POST /v1/skill/operations` instead of session-backed `/v1/me/*`.
+- Enforce strict parameter allow-listing and client-side argument mapping for `overview`, `activity`, `ledger-list`, and `ledger-summary` without sending `owner_id` or `user_id`.
+- Preserve 403 authorization rejections without downgrade and clearly prompt for re-authorization to explicitly grant required scopes (`memory:read` / `ledger:read`).
+
 ### Fixed
 
 - Support `reminders` array in `extractList` for `todo-list` terminal rendering when server returns `{ reminders: [...] }`.
