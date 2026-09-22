@@ -1627,7 +1627,7 @@ test('skill script forget without --confirm exits non-zero and makes zero networ
     ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
 
     assert.equal(resTerm.code, 1);
-    assert.match(resTerm.stderr, /Confirmation required to forget memory 'mem_to_delete'/);
+    assert.match(resTerm.stderr, /Confirmation required to forget memory or ledger record 'mem_to_delete'/);
     assert.match(resTerm.stderr, /Target: mem_to_delete/);
     assert.equal(testServer.requests.length, 0);
   } finally {
@@ -1674,7 +1674,7 @@ test('skill script forget with --confirm sends POST /v1/memories/{id}/forget wit
       'forget', '--id', 'mem_to_delete', '--confirm'
     ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
     assert.equal(termRes.code, 0);
-    assert.match(termRes.stdout, /Memory forgotten \(soft-deleted\)\./);
+    assert.match(termRes.stdout, /Record forgotten \(soft-deleted\)\./);
     assert.match(termRes.stdout, /ID: mem_to_delete/);
     assert.equal(testServer.requests.length, 2);
     const req2 = testServer.requests[1];
@@ -1731,6 +1731,171 @@ test('skill script forget preserves 401 and 403 errors without downgrade', async
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
     assert.notEqual(payload403.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget handles ledger transaction ID, passing ID to POST /v1/memories/{id}/forget', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  testServer.setResponse({
+    ok: true,
+    result: { id: 'tx_ledger_123', status: 'deleted' }
+  });
+
+  try {
+    const res = await runScript([
+      'forget', '--id', 'tx_ledger_123', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(res.code, 0);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.id, 'tx_ledger_123');
+    assert.equal(payload.mode, 'soft_delete');
+    assert.equal(payload.forgotten, true);
+
+    assert.equal(testServer.requests.length, 1);
+    const req = testServer.requests[0];
+    assert.equal(req.method, 'POST');
+    assert.equal(req.url, '/v1/memories/tx_ledger_123/forget');
+    assert.equal(req.headers.authorization, 'Bearer secret-token-key');
+    assert.deepEqual(req.body, { mode: 'soft_delete' });
+
+    // Terminal mode check
+    const termRes = await runScript([
+      'forget', '--id', 'tx_ledger_123', '--confirm'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(termRes.code, 0);
+    assert.match(termRes.stdout, /Record forgotten \(soft-deleted\)\./);
+    assert.match(termRes.stdout, /ID: tx_ledger_123/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget with ledger transaction ID without --confirm makes zero network requests and reports target ID', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    const resJson = await runScript([
+      'forget', '--id', 'tx_ledger_456', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resJson.code, 1);
+    const payload = JSON.parse(resJson.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'confirmation_required');
+    assert.equal(payload.error.target_id, 'tx_ledger_456');
+    assert.match(payload.error.message, /Confirmation required to forget memory or ledger record 'tx_ledger_456'/);
+    assert.equal(testServer.requests.length, 0);
+
+    const resTerm = await runScript([
+      'forget', '--id', 'tx_ledger_456'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+
+    assert.equal(resTerm.code, 1);
+    assert.match(resTerm.stderr, /Confirmation required to forget memory or ledger record 'tx_ledger_456'/);
+    assert.match(resTerm.stderr, /Target: tx_ledger_456/);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget preserves 403 delete scope required error without downgrade', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // Server returns 403 with FastAPI { detail: "delete scope required" }
+    testServer.setResponse({ detail: 'delete scope required' }, 403);
+    const res = await runScript([
+      'forget', '--id', 'tx_ledger_789', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'write-only-token' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'forbidden');
+    assert.match(payload.error.message, /delete scope required/);
+    assert.notEqual(payload.error.code, 'not_found');
+
+    // Terminal mode check
+    const termRes = await runScript([
+      'forget', '--id', 'tx_ledger_789', '--confirm'
+    ], { baseUrl, env: { XMEMO_KEY: 'write-only-token' } });
+    assert.equal(termRes.code, 1);
+    assert.match(termRes.stderr, /delete scope required/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forget preserves 403 cross-tenant / unauthorized tenant scope rejection', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({ error: { code: 'tenant_forbidden', message: 'Cross-tenant deletion not permitted' } }, 403);
+    const res = await runScript([
+      'forget', '--id', 'foreign_tx_001', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'tenant-a-key' } });
+
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'tenant_forbidden');
+    assert.match(payload.error.message, /Cross-tenant deletion not permitted/);
+    assert.notEqual(payload.error.code, 'not_found');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script ledger list excludes transactions whose backing record was forgotten', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  const allTransactions = [
+    { id: 'tx_keep_1', amount: 42.5, currency: 'USD', category: 'Food', date: '2026-09-20' },
+    { id: 'tx_delete_2', amount: 15.0, currency: 'USD', category: 'Coffee', date: '2026-09-21' },
+  ];
+  const remainingTransactions = [
+    { id: 'tx_keep_1', amount: 42.5, currency: 'USD', category: 'Food', date: '2026-09-20' },
+  ];
+
+  try {
+    // Step 1: ledger-list initially returns 2 transactions
+    testServer.setResponse({ ok: true, transactions: allTransactions, total: 2 });
+    const listRes1 = await runScript(['ledger-list', '--json'], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(listRes1.code, 0);
+    const listPayload1 = JSON.parse(listRes1.stdout);
+    assert.equal(listPayload1.transactions.length, 2);
+    assert.ok(listPayload1.transactions.some(t => t.id === 'tx_delete_2'));
+
+    // Step 2: forget the transaction using its transaction id
+    testServer.setResponse({ ok: true, result: { id: 'tx_delete_2', status: 'deleted' } });
+    const forgetRes = await runScript([
+      'forget', '--id', 'tx_delete_2', '--confirm', '--json'
+    ], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(forgetRes.code, 0);
+    const forgetPayload = JSON.parse(forgetRes.stdout);
+    assert.equal(forgetPayload.ok, true);
+    assert.equal(forgetPayload.id, 'tx_delete_2');
+    assert.equal(forgetPayload.forgotten, true);
+
+    // Step 3: subsequent ledger-list reflects exclusion of forgotten record
+    testServer.setResponse({ ok: true, transactions: remainingTransactions, total: 1 });
+    const listRes2 = await runScript(['ledger-list', '--json'], { baseUrl, env: { XMEMO_KEY: 'secret-token-key' } });
+    assert.equal(listRes2.code, 0);
+    const listPayload2 = JSON.parse(listRes2.stdout);
+    assert.equal(listPayload2.transactions.length, 1);
+    assert.equal(listPayload2.transactions[0].id, 'tx_keep_1');
+    assert.ok(!listPayload2.transactions.some(t => t.id === 'tx_delete_2'));
   } finally {
     await testServer.stop();
   }

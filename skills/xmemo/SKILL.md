@@ -142,8 +142,10 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   `ledger-list` / `ledger-summary` (read-only), and inspect account metrics via
   `overview`, `activity`, and `stats`.
 - **Confirm destructive actions.** Pass explicit target IDs and verify intentions
-  before removing or modifying knowledge. An authorized credential with
-  `memory:write` scope is required for `update` and `forget`.
+  before removing or modifying records. `update` requires `memory:write` scope, while
+  `forget` requires `delete` scope (e.g. `delete:memories`, `memory:delete`, or
+  an owner-scoped key). Target IDs from either memory or `ledger-list` transaction
+  records can be passed directly to `forget --id <id> --confirm`.
 - **Read provenance correctly.** `agent_id`, `agent_instance_id`, and
   `agent_boundary` are attribution signals, not authorization boundaries.
 
@@ -235,22 +237,28 @@ remain limited to `remember`, `recall`, and `search`.
   never downgraded to `not_found`. Non-existent memories return 404 `not_found`,
   and 401/403 errors remain preserved. `update --json` returns
   `{ ok: true, id, path, updated: true, ... }`.
-- `forget` performs soft-deletion of an existing memory backed by
-  `POST /v1/memories/{id}/forget`. It accepts `--id` (required), `--reason`
-  (optional explanation), and mandatory `--confirm`. Requires `memory:write`
-  scope. **Accidental Deletion Guard**: If `--confirm` is omitted, the command
-  immediately prints the target ID and exits with non-zero exit code without
-  dispatching any network request. When confirmed, it sends
-  `{ mode: 'soft_delete', reason }`. Successful execution outputs
-  `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
-  Missing records return 404 `not_found`, and 401/403 errors are preserved.
+- `forget` performs soft-deletion of an existing memory or ledger record backed by
+  `POST /v1/memories/{id}/forget`. It accepts `--id` (required, accepts memory ID,
+  logical reference, or `ledger-list` transaction ID), `--reason` (optional
+  explanation), and mandatory `--confirm`. Requires `delete` scope (`delete:memories`,
+  `memory:delete`, `memory:write`, `memory:*`, `admin`, `*`) on an owner-scoped key.
+  **Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately
+  prints the target ID and exits with non-zero exit code without dispatching any
+  network request. When confirmed, it sends `{ mode: 'soft_delete', reason }`.
+  When a ledger transaction ID is passed, the server lifecycle resolver looks up the
+  backing memory record, soft-deletes it, and excludes it from future ledger listings.
+  Successful execution outputs `{ ok: true, id, mode: 'soft_delete', forgotten: true }`
+  under `--json`. Missing records return 404 `not_found`, and 401/403 errors are
+  preserved without downgrade (e.g. 403 `delete scope required`).
 
 ### Ledger Bookkeeping (`ledger-list`, `ledger-summary`)
 
 - `ledger-list` is a strictly read-only query backed by
   `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring
   `ledger:read` scope). It retrieves financial and expense transactions without
-  any write or delete capabilities. It accepts `--limit <n>`, `--offset <n>`,
+  any write or delete capabilities. There is no separate `ledger-delete` command;
+  to remove or void a transaction, obtain its `id` from `ledger-list` and invoke
+  `forget --id <transaction_id> --confirm`. It accepts `--limit <n>`, `--offset <n>`,
   `--currency <code>`, `--from <date>` (`date_from`), `--to <date>` (`date_to`),
   `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and `--type <type>`
   (`transaction_type`). As a convenience, `--month <YYYY-MM>` can be specified to

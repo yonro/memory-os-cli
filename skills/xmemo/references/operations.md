@@ -78,7 +78,7 @@ temporary credential and removes pending confirmation data.
 |--------------|---------|
 | `read` | Read a specific memory by ID with minimal projection and optional character pagination |
 | `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
-| `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
+| `forget` | Soft-delete a memory or ledger transaction via `POST /v1/memories/{id}/forget` (requires delete scope and explicit `--confirm`) |
 | `ledger-list` | List financial/expense transactions via `POST /v1/skill/operations` (operation: `ledger-list`, requires `ledger:read` scope) |
 | `ledger-summary` | Retrieve monthly transaction summary via `POST /v1/skill/operations` (operation: `ledger-summary`, requires `ledger:read` scope) |
 | `overview` | Display account-level memory count, storage, and token consumption via `POST /v1/skill/operations` (operation: `overview`, requires `memory:read` scope) |
@@ -151,19 +151,26 @@ Validation and authorization:
 - Authentication (401) and permission (403) rejections remain accurately categorized.
 - Under `--json`, successful update returns `{ ok: true, id, path, updated: true, ... }`.
 
-### Forget a memory with confirmation
+### Forget a memory or ledger transaction with confirmation
 
 ```text
 node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm
 node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --reason "Deprecated convention"
-node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --json
+node scripts/xmemo-skill.mjs forget --id <transaction_id> --confirm
+node scripts/xmemo-skill.mjs forget --id <id> --confirm --json
 ```
 
 `forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }` to perform a safe soft deletion.
+Target references:
+- Accepts a memory UUID, logical memory reference, or a ledger transaction ID (obtained via `ledger-list`).
+- When a transaction ID is provided, the server lifecycle resolver resolves the backing ledger memory record and soft-deletes it, omitting it from future `ledger-list` queries.
+Scope & Authorization:
+- Requires `delete` scope (`delete:memories`, `memory:delete`, `memory:write`, `memory:*`, `admin`, `*`) on an owner-scoped key.
+- Missing delete scope triggers an HTTP 403 `delete scope required` error from the server.
 **Accidental Deletion Guard**:
 - If `--confirm` is not passed, the script exits immediately with code 1, prints the target ID, and **issues 0 HTTP requests**.
 - When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
-- A 404 response reports `not_found`.
+- A 404 response reports `not_found` (e.g. non-existent memory or transaction record).
 - 401/403 errors are reported without downgrade.
 
 ### Query ledger transactions (read-only)
@@ -177,7 +184,7 @@ node scripts/xmemo-skill.mjs ledger-list --month 2026-09 --json
 ```
 
 `ledger-list` queries personal financial transactions via `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring `ledger:read` scope).
-This command is strictly read-only and possesses zero write or deletion capabilities.
+This command is strictly read-only and possesses zero write or deletion capabilities. To delete or void a transaction, obtain its `id` from `ledger-list` and invoke `forget --id <transaction_id> --confirm`.
 Allowed server arguments:
 - `--limit <n>`: Page limit (default 30, max 100).
 - `--offset <n>`: Pagination offset (default 0).

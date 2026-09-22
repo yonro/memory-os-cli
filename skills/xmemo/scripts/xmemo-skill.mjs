@@ -1567,7 +1567,7 @@ async function main() {
 
   if (command === 'forget') {
     if (!flags.confirm) {
-      const msg = `Confirmation required to forget memory '${flags.id}'. Pass --confirm to proceed.`;
+      const msg = `Confirmation required to forget memory or ledger record '${flags.id}'. Pass --confirm to proceed.`;
       if (options.json) {
         console.log(safeJson({ ok: false, error: { code: 'confirmation_required', message: msg, target_id: flags.id } }));
       } else {
@@ -1590,8 +1590,8 @@ async function main() {
       }, options.timeoutMs);
 
       const data = handleRestError(res, {
-        notFoundMessage: `Memory '${flags.id}' not found.`,
-        context: 'Forget memory request',
+        notFoundMessage: `Record '${flags.id}' not found.`,
+        context: 'Forget request',
         options,
       });
 
@@ -1605,10 +1605,10 @@ async function main() {
         process.exit(0);
       }
 
-      console.log(`✅ Memory forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
+      console.log(`✅ Record forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
       process.exit(0);
     } catch (e) {
-      console.error('Forget memory failed:', e.message);
+      console.error('Forget failed:', e.message);
       process.exit(1);
     }
     return;
