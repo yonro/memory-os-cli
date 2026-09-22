@@ -6,6 +6,13 @@ import path from 'node:path';
 import http from 'node:http';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import {
+  formatRemainingValidity,
+  extractExpiresInSeconds,
+  extractRequestId,
+  COMMAND_USAGE_REGISTRY,
+  buildTopLevelHelp,
+} from '../skills/xmemo/scripts/xmemo-skill.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills/xmemo/scripts/xmemo-skill.mjs');
@@ -75,6 +82,11 @@ async function runScript(args, options = {}) {
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
+    const forceTty = options.pipe
+      ? '0'
+      : (options.isTty !== undefined
+          ? (options.isTty ? '1' : '0')
+          : (options.env?.XMEMO_FORCE_TTY ?? '1'));
     const child = spawn(process.execPath, [skillScript, ...args], {
       env: {
         ...process.env,
@@ -82,6 +94,7 @@ async function runScript(args, options = {}) {
         USERPROFILE: options.homeDir || process.env.USERPROFILE,
         XMEMO_BASE_URL: options.baseUrl,
         XMEMO_KEY: options.env?.XMEMO_KEY,
+        XMEMO_FORCE_TTY: forceTty,
         ...options.env,
       },
       cwd: repoRoot
@@ -3019,6 +3032,239 @@ test('skill script stats 400 without error.code defaults to invalid_request', as
   } finally {
     await testServer.stop();
   }
+});
+
+test('S1-1: terminal error output includes request_id when present in error response', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 1a. Server error with error.request_id in terminal mode
+    testServer.setResponse({
+      ok: false,
+      error: {
+        code: 'not_found',
+        message: 'Requested memory not found on server',
+        request_id: 'req_test_abc123'
+      }
+    }, 404);
+
+    const termResWithReqId = await runScript(['read', '--id', 'mem_missing_1'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(termResWithReqId.code, 1);
+    assert.match(termResWithReqId.stderr, /Error: Requested memory not found on server \(Code: not_found\) \(request_id: req_test_abc123\)/);
+
+    // 1b. Server error with top-level request_id in terminal mode
+    testServer.setResponse({
+      ok: false,
+      error: {
+        code: 'rate_limited',
+        message: 'Too many requests'
+      },
+      request_id: 'req_top_level_456'
+    }, 429);
+
+    const termResTopLevel = await runScript(['read', '--id', 'mem_missing_2'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(termResTopLevel.code, 1);
+    assert.match(termResTopLevel.stderr, /\(request_id: req_top_level_456\)/);
+
+    // 1c. Server error without request_id in terminal mode (omitted cleanly)
+    testServer.setResponse({
+      ok: false,
+      error: {
+        code: 'not_found',
+        message: 'No request ID present'
+      }
+    }, 404);
+
+    const termResWithoutReqId = await runScript(['read', '--id', 'mem_missing_3'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(termResWithoutReqId.code, 1);
+    assert.match(termResWithoutReqId.stderr, /Error: No request ID present \(Code: not_found\)/);
+    assert.doesNotMatch(termResWithoutReqId.stderr, /request_id/);
+
+    // 1d. JSON mode preserves request_id in JSON envelope
+    testServer.setResponse({
+      ok: false,
+      error: {
+        code: 'forbidden',
+        message: 'Access denied',
+        request_id: 'req_json_789'
+      }
+    }, 403);
+
+    const jsonRes = await runScript(['read', '--id', 'mem_missing_4', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(jsonRes.code, 1);
+    const jsonPayload = JSON.parse(jsonRes.stdout);
+    assert.equal(jsonPayload.ok, false);
+    assert.equal(jsonPayload.error.request_id, 'req_json_789');
+
+    // 1e. Unit test extractRequestId helper
+    assert.equal(extractRequestId({ error: { request_id: 'req_1' } }), 'req_1');
+    assert.equal(extractRequestId({ request_id: 'req_2' }), 'req_2');
+    assert.equal(extractRequestId({ error: {} }), null);
+    assert.equal(extractRequestId(null), null);
+    assert.equal(extractRequestId('string'), null);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('S1-2: login polling wait prints remaining validity countdown and duration formatting', async () => {
+  // 2a. Test formatRemainingValidity countdown formatting
+  assert.equal(formatRemainingValidity(572), '9m32s');
+  assert.equal(formatRemainingValidity(600), '10m0s');
+  assert.equal(formatRemainingValidity(45), '45s');
+  assert.equal(formatRemainingValidity(3665), '1h1m5s');
+  assert.equal(formatRemainingValidity(0), '0s');
+  assert.equal(formatRemainingValidity(-10), '0s');
+
+  // 2b. Test extractExpiresInSeconds
+  assert.equal(extractExpiresInSeconds({ expires_in: 572 }), 572);
+  assert.equal(extractExpiresInSeconds({ expires: 300 }), 300);
+  assert.equal(extractExpiresInSeconds({}), 600);
+
+  // 2c. Test login output includes (valid for 9m32s) when server returns expires_in: 572
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-login-countdown-'));
+
+  try {
+    testServer.setResponseSeq([
+      {
+        status: 200,
+        body: {
+          device_code: 'countdown-device-code',
+          verification_uri_complete: 'https://xmemo.dev/device',
+          user_code: 'COUNT-DOWN',
+          interval: 0.001,
+          expires_in: 572,
+        },
+      },
+      {
+        status: 200,
+        body: { access_token: 'formal_token_countdown' },
+      },
+    ]);
+
+    const res = await runScript(['login', '--allow-plaintext'], {
+      baseUrl,
+      homeDir,
+      env: {},
+    });
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /Waiting for authorization\.\.\. \(valid for 9m32s\)/);
+  } finally {
+    await testServer.stop();
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
+test('S1-3: non-TTY stdout pipeline defaults to JSON, explicit --terminal is respected', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    testServer.setResponse({
+      id: 'mem_pipe_test',
+      content: 'Pipeline content testing',
+      path: 'docs/pipe.md',
+      updated_at: '2026-09-22T00:00:00Z'
+    });
+
+    // 3a. Simulated non-TTY (pipe: true) without --json => automatically outputs JSON
+    const pipeAutoJson = await runScript(['read', '--id', 'mem_pipe_test'], {
+      baseUrl,
+      pipe: true,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(pipeAutoJson.code, 0);
+    const parsed = JSON.parse(pipeAutoJson.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.id, 'mem_pipe_test');
+    assert.equal(parsed.content, 'Pipeline content testing');
+
+    // 3b. Simulated non-TTY (pipe: true) with explicit --terminal => outputs human-readable terminal text
+    const pipeTerminal = await runScript(['read', '--id', 'mem_pipe_test', '--terminal'], {
+      baseUrl,
+      pipe: true,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(pipeTerminal.code, 0);
+    assert.match(pipeTerminal.stdout, /Memory: mem_pipe_test \| Path: docs\/pipe\.md/);
+    assert.match(pipeTerminal.stdout, /Content: Pipeline content testing/);
+    assert.throws(() => JSON.parse(pipeTerminal.stdout));
+
+    // 3c. Simulated non-TTY with --no-json alias => outputs human-readable terminal text
+    const pipeNoJson = await runScript(['read', '--id', 'mem_pipe_test', '--no-json'], {
+      baseUrl,
+      pipe: true,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(pipeNoJson.code, 0);
+    assert.match(pipeNoJson.stdout, /Memory: mem_pipe_test \| Path:/);
+
+    // 3d. Conflicting flags --json and --terminal error out
+    const conflict = await runScript(['read', '--id', 'mem_pipe_test', '--json', '--terminal'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(conflict.code, 1);
+    assert.match(conflict.stderr, /Cannot specify both --json and --terminal/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('S1-4: single source of truth for command usage, anti-drift assertion', async () => {
+  // 4a. Run root --help and verify it contains every registered command
+  const rootHelpRes = await runScript(['--help']);
+  assert.equal(rootHelpRes.code, 0);
+  assert.match(rootHelpRes.stdout, /Global options:/);
+  assert.match(rootHelpRes.stdout, /--terminal/);
+
+  // 4b. Anti-drift assertion: iterate through all commands in COMMAND_USAGE_REGISTRY
+  for (const [cmd, entry] of Object.entries(COMMAND_USAGE_REGISTRY)) {
+    if (entry.aliasOf) continue;
+
+    // Verify root --help includes the command usage string
+    assert.ok(
+      rootHelpRes.stdout.includes(entry.usage),
+      `Root --help missing exact usage for command '${cmd}': expected '${entry.usage}'`
+    );
+
+    // Verify <command> --help includes the exact same usage string
+    const cmdArgs = cmd.split(' ');
+    const cmdHelpRes = await runScript([...cmdArgs, '--help']);
+    assert.equal(cmdHelpRes.code, 0);
+    assert.ok(
+      cmdHelpRes.stdout.includes(entry.usage),
+      `Command '${cmd} --help' output does not match COMMAND_USAGE_REGISTRY: expected '${entry.usage}' in '${cmdHelpRes.stdout}'`
+    );
+  }
+
+  // 4c. Explicitly assert ledger-list usage contains all flags in both places
+  const ledgerListEntry = COMMAND_USAGE_REGISTRY['ledger-list'];
+  assert.ok(ledgerListEntry.usage.includes('--category <name>'));
+  assert.ok(ledgerListEntry.usage.includes('--type <type>'));
+  assert.ok(ledgerListEntry.usage.includes('--min-amount <n>'));
+  assert.ok(ledgerListEntry.usage.includes('--max-amount <n>'));
+  assert.ok(ledgerListEntry.usage.includes('--limit <n>'));
+  assert.ok(ledgerListEntry.usage.includes('--offset <n>'));
+
+  const ledgerHelpRes = await runScript(['ledger-list', '--help']);
+  assert.ok(ledgerHelpRes.stdout.includes(ledgerListEntry.usage));
+  assert.ok(rootHelpRes.stdout.includes(ledgerListEntry.usage));
 });
 
 

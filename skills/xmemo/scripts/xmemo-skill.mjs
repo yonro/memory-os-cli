@@ -73,10 +73,27 @@ const AUTH_FLAGS = {
   'claim-deny': new Set(),
 };
 
+function isStdoutTty() {
+  if (process.env.XMEMO_FORCE_TTY === '1' || process.env.XMEMO_FORCE_TTY === 'true') {
+    return true;
+  }
+  if (process.env.XMEMO_FORCE_TTY === '0' || process.env.XMEMO_FORCE_TTY === 'false') {
+    return false;
+  }
+  if (process.env.XMEMO_OUTPUT_MODE === 'terminal') {
+    return true;
+  }
+  if (process.env.XMEMO_OUTPUT_MODE === 'json') {
+    return false;
+  }
+  return Boolean(process.stdout && process.stdout.isTTY);
+}
+
 // Helper to parse arguments
 function parseArgs(args) {
   const options = {
     json: false,
+    terminal: false,
     baseUrl: process.env.XMEMO_BASE_URL || DEFAULT_BASE_URL,
     timeoutMs: process.env.XMEMO_TIMEOUT_MS || String(DEFAULT_TIMEOUT_MS),
     verify: false,
@@ -89,6 +106,8 @@ function parseArgs(args) {
   };
   const positionals = [];
   const flags = {};
+  let explicitJson = false;
+  let explicitTerminal = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -99,7 +118,10 @@ function parseArgs(args) {
       const inlineValue = equalsIndex === -1 ? undefined : rawKey.slice(equalsIndex + 1);
       if (key === 'json') {
         rejectBooleanValue(key, inlineValue);
-        options.json = true;
+        explicitJson = true;
+      } else if (key === 'terminal' || key === 'no-json' || key === 'plain') {
+        rejectBooleanValue(key, inlineValue);
+        explicitTerminal = true;
       } else if (key === 'verify') {
         rejectBooleanValue(key, inlineValue);
         options.verify = true;
@@ -152,7 +174,9 @@ function parseArgs(args) {
     } else if (arg.startsWith('-')) {
       const key = arg.slice(1);
       if (key === 'j') {
-        options.json = true;
+        explicitJson = true;
+      } else if (key === 't') {
+        explicitTerminal = true;
       } else if (key === 'v') {
         options.verify = true;
       } else if (key === 'h') {
@@ -164,6 +188,21 @@ function parseArgs(args) {
       positionals.push(arg);
     }
   }
+
+  if (explicitJson && explicitTerminal) {
+    throw new Error('Cannot specify both --json and --terminal.');
+  }
+
+  const isTty = isStdoutTty();
+  if (explicitJson) {
+    options.json = true;
+  } else if (explicitTerminal) {
+    options.json = false;
+    options.terminal = true;
+  } else {
+    options.json = !isTty;
+  }
+
   return { command: positionals[0], subcommand: positionals[1], positionals, options, flags };
 }
 
@@ -185,61 +224,178 @@ function readOptionValue(args, index, key, inlineValue) {
   return { value, index: index + 1 };
 }
 
+const COMMAND_USAGE_REGISTRY = {
+  login: {
+    usage: 'login --allow-plaintext',
+    desc: 'Start formal device login and explicitly permit local token storage',
+  },
+  register: {
+    usage: 'register --reason <unattended|declined> --allow-plaintext',
+    desc: 'Start limited temporary memory only when formal login is unavailable',
+  },
+  logout: {
+    usage: 'logout [--revoke-environment-token]',
+    desc: 'Revoke and remove a local credential',
+  },
+  'auth status': {
+    usage: 'auth status [--verify]',
+    desc: 'Show local or verified auth status (alias: auth-status)',
+  },
+  'auth add': {
+    usage: 'auth add --from-stdin --allow-plaintext',
+    desc: 'Store a formal token read from standard input',
+  },
+  'auth claim-status': {
+    usage: 'auth claim-status [--allow-plaintext]',
+    desc: 'Check temporary-account claim status',
+  },
+  'auth claim-confirm': {
+    usage: 'auth claim-confirm [--allow-plaintext]',
+    desc: 'Confirm a pending human claim and accept formal token handoff',
+  },
+  'auth claim-deny': {
+    usage: 'auth claim-deny [--allow-plaintext]',
+    desc: 'Decline a pending bind and keep isolated temporary access',
+  },
+  read: {
+    usage: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
+  },
+  update: {
+    usage: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
+  },
+  forget: {
+    usage: 'forget --id <id> [--reason <text>] --confirm',
+  },
+  'ledger-list': {
+    usage: 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
+  },
+  'ledger-summary': {
+    usage: 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
+  },
+  overview: {
+    usage: 'overview',
+    desc: 'Show account overview (memories, storage, agents)',
+  },
+  activity: {
+    usage: 'activity [--limit <n>]',
+    desc: 'Show recent account activity',
+  },
+  stats: {
+    usage: 'stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]',
+    desc: 'Show memory statistics and breakdown',
+  },
+  remember: {
+    usage: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
+  },
+  recall: {
+    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+  },
+  search: {
+    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+  },
+  'recall-context': {
+    usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
+    desc: 'Read-only bounded Memory context; opt into Knowledge with true',
+  },
+  'save-state': {
+    usage: 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
+    desc: '(alias: state-save)',
+  },
+  'restore-state': {
+    usage: 'restore-state --key <key>',
+    desc: '(alias: state-restore)',
+  },
+  'state-save': {
+    usage: 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
+    aliasOf: 'save-state',
+  },
+  'state-restore': {
+    usage: 'state-restore --key <key> (legacy alias)',
+    aliasOf: 'restore-state',
+  },
+  'restart-snapshot': {
+    usage: 'restart-snapshot [--state_key <key>] [--session_id <id>] [--ttl_seconds <0..2592000>]',
+    desc: 'Save a full restart-continuity snapshot',
+  },
+  'restart-restore': {
+    usage: 'restart-restore [--snapshot_id <id> | --source_session_id <id>] [--target_session_id <id>]',
+    desc: 'Restore the latest or selected restart snapshot',
+  },
+  'todo-add': {
+    usage: 'todo-add --content <text>',
+  },
+  'todo-list': {
+    usage: 'todo-list',
+  },
+  'todo-done': {
+    usage: 'todo-done --id <todo_id>',
+  },
+  'expense-add': {
+    usage: 'expense-add --item <text> --amount <number> --currency <code>',
+  },
+  doctor: {
+    usage: 'doctor [--anonymous]',
+  },
+};
+
+function buildTopLevelHelp() {
+  const lines = [
+    'XMemo Standalone Skill Runtime',
+    '',
+    'Usage:',
+    `  ${SCRIPT_COMMAND} <command> [options]`,
+    '',
+    'Commands:',
+  ];
+  for (const entry of Object.values(COMMAND_USAGE_REGISTRY)) {
+    if (entry.aliasOf) continue;
+    if (entry.desc) {
+      lines.push(`  ${entry.usage.padEnd(35)} ${entry.desc}`);
+    } else {
+      lines.push(`  ${entry.usage}`);
+    }
+  }
+  lines.push('');
+  lines.push('Credential resolution:');
+  lines.push('  XMEMO_KEY                          Preferred; never copied to the local credential file');
+  lines.push('  User credential file               Read only as a fallback');
+  lines.push('');
+  lines.push('Global options:');
+  lines.push('  --json                             Print the API response as JSON');
+  lines.push('  --terminal                         Force human-readable terminal output even when piped');
+  lines.push(`  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only`);
+  lines.push(`  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})`);
+  lines.push('  --compact                          Shorten recall/search content for terminals');
+  lines.push('  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage');
+  lines.push('  --version                          Show the Skill runtime version');
+  lines.push('  --help, -h                         Show this help');
+  lines.push('');
+  lines.push(`Run \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  return lines.join('\n');
+}
+
 function printUsage(command) {
-  const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
-  if (command === undefined) {
-    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  overview | activity [--limit <n>] | stats [options]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  const commonOptions = '[--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]';
+  if (command === undefined || (!COMMAND_USAGE_REGISTRY[command] && command !== 'auth' && command !== 'auth-status')) {
+    console.log(buildTopLevelHelp());
     return;
   }
-  if (command === 'auth') {
+
+  if (command === 'auth' || command === 'auth-status') {
     console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-deny [--allow-plaintext]\n\nAlias: ${SCRIPT_COMMAND} auth-status [--verify]\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
     return;
   }
 
-  const directUsage = {
-    login: `login --allow-plaintext ${commonOptions}`,
-    register: `register --reason <unattended|declined> --allow-plaintext ${commonOptions}`,
-    logout: `logout [--revoke-environment-token] ${commonOptions}`,
-  };
-  if (directUsage[command]) {
-    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${directUsage[command]}`);
+  const entry = COMMAND_USAGE_REGISTRY[command];
+  if (entry) {
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${entry.usage} ${commonOptions}`);
     if (command === 'logout') {
       console.log('\nXMEMO_KEY is externally managed and is not revoked unless --revoke-environment-token is explicitly passed.');
     }
     return;
   }
 
-  if (REST_COMMANDS.has(command)) {
-    const commandUsage = {
-      read: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
-      update: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
-      forget: 'forget --id <id> [--reason <text>] --confirm',
-      'ledger-list': 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
-      'ledger-summary': 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
-      overview: 'overview',
-      activity: 'activity [--limit <n>]',
-      stats: 'stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]',
-      remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
-      recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
-      search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
-      'recall-context': 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
-      'save-state': 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
-      'restore-state': 'restore-state --key <key>',
-      'state-save': 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
-      'state-restore': 'state-restore --key <key> (legacy alias)',
-      'restart-snapshot': 'restart-snapshot [--state_key <key>] [--session_id <id>] [--ttl_seconds <0..2592000>]',
-      'restart-restore': 'restart-restore [--snapshot_id <id> | --source_session_id <id>] [--target_session_id <id>]',
-      'todo-add': 'todo-add --content <text>',
-      'todo-list': 'todo-list',
-      'todo-done': 'todo-done --id <todo_id>',
-      'expense-add': 'expense-add --item <text> --amount <number> --currency <code>',
-      doctor: 'doctor [--anonymous]',
-    };
-    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${commandUsage[command]} ${commonOptions}`);
-    return;
-  }
-
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  overview                           Show account overview (memories, storage, agents)\n  activity [--limit <n>]             Show recent account activity\n  stats [options]                    Show memory statistics and breakdown\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(buildTopLevelHelp());
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -452,11 +608,77 @@ function apiErrorMessage(data, fallback = 'Operation failed') {
   return fallback;
 }
 
-function outputRestError(code, message, options) {
+function extractRequestId(data) {
+  if (!data || typeof data !== 'object') return null;
+  const candidate = data.error?.request_id || data.request_id;
+  if (typeof candidate === 'string' && candidate.trim()) {
+    return sanitizeTerminalText(candidate.trim());
+  }
+  return null;
+}
+
+function extractExpiresInSeconds(data) {
+  if (data?.expires_in !== undefined && data?.expires_in !== null) {
+    const num = Number(data.expires_in);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  if (data?.expires !== undefined && data?.expires !== null) {
+    if (typeof data.expires === 'number' && Number.isFinite(data.expires) && data.expires > 0) {
+      if (data.expires > 1e11) {
+        return Math.max(1, Math.round((data.expires - Date.now()) / 1000));
+      }
+      if (data.expires > 1e8) {
+        return Math.max(1, Math.round(data.expires - Date.now() / 1000));
+      }
+      return data.expires;
+    }
+    if (typeof data.expires === 'string') {
+      const parsedNum = Number(data.expires);
+      if (Number.isFinite(parsedNum) && parsedNum > 0) {
+        if (parsedNum > 1e11) {
+          return Math.max(1, Math.round((parsedNum - Date.now()) / 1000));
+        }
+        if (parsedNum > 1e8) {
+          return Math.max(1, Math.round(parsedNum - Date.now() / 1000));
+        }
+        return parsedNum;
+      }
+      const parsedDate = Date.parse(data.expires);
+      if (Number.isFinite(parsedDate) && parsedDate > Date.now()) {
+        return Math.max(1, Math.round((parsedDate - Date.now()) / 1000));
+      }
+    }
+  }
+  return 600;
+}
+
+function formatRemainingValidity(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h${minutes}m${secs}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m${secs}s`;
+  }
+  return `${secs}s`;
+}
+
+function outputRestError(code, message, options, dataOrRequestId) {
+  const reqId = typeof dataOrRequestId === 'string'
+    ? sanitizeTerminalText(dataOrRequestId.trim())
+    : extractRequestId(dataOrRequestId);
   if (options && options.json) {
-    console.log(safeJson({ ok: false, error: { code, message } }));
+    const errorObj = { code, message };
+    if (reqId) {
+      errorObj.request_id = reqId;
+    }
+    console.log(safeJson({ ok: false, error: errorObj }));
   } else {
-    console.error(`Error: ${message} (Code: ${code})`);
+    const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+    console.error(`Error: ${message} (Code: ${code})${reqSuffix}`);
   }
   process.exit(1);
 }
@@ -473,7 +695,7 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     if (res.statusCode === 403 && !/re-?authorization/i.test(msg)) {
       msg = `${msg.replace(/\.*$/, '')}. Re-authorization is required to explicitly grant the required scope.`;
     }
-    outputRestError(code, msg, options);
+    outputRestError(code, msg, options, errData);
   }
 
   if (res.statusCode === 404) {
@@ -481,14 +703,14 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     try { errData = parseJsonResponse(res, context); } catch {}
     const code = 'not_found';
     const msg = apiErrorMessage(errData, notFoundMessage || 'Resource not found.');
-    outputRestError(code, msg, options);
+    outputRestError(code, msg, options, errData);
   }
 
   const data = parseJsonResponse(res, context);
   if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
     const code = data?.error?.code || (res.statusCode === 400 ? 'invalid_request' : `HTTP ${res.statusCode}`);
     const msg = apiErrorMessage(data);
-    outputRestError(code, msg, options);
+    outputRestError(code, msg, options, data);
   }
   return data;
 }
@@ -858,7 +1080,9 @@ async function requestTemporaryMemoryOperation(command, options, flags, credenti
         console.error('Your human account has a pending bind confirmation. Run "auth claim-confirm" to finish the formal-token handoff. Do not share the bind URL or confirmation value.');
       }
     } else {
-      console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}`);
+      const reqId = extractRequestId(data);
+      const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+      console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
     }
     process.exit(1);
   }
@@ -961,7 +1185,9 @@ async function main() {
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Device login start');
       if (res.statusCode !== 200) {
-        console.error(`Failed to start device login: ${apiErrorMessage(data, safeJson(data))}`);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`Failed to start device login: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
         process.exit(1);
       }
       const verificationUrl = data.verification_uri_complete || data.verification_uri;
@@ -969,21 +1195,20 @@ async function main() {
         console.error('Failed to start device login: the service response omitted the device code or verification URL.');
         process.exit(1);
       }
+      const expiresInSeconds = extractExpiresInSeconds(data);
+      const expiresInMs = Math.max(1, expiresInSeconds * 1000);
+      const loginDeadline = Date.now() + expiresInMs;
+      const countdownText = formatRemainingValidity(expiresInSeconds);
       console.log(`To verify this device, open the following URL in your browser:\n`);
       console.log(`  ${sanitizeTerminalText(verificationUrl)}\n`);
       console.log(`Or enter the code: ${sanitizeTerminalText(data.user_code)}`);
-      console.log(`\nWaiting for authorization...`);
+      console.log(`\nWaiting for authorization... (valid for ${countdownText})`);
 
       const deviceCode = data.device_code;
       const intervalSeconds = Number(data.interval);
-      const expiresInSeconds = Number(data.expires_in);
       let pollInterval = Number.isFinite(intervalSeconds) && intervalSeconds > 0
         ? Math.max(1, intervalSeconds * 1000)
         : 5000;
-      const expiresInMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0
-        ? Math.max(1, expiresInSeconds * 1000)
-        : 600_000;
-      const loginDeadline = Date.now() + expiresInMs;
       
       const poll = async () => {
         if (Date.now() >= loginDeadline) {
@@ -1321,7 +1546,9 @@ async function main() {
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Doctor health check');
       if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
-        console.error(`Doctor health check failed: ${apiErrorMessage(data, safeJson(data))}`);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`Doctor health check failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
         process.exit(1);
       }
       if (options.json) {
@@ -1379,7 +1606,9 @@ async function main() {
         process.exit(succeeded ? 0 : 1);
       }
       if (!succeeded) {
-        console.error(`${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})`);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})${reqSuffix}`);
         process.exit(1);
       }
       if (command === 'restart-snapshot') {
@@ -1427,7 +1656,9 @@ async function main() {
         process.exit(succeeded ? 0 : 1);
       }
       if (!succeeded) {
-        console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
         process.exit(1);
       }
       const items = Array.isArray(data.items) ? data.items.length : 0;
@@ -1529,7 +1760,7 @@ async function main() {
           ? `Invalid memory ID: '${flags.id}'.`
           : 'Invalid update request.';
         const msg = apiErrorMessage(errData, fallbackMsg);
-        outputRestError(code, msg, options);
+        outputRestError(code, msg, options, errData);
       }
 
       const data = handleRestError(res, {
@@ -1983,7 +2214,9 @@ async function main() {
     }
 
     if (!succeeded) {
-      console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
+      const reqId = extractRequestId(data);
+      const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+      console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
       process.exit(1);
     }
 
@@ -2045,7 +2278,21 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(`Error: ${sanitizeTerminalText(error?.message || error)}`);
-  process.exit(1);
-});
+export {
+  formatRemainingValidity,
+  extractRequestId,
+  extractExpiresInSeconds,
+  isStdoutTty,
+  COMMAND_USAGE_REGISTRY,
+  buildTopLevelHelp,
+  parseArgs,
+};
+
+const isDirectExecution = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(`Error: ${sanitizeTerminalText(error?.message || error)}`);
+    process.exit(1);
+  });
+}

@@ -423,6 +423,11 @@ validation remain intact.
 `remember` and `expense-add` print the server-returned memory or ledger ID.
 `recall` and `search` accept `--compact` to render each memory on one shortened
 line; use `--json` when a caller needs the complete redacted response payload.
+When stdout is connected to a non-TTY stream (e.g. piped or redirected) and
+neither `--json` nor `--terminal` was explicitly specified, commands automatically
+default to JSON output. Pass `--terminal` (or `--no-json`) to force human-readable
+terminal formatting even when piping. Terminal error messages display the server
+`request_id` whenever provided in the service response body.
 Human-readable output removes terminal control sequences. For the exact accepted
 parameters of any command, run
 `node scripts/xmemo-skill.mjs <command> --help`; use `--version` to identify the

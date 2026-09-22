@@ -1,5 +1,14 @@
 # XMemo Skill Change Log
 
+## [Unreleased]
+
+### Changed
+
+- Append server `request_id` to terminal error output when returned in server error responses.
+- Display remaining authorization validity countdown while waiting for authorization in `login` (e.g. `Waiting for authorization... (valid for 9m32s)`).
+- Automatically default to JSON output when stdout is not a TTY (e.g. piped or redirected) unless explicit `--terminal` (`--no-json`, `--plain`) is provided.
+- Merge duplicate usage blocks into a single source of truth, aligning command arguments and eliminating drift between `--help` and command-specific help.
+
 ## 1.1.19
 
 ### Changed

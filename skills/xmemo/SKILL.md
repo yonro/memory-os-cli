@@ -201,9 +201,14 @@ node scripts/xmemo-skill.mjs auth claim-deny [--allow-plaintext]
 node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 ```
 
-The script supports JSON output with `--json`, command-specific usage with
-`--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact
-recall/search output with `--compact`. `doctor --json` adds a bounded
+The script supports JSON output with `--json`, human-readable terminal output
+with `--terminal`, command-specific usage with `--help`, `--version`, per-request
+timeouts with `--timeout-ms`, and compact recall/search output with `--compact`.
+When stdout is piped or redirected to a non-TTY stream and `--json` is not
+explicitly passed, commands automatically default to JSON output; pass `--terminal`
+to explicitly preserve human-readable terminal text. Terminal errors include the
+server `request_id` whenever present in the error response. `login` displays the
+remaining authorization validity countdown while polling. `doctor --json` adds a bounded
 `clientDiagnostics` object: a read-only discovery summary and a `nextAction`
 command for the next credential check or formal sign-in. The summary includes
 the advertised service version when present, MCP URL, supported clients, and
