@@ -4,6 +4,7 @@
 
 ### Added
 
+- Add pre-release smoke-test script (`scripts/smoke-test.mjs`) to validate exit codes, `--json` envelope keys (`ok: true`, error `error.code`), and command safety across all read-only commands by default, gating write commands behind `--execute-writes` and outputting structured failure checklists.
 - Support stdin (`--content -`) and file import (`--file <path>`) for `remember`, mutually exclusive with `--content <text>`, with byte-identical payload validation and transmission.
 
 ### Changed
