@@ -1,12 +1,13 @@
 # XMemo Skill Change Log
 
-## [Unreleased]
+## 1.1.19
 
 ### Changed
 
 - Route `overview`, `activity`, `ledger-list`, and `ledger-summary` commands to key-authenticated `POST /v1/skill/operations` instead of session-backed `/v1/me/*`.
 - Enforce strict parameter allow-listing and client-side argument mapping for `overview`, `activity`, `ledger-list`, and `ledger-summary` without sending `owner_id` or `user_id`.
 - Preserve 403 authorization rejections without downgrade and clearly prompt for re-authorization to explicitly grant required scopes (`memory:read` / `ledger:read`).
+- Consolidate `SKILL.md` middle section into unified Bundled Command Reference with organized subsections for Direct Memory, Ledger, Diagnostics, Knowledge, and Auth.
 
 ### Fixed
 
