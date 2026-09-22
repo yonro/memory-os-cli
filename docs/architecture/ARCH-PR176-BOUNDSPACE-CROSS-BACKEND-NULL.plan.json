@@ -1,0 +1,101 @@
+{
+  "plan": {
+    "id": "ARCH-PR176-BOUNDSPACE-CROSS-BACKEND-NULL",
+    "title": "PR #176 BoundSpace cross-backend NULL filter semantics and table routing plan",
+    "status": "proposed",
+    "artifact_type": "implementation_plan",
+    "implementation_authorized": false,
+    "architect_request_id": "381861e5-63c3-4030-8f50-b6706396ca2f",
+    "task_id": "ARCH-PR176-BOUNDSPACE-FUSE-4",
+    "authoritative_document": "docs/architecture/ARCH-PR176-BOUNDSPACE-CROSS-BACKEND-NULL.md",
+    "target_repo": "D:\\repos\\memory-os",
+    "baseline_head_sha": "d53bf10dd8991c3bc526328afc97bf7947ad277d",
+    "target_branch": "codex/feat-skill-readonly-operations",
+    "selected_option": "Option 3: Defense-in-depth hybrid with canonical {op:is,value:null} callers, driver hardening, and table-aware filter injection"
+  },
+  "circuit_breaker": {
+    "state": "triggered_after_four_cycles",
+    "root_cause": "team_id: None in query filters emits team_id=eq.None in PostgREST/Supabase wire queries instead of team_id=is.null, masked by FakeRepo and PostgresBackend test suites",
+    "frozen": [
+      "ordinary executor iterative repair loops",
+      "merging PR #176",
+      "deploying to staging or production"
+    ],
+    "reset_condition": "Reviewer approves this plan and dispatches exact single-slice executor repair"
+  },
+  "tasks": [
+    {
+      "id": "INBOX_CHECK_ARCHITECT_PR176_FUSE_4",
+      "type": "checkpoint",
+      "status": "completed",
+      "checks": [
+        "Claimed Architect request 381861e5-63c3-4030-8f50-b6706396ca2f",
+        "Audited SupabaseBackend._apply_filter, PostgresBackend._filter_clause, and FakeRepoBase._matches",
+        "Confirmed eq(None) produces team_id=eq.None on PostgREST wire vs team_id=is.null canonical requirement",
+        "Audited table schema differences: memory_vectors, ledger_transactions, and memory_usage_logs have team_id; storage_usage and token_usage do not",
+        "Recorded architectural decision in XMemo memory store",
+        "Drafted authoritative specification docs/architecture/ARCH-PR176-BOUNDSPACE-CROSS-BACKEND-NULL.md"
+      ]
+    },
+    {
+      "id": "S1_EXECUTE_CROSS_BACKEND_NULL_REPAIR",
+      "title": "Slice 1: Apply canonical NULL filters, harden Supabase driver, route table filters safely, and add wire-level tests",
+      "status": "pending",
+      "depends_on": ["INBOX_CHECK_ARCHITECT_PR176_FUSE_4"],
+      "files": [
+        "src/memory_manager/db/supabase_backend.py",
+        "src/memory_manager/services/personal_console.py",
+        "src/memory_manager/services/ledger.py",
+        "tests/web/test_pr176_review_regressions.py"
+      ],
+      "acceptance": [
+        "All query filters for Personal space use canonical {'op': 'is', 'value': 'null'}",
+        "SupabaseBackend._apply_filter normalizes None values to query.is_(col, 'null')",
+        "storage_usage and token_usage queries do not receive team_id filter, avoiding schema cache / missing column errors",
+        "Unit tests assert Supabase query generation produces is_('team_id', 'null') and no eq.None wire param",
+        "Unit tests assert PostgresBackend generates SQL 'team_id is null'",
+        "All 325+ regression and unit tests pass cleanly",
+        "Byte-for-byte /v1/me/* parity is preserved when personal_only=False",
+        "Team credentials receive 403 on personal skill operations",
+        "Event loop run_payload_builder to_thread offload is preserved"
+      ],
+      "checks": [
+        "pytest tests/web/test_pr176_review_regressions.py -q",
+        "pytest tests/web/test_skill_operations.py -q",
+        "git diff --check",
+        "python .progress/scripts/emit_convergence_event.py task_complete --task-id S1_EXECUTE_CROSS_BACKEND_NULL_REPAIR --plan-ref docs/architecture/ARCH-PR176-BOUNDSPACE-CROSS-BACKEND-NULL.plan.json"
+      ]
+    },
+    {
+      "id": "PHASE_R_ARCHITECT_PR176_FUSE_4_HANDOFF",
+      "type": "checkpoint",
+      "status": "pending",
+      "phase_r_trigger": {
+        "auto_execute": true,
+        "tasks": [
+          "运行 phase_r_alignment_check.py 验证架构对齐",
+          "Read current INBOX and formal Reviewer disposition",
+          "Verify baseline HEAD d53bf10dd8991c3bc526328afc97bf7947ad277d and clean working tree before dispatch",
+          "Reviewer reviews ARCH-PR176-BOUNDSPACE-CROSS-BACKEND-NULL.plan.json and authoritative specification",
+          "Reviewer dispatches single-slice execution S1_EXECUTE_CROSS_BACKEND_NULL_REPAIR",
+          "Verify all wire-level PostgREST tests and Postgres SQL tests pass without regressions",
+          "Keep PR unmerged and undeployed until human signoff"
+        ]
+      }
+    }
+  ],
+  "verification": {
+    "performed": [
+      "Inspected SupabaseBackend._apply_filter lines 315-343 in memory-os",
+      "Inspected PostgresBackend._filter_clause lines 2120-2147 in memory-os",
+      "Inspected FakeRepoBase._matches lines 427-444 in tests/fake_repo_base.py",
+      "Audited table schemas for storage_usage, token_usage, memory_vectors, ledger_transactions, memory_usage_logs",
+      "Validated plan format and Phase R trigger rules with validate_plan.py"
+    ],
+    "pending": [
+      "Reviewer approval of this architectural plan",
+      "Executor application of the approved minimal diff",
+      "Full test suite green run across all backends"
+    ]
+  }
+}

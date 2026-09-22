@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.18';
+const SKILL_VERSION = '1.1.19';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -466,7 +466,13 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     let errData = null;
     try { errData = parseJsonResponse(res, context); } catch {}
     const code = errData?.error?.code || (res.statusCode === 401 ? 'unauthorized' : 'forbidden');
-    const msg = apiErrorMessage(errData, res.statusCode === 401 ? 'Authentication required or token invalid.' : 'Access denied.');
+    const defaultMsg = res.statusCode === 401
+      ? 'Authentication required or token invalid.'
+      : 'Access denied. Re-authorization is required to explicitly grant the required scope.';
+    let msg = apiErrorMessage(errData, defaultMsg);
+    if (res.statusCode === 403 && !/re-?authorization/i.test(msg)) {
+      msg = `${msg.replace(/\.*$/, '')}. Re-authorization is required to explicitly grant the required scope.`;
+    }
     outputRestError(code, msg, options);
   }
 
@@ -1618,24 +1624,34 @@ async function main() {
       if (!dateTo) dateTo = `${flags.month}-${String(lastDayNum).padStart(2, '0')}`;
     }
 
-    const queryParams = [];
-    if (flags.limit !== undefined) queryParams.push(`limit=${encodeURIComponent(flags.limit)}`);
-    if (flags.offset !== undefined) queryParams.push(`offset=${encodeURIComponent(flags.offset)}`);
-    if (flags.currency) queryParams.push(`currency=${encodeURIComponent(flags.currency)}`);
-    if (dateFrom) queryParams.push(`date_from=${encodeURIComponent(dateFrom)}`);
-    if (dateTo) queryParams.push(`date_to=${encodeURIComponent(dateTo)}`);
-    if (flags.category) queryParams.push(`category=${encodeURIComponent(flags.category)}`);
-    if (flags['min-amount'] !== undefined) queryParams.push(`min_amount=${encodeURIComponent(flags['min-amount'])}`);
-    if (flags['max-amount'] !== undefined) queryParams.push(`max_amount=${encodeURIComponent(flags['max-amount'])}`);
-    if (flags.type) queryParams.push(`transaction_type=${encodeURIComponent(flags.type)}`);
-
-    let endpoint = '/v1/me/ledger/transactions';
-    if (queryParams.length > 0) {
-      endpoint += `?${queryParams.join('&')}`;
+    const args = {};
+    if (flags.limit !== undefined) {
+      const parsed = Number(flags.limit);
+      args.limit = Number.isInteger(parsed) ? parsed : flags.limit;
     }
+    if (flags.offset !== undefined) {
+      const parsed = Number(flags.offset);
+      args.offset = Number.isInteger(parsed) ? parsed : flags.offset;
+    }
+    if (flags.currency) args.currency = String(flags.currency);
+    if (dateFrom) args.date_from = String(dateFrom);
+    if (dateTo) args.date_to = String(dateTo);
+    if (flags.category) args.category = String(flags.category);
+    if (flags['min-amount'] !== undefined) {
+      const parsed = Number(flags['min-amount']);
+      args.min_amount = !isNaN(parsed) ? parsed : flags['min-amount'];
+    }
+    if (flags['max-amount'] !== undefined) {
+      const parsed = Number(flags['max-amount']);
+      args.max_amount = !isNaN(parsed) ? parsed : flags['max-amount'];
+    }
+    if (flags.type) args.transaction_type = String(flags.type);
 
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+        operation: 'ledger-list',
+        arguments: args,
+      }, {
         'Authorization': `Bearer ${token}`
       }, options.timeoutMs);
 
@@ -1645,24 +1661,28 @@ async function main() {
         options,
       });
 
+      const result = (data && typeof data.result === 'object' && data.result !== null) ? data.result : data;
+
       if (options.json) {
         console.log(safeJson({
           ok: true,
-          ...data,
+          ...(data?.operation ? { operation: data.operation } : {}),
+          ...result,
+          result,
         }));
         process.exit(0);
       }
 
-      const transactions = Array.isArray(data.transactions)
-        ? data.transactions
-        : (Array.isArray(data.result) ? data.result : []);
+      const transactions = Array.isArray(result.transactions)
+        ? result.transactions
+        : (Array.isArray(result) ? result : []);
 
       if (transactions.length === 0) {
         console.log('No ledger transactions found.');
         process.exit(0);
       }
 
-      const totalInfo = data.total !== undefined ? ` (total: ${data.total})` : '';
+      const totalInfo = result.total !== undefined ? ` (total: ${result.total})` : '';
       console.log(`XMemo Ledger Transactions (${transactions.length}${totalInfo}):`);
       transactions.forEach((tx, idx) => {
         const date = tx.transaction_date || tx.date || tx.created_at || '(unknown date)';
@@ -1682,18 +1702,19 @@ async function main() {
   }
 
   if (command === 'ledger-summary') {
-    const queryParams = [];
-    if (flags.months !== undefined) queryParams.push(`months=${encodeURIComponent(flags.months)}`);
-    if (flags.currency) queryParams.push(`currency=${encodeURIComponent(flags.currency)}`);
-    if (flags.type) queryParams.push(`transaction_type=${encodeURIComponent(flags.type)}`);
-
-    let endpoint = '/v1/me/ledger/monthly-summary';
-    if (queryParams.length > 0) {
-      endpoint += `?${queryParams.join('&')}`;
+    const args = {};
+    if (flags.months !== undefined) {
+      const parsed = Number(flags.months);
+      args.months = Number.isInteger(parsed) ? parsed : flags.months;
     }
+    if (flags.currency) args.currency = String(flags.currency);
+    if (flags.type) args.transaction_type = String(flags.type);
 
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+        operation: 'ledger-summary',
+        arguments: args,
+      }, {
         'Authorization': `Bearer ${token}`
       }, options.timeoutMs);
 
@@ -1703,16 +1724,20 @@ async function main() {
         options,
       });
 
+      const result = (data && typeof data.result === 'object' && data.result !== null) ? data.result : data;
+
       if (options.json) {
         console.log(safeJson({
           ok: true,
-          ...data,
+          ...(data?.operation ? { operation: data.operation } : {}),
+          ...result,
+          result,
         }));
         process.exit(0);
       }
 
-      const summaryList = Array.isArray(data.summary) ? data.summary : [];
-      if (summaryList.length === 0 && data.total === undefined && data.count === undefined) {
+      const summaryList = Array.isArray(result.summary) ? result.summary : [];
+      if (summaryList.length === 0 && result.total === undefined && result.count === undefined) {
         console.log('No ledger monthly summary available.');
         process.exit(0);
       }
@@ -1736,10 +1761,10 @@ async function main() {
         process.exit(0);
       }
 
-      const month = data.month || '(unknown month)';
-      const curr = data.currency || 'UNKNOWN';
-      const total = data.total !== undefined ? data.total : 0;
-      const count = data.count !== undefined ? data.count : 0;
+      const month = result.month || '(unknown month)';
+      const curr = result.currency || 'UNKNOWN';
+      const total = result.total !== undefined ? result.total : 0;
+      const count = result.count !== undefined ? result.count : 0;
       console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${total} ${curr} across ${count} transaction${count === 1 ? '' : 's'}.`);
       process.exit(0);
     } catch (e) {
@@ -1751,7 +1776,10 @@ async function main() {
 
   if (command === 'overview') {
     try {
-      const res = await makeHttpRequest(options.baseUrl, '/v1/me/overview', 'GET', null, {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+        operation: 'overview',
+        arguments: {},
+      }, {
         'Authorization': `Bearer ${token}`
       }, options.timeoutMs);
 
@@ -1761,19 +1789,23 @@ async function main() {
         options,
       });
 
+      const result = (data && typeof data.result === 'object' && data.result !== null) ? data.result : data;
+
       if (options.json) {
         console.log(safeJson({
           ok: true,
-          ...data,
+          ...(data?.operation ? { operation: data.operation } : {}),
+          ...result,
+          result,
         }));
         process.exit(0);
       }
 
       console.log('XMemo Account Overview:');
-      console.log(`- Memories: ${data.memories_total ?? 0} total (${data.memories_active ?? 0} active, ${data.memories_archived ?? 0} archived, ${data.memories_forgotten ?? 0} forgotten)`);
-      console.log(`- Active Agents: ${data.agents_active ?? 0}`);
-      console.log(`- Storage: ${data.storage_mb ?? 0} MB`);
-      console.log(`- Tokens (30d): ${data.tokens_30d ?? 0}`);
+      console.log(`- Memories: ${result.memories_total ?? 0} total (${result.memories_active ?? 0} active, ${result.memories_archived ?? 0} archived, ${result.memories_forgotten ?? 0} forgotten)`);
+      console.log(`- Active Agents: ${result.agents_active ?? 0}`);
+      console.log(`- Storage: ${result.storage_mb ?? 0} MB`);
+      console.log(`- Tokens (30d): ${result.tokens_30d ?? 0}`);
       process.exit(0);
     } catch (e) {
       console.error('Get overview failed:', e.message);
@@ -1783,18 +1815,17 @@ async function main() {
   }
 
   if (command === 'activity') {
-    const queryParams = [];
+    const args = {};
     if (flags.limit !== undefined) {
-      queryParams.push(`limit=${encodeURIComponent(flags.limit)}`);
-    }
-
-    let endpoint = '/v1/me/activity';
-    if (queryParams.length > 0) {
-      endpoint += `?${queryParams.join('&')}`;
+      const parsed = Number(flags.limit);
+      args.limit = Number.isInteger(parsed) ? parsed : flags.limit;
     }
 
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+        operation: 'activity',
+        arguments: args,
+      }, {
         'Authorization': `Bearer ${token}`
       }, options.timeoutMs);
 
@@ -1804,21 +1835,25 @@ async function main() {
         options,
       });
 
+      const result = (data && typeof data.result === 'object' && data.result !== null) ? data.result : data;
+
       if (options.json) {
         console.log(safeJson({
           ok: true,
-          ...data,
+          ...(data?.operation ? { operation: data.operation } : {}),
+          ...result,
+          result,
         }));
         process.exit(0);
       }
 
-      const activityList = Array.isArray(data.activity) ? data.activity : [];
+      const activityList = Array.isArray(result.activity) ? result.activity : [];
       if (activityList.length === 0) {
         console.log('No recent activity found.');
         process.exit(0);
       }
 
-      const totalInfo = data.total !== undefined ? ` (total: ${data.total})` : '';
+      const totalInfo = result.total !== undefined ? ` (total: ${result.total})` : '';
       console.log(`XMemo Recent Activity (${activityList.length}${totalInfo}):`);
       activityList.forEach((item, idx) => {
         const ts = item.ts || '(unknown date)';

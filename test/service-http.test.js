@@ -201,7 +201,7 @@ test('CLI-09 actual npm archive runs outside repo with CLI and independent Skill
   assert.ok(!info.files.some((f) => /credentials\.json|\.env$|npm-cache-review|\.progress/.test(f.path)));
   const unpacked = path.join(directory, 'unpacked');
   await fs.mkdir(unpacked);
-  const extraction = await child('tar', ['-xf', path.join(directory, info.filename), '-C', unpacked], { cwd: directory, env });
+  const extraction = await child('tar', ['-xf', path.basename(info.filename), '-C', 'unpacked'], { cwd: directory, env });
   assert.equal(extraction.code, 0, extraction.stderr);
   const cliOnly = path.join(directory, 'cli only'), skillOnly = path.join(directory, 'skill only');
   await fs.mkdir(cliOnly);

@@ -79,10 +79,10 @@ temporary credential and removes pending confirmation data.
 | `read` | Read a specific memory by ID with minimal projection and optional character pagination |
 | `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
 | `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
-| `ledger-list` | List financial/expense transactions via `GET /v1/me/ledger/transactions` (strictly read-only) |
-| `ledger-summary` | Retrieve monthly transaction summary via `GET /v1/me/ledger/monthly-summary` (strictly read-only) |
-| `overview` | Display account-level memory count, storage, and token consumption via `GET /v1/me/overview` (strictly read-only) |
-| `activity` | Display recent personal activity and events via `GET /v1/me/activity` (strictly read-only) |
+| `ledger-list` | List financial/expense transactions via `POST /v1/skill/operations` (operation: `ledger-list`, requires `ledger:read` scope) |
+| `ledger-summary` | Retrieve monthly transaction summary via `POST /v1/skill/operations` (operation: `ledger-summary`, requires `ledger:read` scope) |
+| `overview` | Display account-level memory count, storage, and token consumption via `POST /v1/skill/operations` (operation: `overview`, requires `memory:read` scope) |
+| `activity` | Display recent personal activity and events via `POST /v1/skill/operations` (operation: `activity`, requires `memory:read` scope) |
 | `stats` | Retrieve multidimensional memory statistics and breakdown counts via `GET /v1/memories/stats` (strictly read-only) |
 | `remember` | Save a durable memory |
 | `recall` | Recall the most relevant memories |
@@ -176,10 +176,10 @@ node scripts/xmemo-skill.mjs ledger-list --category "Dining" --type expense --li
 node scripts/xmemo-skill.mjs ledger-list --month 2026-09 --json
 ```
 
-`ledger-list` queries personal financial transactions via `GET /v1/me/ledger/transactions`.
+`ledger-list` queries personal financial transactions via `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring `ledger:read` scope).
 This command is strictly read-only and possesses zero write or deletion capabilities.
-Allowed server parameters:
-- `--limit <n>`: Page limit (default 30, max 50).
+Allowed server arguments:
+- `--limit <n>`: Page limit (default 30, max 100).
 - `--offset <n>`: Pagination offset (default 0).
 - `--currency <code>`: Filter by 3-letter currency code (e.g. `CNY`, `USD`).
 - `--from <date>`: Filter transactions from start date (`date_from`).
@@ -192,7 +192,7 @@ Allowed server parameters:
 Behavior and error classification:
 - Zero matching transactions return `{ ok: true, transactions: [], total: 0 }` (or clean terminal notice) with exit code 0.
 - Missing resources report 404 `not_found`.
-- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Authentication (401) and authorization (403) errors are preserved without downgrade (403 clearly prompts for re-authorization).
 - Unexpected 400 responses default to `invalid_request`.
 - Terminal output always formats amounts with explicit currency units without loss of precision.
 
@@ -205,9 +205,9 @@ node scripts/xmemo-skill.mjs ledger-summary --months 3 --currency USD
 node scripts/xmemo-skill.mjs ledger-summary --months 12 --type expense --json
 ```
 
-`ledger-summary` aggregates monthly financial transaction figures via `GET /v1/me/ledger/monthly-summary`.
+`ledger-summary` aggregates monthly financial transaction figures via `POST /v1/skill/operations` (`operation: "ledger-summary"`, requiring `ledger:read` scope).
 This command is strictly read-only and possesses zero write or deletion capabilities.
-Allowed server parameters:
+Allowed server arguments:
 - `--months <n>`: Integer count of preceding months to aggregate (default 6, range 1..24).
 - `--currency <code>`: Filter aggregation by currency code.
 - `--type <type>`: Filter aggregation by transaction type (`transaction_type`).
@@ -215,7 +215,7 @@ Allowed server parameters:
 Behavior and error classification:
 - Empty aggregations return `{ ok: true, summary: [], months: ... }` with exit code 0.
 - Missing endpoints report 404 `not_found`.
-- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Authentication (401) and authorization (403) errors are preserved without downgrade (403 clearly prompts for re-authorization).
 - Unexpected 400 responses default to `invalid_request`.
 - Terminal output renders structured monthly periods and breakdown totals with explicit currency labels.
 
@@ -226,7 +226,7 @@ node scripts/xmemo-skill.mjs overview
 node scripts/xmemo-skill.mjs overview --json
 ```
 
-`overview` queries account-level memory and storage metrics via `GET /v1/me/overview`.
+`overview` queries account-level memory and storage metrics via `POST /v1/skill/operations` (`operation: "overview"`, requiring `memory:read` scope).
 This command is strictly read-only, takes zero parameters, and possesses zero write or deletion capabilities.
 It reports:
 - Total, active, archived, and forgotten memory counts
@@ -237,7 +237,7 @@ It reports:
 Behavior and error classification:
 - Zero memories exit cleanly with code 0.
 - Missing resources report 404 `not_found`.
-- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Authentication (401) and authorization (403) errors are preserved without downgrade (403 clearly prompts for re-authorization).
 - Unexpected 400 responses default to `invalid_request`.
 - Terminal output renders exact counts and metrics without precision loss.
 
@@ -249,15 +249,15 @@ node scripts/xmemo-skill.mjs activity --limit 10
 node scripts/xmemo-skill.mjs activity --limit 20 --json
 ```
 
-`activity` queries recent account events and activity items via `GET /v1/me/activity`.
+`activity` queries recent account events and activity items via `POST /v1/skill/operations` (`operation: "activity"`, requiring `memory:read` scope).
 This command is strictly read-only and possesses zero write or deletion capabilities.
-Allowed server parameters:
+Allowed server arguments:
 - `--limit <n>`: Count of recent activities to retrieve (default 20, positive integer up to 100).
 
 Behavior and error classification:
 - Zero activity items return `{ ok: true, activity: [], total: 0 }` (or clean terminal notice) with exit code 0.
 - Missing resources report 404 `not_found`.
-- Authentication (401) and authorization (403) errors are preserved without downgrade.
+- Authentication (401) and authorization (403) errors are preserved without downgrade (403 clearly prompts for re-authorization).
 - Unexpected 400 responses default to `invalid_request`.
 - Terminal output renders sequential timestamped records with type and summary fields.
 
