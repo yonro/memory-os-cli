@@ -422,6 +422,37 @@ test('skill script accepts wrapped recall, search, and TODO list payloads', asyn
   await testServer.stop();
 });
 
+test('skill script renders reminders array from real server todo-list payload in terminal mode', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  testServer.setResponse({
+    ok: true,
+    operation: 'todo-list',
+    result: {
+      reminders: [
+        { id: 'rem_001', content: 'Review ClawHub release checklist', status: 'open' },
+        { id: 'rem_002', content: 'Verify namespace assertion gate', status: 'done' },
+      ],
+    },
+  });
+
+  const todoListRes = await runScript(['todo-list'], { baseUrl, env });
+  assert.equal(todoListRes.code, 0);
+  assert.doesNotMatch(todoListRes.stdout, /No TODOs found\./);
+  assert.match(todoListRes.stdout, /- \[ \] Review ClawHub release checklist \(ID: rem_001\)/);
+  assert.match(todoListRes.stdout, /- \[x\] Verify namespace assertion gate \(ID: rem_002\)/);
+
+  const jsonRes = await runScript(['todo-list', '--json'], { baseUrl, env });
+  assert.equal(jsonRes.code, 0);
+  const jsonOutput = JSON.parse(jsonRes.stdout);
+  assert.equal(jsonOutput.ok, true);
+  assert.equal(jsonOutput.result.reminders.length, 2);
+
+  await testServer.stop();
+});
+
 test('skill script exposes usage and preserves non-JSON server diagnostics', async () => {
   const helpRes = await runScript(['recall', '--help']);
   assert.equal(helpRes.code, 0);

@@ -434,6 +434,7 @@ function extractList(result) {
   if (Array.isArray(result)) return result;
   if (Array.isArray(result?.results)) return result.results;
   if (Array.isArray(result?.todos)) return result.todos;
+  if (Array.isArray(result?.reminders)) return result.reminders;
   return [];
 }
 

@@ -1,5 +1,11 @@
 # XMemo Skill Change Log
 
+## [Unreleased]
+
+### Fixed
+
+- Support `reminders` array in `extractList` for `todo-list` terminal rendering when server returns `{ reminders: [...] }`.
+
 ## 1.1.18
 
 ### Added
