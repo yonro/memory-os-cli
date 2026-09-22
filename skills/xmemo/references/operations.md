@@ -11,6 +11,7 @@ bundled `xmemo` Skill. This is the primary standalone runtime for direct REST ac
 - Examples
 - Direct execution details
 - Output and terminal safety
+- Exit codes
 - Limitations
 
 ## Runtime Selection
@@ -449,6 +450,17 @@ Human-readable output removes terminal control sequences. For the exact accepted
 parameters of any command, run
 `node scripts/xmemo-skill.mjs <command> --help`; use `--version` to identify the
 runtime and `--timeout-ms <ms>` to bound each network request.
+
+## Exit Codes
+
+All CLI operations conform to normalized, deterministic exit codes across all execution modes:
+
+| Exit Code | Classification | Conditions & Semantics | Next Action |
+|:---:|:---|:---|:---|
+| `0` | Success | Operation succeeded, valid empty state results (e.g. zero transactions or memories found), `--help`, or `--version`. | Proceed with next task. |
+| `1` | User Error | Local argument/flag validation failure, mutually exclusive flags (e.g. `--content` with `--file`), missing mandatory `--confirm`, missing or unreadable input file, or HTTP 4xx client errors (400 Bad Request, 404 Not Found, 428 Precondition Required, 429 Too Many Requests). | Check parameters, correct command arguments, or check resource ID. |
+| `2` | Auth Error | Missing credentials (unauthenticated), expired or invalid token, HTTP 401 Unauthorized, HTTP 403 Forbidden / Tenant Forbidden, `auth status --verify` failure, or `doctor` auth invalid. | Run `login --allow-plaintext` or configure `XMEMO_KEY`. |
+| `3` | Server / Network Error | HTTP 5xx server errors, connection refused (`ECONNREFUSED`), host unreachable (`ENOTFOUND`), request timeout (`ETIMEDOUT`), or response size exceeding safety limit (> 8 MiB). | Retry with exponential backoff or check network reachability via `doctor --anonymous`. |
 
 ## Limitations
 

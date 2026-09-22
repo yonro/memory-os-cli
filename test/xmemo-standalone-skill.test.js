@@ -12,6 +12,10 @@ import {
   extractRequestId,
   COMMAND_USAGE_REGISTRY,
   buildTopLevelHelp,
+  EXIT_CODE,
+  exitCodeForHttpStatus,
+  exitCodeForErrorCode,
+  exitCodeForError,
 } from '../skills/xmemo/scripts/xmemo-skill.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -1350,7 +1354,7 @@ test('skill script read preserves 401 and 403 errors without downgrade to 404', 
       baseUrl,
       env: { XMEMO_KEY: 'expired-token' }
     });
-    assert.equal(authRes.code, 1);
+    assert.equal(authRes.code, 2);
     const authPayload = JSON.parse(authRes.stdout);
     assert.equal(authPayload.ok, false);
     assert.equal(authPayload.error.code, 'unauthorized');
@@ -1362,7 +1366,7 @@ test('skill script read preserves 401 and 403 errors without downgrade to 404', 
       baseUrl,
       env: { XMEMO_KEY: 'scoped-token' }
     });
-    assert.equal(forbiddenRes.code, 1);
+    assert.equal(forbiddenRes.code, 2);
     const forbiddenPayload = JSON.parse(forbiddenRes.stdout);
     assert.equal(forbiddenPayload.ok, false);
     assert.equal(forbiddenPayload.error.code, 'forbidden');
@@ -1596,7 +1600,7 @@ test('skill script update preserves 401 and 403 errors without downgrade', async
     const res401 = await runScript([
       'update', '--id', 'mem_1', '--content', 'new content', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-token' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -1606,7 +1610,7 @@ test('skill script update preserves 401 and 403 errors without downgrade', async
     const res403 = await runScript([
       'update', '--id', 'mem_1', '--content', 'new content', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'readonly-token' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -1729,7 +1733,7 @@ test('skill script forget preserves 401 and 403 errors without downgrade', async
     const res401 = await runScript([
       'forget', '--id', 'mem_1', '--confirm', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-token' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -1739,7 +1743,7 @@ test('skill script forget preserves 401 and 403 errors without downgrade', async
     const res403 = await runScript([
       'forget', '--id', 'mem_1', '--confirm', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'readonly-token' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -1830,7 +1834,7 @@ test('skill script forget preserves server 403 forbidden error without downgrade
       'forget', '--id', 'tx_ledger_789', '--confirm', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'test-unauthorized-token' } });
 
-    assert.equal(res.code, 1);
+    assert.equal(res.code, 2);
     const payload = JSON.parse(res.stdout);
     assert.equal(payload.ok, false);
     assert.equal(payload.error.code, 'forbidden');
@@ -1841,7 +1845,7 @@ test('skill script forget preserves server 403 forbidden error without downgrade
     const termRes = await runScript([
       'forget', '--id', 'tx_ledger_789', '--confirm'
     ], { baseUrl, env: { XMEMO_KEY: 'test-unauthorized-token' } });
-    assert.equal(termRes.code, 1);
+    assert.equal(termRes.code, 2);
     assert.match(termRes.stderr, /delete scope required/);
   } finally {
     await testServer.stop();
@@ -1858,7 +1862,7 @@ test('skill script forget preserves 403 cross-tenant / unauthorized tenant scope
       'forget', '--id', 'foreign_tx_001', '--confirm', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'tenant-a-key' } });
 
-    assert.equal(res.code, 1);
+    assert.equal(res.code, 2);
     const payload = JSON.parse(res.stdout);
     assert.equal(payload.ok, false);
     assert.equal(payload.error.code, 'tenant_forbidden');
@@ -2130,7 +2134,7 @@ test('skill script ledger-list preserves 401 and 403 without downgrade', async (
     const res401 = await runScript([
       'ledger-list', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -2140,7 +2144,7 @@ test('skill script ledger-list preserves 401 and 403 without downgrade', async (
     const res403 = await runScript([
       'ledger-list', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -2342,7 +2346,7 @@ test('skill script ledger-summary preserves 401 and 403 without downgrade', asyn
     const res401 = await runScript([
       'ledger-summary', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -2352,7 +2356,7 @@ test('skill script ledger-summary preserves 401 and 403 without downgrade', asyn
     const res403 = await runScript([
       'ledger-summary', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -2557,7 +2561,7 @@ test('skill script overview preserves 401 and 403 without downgrade', async () =
     const res401 = await runScript([
       'overview', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -2567,7 +2571,7 @@ test('skill script overview preserves 401 and 403 without downgrade', async () =
     const res403 = await runScript([
       'overview', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -2733,7 +2737,7 @@ test('skill script activity preserves 401 and 403 without downgrade', async () =
     const res401 = await runScript([
       'activity', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -2743,7 +2747,7 @@ test('skill script activity preserves 401 and 403 without downgrade', async () =
     const res403 = await runScript([
       'activity', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -2995,7 +2999,7 @@ test('skill script stats preserves 401 and 403 without downgrade', async () => {
     const res401 = await runScript([
       'stats', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res401.code, 1);
+    assert.equal(res401.code, 2);
     const payload401 = JSON.parse(res401.stdout);
     assert.equal(payload401.ok, false);
     assert.equal(payload401.error.code, 'unauthorized');
@@ -3005,7 +3009,7 @@ test('skill script stats preserves 401 and 403 without downgrade', async () => {
     const res403 = await runScript([
       'stats', '--json'
     ], { baseUrl, env: { XMEMO_KEY: 'bad-key' } });
-    assert.equal(res403.code, 1);
+    assert.equal(res403.code, 2);
     const payload403 = JSON.parse(res403.stdout);
     assert.equal(payload403.ok, false);
     assert.equal(payload403.error.code, 'forbidden');
@@ -3104,7 +3108,7 @@ test('S1-1: terminal error output includes request_id when present in error resp
       baseUrl,
       env: { XMEMO_KEY: 'secret-token-key' }
     });
-    assert.equal(jsonRes.code, 1);
+    assert.equal(jsonRes.code, 2);
     const jsonPayload = JSON.parse(jsonRes.stdout);
     assert.equal(jsonPayload.ok, false);
     assert.equal(jsonPayload.error.request_id, 'req_json_789');
@@ -3507,6 +3511,311 @@ test('S2-5: remember validates non-empty content for stdin, file, and missing fl
   }
 });
 
+test('S3-1: exit code 0 on success across commands', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
 
+  try {
+    // 1. remember success -> 0
+    testServer.setResponse({ ok: true, result: { id: 'mem_success_0' } }, 200);
+    const remRes = await runScript(['remember', '--content', 'success content', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(remRes.code, 0);
 
+    // 2. read success -> 0
+    testServer.setResponse({ memory: { id: 'mem_success_0', content: 'test' } }, 200);
+    const readRes = await runScript(['read', '--id', 'mem_success_0', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(readRes.code, 0);
 
+    // 3. doctor --anonymous -> 0
+    testServer.setResponse({ status: 'ok', result: { service: 'healthy' } }, 200);
+    const docRes = await runScript(['doctor', '--anonymous', '--json'], { baseUrl });
+    assert.equal(docRes.code, 0);
+
+    // 4. auth status without token (logged out) -> 0
+    const emptyHome = path.join(os.tmpdir(), `xmemo-empty-home-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await fs.mkdir(emptyHome, { recursive: true });
+    try {
+      const authStatusRes = await runScript(['auth', 'status', '--json'], {
+        baseUrl,
+        homeDir: emptyHome,
+        env: { XMEMO_KEY: '' }
+      });
+      assert.equal(authStatusRes.code, 0);
+      const authStatusPayload = JSON.parse(authStatusRes.stdout);
+      assert.equal(authStatusPayload.status, 'logged_out');
+    } finally {
+      await fs.rm(emptyHome, { recursive: true, force: true }).catch(() => {});
+    }
+
+    // 5. --help and --version -> 0
+    const helpRes = await runScript(['--help']);
+    assert.equal(helpRes.code, 0);
+    const verRes = await runScript(['--version']);
+    assert.equal(verRes.code, 0);
+    const subHelpRes = await runScript(['remember', '--help']);
+    assert.equal(subHelpRes.code, 0);
+
+    // 6. ledger-list empty results -> 0
+    testServer.setResponse({ ok: true, result: { transactions: [], total: 0 } }, 200);
+    const ledgerRes = await runScript(['ledger-list', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(ledgerRes.code, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('S3-2: exit code 1 on user error across validation, conflicts, missing flags/files, and 4xx', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 1. Unknown command / unknown flag
+    const unknownCmd = await runScript(['not-a-command'], { baseUrl });
+    assert.equal(unknownCmd.code, 1);
+    const unknownFlag = await runScript(['remember', '--bad-flag', 'val'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(unknownFlag.code, 1);
+
+    // 2. Mutual exclusion conflict (--content and --file)
+    const mutexRes = await runScript(['remember', '--content', 'hello', '--file', 'somefile.txt'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(mutexRes.code, 1);
+
+    // 3. Missing --confirm on forget
+    const noConfirmRes = await runScript(['forget', '--id', 'mem_123'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(noConfirmRes.code, 1);
+
+    // 4. Missing / unreadable file
+    const missingFileRes = await runScript(['remember', '--file', 'nonexistent_file_path_xyz_123.txt'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(missingFileRes.code, 1);
+
+    // 5. 400 Bad Request
+    testServer.setResponse({ error: { code: 'bad_request', message: 'Malformed parameter' } }, 400);
+    const res400 = await runScript(['read', '--id', 'invalid_id', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(res400.code, 1);
+    const payload400 = JSON.parse(res400.stdout);
+    assert.equal(payload400.ok, false);
+
+    // 6. 404 Not Found
+    testServer.setResponse({ error: { code: 'not_found', message: 'Item not found' } }, 404);
+    const res404 = await runScript(['read', '--id', 'mem_not_found', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(res404.code, 1);
+
+    // 7. 428 Precondition Required / 429 Too Many Requests
+    testServer.setResponse({ error: { code: 'rate_limit_exceeded', message: 'Rate limit exceeded' } }, 429);
+    const res429 = await runScript(['read', '--id', 'mem_rate_limit', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(res429.code, 1);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('S3-3: exit code 2 on authentication and authorization errors (401, 403, missing credentials, auth verify failure)', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 1. Missing credentials / unauthenticated
+    const emptyHome = path.join(os.tmpdir(), `xmemo-no-auth-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await fs.mkdir(emptyHome, { recursive: true });
+    try {
+      const noAuthRes = await runScript(['remember', '--content', 'secret data'], {
+        baseUrl,
+        homeDir: emptyHome,
+        env: { XMEMO_KEY: '' }
+      });
+      assert.equal(noAuthRes.code, 2);
+      assert.match(noAuthRes.stderr, /No XMemo credential found/);
+    } finally {
+      await fs.rm(emptyHome, { recursive: true, force: true }).catch(() => {});
+    }
+
+    // 2. 401 Unauthorized
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Invalid or expired token' } }, 401);
+    const res401 = await runScript(['remember', '--content', 'test', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'expired-token' }
+    });
+    assert.equal(res401.code, 2);
+
+    // 3. 403 Forbidden
+    testServer.setResponse({ error: { code: 'forbidden', message: 'Insufficient scope' } }, 403);
+    const res403 = await runScript(['remember', '--content', 'test', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'limited-token' }
+    });
+    assert.equal(res403.code, 2);
+
+    // 4. auth status --verify failure on 401/403
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token expired' } }, 401);
+    const verifyFailRes = await runScript(['auth', 'status', '--verify', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'expired-token' }
+    });
+    assert.equal(verifyFailRes.code, 2);
+
+    // 5. doctor auth invalid
+    testServer.setResponse({ ok: true, result: { service: 'healthy', auth_valid: false } }, 200);
+    const docInvalidRes = await runScript(['doctor', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'invalid-token' }
+    });
+    assert.equal(docInvalidRes.code, 2);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('S3-4: exit code 3 on server/network errors (5xx, ECONNREFUSED, timeout, response > 8 MiB)', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 1. 500 Internal Server Error
+    testServer.setResponse({ error: { code: 'internal_error', message: 'DB connection failure' } }, 500);
+    const res500 = await runScript(['remember', '--content', 'test', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(res500.code, 3);
+
+    // 2. 502 Bad Gateway / Raw non-JSON response
+    testServer.setRawResponse('<html>502 Bad Gateway</html>', 502, 'text/html');
+    const res502 = await runScript(['remember', '--content', 'test', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(res502.code, 3);
+
+    // 3. 503 Service Unavailable
+    testServer.setResponse({ error: { code: 'service_unavailable', message: 'Server under maintenance' } }, 503);
+    const res503 = await runScript(['remember', '--content', 'test', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(res503.code, 3);
+
+    // 4. ECONNREFUSED / unreachable host
+    const connRefusedRes = await runScript(['remember', '--content', 'test'], {
+      baseUrl: 'http://127.0.0.1:49991',
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(connRefusedRes.code, 3);
+
+    // 5. Request timeout
+    testServer.setResponseDelay(600);
+    const timeoutRes = await runScript(['remember', '--content', 'test', '--timeout-ms', '100'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(timeoutRes.code, 3);
+    testServer.setResponseDelay(0);
+
+    // 6. Safety size limit exceeded > 8 MiB
+    testServer.setRawResponse('A'.repeat(8.5 * 1024 * 1024), 200, 'application/json');
+    const oversizeRes = await runScript(['read', '--id', 'oversized_mem', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-key' }
+    });
+    assert.equal(oversizeRes.code, 3);
+    assert.match(oversizeRes.stderr, /safety limit/i);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('S3-5: unit tests asserting exported EXIT_CODE and exit code classification helpers', () => {
+  // 1. EXIT_CODE mapping constants
+  assert.equal(EXIT_CODE.SUCCESS, 0);
+  assert.equal(EXIT_CODE.USER_ERROR, 1);
+  assert.equal(EXIT_CODE.AUTH_ERROR, 2);
+  assert.equal(EXIT_CODE.SERVER_ERROR, 3);
+  assert.ok(Object.isFrozen(EXIT_CODE));
+
+  // 2. exitCodeForHttpStatus
+  assert.equal(exitCodeForHttpStatus(200), EXIT_CODE.SUCCESS);
+  assert.equal(exitCodeForHttpStatus(201), EXIT_CODE.SUCCESS);
+  assert.equal(exitCodeForHttpStatus(204), EXIT_CODE.SUCCESS);
+  assert.equal(exitCodeForHttpStatus(400), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(404), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(405), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(409), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(422), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(428), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(429), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(401), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForHttpStatus(403), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForHttpStatus(500), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForHttpStatus(502), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForHttpStatus(503), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForHttpStatus(504), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForHttpStatus(undefined), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(null), EXIT_CODE.USER_ERROR);
+
+  // 3. exitCodeForErrorCode
+  assert.equal(exitCodeForErrorCode('unauthorized'), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForErrorCode('forbidden'), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForErrorCode('tenant_forbidden'), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForErrorCode('missing_credentials'), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForErrorCode('timeout'), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForErrorCode('ECONNREFUSED'), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForErrorCode('ENOTFOUND'), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForErrorCode('ETIMEDOUT'), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForErrorCode('internal_error'), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForErrorCode('invalid_argument'), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForErrorCode('not_found'), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForErrorCode('bad_request'), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForErrorCode(undefined), null);
+  assert.equal(exitCodeForErrorCode(null), null);
+
+  // 4. exitCodeForError
+  const err401 = new Error('Unauthorized access');
+  err401.statusCode = 401;
+  assert.equal(exitCodeForError(err401), EXIT_CODE.AUTH_ERROR);
+
+  const err403 = new Error('Forbidden scope');
+  err403.statusCode = 403;
+  assert.equal(exitCodeForError(err403), EXIT_CODE.AUTH_ERROR);
+
+  const err500 = new Error('Internal crash');
+  err500.statusCode = 500;
+  assert.equal(exitCodeForError(err500), EXIT_CODE.SERVER_ERROR);
+
+  const errNetwork = new Error('connect ECONNREFUSED 127.0.0.1:49999');
+  errNetwork.code = 'ECONNREFUSED';
+  assert.equal(exitCodeForError(errNetwork), EXIT_CODE.SERVER_ERROR);
+
+  const errTimeout = new Error('Request timed out after 30000ms');
+  assert.equal(exitCodeForError(errTimeout), EXIT_CODE.SERVER_ERROR);
+
+  const errGeneric = new Error('User input invalid');
+  assert.equal(exitCodeForError(errGeneric), EXIT_CODE.USER_ERROR);
+});

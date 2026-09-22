@@ -28,6 +28,122 @@ const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
   ttl_seconds: 1_209_600,
   max_lifetime_seconds: 2_592_000,
 });
+const EXIT_CODE = Object.freeze({
+  SUCCESS: 0,
+  USER_ERROR: 1,
+  AUTH_ERROR: 2,
+  SERVER_ERROR: 3,
+});
+
+function exitCodeForHttpStatus(statusCode) {
+  const code = Number(statusCode);
+  if (code >= 200 && code < 300) {
+    return EXIT_CODE.SUCCESS;
+  }
+  if (code === 401 || code === 403) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  if (code >= 500) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  return EXIT_CODE.USER_ERROR;
+}
+
+function exitCodeForErrorCode(code) {
+  if (!code || typeof code !== 'string') return null;
+  const normalized = code.toLowerCase();
+  if (
+    normalized === 'unauthorized' ||
+    normalized === 'forbidden' ||
+    normalized === 'tenant_forbidden' ||
+    normalized === 'auth_error' ||
+    normalized === 'invalid_token' ||
+    normalized === 'token_expired' ||
+    normalized === 'authentication_required' ||
+    normalized === 'missing_credentials'
+  ) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  if (
+    normalized === 'server_error' ||
+    normalized === 'internal_error' ||
+    normalized === 'timeout' ||
+    normalized === 'bad_gateway' ||
+    normalized === 'service_unavailable' ||
+    normalized === 'econnrefused' ||
+    normalized === 'enotfound' ||
+    normalized === 'ehostunreach' ||
+    normalized === 'econnreset' ||
+    normalized === 'etimedout' ||
+    normalized === 'esockettimedout'
+  ) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  if (
+    normalized === 'bad_request' ||
+    normalized === 'invalid_argument' ||
+    normalized === 'not_found' ||
+    normalized === 'rate_limited' ||
+    normalized === 'rate_limit_exceeded' ||
+    normalized === 'precondition_required'
+  ) {
+    return EXIT_CODE.USER_ERROR;
+  }
+  if (normalized.startsWith('http 401') || normalized.startsWith('http 403')) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  if (normalized.startsWith('http 5')) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  if (normalized.startsWith('http 4')) {
+    return EXIT_CODE.USER_ERROR;
+  }
+  return null;
+}
+
+function exitCodeForError(err) {
+  if (!err) return EXIT_CODE.USER_ERROR;
+  if (typeof err.exitCode === 'number') {
+    return err.exitCode;
+  }
+  const status = Number(err.statusCode || err.status || err.httpStatus);
+  if (Number.isInteger(status) && status > 0) {
+    return exitCodeForHttpStatus(status);
+  }
+  const code = String(err.code || '').toUpperCase();
+  if (['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ECONNRESET', 'ETIMEDOUT', 'ESOCKETTIMEDOUT', 'EAI_AGAIN', 'EPIPE'].includes(code)) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  const msg = String(err.message || err).toLowerCase();
+  if (
+    msg.includes('timed out') ||
+    msg.includes('timeout') ||
+    msg.includes('safety limit') ||
+    msg.includes('socket hang up') ||
+    msg.includes('interrupted') ||
+    msg.includes('econnrefused') ||
+    msg.includes('enotfound') ||
+    msg.includes('ehostunreach') ||
+    msg.includes('server response exceeded') ||
+    msg.includes('server returned a non-json response') ||
+    msg.includes('server returned an empty response')
+  ) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  if (
+    msg.includes('401') ||
+    msg.includes('unauthorized') ||
+    msg.includes('403') ||
+    msg.includes('forbidden') ||
+    msg.includes('invalid or expired token') ||
+    msg.includes('no xmemo credential found') ||
+    msg.includes('authentication required')
+  ) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  return EXIT_CODE.USER_ERROR;
+}
+
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'read', 'update', 'forget',
@@ -584,14 +700,18 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
 function parseJsonResponse(res, context) {
   const body = typeof res.body === 'string' ? res.body.trim() : '';
   if (!body) {
-    throw new Error(`${context}: server returned an empty response (HTTP ${res.statusCode}).`);
+    const error = new Error(`${context}: server returned an empty response (HTTP ${res.statusCode}).`);
+    error.statusCode = res.statusCode;
+    throw error;
   }
   try {
     return JSON.parse(body);
   } catch {
     const safeBody = sanitizeTerminalText(body);
     const preview = safeBody.length > 2_000 ? `${safeBody.slice(0, 2_000)}…` : safeBody;
-    throw new Error(`${context}: server returned a non-JSON response (HTTP ${res.statusCode}): ${preview}`);
+    const error = new Error(`${context}: server returned a non-JSON response (HTTP ${res.statusCode}): ${preview}`);
+    error.statusCode = res.statusCode;
+    throw error;
   }
 }
 
@@ -675,7 +795,7 @@ function formatRemainingValidity(seconds) {
   return `${secs}s`;
 }
 
-function outputRestError(code, message, options, dataOrRequestId) {
+function outputRestError(code, message, options, dataOrRequestId, explicitExitCode = null) {
   const reqId = typeof dataOrRequestId === 'string'
     ? sanitizeTerminalText(dataOrRequestId.trim())
     : extractRequestId(dataOrRequestId);
@@ -689,7 +809,10 @@ function outputRestError(code, message, options, dataOrRequestId) {
     const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
     console.error(`Error: ${message} (Code: ${code})${reqSuffix}`);
   }
-  process.exit(1);
+  const resolvedExitCode = explicitExitCode !== null
+    ? explicitExitCode
+    : (exitCodeForErrorCode(code) ?? EXIT_CODE.USER_ERROR);
+  process.exit(resolvedExitCode);
 }
 
 function handleRestError(res, { notFoundMessage, context = 'REST request', options }) {
@@ -704,7 +827,7 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     if (res.statusCode === 403 && !/re-?authorization/i.test(msg)) {
       msg = `${msg.replace(/\.*$/, '')}. Re-authorization is required to explicitly grant the required scope.`;
     }
-    outputRestError(code, msg, options, errData);
+    outputRestError(code, msg, options, errData, EXIT_CODE.AUTH_ERROR);
   }
 
   if (res.statusCode === 404) {
@@ -712,14 +835,15 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     try { errData = parseJsonResponse(res, context); } catch {}
     const code = 'not_found';
     const msg = apiErrorMessage(errData, notFoundMessage || 'Resource not found.');
-    outputRestError(code, msg, options, errData);
+    outputRestError(code, msg, options, errData, EXIT_CODE.USER_ERROR);
   }
 
   const data = parseJsonResponse(res, context);
   if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
     const code = data?.error?.code || (res.statusCode === 400 ? 'invalid_request' : `HTTP ${res.statusCode}`);
     const msg = apiErrorMessage(data);
-    outputRestError(code, msg, options, data);
+    const exitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+    outputRestError(code, msg, options, data, exitCode);
   }
   return data;
 }
@@ -1093,12 +1217,13 @@ async function requestTemporaryMemoryOperation(command, options, flags, credenti
       const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
       console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
     }
-    process.exit(1);
+    const exitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+    process.exit(exitCode);
   }
 
   if (options.json) {
     console.log(safeJson(data));
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (command === 'remember') {
@@ -1114,7 +1239,9 @@ async function claimStatus(baseUrl, credential, options) {
   }, options.timeoutMs);
   const data = parseJsonResponse(res, 'Claim status request');
   if (res.statusCode < 200 || res.statusCode >= 300) {
-    throw new Error(`Claim status request failed: ${apiErrorMessage(data, safeJson(data))}`);
+    const err = new Error(`Claim status request failed: ${apiErrorMessage(data, safeJson(data))}`);
+    err.statusCode = res.statusCode;
+    throw err;
   }
   if (typeof data.formal_token === 'string' && data.formal_token) {
     const allowPlaintext = plaintextStorageAllowed(options, credential);
@@ -1193,23 +1320,23 @@ async function main() {
 
   if (options.help) {
     printUsage(command);
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (options.version) {
     console.log(SKILL_VERSION);
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (!command) {
     printUsage();
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (!['login', 'register', 'logout', 'auth'].includes(command) && !REST_COMMANDS.has(command)) {
     console.error(`Unknown command: ${command}`);
     printUsage();
-    process.exit(1);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   options.baseUrl = normalizeBaseUrl(options.baseUrl);
@@ -1233,12 +1360,12 @@ async function main() {
         const reqId = extractRequestId(data);
         const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
         console.error(`Failed to start device login: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
-        process.exit(1);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       const verificationUrl = data.verification_uri_complete || data.verification_uri;
       if (!data.device_code || !verificationUrl) {
         console.error('Failed to start device login: the service response omitted the device code or verification URL.');
-        process.exit(1);
+        process.exit(EXIT_CODE.SERVER_ERROR);
       }
       const expiresInSeconds = extractExpiresInSeconds(data);
       const expiresInMs = Math.max(1, expiresInSeconds * 1000);
@@ -1258,7 +1385,7 @@ async function main() {
       const poll = async () => {
         if (Date.now() >= loginDeadline) {
           console.error('Login failed: the device authorization code expired before approval.');
-          process.exit(1);
+          process.exit(EXIT_CODE.AUTH_ERROR);
         }
         try {
           const pollRes = await makeHttpRequest(options.baseUrl, '/v1/auth/device/token', 'POST', {
@@ -1274,26 +1401,26 @@ async function main() {
               setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
             } else {
               console.error(`Login failed: ${sanitizeTerminalText(pollData.error_description || pollData.error)}`);
-              process.exit(1);
+              process.exit(EXIT_CODE.AUTH_ERROR);
             }
           } else if (pollData.access_token) {
             try {
               await saveToken(pollData.access_token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
               console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}`);
               console.log('Token value was not printed. Project files were not modified.');
-              process.exit(0);
+              process.exit(EXIT_CODE.SUCCESS);
             } catch (err) {
               console.error('Failed to save credentials file:', err.message);
-              process.exit(1);
+              process.exit(EXIT_CODE.USER_ERROR);
             }
           } else {
             console.error('Login failed: the token endpoint returned neither an access token nor a recognized pending status.');
-            process.exit(1);
+            process.exit(EXIT_CODE.SERVER_ERROR);
           }
         } catch (e) {
           if (Date.now() >= loginDeadline) {
             console.error('Login failed: the device authorization window expired after repeated polling errors.');
-            process.exit(1);
+            process.exit(EXIT_CODE.AUTH_ERROR);
           }
           console.error('Login polling error:', e.message);
           setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
@@ -1302,7 +1429,7 @@ async function main() {
       setTimeout(poll, Math.min(pollInterval, expiresInMs));
     } catch (e) {
       console.error('Login error:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1312,17 +1439,17 @@ async function main() {
     const reason = flags.reason;
     if (!['unattended', 'declined'].includes(reason)) {
       console.error(`Temporary registration is a conditional fallback. Use "${SCRIPT_COMMAND} register --reason unattended --allow-plaintext" when no human can log in, or "--reason declined --allow-plaintext" after the human explicitly declines formal registration.`);
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
     try {
       requirePlaintextStorageConsent(options, 'Temporary registration');
     } catch (e) {
       console.error(`Temporary registration refused: ${e.message}`);
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
     if (await getStoredToken()) {
       console.error(`A credential is already configured. Formal login is the recommended path; use "${SCRIPT_COMMAND} login" to refresh it instead of creating temporary access.`);
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
     try {
       const limits = await fetchTemporaryLimits(options.baseUrl, options.timeoutMs);
@@ -1338,7 +1465,9 @@ async function main() {
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Temporary registration');
       if (res.statusCode < 200 || res.statusCode >= 300 || !data.temporary_token) {
-        throw new Error(apiErrorMessage(data, safeJson(data)));
+        const err = new Error(apiErrorMessage(data, safeJson(data)));
+        err.statusCode = res.statusCode;
+        throw err;
       }
       await saveToken(data.temporary_token, {
         credential_type: 'temporary',
@@ -1351,10 +1480,10 @@ async function main() {
       } else {
         console.log(`✅ Temporary XMemo memory enabled for this installation.\nThis is a limited sandbox, not a formal account.\nTemporary limits: up to ${limits.max_items} items; expires after ${formatDuration(limits.ttl_seconds)} without successful memory activity; maximum ${formatDuration(limits.max_lifetime_seconds)} from registration.\nComplete formal registration (recommended): ${sanitizeTerminalText(data.bind_url)}\nDo not share this bind URL publicly. After the human claim, run "${SCRIPT_COMMAND} auth claim-confirm" to accept the formal credential.`);
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Temporary registration failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
   }
 
@@ -1364,7 +1493,7 @@ async function main() {
     const token = credential?.token;
     if (!token) {
       console.log('No active login found.');
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     }
 
     if (credential.storage === 'environment' && !options.revokeEnvironmentToken) {
@@ -1380,7 +1509,7 @@ async function main() {
         console.log('XMEMO_KEY is externally managed. No token was revoked and no local credential file was changed.');
         console.log('Unset XMEMO_KEY in the launching environment to log out, or pass --revoke-environment-token to explicitly revoke that token.');
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     }
 
     let remoteRevoked = false;
@@ -1423,7 +1552,7 @@ async function main() {
     } else {
       console.log(`Local credential file removed. Remote revocation could not be confirmed${revokeError ? ` (${revokeError})` : ''}.`);
     }
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   // 3. AUTH (status / add)
@@ -1437,7 +1566,7 @@ async function main() {
         } else {
           console.log('Status: Logged out.');
         }
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
       
       const credentialSource = credential?.storage === 'environment'
@@ -1464,11 +1593,12 @@ async function main() {
             } else {
               console.error(`Status: Invalid or expired token.${data ? ` ${apiErrorMessage(data, '')}` : ''}`);
             }
-            process.exit(1);
+            const exitCode = res.statusCode >= 500 ? EXIT_CODE.SERVER_ERROR : EXIT_CODE.AUTH_ERROR;
+            process.exit(exitCode);
           }
         } catch (e) {
           console.error('Verification error:', e.message);
-          process.exit(1);
+          process.exit(exitCodeForError(e));
         }
       } else {
         if (options.json) {
@@ -1478,7 +1608,7 @@ async function main() {
           console.log(`Status: ${kind}\nCredential Source: ${credentialSource}`);
         }
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     }
     
     if (subcommand === 'add') {
@@ -1487,25 +1617,25 @@ async function main() {
           requirePlaintextStorageConsent(options, 'auth add');
         } catch (e) {
           console.error(`Credential storage refused: ${e.message}`);
-          process.exit(1);
+          process.exit(EXIT_CODE.USER_ERROR);
         }
         const token = await readStdin();
         if (!token) {
           console.error('Error: Stdin did not provide a token.');
-          process.exit(1);
+          process.exit(EXIT_CODE.USER_ERROR);
         }
         try {
           await saveToken(token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
           console.log(`✅ Credential stored in the explicitly approved user credential file: ${credentialsPath}`);
           console.log('Token value was not printed. Project files were not modified.');
-          process.exit(0);
+          process.exit(EXIT_CODE.SUCCESS);
         } catch (err) {
           console.error('Failed to save credentials file:', err.message);
-          process.exit(1);
+          process.exit(EXIT_CODE.USER_ERROR);
         }
       } else {
         console.error(`Error: Run "${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext" to supply and explicitly store a token.`);
-        process.exit(1);
+        process.exit(EXIT_CODE.USER_ERROR);
       }
     }
 
@@ -1513,7 +1643,7 @@ async function main() {
       const credential = await getStoredCredential();
       if (!credential?.token || credential.credential_type !== 'temporary') {
         console.error('Error: Claim commands require a locally stored temporary credential from "register".');
-        process.exit(1);
+        process.exit(EXIT_CODE.USER_ERROR);
       }
       try {
         if (subcommand === 'claim-deny') {
@@ -1522,7 +1652,9 @@ async function main() {
           }, options.timeoutMs);
           const denyData = parseJsonResponse(denyRes, 'Claim denial');
           if (denyRes.statusCode < 200 || denyRes.statusCode >= 300) {
-            throw new Error(apiErrorMessage(denyData, safeJson(denyData)));
+            const err = new Error(apiErrorMessage(denyData, safeJson(denyData)));
+            err.statusCode = denyRes.statusCode;
+            throw err;
           }
           const allowPlaintext = plaintextStorageAllowed(options, credential);
           await saveToken(credential.token, {
@@ -1536,21 +1668,23 @@ async function main() {
           } else {
             console.log('Pending account binding declined. The credential remains limited to isolated temporary memory; formal account login is still recommended.');
           }
-          process.exit(0);
+          process.exit(EXIT_CODE.SUCCESS);
         }
         const status = await claimStatus(options.baseUrl, credential, options);
         if (subcommand === 'claim-confirm' && !status.formal_token) {
           const confirmation_token = status.confirmation_token || credential.pending_confirmation_token;
           if (!confirmation_token) {
             console.error(`No pending human claim confirmation is available. Current status: ${sanitizeTerminalText(status.status || 'unknown')}. Open the stored bind URL first: ${sanitizeTerminalText(credential.bind_url || '(unavailable)')}`);
-            process.exit(1);
+            process.exit(EXIT_CODE.USER_ERROR);
           }
           const confirmRes = await makeHttpRequest(options.baseUrl, '/v1/agents/bind/confirm-current-user', 'POST', { confirmation_token }, {
             Authorization: `Bearer ${credential.token}`,
           }, options.timeoutMs);
           const confirmData = parseJsonResponse(confirmRes, 'Claim confirmation');
           if (confirmRes.statusCode < 200 || confirmRes.statusCode >= 300) {
-            throw new Error(apiErrorMessage(confirmData, safeJson(confirmData)));
+            const err = new Error(apiErrorMessage(confirmData, safeJson(confirmData)));
+            err.statusCode = confirmRes.statusCode;
+            throw err;
           }
           if (credential.pending_confirmation_token) {
             const allowPlaintext = plaintextStorageAllowed(options, credential);
@@ -1563,16 +1697,16 @@ async function main() {
           }
           await claimStatus(options.baseUrl, credential, options);
         }
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       } catch (e) {
         console.error('Claim flow failed:', e.message);
-        process.exit(1);
+        process.exit(exitCodeForError(e));
       }
     }
     
     console.error(`Unknown auth subcommand: ${subcommand || '(missing)'}`);
     printUsage('auth');
-    process.exit(1);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   // 4. REST OPERATIONS (memory, state, restart continuity, TODO, ledger, and diagnostics)
@@ -1594,7 +1728,7 @@ async function main() {
         const reqId = extractRequestId(data);
         const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
         console.error(`Doctor health check failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
-        process.exit(1);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       if (options.json) {
         console.log(safeJson(withDoctorDiagnostics(data, discovery, doctorNextAction({
@@ -1610,17 +1744,17 @@ async function main() {
           : `\nNext: ${SCRIPT_COMMAND} login --allow-plaintext`;
         console.log(`XMemo Service Status: OK\nAuthentication: ${authentication}${nextStep}`);
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Doctor health check failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
 
   if (!token) {
     console.error(`Error: No XMemo credential found. Preferred: set XMEMO_KEY. For formal account login with explicit local storage consent, run "${SCRIPT_COMMAND} login --allow-plaintext". For a limited temporary sandbox only when permitted, run "${SCRIPT_COMMAND} register --reason unattended|declined --allow-plaintext".`);
-    process.exit(1);
+    process.exit(EXIT_CODE.AUTH_ERROR);
   }
 
   if (credential?.credential_type === 'temporary') {
@@ -1629,12 +1763,12 @@ async function main() {
         await requestTemporaryMemoryOperation(command, options, flags, credential);
       } catch (e) {
         console.error('Temporary memory request failed:', e.message);
-        process.exit(1);
+        process.exit(exitCodeForError(e));
       }
       return;
     }
     console.error(`Temporary access supports only remember, recall, and search in its isolated sandbox. Complete formal registration at ${sanitizeTerminalText(credential.bind_url || 'the bind URL shown at registration')} to use ${command}.`);
-    process.exit(1);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   if (command === 'restart-snapshot' || command === 'restart-restore') {
@@ -1648,13 +1782,14 @@ async function main() {
       const succeeded = res.statusCode >= 200 && res.statusCode < 300;
       if (options.json) {
         console.log(safeJson(data));
-        process.exit(succeeded ? 0 : 1);
+        const failCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+        process.exit(succeeded ? EXIT_CODE.SUCCESS : failCode);
       }
       if (!succeeded) {
         const reqId = extractRequestId(data);
         const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
         console.error(`${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})${reqSuffix}`);
-        process.exit(1);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       if (command === 'restart-snapshot') {
         console.log(`✅ Restart snapshot saved.\nID: ${sanitizeTerminalText(extractId(data))}${data.expires_at ? `\nExpires: ${sanitizeTerminalText(data.expires_at)}` : ''}`);
@@ -1668,7 +1803,7 @@ async function main() {
       }
     } catch (e) {
       console.error(`${label} failed:`, e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1698,20 +1833,21 @@ async function main() {
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
       if (options.json) {
         console.log(safeJson(data));
-        process.exit(succeeded ? 0 : 1);
+        const failCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+        process.exit(succeeded ? EXIT_CODE.SUCCESS : failCode);
       }
       if (!succeeded) {
         const reqId = extractRequestId(data);
         const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
         console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
-        process.exit(1);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       const items = Array.isArray(data.items) ? data.items.length : 0;
       const contextText = sanitizeTerminalText(data.context_text || '');
       console.log(`XMemo Context: ${items} item${items === 1 ? '' : 's'}\n${contextText || 'No matching memories found.'}`);
     } catch (e) {
       console.error('Recall context failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1770,15 +1906,15 @@ async function main() {
           ok: true,
           ...projected,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log(`Memory: ${sanitizeTerminalText(projected.id)} | Path: ${sanitizeTerminalText(projected.path || '(unknown)')} | Version: ${sanitizeTerminalText(projected.version || '(unknown)')}${projected.truncated ? ' [truncated]' : ''}`);
       console.log(`Content: ${formatMemoryContent(projected.content, options.compact)}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Read memory failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1805,7 +1941,7 @@ async function main() {
           ? `Invalid memory ID: '${flags.id}'.`
           : 'Invalid update request.';
         const msg = apiErrorMessage(errData, fallbackMsg);
-        outputRestError(code, msg, options, errData);
+        outputRestError(code, msg, options, errData, EXIT_CODE.USER_ERROR);
       }
 
       const data = handleRestError(res, {
@@ -1829,14 +1965,14 @@ async function main() {
           updated: true,
           ...(typeof record === 'object' ? record : {}),
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log(`✅ Memory updated.\nID: ${sanitizeTerminalText(memoryId)}${flags.path ? `\nPath: ${sanitizeTerminalText(flags.path)}` : ''}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Update memory failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1849,7 +1985,7 @@ async function main() {
       } else {
         console.error(`Error: ${msg}\nTarget: ${sanitizeTerminalText(flags.id)}`);
       }
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
 
     const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/forget`;
@@ -1878,14 +2014,14 @@ async function main() {
           mode: 'soft_delete',
           forgotten: true,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log(`✅ Record forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Forget failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1946,7 +2082,7 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const transactions = Array.isArray(result.transactions)
@@ -1955,7 +2091,7 @@ async function main() {
 
       if (transactions.length === 0) {
         console.log('No ledger transactions found.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const totalInfo = result.total !== undefined ? ` (total: ${result.total})` : '';
@@ -1969,10 +2105,10 @@ async function main() {
         const desc = tx.description || tx.item || tx.note || '';
         console.log(`[${idx + 1}] ${sanitizeTerminalText(date)} | ${type.toUpperCase()} | ${amount} ${curr}${sanitizeTerminalText(cat)}${desc ? ` | ${sanitizeTerminalText(desc)}` : ''}`);
       });
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('List ledger transactions failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -2009,13 +2145,13 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const summaryList = Array.isArray(result.summary) ? result.summary : [];
       if (summaryList.length === 0 && result.total === undefined && result.count === undefined) {
         console.log('No ledger monthly summary available.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       if (summaryList.length > 0) {
@@ -2034,7 +2170,7 @@ async function main() {
           if (count) parts.push(count);
           console.log(`- ${month} (${curr}): ${parts.join(' | ')}`);
         });
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const month = result.month || '(unknown month)';
@@ -2042,10 +2178,10 @@ async function main() {
       const total = result.total !== undefined ? result.total : 0;
       const count = result.count !== undefined ? result.count : 0;
       console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${total} ${curr} across ${count} transaction${count === 1 ? '' : 's'}.`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get ledger monthly summary failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -2074,7 +2210,7 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log('XMemo Account Overview:');
@@ -2082,10 +2218,10 @@ async function main() {
       console.log(`- Active Agents: ${result.agents_active ?? 0}`);
       console.log(`- Storage: ${result.storage_mb ?? 0} MB`);
       console.log(`- Tokens (30d): ${result.tokens_30d ?? 0}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get overview failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -2120,13 +2256,13 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const activityList = Array.isArray(result.activity) ? result.activity : [];
       if (activityList.length === 0) {
         console.log('No recent activity found.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const totalInfo = result.total !== undefined ? ` (total: ${result.total})` : '';
@@ -2138,10 +2274,10 @@ async function main() {
         const ref = item.ref_id ? ` [ref: ${item.ref_id}]` : '';
         console.log(`[${idx + 1}] ${sanitizeTerminalText(ts)} | ${type.toUpperCase()} | ${sanitizeTerminalText(summary)}${ref}`);
       });
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get activity failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -2193,12 +2329,12 @@ async function main() {
           ok: true,
           ...data,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       if ((data.total_count ?? 0) === 0 && (data.filtered_count ?? 0) === 0) {
         console.log('No memory statistics available.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log('XMemo Memory Statistics:');
@@ -2224,10 +2360,10 @@ async function main() {
           console.log(`  * [${dims}]: ${g.count}`);
         });
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get memory stats failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -2249,20 +2385,25 @@ async function main() {
     }, options.timeoutMs);
 
     const data = parseJsonResponse(res, `${opName} request`);
-    const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
+    const isDoctorAuthInvalid = opName === 'doctor' && data.result?.auth_valid === false;
+    const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false && !isDoctorAuthInvalid;
     if (options.json) {
       const output = opName === 'doctor'
         ? withDoctorDiagnostics(data, discovery, doctorNextAction({ credential, anonymous: false }))
         : data;
       console.log(safeJson(output));
-      process.exit(succeeded ? 0 : 1);
+      const failureExitCode = isDoctorAuthInvalid
+        ? EXIT_CODE.AUTH_ERROR
+        : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
+      process.exit(succeeded ? EXIT_CODE.SUCCESS : failureExitCode);
     }
 
     if (!succeeded) {
       const reqId = extractRequestId(data);
       const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
       console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
-      process.exit(1);
+      const failureExitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+      process.exit(failureExitCode);
     }
 
     if (opName === 'doctor') {
@@ -2271,7 +2412,7 @@ async function main() {
         console.log(`XMemo Service Status: OK\nAuthentication: Valid\nScopes: ${extractList(data.result?.scopes).join(', ')}`);
       } else {
         console.log(`XMemo Service Status: OK\nAuthentication: Invalid`);
-        process.exit(1);
+        process.exit(EXIT_CODE.AUTH_ERROR);
       }
     } else if (opName === 'recall' || opName === 'search') {
       const results = extractList(data.result);
@@ -2319,11 +2460,15 @@ async function main() {
     }
   } catch (e) {
     console.error('Request failed:', e.message);
-    process.exit(1);
+    process.exit(exitCodeForError(e));
   }
 }
 
 export {
+  EXIT_CODE,
+  exitCodeForHttpStatus,
+  exitCodeForErrorCode,
+  exitCodeForError,
   formatRemainingValidity,
   extractRequestId,
   extractExpiresInSeconds,
@@ -2340,6 +2485,6 @@ const isDirectExecution = process.argv[1] && import.meta.url.endsWith(path.basen
 if (isDirectExecution) {
   main().catch((error) => {
     console.error(`Error: ${sanitizeTerminalText(error?.message || error)}`);
-    process.exit(1);
+    process.exit(exitCodeForError(error));
   });
 }

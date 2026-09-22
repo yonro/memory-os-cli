@@ -398,6 +398,17 @@ attempt to inspect another user's Knowledge space.
 
 For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
 
+## Exit Codes
+
+All CLI operations conform to normalized, deterministic exit codes:
+
+| Exit Code | Classification | Conditions & Semantics | Next Action |
+|:---:|:---|:---|:---|
+| `0` | Success | Operation succeeded, valid empty state, help (`--help`), or version (`--version`). | Proceed with next task. |
+| `1` | User Error | Local argument validation failure, mutually exclusive flags, missing `--confirm`, missing or unreadable input file, or HTTP 4xx client errors (400 Bad Request, 404 Not Found, 428 Precondition Required, 429 Too Many Requests). | Check parameters, correct command arguments, or check resource ID. |
+| `2` | Auth Error | Missing credentials, unauthenticated request, expired/invalid token, HTTP 401 Unauthorized, HTTP 403 Forbidden / Tenant Forbidden, `auth status --verify` failure, or `doctor` auth invalid. | Run `login --allow-plaintext` or configure `XMEMO_KEY`. |
+| `3` | Server / Network Error | HTTP 5xx server errors, connection refused (`ECONNREFUSED`), host unreachable (`ENOTFOUND`), network timeout (`ETIMEDOUT`), or response size exceeding safety limit (> 8 MiB). | Retry with exponential backoff or check network reachability via `doctor --anonymous`. |
+
 ## Good Memory Candidates
 
 - Repository conventions, build/test/deploy commands, and verified troubleshooting steps.
