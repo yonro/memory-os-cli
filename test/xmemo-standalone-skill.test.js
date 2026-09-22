@@ -1806,16 +1806,16 @@ test('skill script forget with ledger transaction ID without --confirm makes zer
   }
 });
 
-test('skill script forget preserves 403 delete scope required error without downgrade', async () => {
+test('skill script forget preserves server 403 forbidden error without downgrade', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
 
   try {
-    // Server returns 403 with FastAPI { detail: "delete scope required" }
+    // Tests client-side preservation of server 403 response without downgrade to 404 or success
     testServer.setResponse({ detail: 'delete scope required' }, 403);
     const res = await runScript([
       'forget', '--id', 'tx_ledger_789', '--confirm', '--json'
-    ], { baseUrl, env: { XMEMO_KEY: 'write-only-token' } });
+    ], { baseUrl, env: { XMEMO_KEY: 'test-unauthorized-token' } });
 
     assert.equal(res.code, 1);
     const payload = JSON.parse(res.stdout);
@@ -1827,7 +1827,7 @@ test('skill script forget preserves 403 delete scope required error without down
     // Terminal mode check
     const termRes = await runScript([
       'forget', '--id', 'tx_ledger_789', '--confirm'
-    ], { baseUrl, env: { XMEMO_KEY: 'write-only-token' } });
+    ], { baseUrl, env: { XMEMO_KEY: 'test-unauthorized-token' } });
     assert.equal(termRes.code, 1);
     assert.match(termRes.stderr, /delete scope required/);
   } finally {

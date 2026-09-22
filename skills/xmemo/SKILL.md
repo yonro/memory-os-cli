@@ -142,10 +142,13 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   `ledger-list` / `ledger-summary` (read-only), and inspect account metrics via
   `overview`, `activity`, and `stats`.
 - **Confirm destructive actions.** Pass explicit target IDs and verify intentions
-  before removing or modifying records. `update` requires `memory:write` scope, while
-  `forget` requires `delete` scope (e.g. `delete:memories`, `memory:delete`, or
-  an owner-scoped key). Target IDs from either memory or `ledger-list` transaction
-  records can be passed directly to `forget --id <id> --confirm`.
+  before removing or modifying records. `update` requires an update-capable scope
+  (`memory:update`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
+  `forget` requires a delete-capable scope (`memory:delete`, `delete:memories`,
+  `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
+  Both operations strictly require BOTH an owner-scoped API key AND an accepted scope.
+  Target IDs from either memory records or `ledger-list` transaction records (`transaction.id`)
+  can be passed directly to `forget --id <id> --confirm`.
 - **Read provenance correctly.** `agent_id`, `agent_instance_id`, and
   `agent_boundary` are attribution signals, not authorization boundaries.
 
@@ -238,10 +241,14 @@ remain limited to `remember`, `recall`, and `search`.
   and 401/403 errors remain preserved. `update --json` returns
   `{ ok: true, id, path, updated: true, ... }`.
 - `forget` performs soft-deletion of an existing memory or ledger record backed by
-  `POST /v1/memories/{id}/forget`. It accepts `--id` (required, accepts memory ID,
+  `POST /v1/memories/{id}/forget`. It accepts `--id` (required; accepts memory ID,
   logical reference, or `ledger-list` transaction ID), `--reason` (optional
-  explanation), and mandatory `--confirm`. Requires `delete` scope (`delete:memories`,
-  `memory:delete`, `memory:write`, `memory:*`, `admin`, `*`) on an owner-scoped key.
+  explanation), and mandatory `--confirm`. Authorization strictly requires BOTH an
+  owner-scoped API key AND an accepted delete-capable scope: `memory:delete`,
+  `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`,
+  `admin`, or `*`. Standard credentials carrying `memory:write` are accepted by
+  the server's delete gate; read-only tokens (such as `ledger:read` or `memory:read`
+  alone) or unclaimed agent keys trigger HTTP 403 `delete scope required` / `Access denied`.
   **Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately
   prints the target ID and exits with non-zero exit code without dispatching any
   network request. When confirmed, it sends `{ mode: 'soft_delete', reason }`.

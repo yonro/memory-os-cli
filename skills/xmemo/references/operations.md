@@ -165,8 +165,8 @@ Target references:
 - Accepts a memory UUID, logical memory reference, or a ledger transaction ID (obtained via `ledger-list`).
 - When a transaction ID is provided, the server lifecycle resolver resolves the backing ledger memory record and soft-deletes it, omitting it from future `ledger-list` queries.
 Scope & Authorization:
-- Requires `delete` scope (`delete:memories`, `memory:delete`, `memory:write`, `memory:*`, `admin`, `*`) on an owner-scoped key.
-- Missing delete scope triggers an HTTP 403 `delete scope required` error from the server.
+- Authorization strictly requires BOTH an owner-scoped API key AND an accepted delete-capable scope: `memory:delete`, `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, or `*`.
+- Standard credentials carrying `memory:write` are accepted. Read-only tokens (such as `ledger:read` or `memory:read` alone) or unclaimed agent keys trigger HTTP 403 `delete scope required` / `Access denied`.
 **Accidental Deletion Guard**:
 - If `--confirm` is not passed, the script exits immediately with code 1, prints the target ID, and **issues 0 HTTP requests**.
 - When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
