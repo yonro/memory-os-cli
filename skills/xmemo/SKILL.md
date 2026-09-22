@@ -158,7 +158,7 @@ The Skill script handles all operations directly from the Skill root:
 
 ```text
 # Memory Operations
-node scripts/xmemo-skill.mjs remember --content "..." --path "..."
+node scripts/xmemo-skill.mjs remember (--content "..." | --content - | --file <path>) [--path "..."] [--metadata '{"k":"v"}']
 node scripts/xmemo-skill.mjs recall --query "..." [--limit <n>] [--compact]
 node scripts/xmemo-skill.mjs search --query "..." [--limit <n>] [--compact]
 node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]
@@ -216,6 +216,7 @@ standalone Skill package version and operations so compatibility can be checked
 without inspecting the raw discovery document. If discovery is unavailable,
 `clientDiagnostics.discovery.status` is `unavailable`; a successful doctor
 health check still succeeds. It never prints token values or prefixes.
+`remember` accepts direct text via `--content "<text>"`, piped standard input via `--content -`, or a file via `--file <path>`. These content options are mutually exclusive; file or stdin inputs undergo identical local validation and outbound request payload formatting without modifying server request structures. Missing or unreadable files exit with code 1 and issue zero network requests.
 
 When native XMemo MCP tools are present, use `create_restart_snapshot` and
 `restore_restart_snapshot` for the same full-continuity workflow. The bundled

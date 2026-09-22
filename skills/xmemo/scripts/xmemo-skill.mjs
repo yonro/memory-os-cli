@@ -50,7 +50,7 @@ const COMMAND_FLAGS = {
   overview: new Set(),
   activity: new Set(['limit']),
   stats: new Set(['scope', 'path', 'bucket', 'memory-type', 'memory_type', 'status', 'source', 'since', 'until', 'group-by', 'group_by', 'top-n', 'top_n', 'team-id', 'team_id']),
-  remember: new Set(['content', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
+  remember: new Set(['content', 'file', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
   recall: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   search: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   'save-state': new Set(['key', 'state_key', 'content', 'current_task', 'next_action', 'blocked_reason', 'ttl_seconds', 'bucket', 'scope']),
@@ -168,6 +168,9 @@ function parseArgs(args) {
         i = parsed.index;
       } else {
         const parsed = readOptionValue(args, i, key, inlineValue);
+        if (flags[key] !== undefined && (key === 'content' || key === 'file')) {
+          throw new Error(`Cannot specify multiple --${key} options.`);
+        }
         flags[key] = parsed.value;
         i = parsed.index;
       }
@@ -285,7 +288,7 @@ const COMMAND_USAGE_REGISTRY = {
     desc: 'Show memory statistics and breakdown',
   },
   remember: {
-    usage: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
+    usage: 'remember (--content <text> | --content - | --file <path>) [--path <path>] [--metadata <json-object>]',
   },
   recall: {
     usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
@@ -493,7 +496,7 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     read: ['id'],
     update: ['id'],
     forget: ['id'],
-    remember: ['content'],
+    remember: ['content|file'],
     recall: ['query'],
     search: ['query'],
     'recall-context': ['query'],
@@ -505,6 +508,12 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     const alternatives = requirement.split('|');
     if (!alternatives.some((key) => flags[key] !== undefined && String(flags[key]).trim())) {
       throw new Error(`${command} requires --${alternatives.join(' or --')}.`);
+    }
+  }
+
+  if (command === 'remember') {
+    if (flags.content !== undefined && flags.file !== undefined) {
+      throw new Error('Cannot specify both --content and --file.');
     }
   }
 
@@ -1137,6 +1146,41 @@ async function readStdin() {
   });
 }
 
+// Read full stdin content helper (exact UTF-8 content without trimming)
+function readStdinContent() {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => {
+      resolve(data);
+    });
+    process.stdin.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+async function resolveCommandInputs(command, flags) {
+  if (command === 'remember') {
+    if (flags.file !== undefined) {
+      try {
+        flags.content = await fs.readFile(flags.file, 'utf8');
+        delete flags.file;
+      } catch (err) {
+        throw new Error(`Failed to read file '${flags.file}': ${err.message}`);
+      }
+    } else if (flags.content === '-') {
+      flags.content = await readStdinContent();
+    }
+    if (flags.content === undefined || !String(flags.content).trim()) {
+      throw new Error('remember content must not be empty.');
+    }
+  }
+}
+
 // Command execution dispatcher
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
@@ -1171,6 +1215,7 @@ async function main() {
   options.baseUrl = normalizeBaseUrl(options.baseUrl);
   options.timeoutMs = parsePositiveInteger(options.timeoutMs, '--timeout-ms', MAX_TIMEOUT_MS);
   validateCommandInput(command, subcommand, positionals, options, flags);
+  await resolveCommandInputs(command, flags);
 
   // 1. LOGIN
   if (command === 'login') {
@@ -2286,6 +2331,8 @@ export {
   COMMAND_USAGE_REGISTRY,
   buildTopLevelHelp,
   parseArgs,
+  readStdinContent,
+  resolveCommandInputs,
 };
 
 const isDirectExecution = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));

@@ -303,8 +303,25 @@ Behavior and error classification:
 ### Remember a decision
 
 ```text
+# Direct content text
 node scripts/xmemo-skill.mjs remember --content "Use pnpm for package management in this repo" --path "projects/memory-os-cli/conventions"
+
+# Read content from standard input (stdin)
+cat docs/conventions.md | node scripts/xmemo-skill.mjs remember --content - --path "projects/memory-os-cli/conventions"
+
+# Import content from a local file
+node scripts/xmemo-skill.mjs remember --file docs/conventions.md --path "projects/memory-os-cli/conventions"
 ```
+
+`remember` creates a durable memory record via `POST /v1/skill/operations` (or `POST /v1/remember` in temporary mode).
+Content input options:
+- `--content <text>`: Direct string content.
+- `--content -`: Reads the full content from standard input until EOF.
+- `--file <path>`: Reads the full content from the specified file path.
+- **Mutual exclusion**: Specifying both `--content` and `--file`, or multiple `--content` / `--file` flags, is rejected locally with exit code 1 and **zero network requests**.
+- **Payload & validation consistency**: Stdin and file content undergo identical validation and are transmitted in the same outbound payload format (`arguments: { content: <text>, path: ... }`). Server request structure and byte integrity are preserved exactly across all input paths.
+- **File read failures**: If the target file does not exist (`ENOENT`) or is inaccessible (`EACCES`), the command immediately reports a local error with exit code 1 and makes **zero network requests**.
+- Empty or whitespace-only content is rejected locally before request transmission.
 
 ### Recall before acting
 

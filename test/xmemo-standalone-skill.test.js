@@ -3267,5 +3267,246 @@ test('S1-4: single source of truth for command usage, anti-drift assertion', asy
   assert.ok(rootHelpRes.stdout.includes(ledgerListEntry.usage));
 });
 
+test('S2-1: remember supports --content - (stdin) and --file <path> with identical outbound payload structure', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-s2-test-'));
+  testServer.setResponse({ ok: true, result: { id: 'mem-s2-123' } });
+
+  try {
+    // 1. File import
+    const tmpFile = path.join(tmpDir, 'decision.md');
+    await fs.writeFile(tmpFile, 'Architecture decision saved from file.', 'utf8');
+
+    const fileRes = await runScript(['remember', '--file', tmpFile, '--path', 'projects/s2/decisions'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(fileRes.code, 0);
+    assert.match(fileRes.stdout, /Saved to XMemo/);
+    assert.match(fileRes.stdout, /mem-s2-123/);
+    assert.equal(testServer.requests.length, 1);
+    assert.equal(testServer.requests[0].url, '/v1/skill/operations');
+    assert.equal(testServer.requests[0].method, 'POST');
+    assert.deepEqual(testServer.requests[0].body, {
+      operation: 'remember',
+      arguments: {
+        content: 'Architecture decision saved from file.',
+        path: 'projects/s2/decisions',
+      },
+    });
+
+    // 2. Standard input (--content -)
+    const stdinRes = await runScript(['remember', '--content', '-', '--path', 'projects/s2/decisions'], {
+      baseUrl,
+      stdin: 'Architecture decision saved from stdin.',
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(stdinRes.code, 0);
+    assert.match(stdinRes.stdout, /Saved to XMemo/);
+    assert.match(stdinRes.stdout, /mem-s2-123/);
+    assert.equal(testServer.requests.length, 2);
+    assert.equal(testServer.requests[1].url, '/v1/skill/operations');
+    assert.equal(testServer.requests[1].method, 'POST');
+    assert.deepEqual(testServer.requests[1].body, {
+      operation: 'remember',
+      arguments: {
+        content: 'Architecture decision saved from stdin.',
+        path: 'projects/s2/decisions',
+      },
+    });
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('S2-2: remember enforces mutual exclusion between --content and --file', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-s2-test-'));
+  const tmpFile = path.join(tmpDir, 'test.txt');
+  await fs.writeFile(tmpFile, 'some text', 'utf8');
+
+  try {
+    // Both --content <text> and --file <path>
+    const conflict1 = await runScript(['remember', '--content', 'inline text', '--file', tmpFile], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(conflict1.code, 1);
+    assert.match(conflict1.stderr, /Cannot specify both --content and --file/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Both --content - and --file <path>
+    const conflict2 = await runScript(['remember', '--content', '-', '--file', tmpFile], {
+      baseUrl,
+      stdin: 'stdin text',
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(conflict2.code, 1);
+    assert.match(conflict2.stderr, /Cannot specify both --content and --file/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Duplicate --content flags
+    const conflict3 = await runScript(['remember', '--content', 'first', '--content', 'second'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(conflict3.code, 1);
+    assert.match(conflict3.stderr, /Cannot specify multiple --content options/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Duplicate --file flags
+    const conflict4 = await runScript(['remember', '--file', tmpFile, '--file', tmpFile], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(conflict4.code, 1);
+    assert.match(conflict4.stderr, /Cannot specify multiple --file options/);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('S2-3: complex multiline, quotes, backticks, and Unicode content match byte-for-byte across stdin, file, and direct content', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-s2-test-'));
+  testServer.setResponse({ ok: true, result: { id: 'mem-s2-bytes' } });
+
+  const complexContent = [
+    '# Release Architecture & Decisions 🚀',
+    '',
+    'Key specifications:',
+    '- Contains "double quotes", \'single quotes\', and `embedded backticks`.',
+    '- Math and symbols: $E = mc^2$, 100€, ±5%, §14.2, © 2026.',
+    '- Multi-language Unicode: 日本語のテスト, 中文测试, café, résumé, São Paulo, crème brûlée.',
+    '  - Indented code block:',
+    '    ```json',
+    '    {"nested": true, "key": "value"}',
+    '    ```',
+    'End of message with newline.\n'
+  ].join('\n');
+
+  try {
+    const tmpFile = path.join(tmpDir, 'complex.md');
+    await fs.writeFile(tmpFile, complexContent, 'utf8');
+
+    // 1. Sent via --file
+    const fileRes = await runScript(['remember', '--file', tmpFile, '--path', 'conventions/complex'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(fileRes.code, 0);
+
+    // 2. Sent via --content - (stdin)
+    const stdinRes = await runScript(['remember', '--content', '-', '--path', 'conventions/complex'], {
+      baseUrl,
+      stdin: complexContent,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(stdinRes.code, 0);
+
+    // 3. Sent via direct --content
+    const directRes = await runScript(['remember', '--content', complexContent, '--path', 'conventions/complex'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(directRes.code, 0);
+
+    assert.equal(testServer.requests.length, 3);
+    const filePayload = testServer.requests[0].body.arguments.content;
+    const stdinPayload = testServer.requests[1].body.arguments.content;
+    const directPayload = testServer.requests[2].body.arguments.content;
+
+    // Byte-identical assertion across stdin, file, and original content
+    assert.equal(filePayload, complexContent, 'File payload must match original content exactly');
+    assert.equal(stdinPayload, complexContent, 'Stdin payload must match original content exactly');
+    assert.equal(directPayload, complexContent, 'Direct payload must match original content exactly');
+    assert.strictEqual(filePayload, stdinPayload, 'File and Stdin payloads must be strictly equal');
+    assert.strictEqual(stdinPayload, directPayload, 'Stdin and Direct payloads must be strictly equal');
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('S2-4: remember reports user error code 1 and zero requests when file cannot be read', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-s2-test-'));
+  const nonExistentFile = path.join(tmpDir, 'does-not-exist-xyz123.md');
+
+  try {
+    const res = await runScript(['remember', '--file', nonExistentFile], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(res.code, 1);
+    assert.match(res.stderr, /Failed to read file/);
+    assert.match(res.stderr, /ENOENT/);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('S2-5: remember validates non-empty content for stdin, file, and missing flags', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-s2-test-'));
+
+  try {
+    // Missing both --content and --file
+    const missingBoth = await runScript(['remember', '--path', 'some/path'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(missingBoth.code, 1);
+    assert.match(missingBoth.stderr, /remember requires --content or --file/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Empty file (0 bytes)
+    const emptyFile = path.join(tmpDir, 'empty.txt');
+    await fs.writeFile(emptyFile, '', 'utf8');
+    const emptyFileRes = await runScript(['remember', '--file', emptyFile], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(emptyFileRes.code, 1);
+    assert.match(emptyFileRes.stderr, /remember content must not be empty/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Whitespace-only file
+    const whitespaceFile = path.join(tmpDir, 'whitespace.txt');
+    await fs.writeFile(whitespaceFile, '   \n  \t  \n', 'utf8');
+    const whitespaceFileRes = await runScript(['remember', '--file', whitespaceFile], {
+      baseUrl,
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(whitespaceFileRes.code, 1);
+    assert.match(whitespaceFileRes.stderr, /remember content must not be empty/);
+    assert.equal(testServer.requests.length, 0);
+
+    // Empty stdin
+    const emptyStdinRes = await runScript(['remember', '--content', '-'], {
+      baseUrl,
+      stdin: '',
+      env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(emptyStdinRes.code, 1);
+    assert.match(emptyStdinRes.stderr, /remember content must not be empty/);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+
 
 

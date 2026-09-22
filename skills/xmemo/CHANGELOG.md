@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Support stdin (`--content -`) and file import (`--file <path>`) for `remember`, mutually exclusive with `--content <text>`, with byte-identical payload validation and transmission.
+
 ### Changed
 
 - Append server `request_id` to terminal error output when returned in server error responses.
