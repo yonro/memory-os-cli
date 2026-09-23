@@ -13,7 +13,7 @@ import os from 'node:os';
 import readline from 'node:readline';
 import { randomUUID } from 'node:crypto';
 
-const SKILL_VERSION = '1.1.19';
+const SKILL_VERSION = '1.1.20';
 const credentialsPath = path.join(os.homedir(), '.xmemo', 'skill-credentials.json');
 const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registration.json');
 const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
@@ -28,6 +28,122 @@ const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
   ttl_seconds: 1_209_600,
   max_lifetime_seconds: 2_592_000,
 });
+const EXIT_CODE = Object.freeze({
+  SUCCESS: 0,
+  USER_ERROR: 1,
+  AUTH_ERROR: 2,
+  SERVER_ERROR: 3,
+});
+
+function exitCodeForHttpStatus(statusCode) {
+  const code = Number(statusCode);
+  if (code >= 200 && code < 300) {
+    return EXIT_CODE.SUCCESS;
+  }
+  if (code === 401 || code === 403) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  if (code >= 500) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  return EXIT_CODE.USER_ERROR;
+}
+
+function exitCodeForErrorCode(code) {
+  if (!code || typeof code !== 'string') return null;
+  const normalized = code.toLowerCase();
+  if (
+    normalized === 'unauthorized' ||
+    normalized === 'forbidden' ||
+    normalized === 'tenant_forbidden' ||
+    normalized === 'auth_error' ||
+    normalized === 'invalid_token' ||
+    normalized === 'token_expired' ||
+    normalized === 'authentication_required' ||
+    normalized === 'missing_credentials'
+  ) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  if (
+    normalized === 'server_error' ||
+    normalized === 'internal_error' ||
+    normalized === 'timeout' ||
+    normalized === 'bad_gateway' ||
+    normalized === 'service_unavailable' ||
+    normalized === 'econnrefused' ||
+    normalized === 'enotfound' ||
+    normalized === 'ehostunreach' ||
+    normalized === 'econnreset' ||
+    normalized === 'etimedout' ||
+    normalized === 'esockettimedout'
+  ) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  if (
+    normalized === 'bad_request' ||
+    normalized === 'invalid_argument' ||
+    normalized === 'not_found' ||
+    normalized === 'rate_limited' ||
+    normalized === 'rate_limit_exceeded' ||
+    normalized === 'precondition_required'
+  ) {
+    return EXIT_CODE.USER_ERROR;
+  }
+  if (normalized.startsWith('http 401') || normalized.startsWith('http 403')) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  if (normalized.startsWith('http 5')) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  if (normalized.startsWith('http 4')) {
+    return EXIT_CODE.USER_ERROR;
+  }
+  return null;
+}
+
+function exitCodeForError(err) {
+  if (!err) return EXIT_CODE.USER_ERROR;
+  if (typeof err.exitCode === 'number') {
+    return err.exitCode;
+  }
+  const status = Number(err.statusCode || err.status || err.httpStatus);
+  if (Number.isInteger(status) && status > 0) {
+    return exitCodeForHttpStatus(status);
+  }
+  const code = String(err.code || '').toUpperCase();
+  if (['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ECONNRESET', 'ETIMEDOUT', 'ESOCKETTIMEDOUT', 'EAI_AGAIN', 'EPIPE'].includes(code)) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  const msg = String(err.message || err).toLowerCase();
+  if (
+    msg.includes('timed out') ||
+    msg.includes('timeout') ||
+    msg.includes('safety limit') ||
+    msg.includes('socket hang up') ||
+    msg.includes('interrupted') ||
+    msg.includes('econnrefused') ||
+    msg.includes('enotfound') ||
+    msg.includes('ehostunreach') ||
+    msg.includes('server response exceeded') ||
+    msg.includes('server returned a non-json response') ||
+    msg.includes('server returned an empty response')
+  ) {
+    return EXIT_CODE.SERVER_ERROR;
+  }
+  if (
+    msg.includes('401') ||
+    msg.includes('unauthorized') ||
+    msg.includes('403') ||
+    msg.includes('forbidden') ||
+    msg.includes('invalid or expired token') ||
+    msg.includes('no xmemo credential found') ||
+    msg.includes('authentication required')
+  ) {
+    return EXIT_CODE.AUTH_ERROR;
+  }
+  return EXIT_CODE.USER_ERROR;
+}
+
 const warnedCredentialOrigins = new Set();
 const REST_COMMANDS = new Set([
   'read', 'update', 'forget',
@@ -50,7 +166,7 @@ const COMMAND_FLAGS = {
   overview: new Set(),
   activity: new Set(['limit']),
   stats: new Set(['scope', 'path', 'bucket', 'memory-type', 'memory_type', 'status', 'source', 'since', 'until', 'group-by', 'group_by', 'top-n', 'top_n', 'team-id', 'team_id']),
-  remember: new Set(['content', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
+  remember: new Set(['content', 'file', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
   recall: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   search: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']),
   'save-state': new Set(['key', 'state_key', 'content', 'current_task', 'next_action', 'blocked_reason', 'ttl_seconds', 'bucket', 'scope']),
@@ -73,10 +189,27 @@ const AUTH_FLAGS = {
   'claim-deny': new Set(),
 };
 
+function isStdoutTty() {
+  if (process.env.XMEMO_FORCE_TTY === '1' || process.env.XMEMO_FORCE_TTY === 'true') {
+    return true;
+  }
+  if (process.env.XMEMO_FORCE_TTY === '0' || process.env.XMEMO_FORCE_TTY === 'false') {
+    return false;
+  }
+  if (process.env.XMEMO_OUTPUT_MODE === 'terminal') {
+    return true;
+  }
+  if (process.env.XMEMO_OUTPUT_MODE === 'json') {
+    return false;
+  }
+  return Boolean(process.stdout && process.stdout.isTTY);
+}
+
 // Helper to parse arguments
 function parseArgs(args) {
   const options = {
     json: false,
+    terminal: false,
     baseUrl: process.env.XMEMO_BASE_URL || DEFAULT_BASE_URL,
     timeoutMs: process.env.XMEMO_TIMEOUT_MS || String(DEFAULT_TIMEOUT_MS),
     verify: false,
@@ -89,6 +222,8 @@ function parseArgs(args) {
   };
   const positionals = [];
   const flags = {};
+  let explicitJson = false;
+  let explicitTerminal = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -99,7 +234,10 @@ function parseArgs(args) {
       const inlineValue = equalsIndex === -1 ? undefined : rawKey.slice(equalsIndex + 1);
       if (key === 'json') {
         rejectBooleanValue(key, inlineValue);
-        options.json = true;
+        explicitJson = true;
+      } else if (key === 'terminal' || key === 'no-json' || key === 'plain') {
+        rejectBooleanValue(key, inlineValue);
+        explicitTerminal = true;
       } else if (key === 'verify') {
         rejectBooleanValue(key, inlineValue);
         options.verify = true;
@@ -146,13 +284,18 @@ function parseArgs(args) {
         i = parsed.index;
       } else {
         const parsed = readOptionValue(args, i, key, inlineValue);
+        if (flags[key] !== undefined && (key === 'content' || key === 'file')) {
+          throw new Error(`Cannot specify multiple --${key} options.`);
+        }
         flags[key] = parsed.value;
         i = parsed.index;
       }
     } else if (arg.startsWith('-')) {
       const key = arg.slice(1);
       if (key === 'j') {
-        options.json = true;
+        explicitJson = true;
+      } else if (key === 't') {
+        explicitTerminal = true;
       } else if (key === 'v') {
         options.verify = true;
       } else if (key === 'h') {
@@ -164,6 +307,21 @@ function parseArgs(args) {
       positionals.push(arg);
     }
   }
+
+  if (explicitJson && explicitTerminal) {
+    throw new Error('Cannot specify both --json and --terminal.');
+  }
+
+  const isTty = isStdoutTty();
+  if (explicitJson) {
+    options.json = true;
+  } else if (explicitTerminal) {
+    options.json = false;
+    options.terminal = true;
+  } else {
+    options.json = !isTty;
+  }
+
   return { command: positionals[0], subcommand: positionals[1], positionals, options, flags };
 }
 
@@ -185,61 +343,178 @@ function readOptionValue(args, index, key, inlineValue) {
   return { value, index: index + 1 };
 }
 
+const COMMAND_USAGE_REGISTRY = {
+  login: {
+    usage: 'login --allow-plaintext',
+    desc: 'Start formal device login and explicitly permit local token storage',
+  },
+  register: {
+    usage: 'register --reason <unattended|declined> --allow-plaintext',
+    desc: 'Start limited temporary memory only when formal login is unavailable',
+  },
+  logout: {
+    usage: 'logout [--revoke-environment-token]',
+    desc: 'Revoke and remove a local credential',
+  },
+  'auth status': {
+    usage: 'auth status [--verify]',
+    desc: 'Show local or verified auth status (alias: auth-status)',
+  },
+  'auth add': {
+    usage: 'auth add --from-stdin --allow-plaintext',
+    desc: 'Store a formal token read from standard input',
+  },
+  'auth claim-status': {
+    usage: 'auth claim-status [--allow-plaintext]',
+    desc: 'Check temporary-account claim status',
+  },
+  'auth claim-confirm': {
+    usage: 'auth claim-confirm [--allow-plaintext]',
+    desc: 'Confirm a pending human claim and accept formal token handoff',
+  },
+  'auth claim-deny': {
+    usage: 'auth claim-deny [--allow-plaintext]',
+    desc: 'Decline a pending bind and keep isolated temporary access',
+  },
+  read: {
+    usage: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
+  },
+  update: {
+    usage: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
+  },
+  forget: {
+    usage: 'forget --id <id> [--reason <text>] --confirm',
+  },
+  'ledger-list': {
+    usage: 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
+  },
+  'ledger-summary': {
+    usage: 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
+  },
+  overview: {
+    usage: 'overview',
+    desc: 'Show account overview (memories, storage, agents)',
+  },
+  activity: {
+    usage: 'activity [--limit <n>]',
+    desc: 'Show recent account activity',
+  },
+  stats: {
+    usage: 'stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]',
+    desc: 'Show memory statistics and breakdown',
+  },
+  remember: {
+    usage: 'remember (--content <text> | --content - | --file <path>) [--path <path>] [--metadata <json-object>]',
+  },
+  recall: {
+    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+  },
+  search: {
+    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+  },
+  'recall-context': {
+    usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
+    desc: 'Read-only bounded Memory context; opt into Knowledge with true',
+  },
+  'save-state': {
+    usage: 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
+    desc: '(alias: state-save)',
+  },
+  'restore-state': {
+    usage: 'restore-state --key <key>',
+    desc: '(alias: state-restore)',
+  },
+  'state-save': {
+    usage: 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
+    aliasOf: 'save-state',
+  },
+  'state-restore': {
+    usage: 'state-restore --key <key> (legacy alias)',
+    aliasOf: 'restore-state',
+  },
+  'restart-snapshot': {
+    usage: 'restart-snapshot [--state_key <key>] [--session_id <id>] [--ttl_seconds <0..2592000>]',
+    desc: 'Save a full restart-continuity snapshot',
+  },
+  'restart-restore': {
+    usage: 'restart-restore [--snapshot_id <id> | --source_session_id <id>] [--target_session_id <id>]',
+    desc: 'Restore the latest or selected restart snapshot',
+  },
+  'todo-add': {
+    usage: 'todo-add --content <text>',
+  },
+  'todo-list': {
+    usage: 'todo-list',
+  },
+  'todo-done': {
+    usage: 'todo-done --id <todo_id>',
+  },
+  'expense-add': {
+    usage: 'expense-add --item <text> --amount <number> --currency <code>',
+  },
+  doctor: {
+    usage: 'doctor [--anonymous]',
+  },
+};
+
+function buildTopLevelHelp() {
+  const lines = [
+    'XMemo Standalone Skill Runtime',
+    '',
+    'Usage:',
+    `  ${SCRIPT_COMMAND} <command> [options]`,
+    '',
+    'Commands:',
+  ];
+  for (const entry of Object.values(COMMAND_USAGE_REGISTRY)) {
+    if (entry.aliasOf) continue;
+    if (entry.desc) {
+      lines.push(`  ${entry.usage.padEnd(35)} ${entry.desc}`);
+    } else {
+      lines.push(`  ${entry.usage}`);
+    }
+  }
+  lines.push('');
+  lines.push('Credential resolution:');
+  lines.push('  XMEMO_KEY                          Preferred; never copied to the local credential file');
+  lines.push('  User credential file               Read only as a fallback');
+  lines.push('');
+  lines.push('Global options:');
+  lines.push('  --json                             Print the API response as JSON');
+  lines.push('  --terminal                         Force human-readable terminal output even when piped');
+  lines.push(`  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only`);
+  lines.push(`  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})`);
+  lines.push('  --compact                          Shorten recall/search content for terminals');
+  lines.push('  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage');
+  lines.push('  --version                          Show the Skill runtime version');
+  lines.push('  --help, -h                         Show this help');
+  lines.push('');
+  lines.push(`Run \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  return lines.join('\n');
+}
+
 function printUsage(command) {
-  const commonOptions = '[--json] [--base-url <url>] [--timeout-ms <ms>]';
-  if (command === undefined) {
-    console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login | register | logout | auth status | auth add\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  overview | activity [--limit <n>] | stats [options]\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  recall-context --query <text> [--include_knowledge <true|false>]\n                                  Read-only bounded Memory context; opt into Knowledge with true\n  save-state | restore-state | restart-snapshot | restart-restore\n  todo-add | todo-list | todo-done | expense-add | doctor\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file               Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  const commonOptions = '[--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]';
+  if (command === undefined || (!COMMAND_USAGE_REGISTRY[command] && command !== 'auth' && command !== 'auth-status')) {
+    console.log(buildTopLevelHelp());
     return;
   }
-  if (command === 'auth') {
+
+  if (command === 'auth' || command === 'auth-status') {
     console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-deny [--allow-plaintext]\n\nAlias: ${SCRIPT_COMMAND} auth-status [--verify]\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
     return;
   }
 
-  const directUsage = {
-    login: `login --allow-plaintext ${commonOptions}`,
-    register: `register --reason <unattended|declined> --allow-plaintext ${commonOptions}`,
-    logout: `logout [--revoke-environment-token] ${commonOptions}`,
-  };
-  if (directUsage[command]) {
-    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${directUsage[command]}`);
+  const entry = COMMAND_USAGE_REGISTRY[command];
+  if (entry) {
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${entry.usage} ${commonOptions}`);
     if (command === 'logout') {
       console.log('\nXMEMO_KEY is externally managed and is not revoked unless --revoke-environment-token is explicitly passed.');
     }
     return;
   }
 
-  if (REST_COMMANDS.has(command)) {
-    const commandUsage = {
-      read: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
-      update: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
-      forget: 'forget --id <id> [--reason <text>] --confirm',
-      'ledger-list': 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
-      'ledger-summary': 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
-      overview: 'overview',
-      activity: 'activity [--limit <n>]',
-      stats: 'stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]',
-      remember: 'remember --content <text> [--path <path>] [--metadata <json-object>]',
-      recall: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
-      search: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
-      'recall-context': 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
-      'save-state': 'save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>]',
-      'restore-state': 'restore-state --key <key>',
-      'state-save': 'state-save --key <key> [--content <text>] [--ttl_seconds <0..604800>] (legacy alias)',
-      'state-restore': 'state-restore --key <key> (legacy alias)',
-      'restart-snapshot': 'restart-snapshot [--state_key <key>] [--session_id <id>] [--ttl_seconds <0..2592000>]',
-      'restart-restore': 'restart-restore [--snapshot_id <id> | --source_session_id <id>] [--target_session_id <id>]',
-      'todo-add': 'todo-add --content <text>',
-      'todo-list': 'todo-list',
-      'todo-done': 'todo-done --id <todo_id>',
-      'expense-add': 'expense-add --item <text> --amount <number> --currency <code>',
-      doctor: 'doctor [--anonymous]',
-    };
-    console.log(`Usage:\n  ${SCRIPT_COMMAND} ${commandUsage[command]} ${commonOptions}`);
-    return;
-  }
-
-  console.log(`XMemo Standalone Skill Runtime\n\nUsage:\n  ${SCRIPT_COMMAND} <command> [options]\n\nCommands:\n  login --allow-plaintext            Start formal device login and explicitly permit local token storage\n  register --reason <unattended|declined> --allow-plaintext\n                                     Start limited temporary memory only when formal login is unavailable\n  logout                             Revoke and remove a local credential\n  auth status [--verify]             Show local or verified auth status\n  auth-status [--verify]             Alias for auth status\n  auth add --from-stdin --allow-plaintext\n                                     Store a formal token read from standard input\n  auth claim-status [--allow-plaintext]\n                                     Check temporary-account claim status\n  auth claim-confirm [--allow-plaintext]\n                                     Confirm a pending human claim and accept formal token handoff\n  auth claim-deny [--allow-plaintext]\n                                     Decline a pending bind and keep isolated temporary access\n  read --id <id> [--offset <n>] [--limit <n>]\n  update --id <id> [--content <text>] [--path <path>] [--metadata <json>]\n  forget --id <id> [--reason <text>] --confirm\n  ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]\n  ledger-summary [--months <n>] [--currency <code>] [--type <type>]\n  overview                           Show account overview (memories, storage, agents)\n  activity [--limit <n>]             Show recent account activity\n  stats [options]                    Show memory statistics and breakdown\n  remember --content <text> --path <path>\n  recall --query <text> [--limit <n>] [--compact]\n  search --query <text> [--limit <n>] [--compact]\n  save-state --key <key> [--content <text>] (aliases: state-save)\n  restore-state --key <key> (aliases: state-restore)\n  restart-snapshot                  Save a full restart-continuity snapshot\n  restart-restore                   Restore the latest or selected restart snapshot\n  todo-add --content <text>\n  todo-list\n  todo-done --id <todo_id>\n  expense-add --item <text> --amount <number> --currency <code>\n  doctor [--anonymous]\n\nCredential resolution:\n  XMEMO_KEY                          Preferred; never copied to the local credential file\n  User credential file              Read only as a fallback\n\nGlobal options:\n  --json                             Print the API response as JSON\n  --base-url <url>                   Override ${DEFAULT_BASE_URL}; HTTPS or loopback HTTP only\n  --timeout-ms <ms>                  Per-request timeout (default: ${DEFAULT_TIMEOUT_MS})\n  --compact                          Shorten recall/search content for terminals\n  --allow-plaintext                  Explicitly permit unencrypted user-file credential storage\n  --version                          Show the Skill runtime version\n  --help, -h                         Show this help\n\nRun \`${SCRIPT_COMMAND} <command> --help\` for command-specific usage.`);
+  console.log(buildTopLevelHelp());
 }
 
 function parsePositiveInteger(value, name, max = Number.MAX_SAFE_INTEGER) {
@@ -337,7 +612,7 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     read: ['id'],
     update: ['id'],
     forget: ['id'],
-    remember: ['content'],
+    remember: ['content|file'],
     recall: ['query'],
     search: ['query'],
     'recall-context': ['query'],
@@ -349,6 +624,12 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
     const alternatives = requirement.split('|');
     if (!alternatives.some((key) => flags[key] !== undefined && String(flags[key]).trim())) {
       throw new Error(`${command} requires --${alternatives.join(' or --')}.`);
+    }
+  }
+
+  if (command === 'remember') {
+    if (flags.content !== undefined && flags.file !== undefined) {
+      throw new Error('Cannot specify both --content and --file.');
     }
   }
 
@@ -419,14 +700,18 @@ function validateCommandInput(command, subcommand, positionals, options, flags) 
 function parseJsonResponse(res, context) {
   const body = typeof res.body === 'string' ? res.body.trim() : '';
   if (!body) {
-    throw new Error(`${context}: server returned an empty response (HTTP ${res.statusCode}).`);
+    const error = new Error(`${context}: server returned an empty response (HTTP ${res.statusCode}).`);
+    error.statusCode = res.statusCode;
+    throw error;
   }
   try {
     return JSON.parse(body);
   } catch {
     const safeBody = sanitizeTerminalText(body);
     const preview = safeBody.length > 2_000 ? `${safeBody.slice(0, 2_000)}…` : safeBody;
-    throw new Error(`${context}: server returned a non-JSON response (HTTP ${res.statusCode}): ${preview}`);
+    const error = new Error(`${context}: server returned a non-JSON response (HTTP ${res.statusCode}): ${preview}`);
+    error.statusCode = res.statusCode;
+    throw error;
   }
 }
 
@@ -452,13 +737,82 @@ function apiErrorMessage(data, fallback = 'Operation failed') {
   return fallback;
 }
 
-function outputRestError(code, message, options) {
-  if (options && options.json) {
-    console.log(safeJson({ ok: false, error: { code, message } }));
-  } else {
-    console.error(`Error: ${message} (Code: ${code})`);
+function extractRequestId(data) {
+  if (!data || typeof data !== 'object') return null;
+  const candidate = data.error?.request_id || data.request_id;
+  if (typeof candidate === 'string' && candidate.trim()) {
+    return sanitizeTerminalText(candidate.trim());
   }
-  process.exit(1);
+  return null;
+}
+
+function extractExpiresInSeconds(data) {
+  if (data?.expires_in !== undefined && data?.expires_in !== null) {
+    const num = Number(data.expires_in);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  if (data?.expires !== undefined && data?.expires !== null) {
+    if (typeof data.expires === 'number' && Number.isFinite(data.expires) && data.expires > 0) {
+      if (data.expires > 1e11) {
+        return Math.max(1, Math.round((data.expires - Date.now()) / 1000));
+      }
+      if (data.expires > 1e8) {
+        return Math.max(1, Math.round(data.expires - Date.now() / 1000));
+      }
+      return data.expires;
+    }
+    if (typeof data.expires === 'string') {
+      const parsedNum = Number(data.expires);
+      if (Number.isFinite(parsedNum) && parsedNum > 0) {
+        if (parsedNum > 1e11) {
+          return Math.max(1, Math.round((parsedNum - Date.now()) / 1000));
+        }
+        if (parsedNum > 1e8) {
+          return Math.max(1, Math.round(parsedNum - Date.now() / 1000));
+        }
+        return parsedNum;
+      }
+      const parsedDate = Date.parse(data.expires);
+      if (Number.isFinite(parsedDate) && parsedDate > Date.now()) {
+        return Math.max(1, Math.round((parsedDate - Date.now()) / 1000));
+      }
+    }
+  }
+  return 600;
+}
+
+function formatRemainingValidity(seconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h${minutes}m${secs}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m${secs}s`;
+  }
+  return `${secs}s`;
+}
+
+function outputRestError(code, message, options, dataOrRequestId, explicitExitCode = null) {
+  const reqId = typeof dataOrRequestId === 'string'
+    ? sanitizeTerminalText(dataOrRequestId.trim())
+    : extractRequestId(dataOrRequestId);
+  if (options && options.json) {
+    const errorObj = { code, message };
+    if (reqId) {
+      errorObj.request_id = reqId;
+    }
+    console.log(safeJson({ ok: false, error: errorObj }));
+  } else {
+    const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+    console.error(`Error: ${message} (Code: ${code})${reqSuffix}`);
+  }
+  const resolvedExitCode = explicitExitCode !== null
+    ? explicitExitCode
+    : (exitCodeForErrorCode(code) ?? EXIT_CODE.USER_ERROR);
+  process.exit(resolvedExitCode);
 }
 
 function handleRestError(res, { notFoundMessage, context = 'REST request', options }) {
@@ -473,7 +827,7 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     if (res.statusCode === 403 && !/re-?authorization/i.test(msg)) {
       msg = `${msg.replace(/\.*$/, '')}. Re-authorization is required to explicitly grant the required scope.`;
     }
-    outputRestError(code, msg, options);
+    outputRestError(code, msg, options, errData, EXIT_CODE.AUTH_ERROR);
   }
 
   if (res.statusCode === 404) {
@@ -481,14 +835,15 @@ function handleRestError(res, { notFoundMessage, context = 'REST request', optio
     try { errData = parseJsonResponse(res, context); } catch {}
     const code = 'not_found';
     const msg = apiErrorMessage(errData, notFoundMessage || 'Resource not found.');
-    outputRestError(code, msg, options);
+    outputRestError(code, msg, options, errData, EXIT_CODE.USER_ERROR);
   }
 
   const data = parseJsonResponse(res, context);
   if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
     const code = data?.error?.code || (res.statusCode === 400 ? 'invalid_request' : `HTTP ${res.statusCode}`);
     const msg = apiErrorMessage(data);
-    outputRestError(code, msg, options);
+    const exitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+    outputRestError(code, msg, options, data, exitCode);
   }
   return data;
 }
@@ -858,14 +1213,17 @@ async function requestTemporaryMemoryOperation(command, options, flags, credenti
         console.error('Your human account has a pending bind confirmation. Run "auth claim-confirm" to finish the formal-token handoff. Do not share the bind URL or confirmation value.');
       }
     } else {
-      console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}`);
+      const reqId = extractRequestId(data);
+      const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+      console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
     }
-    process.exit(1);
+    const exitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+    process.exit(exitCode);
   }
 
   if (options.json) {
     console.log(safeJson(data));
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (command === 'remember') {
@@ -881,7 +1239,9 @@ async function claimStatus(baseUrl, credential, options) {
   }, options.timeoutMs);
   const data = parseJsonResponse(res, 'Claim status request');
   if (res.statusCode < 200 || res.statusCode >= 300) {
-    throw new Error(`Claim status request failed: ${apiErrorMessage(data, safeJson(data))}`);
+    const err = new Error(`Claim status request failed: ${apiErrorMessage(data, safeJson(data))}`);
+    err.statusCode = res.statusCode;
+    throw err;
   }
   if (typeof data.formal_token === 'string' && data.formal_token) {
     const allowPlaintext = plaintextStorageAllowed(options, credential);
@@ -913,6 +1273,41 @@ async function readStdin() {
   });
 }
 
+// Read full stdin content helper (exact UTF-8 content without trimming)
+function readStdinContent() {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => {
+      resolve(data);
+    });
+    process.stdin.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+async function resolveCommandInputs(command, flags) {
+  if (command === 'remember') {
+    if (flags.file !== undefined) {
+      try {
+        flags.content = await fs.readFile(flags.file, 'utf8');
+        delete flags.file;
+      } catch (err) {
+        throw new Error(`Failed to read file '${flags.file}': ${err.message}`);
+      }
+    } else if (flags.content === '-') {
+      flags.content = await readStdinContent();
+    }
+    if (flags.content === undefined || !String(flags.content).trim()) {
+      throw new Error('remember content must not be empty.');
+    }
+  }
+}
+
 // Command execution dispatcher
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
@@ -925,28 +1320,29 @@ async function main() {
 
   if (options.help) {
     printUsage(command);
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (options.version) {
     console.log(SKILL_VERSION);
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (!command) {
     printUsage();
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   if (!['login', 'register', 'logout', 'auth'].includes(command) && !REST_COMMANDS.has(command)) {
     console.error(`Unknown command: ${command}`);
     printUsage();
-    process.exit(1);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   options.baseUrl = normalizeBaseUrl(options.baseUrl);
   options.timeoutMs = parsePositiveInteger(options.timeoutMs, '--timeout-ms', MAX_TIMEOUT_MS);
   validateCommandInput(command, subcommand, positionals, options, flags);
+  await resolveCommandInputs(command, flags);
 
   // 1. LOGIN
   if (command === 'login') {
@@ -961,34 +1357,35 @@ async function main() {
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Device login start');
       if (res.statusCode !== 200) {
-        console.error(`Failed to start device login: ${apiErrorMessage(data, safeJson(data))}`);
-        process.exit(1);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`Failed to start device login: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       const verificationUrl = data.verification_uri_complete || data.verification_uri;
       if (!data.device_code || !verificationUrl) {
         console.error('Failed to start device login: the service response omitted the device code or verification URL.');
-        process.exit(1);
+        process.exit(EXIT_CODE.SERVER_ERROR);
       }
+      const expiresInSeconds = extractExpiresInSeconds(data);
+      const expiresInMs = Math.max(1, expiresInSeconds * 1000);
+      const loginDeadline = Date.now() + expiresInMs;
+      const countdownText = formatRemainingValidity(expiresInSeconds);
       console.log(`To verify this device, open the following URL in your browser:\n`);
       console.log(`  ${sanitizeTerminalText(verificationUrl)}\n`);
       console.log(`Or enter the code: ${sanitizeTerminalText(data.user_code)}`);
-      console.log(`\nWaiting for authorization...`);
+      console.log(`\nWaiting for authorization... (valid for ${countdownText})`);
 
       const deviceCode = data.device_code;
       const intervalSeconds = Number(data.interval);
-      const expiresInSeconds = Number(data.expires_in);
       let pollInterval = Number.isFinite(intervalSeconds) && intervalSeconds > 0
         ? Math.max(1, intervalSeconds * 1000)
         : 5000;
-      const expiresInMs = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0
-        ? Math.max(1, expiresInSeconds * 1000)
-        : 600_000;
-      const loginDeadline = Date.now() + expiresInMs;
       
       const poll = async () => {
         if (Date.now() >= loginDeadline) {
           console.error('Login failed: the device authorization code expired before approval.');
-          process.exit(1);
+          process.exit(EXIT_CODE.AUTH_ERROR);
         }
         try {
           const pollRes = await makeHttpRequest(options.baseUrl, '/v1/auth/device/token', 'POST', {
@@ -1004,26 +1401,26 @@ async function main() {
               setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
             } else {
               console.error(`Login failed: ${sanitizeTerminalText(pollData.error_description || pollData.error)}`);
-              process.exit(1);
+              process.exit(EXIT_CODE.AUTH_ERROR);
             }
           } else if (pollData.access_token) {
             try {
               await saveToken(pollData.access_token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
               console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}`);
               console.log('Token value was not printed. Project files were not modified.');
-              process.exit(0);
+              process.exit(EXIT_CODE.SUCCESS);
             } catch (err) {
               console.error('Failed to save credentials file:', err.message);
-              process.exit(1);
+              process.exit(EXIT_CODE.USER_ERROR);
             }
           } else {
             console.error('Login failed: the token endpoint returned neither an access token nor a recognized pending status.');
-            process.exit(1);
+            process.exit(EXIT_CODE.SERVER_ERROR);
           }
         } catch (e) {
           if (Date.now() >= loginDeadline) {
             console.error('Login failed: the device authorization window expired after repeated polling errors.');
-            process.exit(1);
+            process.exit(EXIT_CODE.AUTH_ERROR);
           }
           console.error('Login polling error:', e.message);
           setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
@@ -1032,7 +1429,7 @@ async function main() {
       setTimeout(poll, Math.min(pollInterval, expiresInMs));
     } catch (e) {
       console.error('Login error:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1042,17 +1439,17 @@ async function main() {
     const reason = flags.reason;
     if (!['unattended', 'declined'].includes(reason)) {
       console.error(`Temporary registration is a conditional fallback. Use "${SCRIPT_COMMAND} register --reason unattended --allow-plaintext" when no human can log in, or "--reason declined --allow-plaintext" after the human explicitly declines formal registration.`);
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
     try {
       requirePlaintextStorageConsent(options, 'Temporary registration');
     } catch (e) {
       console.error(`Temporary registration refused: ${e.message}`);
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
     if (await getStoredToken()) {
       console.error(`A credential is already configured. Formal login is the recommended path; use "${SCRIPT_COMMAND} login" to refresh it instead of creating temporary access.`);
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
     try {
       const limits = await fetchTemporaryLimits(options.baseUrl, options.timeoutMs);
@@ -1068,7 +1465,9 @@ async function main() {
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Temporary registration');
       if (res.statusCode < 200 || res.statusCode >= 300 || !data.temporary_token) {
-        throw new Error(apiErrorMessage(data, safeJson(data)));
+        const err = new Error(apiErrorMessage(data, safeJson(data)));
+        err.statusCode = res.statusCode;
+        throw err;
       }
       await saveToken(data.temporary_token, {
         credential_type: 'temporary',
@@ -1081,10 +1480,10 @@ async function main() {
       } else {
         console.log(`✅ Temporary XMemo memory enabled for this installation.\nThis is a limited sandbox, not a formal account.\nTemporary limits: up to ${limits.max_items} items; expires after ${formatDuration(limits.ttl_seconds)} without successful memory activity; maximum ${formatDuration(limits.max_lifetime_seconds)} from registration.\nComplete formal registration (recommended): ${sanitizeTerminalText(data.bind_url)}\nDo not share this bind URL publicly. After the human claim, run "${SCRIPT_COMMAND} auth claim-confirm" to accept the formal credential.`);
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Temporary registration failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
   }
 
@@ -1094,7 +1493,7 @@ async function main() {
     const token = credential?.token;
     if (!token) {
       console.log('No active login found.');
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     }
 
     if (credential.storage === 'environment' && !options.revokeEnvironmentToken) {
@@ -1110,7 +1509,7 @@ async function main() {
         console.log('XMEMO_KEY is externally managed. No token was revoked and no local credential file was changed.');
         console.log('Unset XMEMO_KEY in the launching environment to log out, or pass --revoke-environment-token to explicitly revoke that token.');
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     }
 
     let remoteRevoked = false;
@@ -1153,7 +1552,7 @@ async function main() {
     } else {
       console.log(`Local credential file removed. Remote revocation could not be confirmed${revokeError ? ` (${revokeError})` : ''}.`);
     }
-    process.exit(0);
+    process.exit(EXIT_CODE.SUCCESS);
   }
 
   // 3. AUTH (status / add)
@@ -1167,7 +1566,7 @@ async function main() {
         } else {
           console.log('Status: Logged out.');
         }
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
       
       const credentialSource = credential?.storage === 'environment'
@@ -1194,11 +1593,12 @@ async function main() {
             } else {
               console.error(`Status: Invalid or expired token.${data ? ` ${apiErrorMessage(data, '')}` : ''}`);
             }
-            process.exit(1);
+            const exitCode = res.statusCode >= 500 ? EXIT_CODE.SERVER_ERROR : EXIT_CODE.AUTH_ERROR;
+            process.exit(exitCode);
           }
         } catch (e) {
           console.error('Verification error:', e.message);
-          process.exit(1);
+          process.exit(exitCodeForError(e));
         }
       } else {
         if (options.json) {
@@ -1208,7 +1608,7 @@ async function main() {
           console.log(`Status: ${kind}\nCredential Source: ${credentialSource}`);
         }
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     }
     
     if (subcommand === 'add') {
@@ -1217,25 +1617,25 @@ async function main() {
           requirePlaintextStorageConsent(options, 'auth add');
         } catch (e) {
           console.error(`Credential storage refused: ${e.message}`);
-          process.exit(1);
+          process.exit(EXIT_CODE.USER_ERROR);
         }
         const token = await readStdin();
         if (!token) {
           console.error('Error: Stdin did not provide a token.');
-          process.exit(1);
+          process.exit(EXIT_CODE.USER_ERROR);
         }
         try {
           await saveToken(token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
           console.log(`✅ Credential stored in the explicitly approved user credential file: ${credentialsPath}`);
           console.log('Token value was not printed. Project files were not modified.');
-          process.exit(0);
+          process.exit(EXIT_CODE.SUCCESS);
         } catch (err) {
           console.error('Failed to save credentials file:', err.message);
-          process.exit(1);
+          process.exit(EXIT_CODE.USER_ERROR);
         }
       } else {
         console.error(`Error: Run "${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext" to supply and explicitly store a token.`);
-        process.exit(1);
+        process.exit(EXIT_CODE.USER_ERROR);
       }
     }
 
@@ -1243,7 +1643,7 @@ async function main() {
       const credential = await getStoredCredential();
       if (!credential?.token || credential.credential_type !== 'temporary') {
         console.error('Error: Claim commands require a locally stored temporary credential from "register".');
-        process.exit(1);
+        process.exit(EXIT_CODE.USER_ERROR);
       }
       try {
         if (subcommand === 'claim-deny') {
@@ -1252,7 +1652,9 @@ async function main() {
           }, options.timeoutMs);
           const denyData = parseJsonResponse(denyRes, 'Claim denial');
           if (denyRes.statusCode < 200 || denyRes.statusCode >= 300) {
-            throw new Error(apiErrorMessage(denyData, safeJson(denyData)));
+            const err = new Error(apiErrorMessage(denyData, safeJson(denyData)));
+            err.statusCode = denyRes.statusCode;
+            throw err;
           }
           const allowPlaintext = plaintextStorageAllowed(options, credential);
           await saveToken(credential.token, {
@@ -1266,21 +1668,23 @@ async function main() {
           } else {
             console.log('Pending account binding declined. The credential remains limited to isolated temporary memory; formal account login is still recommended.');
           }
-          process.exit(0);
+          process.exit(EXIT_CODE.SUCCESS);
         }
         const status = await claimStatus(options.baseUrl, credential, options);
         if (subcommand === 'claim-confirm' && !status.formal_token) {
           const confirmation_token = status.confirmation_token || credential.pending_confirmation_token;
           if (!confirmation_token) {
             console.error(`No pending human claim confirmation is available. Current status: ${sanitizeTerminalText(status.status || 'unknown')}. Open the stored bind URL first: ${sanitizeTerminalText(credential.bind_url || '(unavailable)')}`);
-            process.exit(1);
+            process.exit(EXIT_CODE.USER_ERROR);
           }
           const confirmRes = await makeHttpRequest(options.baseUrl, '/v1/agents/bind/confirm-current-user', 'POST', { confirmation_token }, {
             Authorization: `Bearer ${credential.token}`,
           }, options.timeoutMs);
           const confirmData = parseJsonResponse(confirmRes, 'Claim confirmation');
           if (confirmRes.statusCode < 200 || confirmRes.statusCode >= 300) {
-            throw new Error(apiErrorMessage(confirmData, safeJson(confirmData)));
+            const err = new Error(apiErrorMessage(confirmData, safeJson(confirmData)));
+            err.statusCode = confirmRes.statusCode;
+            throw err;
           }
           if (credential.pending_confirmation_token) {
             const allowPlaintext = plaintextStorageAllowed(options, credential);
@@ -1293,16 +1697,16 @@ async function main() {
           }
           await claimStatus(options.baseUrl, credential, options);
         }
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       } catch (e) {
         console.error('Claim flow failed:', e.message);
-        process.exit(1);
+        process.exit(exitCodeForError(e));
       }
     }
     
     console.error(`Unknown auth subcommand: ${subcommand || '(missing)'}`);
     printUsage('auth');
-    process.exit(1);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   // 4. REST OPERATIONS (memory, state, restart continuity, TODO, ledger, and diagnostics)
@@ -1321,8 +1725,10 @@ async function main() {
       }, {}, options.timeoutMs);
       const data = parseJsonResponse(res, 'Doctor health check');
       if (res.statusCode < 200 || res.statusCode >= 300 || data.ok === false) {
-        console.error(`Doctor health check failed: ${apiErrorMessage(data, safeJson(data))}`);
-        process.exit(1);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`Doctor health check failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       if (options.json) {
         console.log(safeJson(withDoctorDiagnostics(data, discovery, doctorNextAction({
@@ -1338,17 +1744,17 @@ async function main() {
           : `\nNext: ${SCRIPT_COMMAND} login --allow-plaintext`;
         console.log(`XMemo Service Status: OK\nAuthentication: ${authentication}${nextStep}`);
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Doctor health check failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
 
   if (!token) {
     console.error(`Error: No XMemo credential found. Preferred: set XMEMO_KEY. For formal account login with explicit local storage consent, run "${SCRIPT_COMMAND} login --allow-plaintext". For a limited temporary sandbox only when permitted, run "${SCRIPT_COMMAND} register --reason unattended|declined --allow-plaintext".`);
-    process.exit(1);
+    process.exit(EXIT_CODE.AUTH_ERROR);
   }
 
   if (credential?.credential_type === 'temporary') {
@@ -1357,12 +1763,12 @@ async function main() {
         await requestTemporaryMemoryOperation(command, options, flags, credential);
       } catch (e) {
         console.error('Temporary memory request failed:', e.message);
-        process.exit(1);
+        process.exit(exitCodeForError(e));
       }
       return;
     }
     console.error(`Temporary access supports only remember, recall, and search in its isolated sandbox. Complete formal registration at ${sanitizeTerminalText(credential.bind_url || 'the bind URL shown at registration')} to use ${command}.`);
-    process.exit(1);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   if (command === 'restart-snapshot' || command === 'restart-restore') {
@@ -1376,11 +1782,14 @@ async function main() {
       const succeeded = res.statusCode >= 200 && res.statusCode < 300;
       if (options.json) {
         console.log(safeJson(data));
-        process.exit(succeeded ? 0 : 1);
+        const failCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+        process.exit(succeeded ? EXIT_CODE.SUCCESS : failCode);
       }
       if (!succeeded) {
-        console.error(`${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})`);
-        process.exit(1);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})${reqSuffix}`);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       if (command === 'restart-snapshot') {
         console.log(`✅ Restart snapshot saved.\nID: ${sanitizeTerminalText(extractId(data))}${data.expires_at ? `\nExpires: ${sanitizeTerminalText(data.expires_at)}` : ''}`);
@@ -1394,7 +1803,7 @@ async function main() {
       }
     } catch (e) {
       console.error(`${label} failed:`, e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1424,18 +1833,21 @@ async function main() {
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
       if (options.json) {
         console.log(safeJson(data));
-        process.exit(succeeded ? 0 : 1);
+        const failCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+        process.exit(succeeded ? EXIT_CODE.SUCCESS : failCode);
       }
       if (!succeeded) {
-        console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
-        process.exit(1);
+        const reqId = extractRequestId(data);
+        const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+        console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
+        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       const items = Array.isArray(data.items) ? data.items.length : 0;
       const contextText = sanitizeTerminalText(data.context_text || '');
       console.log(`XMemo Context: ${items} item${items === 1 ? '' : 's'}\n${contextText || 'No matching memories found.'}`);
     } catch (e) {
       console.error('Recall context failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1494,15 +1906,15 @@ async function main() {
           ok: true,
           ...projected,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log(`Memory: ${sanitizeTerminalText(projected.id)} | Path: ${sanitizeTerminalText(projected.path || '(unknown)')} | Version: ${sanitizeTerminalText(projected.version || '(unknown)')}${projected.truncated ? ' [truncated]' : ''}`);
       console.log(`Content: ${formatMemoryContent(projected.content, options.compact)}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Read memory failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1529,7 +1941,7 @@ async function main() {
           ? `Invalid memory ID: '${flags.id}'.`
           : 'Invalid update request.';
         const msg = apiErrorMessage(errData, fallbackMsg);
-        outputRestError(code, msg, options);
+        outputRestError(code, msg, options, errData, EXIT_CODE.USER_ERROR);
       }
 
       const data = handleRestError(res, {
@@ -1553,27 +1965,27 @@ async function main() {
           updated: true,
           ...(typeof record === 'object' ? record : {}),
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log(`✅ Memory updated.\nID: ${sanitizeTerminalText(memoryId)}${flags.path ? `\nPath: ${sanitizeTerminalText(flags.path)}` : ''}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Update memory failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
 
   if (command === 'forget') {
     if (!flags.confirm) {
-      const msg = `Confirmation required to forget memory '${flags.id}'. Pass --confirm to proceed.`;
+      const msg = `Confirmation required to forget memory or ledger record '${flags.id}'. Pass --confirm to proceed.`;
       if (options.json) {
         console.log(safeJson({ ok: false, error: { code: 'confirmation_required', message: msg, target_id: flags.id } }));
       } else {
         console.error(`Error: ${msg}\nTarget: ${sanitizeTerminalText(flags.id)}`);
       }
-      process.exit(1);
+      process.exit(EXIT_CODE.USER_ERROR);
     }
 
     const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/forget`;
@@ -1590,8 +2002,8 @@ async function main() {
       }, options.timeoutMs);
 
       const data = handleRestError(res, {
-        notFoundMessage: `Memory '${flags.id}' not found.`,
-        context: 'Forget memory request',
+        notFoundMessage: `Record '${flags.id}' not found.`,
+        context: 'Forget request',
         options,
       });
 
@@ -1602,14 +2014,14 @@ async function main() {
           mode: 'soft_delete',
           forgotten: true,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
-      console.log(`✅ Memory forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
-      process.exit(0);
+      console.log(`✅ Record forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Forget memory failed:', e.message);
-      process.exit(1);
+      console.error('Forget failed:', e.message);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1670,7 +2082,7 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const transactions = Array.isArray(result.transactions)
@@ -1679,7 +2091,7 @@ async function main() {
 
       if (transactions.length === 0) {
         console.log('No ledger transactions found.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const totalInfo = result.total !== undefined ? ` (total: ${result.total})` : '';
@@ -1693,10 +2105,10 @@ async function main() {
         const desc = tx.description || tx.item || tx.note || '';
         console.log(`[${idx + 1}] ${sanitizeTerminalText(date)} | ${type.toUpperCase()} | ${amount} ${curr}${sanitizeTerminalText(cat)}${desc ? ` | ${sanitizeTerminalText(desc)}` : ''}`);
       });
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('List ledger transactions failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1733,13 +2145,13 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const summaryList = Array.isArray(result.summary) ? result.summary : [];
       if (summaryList.length === 0 && result.total === undefined && result.count === undefined) {
         console.log('No ledger monthly summary available.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       if (summaryList.length > 0) {
@@ -1758,7 +2170,7 @@ async function main() {
           if (count) parts.push(count);
           console.log(`- ${month} (${curr}): ${parts.join(' | ')}`);
         });
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const month = result.month || '(unknown month)';
@@ -1766,10 +2178,10 @@ async function main() {
       const total = result.total !== undefined ? result.total : 0;
       const count = result.count !== undefined ? result.count : 0;
       console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${total} ${curr} across ${count} transaction${count === 1 ? '' : 's'}.`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get ledger monthly summary failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1798,7 +2210,7 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log('XMemo Account Overview:');
@@ -1806,10 +2218,10 @@ async function main() {
       console.log(`- Active Agents: ${result.agents_active ?? 0}`);
       console.log(`- Storage: ${result.storage_mb ?? 0} MB`);
       console.log(`- Tokens (30d): ${result.tokens_30d ?? 0}`);
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get overview failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1844,13 +2256,13 @@ async function main() {
           ...result,
           result,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const activityList = Array.isArray(result.activity) ? result.activity : [];
       if (activityList.length === 0) {
         console.log('No recent activity found.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       const totalInfo = result.total !== undefined ? ` (total: ${result.total})` : '';
@@ -1862,10 +2274,10 @@ async function main() {
         const ref = item.ref_id ? ` [ref: ${item.ref_id}]` : '';
         console.log(`[${idx + 1}] ${sanitizeTerminalText(ts)} | ${type.toUpperCase()} | ${sanitizeTerminalText(summary)}${ref}`);
       });
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get activity failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1917,12 +2329,12 @@ async function main() {
           ok: true,
           ...data,
         }));
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       if ((data.total_count ?? 0) === 0 && (data.filtered_count ?? 0) === 0) {
         console.log('No memory statistics available.');
-        process.exit(0);
+        process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log('XMemo Memory Statistics:');
@@ -1948,10 +2360,10 @@ async function main() {
           console.log(`  * [${dims}]: ${g.count}`);
         });
       }
-      process.exit(0);
+      process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get memory stats failed:', e.message);
-      process.exit(1);
+      process.exit(exitCodeForError(e));
     }
     return;
   }
@@ -1973,18 +2385,25 @@ async function main() {
     }, options.timeoutMs);
 
     const data = parseJsonResponse(res, `${opName} request`);
-    const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
+    const isDoctorAuthInvalid = opName === 'doctor' && data.result?.auth_valid === false;
+    const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false && !isDoctorAuthInvalid;
     if (options.json) {
       const output = opName === 'doctor'
         ? withDoctorDiagnostics(data, discovery, doctorNextAction({ credential, anonymous: false }))
         : data;
       console.log(safeJson(output));
-      process.exit(succeeded ? 0 : 1);
+      const failureExitCode = isDoctorAuthInvalid
+        ? EXIT_CODE.AUTH_ERROR
+        : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
+      process.exit(succeeded ? EXIT_CODE.SUCCESS : failureExitCode);
     }
 
     if (!succeeded) {
-      console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
-      process.exit(1);
+      const reqId = extractRequestId(data);
+      const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
+      console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
+      const failureExitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+      process.exit(failureExitCode);
     }
 
     if (opName === 'doctor') {
@@ -1993,7 +2412,7 @@ async function main() {
         console.log(`XMemo Service Status: OK\nAuthentication: Valid\nScopes: ${extractList(data.result?.scopes).join(', ')}`);
       } else {
         console.log(`XMemo Service Status: OK\nAuthentication: Invalid`);
-        process.exit(1);
+        process.exit(EXIT_CODE.AUTH_ERROR);
       }
     } else if (opName === 'recall' || opName === 'search') {
       const results = extractList(data.result);
@@ -2041,11 +2460,31 @@ async function main() {
     }
   } catch (e) {
     console.error('Request failed:', e.message);
-    process.exit(1);
+    process.exit(exitCodeForError(e));
   }
 }
 
-main().catch((error) => {
-  console.error(`Error: ${sanitizeTerminalText(error?.message || error)}`);
-  process.exit(1);
-});
+export {
+  EXIT_CODE,
+  exitCodeForHttpStatus,
+  exitCodeForErrorCode,
+  exitCodeForError,
+  formatRemainingValidity,
+  extractRequestId,
+  extractExpiresInSeconds,
+  isStdoutTty,
+  COMMAND_USAGE_REGISTRY,
+  buildTopLevelHelp,
+  parseArgs,
+  readStdinContent,
+  resolveCommandInputs,
+};
+
+const isDirectExecution = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(`Error: ${sanitizeTerminalText(error?.message || error)}`);
+    process.exit(exitCodeForError(error));
+  });
+}

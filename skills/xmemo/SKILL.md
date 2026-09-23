@@ -142,8 +142,13 @@ Never ask the user to paste a raw token into chat, logs, or project files.
   `ledger-list` / `ledger-summary` (read-only), and inspect account metrics via
   `overview`, `activity`, and `stats`.
 - **Confirm destructive actions.** Pass explicit target IDs and verify intentions
-  before removing or modifying knowledge. An authorized credential with
-  `memory:write` scope is required for `update` and `forget`.
+  before removing or modifying records. `update` requires an update-capable scope
+  (`memory:update`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
+  `forget` requires a delete-capable scope (`memory:delete`, `delete:memories`,
+  `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
+  Both operations strictly require BOTH an owner-scoped API key AND an accepted scope.
+  Target IDs from either memory records or `ledger-list` transaction records (`transaction.id`)
+  can be passed directly to `forget --id <id> --confirm`.
 - **Read provenance correctly.** `agent_id`, `agent_instance_id`, and
   `agent_boundary` are attribution signals, not authorization boundaries.
 
@@ -153,7 +158,7 @@ The Skill script handles all operations directly from the Skill root:
 
 ```text
 # Memory Operations
-node scripts/xmemo-skill.mjs remember --content "..." --path "..."
+node scripts/xmemo-skill.mjs remember (--content "..." | --content - | --file <path>) [--path "..."] [--metadata '{"k":"v"}']
 node scripts/xmemo-skill.mjs recall --query "..." [--limit <n>] [--compact]
 node scripts/xmemo-skill.mjs search --query "..." [--limit <n>] [--compact]
 node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]
@@ -196,9 +201,14 @@ node scripts/xmemo-skill.mjs auth claim-deny [--allow-plaintext]
 node scripts/xmemo-skill.mjs logout [--revoke-environment-token]
 ```
 
-The script supports JSON output with `--json`, command-specific usage with
-`--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact
-recall/search output with `--compact`. `doctor --json` adds a bounded
+The script supports JSON output with `--json`, human-readable terminal output
+with `--terminal`, command-specific usage with `--help`, `--version`, per-request
+timeouts with `--timeout-ms`, and compact recall/search output with `--compact`.
+When stdout is piped or redirected to a non-TTY stream and `--json` is not
+explicitly passed, commands automatically default to JSON output; pass `--terminal`
+to explicitly preserve human-readable terminal text. Terminal errors include the
+server `request_id` whenever present in the error response. `login` displays the
+remaining authorization validity countdown while polling. `doctor --json` adds a bounded
 `clientDiagnostics` object: a read-only discovery summary and a `nextAction`
 command for the next credential check or formal sign-in. The summary includes
 the advertised service version when present, MCP URL, supported clients, and
@@ -206,6 +216,7 @@ standalone Skill package version and operations so compatibility can be checked
 without inspecting the raw discovery document. If discovery is unavailable,
 `clientDiagnostics.discovery.status` is `unavailable`; a successful doctor
 health check still succeeds. It never prints token values or prefixes.
+`remember` accepts direct text via `--content "<text>"`, piped standard input via `--content -`, or a file via `--file <path>`. These content options are mutually exclusive; file or stdin inputs undergo identical local validation and outbound request payload formatting without modifying server request structures. Missing or unreadable files exit with code 1 and issue zero network requests.
 
 When native XMemo MCP tools are present, use `create_restart_snapshot` and
 `restore_restart_snapshot` for the same full-continuity workflow. The bundled
@@ -235,22 +246,32 @@ remain limited to `remember`, `recall`, and `search`.
   never downgraded to `not_found`. Non-existent memories return 404 `not_found`,
   and 401/403 errors remain preserved. `update --json` returns
   `{ ok: true, id, path, updated: true, ... }`.
-- `forget` performs soft-deletion of an existing memory backed by
-  `POST /v1/memories/{id}/forget`. It accepts `--id` (required), `--reason`
-  (optional explanation), and mandatory `--confirm`. Requires `memory:write`
-  scope. **Accidental Deletion Guard**: If `--confirm` is omitted, the command
-  immediately prints the target ID and exits with non-zero exit code without
-  dispatching any network request. When confirmed, it sends
-  `{ mode: 'soft_delete', reason }`. Successful execution outputs
-  `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
-  Missing records return 404 `not_found`, and 401/403 errors are preserved.
+- `forget` performs soft-deletion of an existing memory or ledger record backed by
+  `POST /v1/memories/{id}/forget`. It accepts `--id` (required; accepts memory ID,
+  logical reference, or `ledger-list` transaction ID), `--reason` (optional
+  explanation), and mandatory `--confirm`. Authorization strictly requires BOTH an
+  owner-scoped API key AND an accepted delete-capable scope: `memory:delete`,
+  `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`,
+  `admin`, or `*`. Standard credentials carrying `memory:write` are accepted by
+  the server's delete gate; read-only tokens (such as `ledger:read` or `memory:read`
+  alone) or unclaimed agent keys trigger HTTP 403 `delete scope required` / `Access denied`.
+  **Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately
+  prints the target ID and exits with non-zero exit code without dispatching any
+  network request. When confirmed, it sends `{ mode: 'soft_delete', reason }`.
+  When a ledger transaction ID is passed, the server lifecycle resolver looks up the
+  backing memory record, soft-deletes it, and excludes it from future ledger listings.
+  Successful execution outputs `{ ok: true, id, mode: 'soft_delete', forgotten: true }`
+  under `--json`. Missing records return 404 `not_found`, and 401/403 errors are
+  preserved without downgrade (e.g. 403 `delete scope required`).
 
 ### Ledger Bookkeeping (`ledger-list`, `ledger-summary`)
 
 - `ledger-list` is a strictly read-only query backed by
   `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring
   `ledger:read` scope). It retrieves financial and expense transactions without
-  any write or delete capabilities. It accepts `--limit <n>`, `--offset <n>`,
+  any write or delete capabilities. There is no separate `ledger-delete` command;
+  to remove or void a transaction, obtain its `id` from `ledger-list` and invoke
+  `forget --id <transaction_id> --confirm`. It accepts `--limit <n>`, `--offset <n>`,
   `--currency <code>`, `--from <date>` (`date_from`), `--to <date>` (`date_to`),
   `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and `--type <type>`
   (`transaction_type`). As a convenience, `--month <YYYY-MM>` can be specified to
@@ -375,7 +396,18 @@ items, verify the credential scopes first. A valid `memory:read` token alone is
 not proof of Knowledge authorization; do not fall back to a broader token or
 attempt to inspect another user's Knowledge space.
 
-For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
+For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`. For automated pre-release verification across CLI commands, exit codes, and JSON envelopes, use `node scripts/smoke-test.mjs` (documented in `references/operations.md`).
+
+## Exit Codes
+
+All CLI operations conform to normalized, deterministic exit codes:
+
+| Exit Code | Classification | Conditions & Semantics | Next Action |
+|:---:|:---|:---|:---|
+| `0` | Success | Operation succeeded, valid empty state, help (`--help`), or version (`--version`). | Proceed with next task. |
+| `1` | User Error | Local argument validation failure, mutually exclusive flags, missing `--confirm`, missing or unreadable input file, or HTTP 4xx client errors (400 Bad Request, 404 Not Found, 428 Precondition Required, 429 Too Many Requests). | Check parameters, correct command arguments, or check resource ID. |
+| `2` | Auth Error | Missing credentials, unauthenticated request, expired/invalid token, HTTP 401 Unauthorized, HTTP 403 Forbidden / Tenant Forbidden, `auth status --verify` failure, or `doctor` auth invalid. | Run `login --allow-plaintext` or configure `XMEMO_KEY`. |
+| `3` | Server / Network Error | HTTP 5xx server errors, connection refused (`ECONNREFUSED`), host unreachable (`ENOTFOUND`), network timeout (`ETIMEDOUT`), or response size exceeding safety limit (> 8 MiB). | Retry with exponential backoff or check network reachability via `doctor --anonymous`. |
 
 ## Good Memory Candidates
 

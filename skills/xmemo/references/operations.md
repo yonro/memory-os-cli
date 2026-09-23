@@ -11,6 +11,8 @@ bundled `xmemo` Skill. This is the primary standalone runtime for direct REST ac
 - Examples
 - Direct execution details
 - Output and terminal safety
+- Exit codes
+- Pre-release smoke testing
 - Limitations
 
 ## Runtime Selection
@@ -78,7 +80,7 @@ temporary credential and removes pending confirmation data.
 |--------------|---------|
 | `read` | Read a specific memory by ID with minimal projection and optional character pagination |
 | `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
-| `forget` | Soft-delete a memory via `POST /v1/memories/{id}/forget` (requires explicit `--confirm`) |
+| `forget` | Soft-delete a memory or ledger transaction via `POST /v1/memories/{id}/forget` (requires delete scope and explicit `--confirm`) |
 | `ledger-list` | List financial/expense transactions via `POST /v1/skill/operations` (operation: `ledger-list`, requires `ledger:read` scope) |
 | `ledger-summary` | Retrieve monthly transaction summary via `POST /v1/skill/operations` (operation: `ledger-summary`, requires `ledger:read` scope) |
 | `overview` | Display account-level memory count, storage, and token consumption via `POST /v1/skill/operations` (operation: `overview`, requires `memory:read` scope) |
@@ -151,19 +153,26 @@ Validation and authorization:
 - Authentication (401) and permission (403) rejections remain accurately categorized.
 - Under `--json`, successful update returns `{ ok: true, id, path, updated: true, ... }`.
 
-### Forget a memory with confirmation
+### Forget a memory or ledger transaction with confirmation
 
 ```text
 node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm
 node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --reason "Deprecated convention"
-node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --json
+node scripts/xmemo-skill.mjs forget --id <transaction_id> --confirm
+node scripts/xmemo-skill.mjs forget --id <id> --confirm --json
 ```
 
 `forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }` to perform a safe soft deletion.
+Target references:
+- Accepts a memory UUID, logical memory reference, or a ledger transaction ID (obtained via `ledger-list`).
+- When a transaction ID is provided, the server lifecycle resolver resolves the backing ledger memory record and soft-deletes it, omitting it from future `ledger-list` queries.
+Scope & Authorization:
+- Authorization strictly requires BOTH an owner-scoped API key AND an accepted delete-capable scope: `memory:delete`, `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, or `*`.
+- Standard credentials carrying `memory:write` are accepted. Read-only tokens (such as `ledger:read` or `memory:read` alone) or unclaimed agent keys trigger HTTP 403 `delete scope required` / `Access denied`.
 **Accidental Deletion Guard**:
 - If `--confirm` is not passed, the script exits immediately with code 1, prints the target ID, and **issues 0 HTTP requests**.
 - When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
-- A 404 response reports `not_found`.
+- A 404 response reports `not_found` (e.g. non-existent memory or transaction record).
 - 401/403 errors are reported without downgrade.
 
 ### Query ledger transactions (read-only)
@@ -177,7 +186,7 @@ node scripts/xmemo-skill.mjs ledger-list --month 2026-09 --json
 ```
 
 `ledger-list` queries personal financial transactions via `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring `ledger:read` scope).
-This command is strictly read-only and possesses zero write or deletion capabilities.
+This command is strictly read-only and possesses zero write or deletion capabilities. To delete or void a transaction, obtain its `id` from `ledger-list` and invoke `forget --id <transaction_id> --confirm`.
 Allowed server arguments:
 - `--limit <n>`: Page limit (default 30, max 100).
 - `--offset <n>`: Pagination offset (default 0).
@@ -296,8 +305,25 @@ Behavior and error classification:
 ### Remember a decision
 
 ```text
+# Direct content text
 node scripts/xmemo-skill.mjs remember --content "Use pnpm for package management in this repo" --path "projects/memory-os-cli/conventions"
+
+# Read content from standard input (stdin)
+cat docs/conventions.md | node scripts/xmemo-skill.mjs remember --content - --path "projects/memory-os-cli/conventions"
+
+# Import content from a local file
+node scripts/xmemo-skill.mjs remember --file docs/conventions.md --path "projects/memory-os-cli/conventions"
 ```
+
+`remember` creates a durable memory record via `POST /v1/skill/operations` (or `POST /v1/remember` in temporary mode).
+Content input options:
+- `--content <text>`: Direct string content.
+- `--content -`: Reads the full content from standard input until EOF.
+- `--file <path>`: Reads the full content from the specified file path.
+- **Mutual exclusion**: Specifying both `--content` and `--file`, or multiple `--content` / `--file` flags, is rejected locally with exit code 1 and **zero network requests**.
+- **Payload & validation consistency**: Stdin and file content undergo identical validation and are transmitted in the same outbound payload format (`arguments: { content: <text>, path: ... }`). Server request structure and byte integrity are preserved exactly across all input paths.
+- **File read failures**: If the target file does not exist (`ENOENT`) or is inaccessible (`EACCES`), the command immediately reports a local error with exit code 1 and makes **zero network requests**.
+- Empty or whitespace-only content is rejected locally before request transmission.
 
 ### Recall before acting
 
@@ -416,10 +442,66 @@ validation remain intact.
 `remember` and `expense-add` print the server-returned memory or ledger ID.
 `recall` and `search` accept `--compact` to render each memory on one shortened
 line; use `--json` when a caller needs the complete redacted response payload.
+When stdout is connected to a non-TTY stream (e.g. piped or redirected) and
+neither `--json` nor `--terminal` was explicitly specified, commands automatically
+default to JSON output. Pass `--terminal` (or `--no-json`) to force human-readable
+terminal formatting even when piping. Terminal error messages display the server
+`request_id` whenever provided in the service response body.
 Human-readable output removes terminal control sequences. For the exact accepted
 parameters of any command, run
 `node scripts/xmemo-skill.mjs <command> --help`; use `--version` to identify the
 runtime and `--timeout-ms <ms>` to bound each network request.
+
+## Exit Codes
+
+All CLI operations conform to normalized, deterministic exit codes across all execution modes:
+
+| Exit Code | Classification | Conditions & Semantics | Next Action |
+|:---:|:---|:---|:---|
+| `0` | Success | Operation succeeded, valid empty state results (e.g. zero transactions or memories found), `--help`, or `--version`. | Proceed with next task. |
+| `1` | User Error | Local argument/flag validation failure, mutually exclusive flags (e.g. `--content` with `--file`), missing mandatory `--confirm`, missing or unreadable input file, or HTTP 4xx client errors (400 Bad Request, 404 Not Found, 428 Precondition Required, 429 Too Many Requests). | Check parameters, correct command arguments, or check resource ID. |
+| `2` | Auth Error | Missing credentials (unauthenticated), expired or invalid token, HTTP 401 Unauthorized, HTTP 403 Forbidden / Tenant Forbidden, `auth status --verify` failure, or `doctor` auth invalid. | Run `login --allow-plaintext` or configure `XMEMO_KEY`. |
+| `3` | Server / Network Error | HTTP 5xx server errors, connection refused (`ECONNREFUSED`), host unreachable (`ENOTFOUND`), request timeout (`ETIMEDOUT`), or response size exceeding safety limit (> 8 MiB). | Retry with exponential backoff or check network reachability via `doctor --anonymous`. |
+
+## Pre-Release Smoke Testing
+
+Before releasing or publishing changes to the XMemo skill, run the automated smoke test script to verify end-to-end command execution, exit code normalization, and `--json` envelope compliance against live or mock endpoints:
+
+```bash
+# Run read-only verification against default or target base URL
+node skills/xmemo/scripts/smoke-test.mjs --base-url https://xmemo.dev
+
+# Machine-readable output in CI pipelines
+node skills/xmemo/scripts/smoke-test.mjs --json
+
+# Execute write-side commands against disposable test accounts or local mocks
+node skills/xmemo/scripts/smoke-test.mjs --execute-writes --base-url http://127.0.0.1:8080
+```
+
+### Safety & Write Gating
+- **Read-Only Commands (Always Executed)**:
+  `overview`, `activity`, `stats`, `ledger-list`, `ledger-summary`, `todo-list`, `search`, `recall`, `recall-context`, `read`, `restore-state`, `doctor --anonymous`, `auth status`, `--version`, `--help`.
+- **Write Commands (Explicitly Gated)**:
+  `remember`, `update`, `forget`, `todo-add`, `todo-done`, `expense-add`, `save-state`, `restart-snapshot`, `restart-restore`.
+  Write commands are skipped by default with status `skipped`. They only execute when the `--execute-writes` CLI flag is explicitly passed, protecting production accounts from data pollution or unwanted modifications during smoke testing.
+
+### Validation Semantics
+- **Exit Codes**: Asserts that successful commands exit with code 0 (or expected exit code).
+- **JSON Envelopes**: Verifies that commands invoked with `--json` produce valid JSON output containing required envelope keys (`ok: true`, or `status`, `context_text`, and structured `error.code` string on failure).
+- **Fail-Fast & Failure Inventory**: If any command unexpectedly fails or produces an invalid envelope, the runner terminates with exit code 1 and prints a detailed checklist of failed commands, their exit codes, and error descriptions (or a `{ "ok": false, "failures": [...] }` envelope in JSON mode).
+
+### CLI Options
+
+| Option | Default | Description |
+|---|---|---|
+| `--base-url <url>` | `https://xmemo.dev` | XMemo backend service URL |
+| `--timeout-ms <ms>` | `30000` | Request timeout per command in milliseconds |
+| `--execute-writes` | `false` | Enable write command execution (otherwise skipped) |
+| `--token <token>` | (env / stored) | Auth token for skill execution (`XMEMO_KEY` fallback) |
+| `--script-path <path>` | (bundled) | Path to `xmemo-skill.mjs` |
+| `--json` | `false` | Output structured JSON summary |
+| `--verbose` | `false` | Print detailed sub-process stdout/stderr |
+| `--help` | `false` | Display command help and exit |
 
 ## Limitations
 

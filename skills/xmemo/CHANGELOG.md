@@ -1,5 +1,22 @@
 # XMemo Skill Change Log
 
+## [Unreleased]
+
+## 1.1.20
+
+### Added
+
+- Add pre-release smoke-test script (`scripts/smoke-test.mjs`) to validate exit codes, `--json` envelope keys (`ok: true`, error `error.code`), and command safety across all read-only commands by default, gating write commands behind `--execute-writes` and outputting structured failure checklists.
+- Support stdin (`--content -`) and file import (`--file <path>`) for `remember`, mutually exclusive with `--content <text>`, with byte-identical payload validation and transmission.
+
+### Changed
+
+- Append server `request_id` to terminal error output when returned in server error responses.
+- Display remaining authorization validity countdown while waiting for authorization in `login` (e.g. `Waiting for authorization... (valid for 9m32s)`).
+- Automatically default to JSON output when stdout is not a TTY (e.g. piped or redirected) unless explicit `--terminal` (`--no-json`, `--plain`) is provided.
+- Merge duplicate usage blocks into a single source of truth, aligning command arguments and eliminating drift between `--help` and command-specific help.
+- Normalize process exit codes across all commands: `0` for success/help/version/valid empty states, `1` for user argument/flag/file validation and 4xx client errors, `2` for missing credentials and 401/403 authentication/authorization errors, and `3` for 5xx server errors, connection refusal, timeouts, and oversize response limits.
+
 ## 1.1.19
 
 ### Changed
