@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readdir, readFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -100,23 +100,53 @@ test('standalone Skill installers remain HTTPS-only and package the expected ent
   }
 });
 
-test('skills/xmemo package directory strictly contains only allowed consumer assets', async () => {
-  const skillDir = path.join(repoRoot, 'skills/xmemo');
-  async function getFiles(dir) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    const files = await Promise.all(
-      entries.map(async (entry) => {
-        const res = path.join(dir, entry.name);
-        return entry.isDirectory() ? getFiles(res) : res;
-      })
-    );
-    return files.flat();
+export async function getSkillDirectoryFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const res = path.join(dir, entry.name);
+      return entry.isDirectory() ? getSkillDirectoryFiles(res) : res;
+    })
+  );
+  return files.flat();
+}
+
+export function isSensitivePathSegment(segment) {
+  const lower = segment.toLowerCase();
+  if (lower.startsWith('.env')) return true;
+  return /(secret|token|key|credential)/i.test(lower);
+}
+
+export function validateSkillPathAllowlist(relPath) {
+  const normalized = relPath.split(path.sep).join('/');
+  const baseAllowed = new Set([
+    'CHANGELOG.md',
+    'SKILL.md',
+    'skill-card.md',
+    'references/operations.md',
+    'references/troubleshooting.md',
+    'scripts/xmemo-skill.mjs',
+  ]);
+  if (baseAllowed.has(normalized)) {
+    return true;
   }
+  if (/^scripts\/lib\/[a-zA-Z0-9_-]+\.mjs$/.test(normalized)) {
+    return true;
+  }
+  if (/^scripts\/commands\/[a-zA-Z0-9_-]+\.mjs$/.test(normalized)) {
+    return true;
+  }
+  return false;
+}
 
-  const allFiles = (await getFiles(skillDir))
-    .map((f) => path.relative(skillDir, f).split(path.sep).join('/'))
-    .sort();
+export const FORBIDDEN_SECURITY_PATTERNS = [
+  { pattern: /child_process/, name: 'child_process', codeOnly: false },
+  { pattern: /\beval\s*\(/, name: 'eval()', codeOnly: false },
+  { pattern: /\bnew\s+Function\b/, name: 'new Function', codeOnly: false },
+  { pattern: /\bimport\s*\(/, name: 'dynamic import()', codeOnly: true },
+];
 
+export async function assertSkillDirectoryIntegrity(skillDir) {
   const requiredFiles = [
     'CHANGELOG.md',
     'SKILL.md',
@@ -125,39 +155,182 @@ test('skills/xmemo package directory strictly contains only allowed consumer ass
     'scripts/xmemo-skill.mjs',
   ];
 
-  // If skill-card.md exists in repo, it is permitted alongside the required consumer files
-  const hasSkillCard = allFiles.includes('skill-card.md');
-  const expectedFiles = hasSkillCard
-    ? [...requiredFiles, 'skill-card.md'].sort()
-    : [...requiredFiles].sort();
+  const allFiles = await getSkillDirectoryFiles(skillDir);
+  const relPaths = allFiles.map((f) => path.relative(skillDir, f).split(path.sep).join('/')).sort();
 
-  assert.deepEqual(allFiles, expectedFiles);
-});
-
-test('skills/xmemo does not import or execute child_process outside the entrypoint', async () => {
-  const skillDir = path.join(repoRoot, 'skills/xmemo');
-  async function getFiles(dir) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    const files = await Promise.all(
-      entries.map(async (entry) => {
-        const res = path.join(dir, entry.name);
-        return entry.isDirectory() ? getFiles(res) : res;
-      })
-    );
-    return files.flat();
+  for (const req of requiredFiles) {
+    assert.ok(relPaths.includes(req), `Required file missing from skill package: ${req}`);
   }
 
-  const allFiles = await getFiles(skillDir);
   for (const filePath of allFiles) {
     const relPath = path.relative(skillDir, filePath).split(path.sep).join('/');
-    if (relPath === 'scripts/xmemo-skill.mjs') {
-      continue;
+    const segments = relPath.split('/');
+
+    for (const segment of segments) {
+      if (isSensitivePathSegment(segment)) {
+        throw new Error(`C3 violation: sensitive path segment "${segment}" in "${relPath}"`);
+      }
     }
+
+    if (!validateSkillPathAllowlist(relPath)) {
+      throw new Error(`Allowlist violation: unexpected file "${relPath}" in skill package`);
+    }
+
+    const isCodeFile = /\.(m?js|cjs)$/.test(relPath);
     const content = await readFile(filePath, 'utf8');
-    assert.doesNotMatch(
-      content,
-      /child_process/,
-      `${relPath} should not reference or import child_process`
+    for (const { pattern, name, codeOnly } of FORBIDDEN_SECURITY_PATTERNS) {
+      if (codeOnly && !isCodeFile) {
+        continue;
+      }
+      if (pattern.test(content)) {
+        throw new Error(`Security violation: forbidden pattern "${name}" found in "${relPath}"`);
+      }
+    }
+  }
+}
+
+test('skills/xmemo package directory strictly adheres to allowlist and security rules', async () => {
+  const skillDir = path.join(repoRoot, 'skills/xmemo');
+  await assertSkillDirectoryIntegrity(skillDir);
+});
+
+test('skills/xmemo security guard rejects C3 sensitive file/dir names (negative tests)', async () => {
+  const skillDir = path.join(repoRoot, 'skills/xmemo');
+
+  // Negative 1: file named token.mjs in scripts/lib/
+  const tempLibDir = path.join(skillDir, 'scripts', 'lib');
+  const tempTokenFile = path.join(tempLibDir, 'token.mjs');
+  try {
+    await mkdir(tempLibDir, { recursive: true });
+    await writeFile(tempTokenFile, 'export const token = "abc";\n', 'utf8');
+    await assert.rejects(
+      async () => {
+        await assertSkillDirectoryIntegrity(skillDir);
+      },
+      /C3 violation: sensitive path segment "token\.mjs"/
     );
+  } finally {
+    await rm(tempTokenFile, { force: true });
+    const remaining = await readdir(tempLibDir).catch(() => []);
+    if (remaining.length === 0) {
+      await rm(tempLibDir, { recursive: true, force: true });
+    }
+  }
+
+  // Negative 2: directory named secret_dir
+  const tempSecretDir = path.join(skillDir, 'secret_dir');
+  const tempInSecret = path.join(tempSecretDir, 'dummy.mjs');
+  try {
+    await mkdir(tempSecretDir, { recursive: true });
+    await writeFile(tempInSecret, 'export const x = 1;\n', 'utf8');
+    await assert.rejects(
+      async () => {
+        await assertSkillDirectoryIntegrity(skillDir);
+      },
+      /C3 violation: sensitive path segment "secret_dir"/
+    );
+  } finally {
+    await rm(tempSecretDir, { recursive: true, force: true });
+  }
+
+  // Negative 3: .env file
+  const tempEnvFile = path.join(skillDir, '.env.local');
+  try {
+    await writeFile(tempEnvFile, 'VAR=1\n', 'utf8');
+    await assert.rejects(
+      async () => {
+        await assertSkillDirectoryIntegrity(skillDir);
+      },
+      /C3 violation: sensitive path segment "\.env\.local"/
+    );
+  } finally {
+    await rm(tempEnvFile, { force: true });
   }
 });
+
+test('skills/xmemo security guard rejects disallowed file paths and extensions (negative tests)', async () => {
+  const skillDir = path.join(repoRoot, 'skills/xmemo');
+
+  // Negative 1: text file in scripts/lib
+  const tempLibDir = path.join(skillDir, 'scripts', 'lib');
+  const tempTxtFile = path.join(tempLibDir, 'extra.txt');
+  try {
+    await mkdir(tempLibDir, { recursive: true });
+    await writeFile(tempTxtFile, 'text content\n', 'utf8');
+    await assert.rejects(
+      async () => {
+        await assertSkillDirectoryIntegrity(skillDir);
+      },
+      /Allowlist violation: unexpected file "scripts\/lib\/extra\.txt"/
+    );
+  } finally {
+    await rm(tempTxtFile, { force: true });
+    const remaining = await readdir(tempLibDir).catch(() => []);
+    if (remaining.length === 0) {
+      await rm(tempLibDir, { recursive: true, force: true });
+    }
+  }
+
+  // Negative 2: rogue file at root
+  const rogueFile = path.join(skillDir, 'rogue.mjs');
+  try {
+    await writeFile(rogueFile, 'export const rogue = true;\n', 'utf8');
+    await assert.rejects(
+      async () => {
+        await assertSkillDirectoryIntegrity(skillDir);
+      },
+      /Allowlist violation: unexpected file "rogue\.mjs"/
+    );
+  } finally {
+    await rm(rogueFile, { force: true });
+  }
+});
+
+test('skills/xmemo security guard rejects dangerous code patterns (negative tests)', async () => {
+  const skillDir = path.join(repoRoot, 'skills/xmemo');
+  const tempLibDir = path.join(skillDir, 'scripts', 'lib');
+
+  const dangerousCases = [
+    {
+      file: 'bad-cp.mjs',
+      content: "import cp from 'child_process';\n",
+      patternName: 'child_process',
+    },
+    {
+      file: 'bad-eval.mjs',
+      content: 'export function run(x) { return eval(x); }\n',
+      patternName: 'eval()',
+    },
+    {
+      file: 'bad-func.mjs',
+      content: 'export const fn = new Function("a", "return a");\n',
+      patternName: 'new Function',
+    },
+    {
+      file: 'bad-dyn-import.mjs',
+      content: 'export async function load(m) { return import(m); }\n',
+      patternName: 'dynamic import()',
+    },
+  ];
+
+  for (const { file, content, patternName } of dangerousCases) {
+    const targetPath = path.join(tempLibDir, file);
+    try {
+      await mkdir(tempLibDir, { recursive: true });
+      await writeFile(targetPath, content, 'utf8');
+      await assert.rejects(
+        async () => {
+          await assertSkillDirectoryIntegrity(skillDir);
+        },
+        new RegExp(`Security violation: forbidden pattern "${patternName.replace('(', '\\(').replace(')', '\\)')}"`)
+      );
+    } finally {
+      await rm(targetPath, { force: true });
+      const remaining = await readdir(tempLibDir).catch(() => []);
+      if (remaining.length === 0) {
+        await rm(tempLibDir, { recursive: true, force: true });
+      }
+    }
+  }
+});
+

@@ -86,17 +86,39 @@ jobs:
             [[ "$name" == .env || "$name" == .env.* || "$name" == *secret* || "$name" == *token* || "$name" == *key* || "$name" == *credential* ]]
           }
 
+          excluded_files=()
           while IFS= read -r -d '' source_file; do
             relative_path="${source_file#"$source_dir"/}"
-            filename="${relative_path##*/}"
-            if is_sensitive_name "$filename"; then
-              echo "Excluding sensitive-looking file: $relative_path"
+            IFS='/' read -ra path_parts <<< "$relative_path"
+            sensitive=false
+            for part in "${path_parts[@]}"; do
+              if is_sensitive_name "$part"; then
+                sensitive=true
+                break
+              fi
+            done
+            if [[ "$sensitive" == "true" ]]; then
+              echo "ERROR: Sensitive-looking file found in $source_dir: $relative_path" >&2
+              excluded_files+=("$relative_path")
               continue
             fi
             destination="$staging_dir/$relative_path"
             mkdir -p "$(dirname "$destination")"
             cp --preserve=mode,timestamps -- "$source_file" "$destination"
           done < <(find "$source_dir" -type f -print0 | LC_ALL=C sort -z)
+
+          if (( ${#excluded_files[@]} > 0 )); then
+            echo "Release packaging rejected: ${#excluded_files[@]} file(s) matched sensitive name rules: ${excluded_files[*]}" >&2
+            exit 1
+          fi
+
+          source_manifest="$(cd "$source_dir" && find . -type f | LC_ALL=C sort)"
+          staged_manifest="$(cd "$staging_dir" && find . -type f | LC_ALL=C sort)"
+          if [[ "$source_manifest" != "$staged_manifest" ]]; then
+            echo "Release packaging rejected: source files and staged archive files do not match" >&2
+            diff -u <(echo "$source_manifest") <(echo "$staged_manifest") >&2 || true
+            exit 1
+          fi
 
           test -f "$staging_dir/scripts/xmemo-skill.mjs"
           if ! find "$staging_dir" -type f -print -quit | grep -q .; then

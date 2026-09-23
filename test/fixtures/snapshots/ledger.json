@@ -1,0 +1,231 @@
+{
+  "expense-add-terminal": {
+    "id": "expense-add-terminal",
+    "args": [
+      "expense-add",
+      "--item",
+      "Domain name",
+      "--amount",
+      "12.99",
+      "--currency",
+      "USD"
+    ],
+    "code": 0,
+    "stdout": "✅ Expense recorded.\nID: exp_golden_123\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "expense-add",
+          "arguments": {
+            "item": "Domain name",
+            "amount": "12.99",
+            "currency": "USD"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "expense-add-json": {
+    "id": "expense-add-json",
+    "args": [
+      "expense-add",
+      "--item",
+      "Domain name",
+      "--amount",
+      "12.99",
+      "--currency",
+      "USD",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{\"id\":\"exp_golden_123\",\"item\":\"Domain name\",\"amount\":\"12.99\",\"currency\":\"USD\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "expense-add",
+          "arguments": {
+            "item": "Domain name",
+            "amount": "12.99",
+            "currency": "USD"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "expense-add-error-missing-amount": {
+    "id": "expense-add-error-missing-amount",
+    "args": [
+      "expense-add",
+      "--item",
+      "Domain name"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: expense-add requires --amount.\n",
+    "httpRequests": []
+  },
+  "expense-add-help": {
+    "id": "expense-add-help",
+    "args": [
+      "expense-add",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs expense-add --item <text> --amount <number> --currency <code> [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "ledger-list-terminal": {
+    "id": "ledger-list-terminal",
+    "args": [
+      "ledger-list"
+    ],
+    "code": 0,
+    "stdout": "XMemo Ledger Transactions (1):\n[1] 2026-09-24T00:00:00Z | EXPENSE | 15.5 USD | Server hosting\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "ledger-list",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "ledger-list-json": {
+    "id": "ledger-list-json",
+    "args": [
+      "ledger-list",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"0\":{\"id\":\"tx_golden_123\",\"item\":\"Server hosting\",\"amount\":15.5,\"currency\":\"USD\",\"created_at\":\"2026-09-24T00:00:00Z\"},\"ok\":true,\"result\":[{\"id\":\"tx_golden_123\",\"item\":\"Server hosting\",\"amount\":15.5,\"currency\":\"USD\",\"created_at\":\"2026-09-24T00:00:00Z\"}]}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "ledger-list",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "ledger-list-error-404": {
+    "id": "ledger-list-error-404",
+    "args": [
+      "ledger-list"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: No records found (Code: not_found)\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "ledger-list",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "ledger-list-help": {
+    "id": "ledger-list-help",
+    "args": [
+      "ledger-list",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "ledger-summary-terminal": {
+    "id": "ledger-summary-terminal",
+    "args": [
+      "ledger-summary"
+    ],
+    "code": 0,
+    "stdout": "No ledger monthly summary available.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "ledger-summary",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "ledger-summary-json": {
+    "id": "ledger-summary-json",
+    "args": [
+      "ledger-summary",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"total_amount\":15.5,\"currency\":\"USD\",\"by_category\":{\"hosting\":15.5},\"result\":{\"total_amount\":15.5,\"currency\":\"USD\",\"by_category\":{\"hosting\":15.5}}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "ledger-summary",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "ledger-summary-help": {
+    "id": "ledger-summary-help",
+    "args": [
+      "ledger-summary",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs ledger-summary [--months <n>] [--currency <code>] [--type <type>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  }
+}
