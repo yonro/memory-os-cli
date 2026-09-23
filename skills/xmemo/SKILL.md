@@ -396,7 +396,7 @@ items, verify the credential scopes first. A valid `memory:read` token alone is
 not proof of Knowledge authorization; do not fall back to a broader token or
 attempt to inspect another user's Knowledge space.
 
-For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`. For automated pre-release verification across CLI commands, exit codes, and JSON envelopes, use `node scripts/smoke-test.mjs` (documented in `references/operations.md`).
+For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
 
 ## Exit Codes
 

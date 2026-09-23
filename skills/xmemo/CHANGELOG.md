@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 发布包精简：移出维护者预发测试脚本（`smoke-test.mjs`）与发版流程文档，仅保留消费者核心技能资产；维护者流程迁移至仓库级 `scripts/` 与 `docs/`。
+
 ## 1.1.21
 
 ### Fixed
