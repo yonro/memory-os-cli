@@ -201,6 +201,7 @@ export function handleRestError(res, { notFoundMessage, context = 'REST request'
   return data;
 }
 
+// HTTP request helper
 export function makeHttpRequest(baseUrl, apiPath, method, body = null, headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     try {
@@ -288,6 +289,7 @@ export async function fetchTemporaryLimits(baseUrl, timeoutMs) {
     }
     return { max_items, ttl_seconds, max_lifetime_seconds };
   } catch {
+    // Discovery must not make an otherwise available registration endpoint unusable.
     return { ...DEFAULT_TEMPORARY_LIMITS };
   }
 }
