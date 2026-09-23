@@ -1,0 +1,169 @@
+{
+  "prereq-no-credentials-remember": {
+    "id": "prereq-no-credentials-remember",
+    "args": [
+      "remember",
+      "--content",
+      "Note without credentials"
+    ],
+    "code": 2,
+    "stdout": "",
+    "stderr": "Error: No XMemo credential found. Preferred: set XMEMO_KEY. For formal account login with explicit local storage consent, run \"node scripts/xmemo-skill.mjs login --allow-plaintext\". For a limited temporary sandbox only when permitted, run \"node scripts/xmemo-skill.mjs register --reason unattended|declined --allow-plaintext\".\n",
+    "httpRequests": []
+  },
+  "prereq-no-credentials-doctor-normal": {
+    "id": "prereq-no-credentials-doctor-normal",
+    "args": [
+      "doctor"
+    ],
+    "code": 0,
+    "stdout": "XMemo Service Status: OK\nAuthentication: Missing/Unauthenticated\nNext: node scripts/xmemo-skill.mjs login --allow-plaintext\n",
+    "stderr": "",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "prereq-anonymous-doctor": {
+    "id": "prereq-anonymous-doctor",
+    "args": [
+      "doctor",
+      "--anonymous"
+    ],
+    "code": 0,
+    "stdout": "XMemo Service Status: OK\nAuthentication: Not checked (anonymous mode)\n",
+    "stderr": "",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "prereq-anonymous-doctor-json": {
+    "id": "prereq-anonymous-doctor-json",
+    "args": [
+      "doctor",
+      "--anonymous",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{\"ok\":true,\"status\":\"healthy\",\"version\":\"2.0.0\"},\"clientDiagnostics\":{\"discovery\":{\"status\":\"available\",\"url\":\"http://127.0.0.1:<PORT>/.well-known/agent-discovery.json\",\"schemaVersion\":\"1.0\",\"protocol\":\"https\",\"service\":\"XMemo Cloud\",\"serviceVersion\":\"2.0.0\",\"mcpUrl\":\"https://xmemo.dev/mcp\",\"supportedClients\":[\"cli\",\"skill\",\"mcp\"],\"standaloneSkill\":{\"status\":\"ready\",\"runtimeModel\":\"standalone_cli\",\"packageVersion\":\"1.1.22\",\"operations\":[\"remember\",\"recall\",\"doctor\"],\"defaultScopes\":[\"memory:read\",\"memory:write\"]}},\"nextAction\":{\"command\":\"node scripts/xmemo-skill.mjs auth status --verify\",\"reason\":\"Verify the credential separately when an authenticated follow-up is needed.\"}}}\n",
+    "stderr": "",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/.well-known/agent-discovery.json",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "prereq-temporary-credentials-remember": {
+    "id": "prereq-temporary-credentials-remember",
+    "args": [
+      "remember",
+      "--content",
+      "Sandbox note"
+    ],
+    "code": 0,
+    "stdout": "✅ Saved to temporary XMemo memory.\nID: {\"ok\":true,\"memory\":{\"id\":\"mem_temp_123\",\"content\":\"Sandbox note\",\"path\":\"memories\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/remember",
+        "body": {
+          "content": "Sandbox note",
+          "path": "memories"
+        },
+        "headers": {
+          "authorization": "Bearer mos_anon_temp_token",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "prereq-temporary-credentials-recall": {
+    "id": "prereq-temporary-credentials-recall",
+    "args": [
+      "recall",
+      "--query",
+      "Sandbox query"
+    ],
+    "code": 0,
+    "stdout": "[1] ID: mem_temp_123 | Path: memories\nContent: Temporary recall text\n---\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/recall?query=Sandbox+query&limit=5",
+        "headers": {
+          "authorization": "Bearer mos_anon_temp_token",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "prereq-temporary-credentials-search": {
+    "id": "prereq-temporary-credentials-search",
+    "args": [
+      "search",
+      "--query",
+      "Sandbox search"
+    ],
+    "code": 0,
+    "stdout": "[1] ID: mem_temp_123 | Path: memories\nContent: Temporary search text\n---\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/memories/search?query=Sandbox+search&limit=5",
+        "headers": {
+          "authorization": "Bearer mos_anon_temp_token",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "prereq-temporary-credentials-unsupported-read": {
+    "id": "prereq-temporary-credentials-unsupported-read",
+    "args": [
+      "read",
+      "--id",
+      "mem_golden_123"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Temporary access supports only remember, recall, and search in its isolated sandbox. Complete formal registration at http://127.0.0.1:<PORT>/bind/abc to use read.\n",
+    "httpRequests": []
+  }
+}

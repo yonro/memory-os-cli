@@ -1,0 +1,387 @@
+{
+  "save-state-terminal": {
+    "id": "save-state-terminal",
+    "args": [
+      "save-state",
+      "--key",
+      "golden_key",
+      "--content",
+      "State text"
+    ],
+    "code": 0,
+    "stdout": "✅ Operation succeeded.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-save",
+          "arguments": {
+            "key": "golden_key",
+            "content": "State text"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "save-state-json": {
+    "id": "save-state-json",
+    "args": [
+      "save-state",
+      "--key",
+      "golden_key",
+      "--content",
+      "State text",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-save",
+          "arguments": {
+            "key": "golden_key",
+            "content": "State text"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "save-state-alias-terminal": {
+    "id": "save-state-alias-terminal",
+    "args": [
+      "state-save",
+      "--key",
+      "golden_key",
+      "--content",
+      "State text"
+    ],
+    "code": 0,
+    "stdout": "✅ Operation succeeded.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-save",
+          "arguments": {
+            "key": "golden_key",
+            "content": "State text"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "save-state-error-missing-key": {
+    "id": "save-state-error-missing-key",
+    "args": [
+      "save-state"
+    ],
+    "code": 0,
+    "stdout": "✅ Operation succeeded.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-save",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "save-state-help": {
+    "id": "save-state-help",
+    "args": [
+      "save-state",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs save-state --key <key> [--content <text>] [--ttl_seconds <0..604800>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "restore-state-terminal": {
+    "id": "restore-state-terminal",
+    "args": [
+      "restore-state",
+      "--key",
+      "golden_key"
+    ],
+    "code": 0,
+    "stdout": "Working State restored:\nKey: golden_key\nContent: (empty)\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-restore",
+          "arguments": {
+            "key": "golden_key"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restore-state-json": {
+    "id": "restore-state-json",
+    "args": [
+      "restore-state",
+      "--key",
+      "golden_key",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-restore",
+          "arguments": {
+            "key": "golden_key"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restore-state-alias-terminal": {
+    "id": "restore-state-alias-terminal",
+    "args": [
+      "state-restore",
+      "--key",
+      "golden_key"
+    ],
+    "code": 0,
+    "stdout": "Working State restored:\nKey: golden_key\nContent: (empty)\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-restore",
+          "arguments": {
+            "key": "golden_key"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restore-state-error-missing-key": {
+    "id": "restore-state-error-missing-key",
+    "args": [
+      "restore-state"
+    ],
+    "code": 0,
+    "stdout": "Working State restored:\nKey: (unknown)\nContent: (empty)\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "state-restore",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restore-state-help": {
+    "id": "restore-state-help",
+    "args": [
+      "restore-state",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs restore-state --key <key> [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "restart-snapshot-terminal": {
+    "id": "restart-snapshot-terminal",
+    "args": [
+      "restart-snapshot"
+    ],
+    "code": 0,
+    "stdout": "✅ Restart snapshot saved.\nID: {\"ok\":true,\"snapshot_id\":\"snap_golden_123\",\"created_at\":\"2026-09-24T00:00:00Z\"}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/restart/snapshot",
+        "body": {},
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restart-snapshot-json": {
+    "id": "restart-snapshot-json",
+    "args": [
+      "restart-snapshot",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"snapshot_id\":\"snap_golden_123\",\"created_at\":\"2026-09-24T00:00:00Z\"}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/restart/snapshot",
+        "body": {},
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restart-snapshot-error-400": {
+    "id": "restart-snapshot-error-400",
+    "args": [
+      "restart-snapshot"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nRestart snapshot failed: Invalid session (HTTP 400)\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/restart/snapshot",
+        "body": {},
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restart-snapshot-help": {
+    "id": "restart-snapshot-help",
+    "args": [
+      "restart-snapshot",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs restart-snapshot [--state_key <key>] [--session_id <id>] [--ttl_seconds <0..2592000>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "restart-restore-terminal": {
+    "id": "restart-restore-terminal",
+    "args": [
+      "restart-restore"
+    ],
+    "code": 0,
+    "stdout": "✅ Restart snapshot restored.\nID: {\"ok\":true,\"snapshot_id\":\"snap_golden_123\",\"restored\":true}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/restart/restore",
+        "body": {},
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restart-restore-json": {
+    "id": "restart-restore-json",
+    "args": [
+      "restart-restore",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"snapshot_id\":\"snap_golden_123\",\"restored\":true}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/restart/restore",
+        "body": {},
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restart-restore-error-404": {
+    "id": "restart-restore-error-404",
+    "args": [
+      "restart-restore"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nRestart restore failed: No snapshot available (HTTP 404)\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/restart/restore",
+        "body": {},
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "restart-restore-help": {
+    "id": "restart-restore-help",
+    "args": [
+      "restart-restore",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs restart-restore [--snapshot_id <id> | --source_session_id <id>] [--target_session_id <id>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  }
+}

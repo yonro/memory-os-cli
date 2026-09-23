@@ -1,0 +1,463 @@
+{
+  "remember-terminal": {
+    "id": "remember-terminal",
+    "args": [
+      "remember",
+      "--content",
+      "Golden memory content"
+    ],
+    "code": 0,
+    "stdout": "✅ Saved to XMemo.\nID: {}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "remember",
+          "arguments": {
+            "content": "Golden memory content"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "remember-json": {
+    "id": "remember-json",
+    "args": [
+      "remember",
+      "--content",
+      "Golden memory content",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "remember",
+          "arguments": {
+            "content": "Golden memory content"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "remember-error-missing-content": {
+    "id": "remember-error-missing-content",
+    "args": [
+      "remember"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: remember requires --content or --file.\n",
+    "httpRequests": []
+  },
+  "remember-help": {
+    "id": "remember-help",
+    "args": [
+      "remember",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs remember (--content <text> | --content - | --file <path>) [--path <path>] [--metadata <json-object>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "recall-terminal": {
+    "id": "recall-terminal",
+    "args": [
+      "recall",
+      "--query",
+      "Golden search query"
+    ],
+    "code": 0,
+    "stdout": "No matching memories found.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "recall",
+          "arguments": {
+            "query": "Golden search query"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "recall-json": {
+    "id": "recall-json",
+    "args": [
+      "recall",
+      "--query",
+      "Golden search query",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "recall",
+          "arguments": {
+            "query": "Golden search query"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "recall-error-missing-query": {
+    "id": "recall-error-missing-query",
+    "args": [
+      "recall"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: recall requires --query.\n",
+    "httpRequests": []
+  },
+  "recall-help": {
+    "id": "recall-help",
+    "args": [
+      "recall",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "search-terminal": {
+    "id": "search-terminal",
+    "args": [
+      "search",
+      "--query",
+      "Golden search term"
+    ],
+    "code": 0,
+    "stdout": "No matching memories found.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "search",
+          "arguments": {
+            "query": "Golden search term"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "search-json": {
+    "id": "search-json",
+    "args": [
+      "search",
+      "--query",
+      "Golden search term",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "search",
+          "arguments": {
+            "query": "Golden search term"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "search-error-missing-query": {
+    "id": "search-error-missing-query",
+    "args": [
+      "search"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: search requires --query.\n",
+    "httpRequests": []
+  },
+  "search-help": {
+    "id": "search-help",
+    "args": [
+      "search",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "read-terminal": {
+    "id": "read-terminal",
+    "args": [
+      "read",
+      "--id",
+      "mem_golden_123"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: Route /v1/memories/mem_golden_123/explain not found (Code: not_found)\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/memories/mem_golden_123/explain?include_embedding=false",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "read-json": {
+    "id": "read-json",
+    "args": [
+      "read",
+      "--id",
+      "mem_golden_123",
+      "--json"
+    ],
+    "code": 1,
+    "stdout": "{\"ok\":false,\"error\":{\"code\":\"not_found\",\"message\":\"Route /v1/memories/mem_golden_123/explain not found\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/memories/mem_golden_123/explain?include_embedding=false",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "read-error-missing-id": {
+    "id": "read-error-missing-id",
+    "args": [
+      "read"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: read requires --id.\n",
+    "httpRequests": []
+  },
+  "read-error-404": {
+    "id": "read-error-404",
+    "args": [
+      "read",
+      "--id",
+      "mem_missing"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: Route /v1/memories/mem_missing/explain not found (Code: not_found)\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/memories/mem_missing/explain?include_embedding=false",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "read-help": {
+    "id": "read-help",
+    "args": [
+      "read",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "update-terminal": {
+    "id": "update-terminal",
+    "args": [
+      "update",
+      "--id",
+      "mem_golden_123",
+      "--content",
+      "Updated content"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: Route /v1/memories/mem_golden_123 not found (Code: not_found)\n",
+    "httpRequests": [
+      {
+        "method": "PATCH",
+        "url": "/v1/memories/mem_golden_123",
+        "body": {
+          "content": "Updated content"
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "update-json": {
+    "id": "update-json",
+    "args": [
+      "update",
+      "--id",
+      "mem_golden_123",
+      "--content",
+      "Updated content",
+      "--json"
+    ],
+    "code": 1,
+    "stdout": "{\"ok\":false,\"error\":{\"code\":\"not_found\",\"message\":\"Route /v1/memories/mem_golden_123 not found\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "PATCH",
+        "url": "/v1/memories/mem_golden_123",
+        "body": {
+          "content": "Updated content"
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "update-error-missing-id": {
+    "id": "update-error-missing-id",
+    "args": [
+      "update"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: update requires --id.\n",
+    "httpRequests": []
+  },
+  "update-help": {
+    "id": "update-help",
+    "args": [
+      "update",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "forget-terminal": {
+    "id": "forget-terminal",
+    "args": [
+      "forget",
+      "--id",
+      "mem_golden_123",
+      "--confirm"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: Route /v1/memories/mem_golden_123/forget not found (Code: not_found)\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/memories/mem_golden_123/forget",
+        "body": {
+          "mode": "soft_delete"
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "forget-json": {
+    "id": "forget-json",
+    "args": [
+      "forget",
+      "--id",
+      "mem_golden_123",
+      "--confirm",
+      "--json"
+    ],
+    "code": 1,
+    "stdout": "{\"ok\":false,\"error\":{\"code\":\"not_found\",\"message\":\"Route /v1/memories/mem_golden_123/forget not found\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/memories/mem_golden_123/forget",
+        "body": {
+          "mode": "soft_delete"
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "forget-error-no-confirm": {
+    "id": "forget-error-no-confirm",
+    "args": [
+      "forget",
+      "--id",
+      "mem_golden_123"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: Confirmation required to forget memory or ledger record 'mem_golden_123'. Pass --confirm to proceed.\nTarget: mem_golden_123\n",
+    "httpRequests": []
+  },
+  "forget-help": {
+    "id": "forget-help",
+    "args": [
+      "forget",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs forget --id <id> [--reason <text>] --confirm [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  }
+}

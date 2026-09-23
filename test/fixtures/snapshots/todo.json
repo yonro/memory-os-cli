@@ -1,0 +1,235 @@
+{
+  "todo-add-terminal": {
+    "id": "todo-add-terminal",
+    "args": [
+      "todo-add",
+      "--content",
+      "Write golden tests"
+    ],
+    "code": 0,
+    "stdout": "✅ TODO added.\nID: todo_golden_123\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-add",
+          "arguments": {
+            "content": "Write golden tests"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-add-json": {
+    "id": "todo-add-json",
+    "args": [
+      "todo-add",
+      "--content",
+      "Write golden tests",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{\"id\":\"todo_golden_123\",\"content\":\"Write golden tests\",\"status\":\"pending\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-add",
+          "arguments": {
+            "content": "Write golden tests"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-add-error-missing-content": {
+    "id": "todo-add-error-missing-content",
+    "args": [
+      "todo-add"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: todo-add requires --content.\n",
+    "httpRequests": []
+  },
+  "todo-add-help": {
+    "id": "todo-add-help",
+    "args": [
+      "todo-add",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs todo-add --content <text> [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "todo-list-terminal": {
+    "id": "todo-list-terminal",
+    "args": [
+      "todo-list"
+    ],
+    "code": 0,
+    "stdout": "- [ ] TODO task (ID: todo_golden_123)\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-list",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-list-json": {
+    "id": "todo-list-json",
+    "args": [
+      "todo-list",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":[{\"id\":\"todo_golden_123\",\"content\":\"TODO task\",\"status\":\"pending\"}]}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-list",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-list-error-500": {
+    "id": "todo-list-error-500",
+    "args": [
+      "todo-list"
+    ],
+    "code": 3,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: Database query failed (Code: internal_error)\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-list",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-list-help": {
+    "id": "todo-list-help",
+    "args": [
+      "todo-list",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs todo-list [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "todo-done-terminal": {
+    "id": "todo-done-terminal",
+    "args": [
+      "todo-done",
+      "--id",
+      "todo_golden_123"
+    ],
+    "code": 0,
+    "stdout": "✅ TODO completed.\nID: todo_golden_123\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-done",
+          "arguments": {
+            "id": "todo_golden_123"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-done-json": {
+    "id": "todo-done-json",
+    "args": [
+      "todo-done",
+      "--id",
+      "todo_golden_123",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{\"id\":\"todo_golden_123\",\"status\":\"completed\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "todo-done",
+          "arguments": {
+            "id": "todo_golden_123"
+          }
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "todo-done-error-missing-id": {
+    "id": "todo-done-error-missing-id",
+    "args": [
+      "todo-done"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: todo-done requires --id or --todo_id.\n",
+    "httpRequests": []
+  },
+  "todo-done-help": {
+    "id": "todo-done-help",
+    "args": [
+      "todo-done",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs todo-done --id <todo_id> [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  }
+}
