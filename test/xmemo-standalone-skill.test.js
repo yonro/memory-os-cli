@@ -1161,6 +1161,164 @@ test('skill script creates and restores full restart-continuity snapshots', asyn
   }
 });
 
+test('skill script restart-snapshot and restart-restore --json output contains standard ok: true envelope and failure paths', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  try {
+    // 1. restart-snapshot --json success path
+    testServer.setResponse({
+      id: 'restart_snap_123',
+      memory_id: 'mem_snap_123',
+      status: 'created',
+      expires_at: '2026-08-10T00:00:00Z',
+      snapshot: { active_state: { content: 'state body' } },
+    }, 201);
+
+    const snapRes = await runScript([
+      'restart-snapshot',
+      '--session_id', 'handoff-json-a',
+      '--json',
+    ], { baseUrl, env });
+
+    assert.equal(snapRes.code, 0);
+    const snapData = JSON.parse(snapRes.stdout);
+    assert.equal(snapData.ok, true);
+    assert.equal(snapData.id, 'restart_snap_123');
+    assert.equal(snapData.status, 'created');
+    assert.equal(snapData.expires_at, '2026-08-10T00:00:00Z');
+
+    // 2. restart-restore --json success path
+    testServer.setResponse({
+      id: 'restart_snap_123',
+      memory_id: 'mem_snap_123',
+      status: 'restored',
+      restored_at: '2026-08-03T00:00:00Z',
+      snapshot: {},
+    }, 200);
+
+    const restoreRes = await runScript([
+      'restart-restore',
+      '--source_session_id', 'handoff-json-a',
+      '--json',
+    ], { baseUrl, env });
+
+    assert.equal(restoreRes.code, 0);
+    const restoreData = JSON.parse(restoreRes.stdout);
+    assert.equal(restoreData.ok, true);
+    assert.equal(restoreData.id, 'restart_snap_123');
+    assert.equal(restoreData.status, 'restored');
+    assert.equal(restoreData.restored_at, '2026-08-03T00:00:00Z');
+
+    // 3. restart-restore --json empty/not_found state path
+    testServer.setResponse({
+      id: null,
+      status: 'not_found',
+      restored: false,
+    }, 200);
+
+    const emptyRes = await runScript([
+      'restart-restore',
+      '--source_session_id', 'handoff-empty-json',
+      '--json',
+    ], { baseUrl, env });
+
+    assert.equal(emptyRes.code, 0);
+    const emptyData = JSON.parse(emptyRes.stdout);
+    assert.equal(emptyData.ok, true);
+    assert.equal(emptyData.restored, false);
+
+    // 4. restart-snapshot --json failure paths (S3 exit code classification)
+    // 4a. Client-side argument validation error -> exit code 1
+    const invalidLimitRes = await runScript([
+      'restart-snapshot',
+      '--timeline_limit', '101',
+      '--json',
+    ], { baseUrl, env });
+    assert.equal(invalidLimitRes.code, 1);
+
+    // 4b. 4xx error from server -> exit code 1
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'invalid_request', message: 'Session ID is invalid' },
+    }, 400);
+
+    const badRequestRes = await runScript([
+      'restart-snapshot',
+      '--session_id', 'bad-session',
+      '--json',
+    ], { baseUrl, env });
+    assert.equal(badRequestRes.code, 1);
+    const badRequestData = JSON.parse(badRequestRes.stdout);
+    assert.equal(badRequestData.ok, false);
+    assert.equal(badRequestData.error.code, 'invalid_request');
+
+    // 4c. 401/403 error from server -> exit code 2
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'unauthorized', message: 'Token expired' },
+    }, 401);
+
+    const authErrRes = await runScript([
+      'restart-snapshot',
+      '--session_id', 'handoff-auth-err',
+      '--json',
+    ], { baseUrl, env });
+    assert.equal(authErrRes.code, 2);
+    const authErrData = JSON.parse(authErrRes.stdout);
+    assert.equal(authErrData.error.code, 'unauthorized');
+
+    // 4d. 5xx error from server -> exit code 3
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'internal_error', message: 'Database failure' },
+    }, 500);
+
+    const serverErrRes = await runScript([
+      'restart-snapshot',
+      '--session_id', 'handoff-500',
+      '--json',
+    ], { baseUrl, env });
+    assert.equal(serverErrRes.code, 3);
+    const serverErrData = JSON.parse(serverErrRes.stdout);
+    assert.equal(serverErrData.error.code, 'internal_error');
+
+    // 5. restart-restore --json failure paths
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'snapshot_corrupted', message: 'Corrupted snapshot data' },
+    }, 400);
+
+    const restoreFailRes = await runScript([
+      'restart-restore',
+      '--source_session_id', 'handoff-corrupted',
+      '--json',
+    ], { baseUrl, env });
+    assert.equal(restoreFailRes.code, 1);
+    const restoreFailData = JSON.parse(restoreFailRes.stdout);
+    assert.equal(restoreFailData.ok, false);
+    assert.equal(restoreFailData.error.code, 'snapshot_corrupted');
+
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'internal_error', message: 'Storage timeout' },
+    }, 500);
+
+    const restore500Res = await runScript([
+      'restart-restore',
+      '--source_session_id', 'handoff-500',
+      '--json',
+    ], { baseUrl, env });
+    assert.equal(restore500Res.code, 3);
+    const restore500Data = JSON.parse(restore500Res.stdout);
+    assert.equal(restore500Data.error.code, 'internal_error');
+
+  } finally {
+    await testServer.stop();
+  }
+});
+
 test('skill script expense-add command calls /v1/skill/operations with operation expense-add', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
