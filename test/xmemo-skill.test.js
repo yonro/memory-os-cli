@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -194,143 +195,124 @@ test('skills/xmemo package directory strictly adheres to allowlist and security 
   await assertSkillDirectoryIntegrity(skillDir);
 });
 
-test('skills/xmemo security guard rejects C3 sensitive file/dir names (negative tests)', async () => {
-  const skillDir = path.join(repoRoot, 'skills/xmemo');
-
-  // Negative 1: file named token.mjs in scripts/lib/
-  const tempLibDir = path.join(skillDir, 'scripts', 'lib');
-  const tempTokenFile = path.join(tempLibDir, 'token.mjs');
+async function withTempSkillDir(fn) {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-guard-'));
   try {
+    await cp(path.join(repoRoot, 'skills/xmemo'), tempDir, { recursive: true });
+    await fn(tempDir);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+test('skills/xmemo security guard rejects C3 sensitive file/dir names (negative tests)', async () => {
+  await withTempSkillDir(async (tempSkillDir) => {
+    // Negative 1: file named token.mjs in scripts/lib/
+    const tempLibDir = path.join(tempSkillDir, 'scripts', 'lib');
+    const tempTokenFile = path.join(tempLibDir, 'token.mjs');
     await mkdir(tempLibDir, { recursive: true });
     await writeFile(tempTokenFile, 'export const token = "abc";\n', 'utf8');
     await assert.rejects(
       async () => {
-        await assertSkillDirectoryIntegrity(skillDir);
+        await assertSkillDirectoryIntegrity(tempSkillDir);
       },
       /C3 violation: sensitive path segment "token\.mjs"/
     );
-  } finally {
     await rm(tempTokenFile, { force: true });
-    const remaining = await readdir(tempLibDir).catch(() => []);
-    if (remaining.length === 0) {
-      await rm(tempLibDir, { recursive: true, force: true });
-    }
-  }
 
-  // Negative 2: directory named secret_dir
-  const tempSecretDir = path.join(skillDir, 'secret_dir');
-  const tempInSecret = path.join(tempSecretDir, 'dummy.mjs');
-  try {
+    // Negative 2: directory named secret_dir
+    const tempSecretDir = path.join(tempSkillDir, 'secret_dir');
+    const tempInSecret = path.join(tempSecretDir, 'dummy.mjs');
     await mkdir(tempSecretDir, { recursive: true });
     await writeFile(tempInSecret, 'export const x = 1;\n', 'utf8');
     await assert.rejects(
       async () => {
-        await assertSkillDirectoryIntegrity(skillDir);
+        await assertSkillDirectoryIntegrity(tempSkillDir);
       },
       /C3 violation: sensitive path segment "secret_dir"/
     );
-  } finally {
     await rm(tempSecretDir, { recursive: true, force: true });
-  }
 
-  // Negative 3: .env file
-  const tempEnvFile = path.join(skillDir, '.env.local');
-  try {
+    // Negative 3: .env file
+    const tempEnvFile = path.join(tempSkillDir, '.env.local');
     await writeFile(tempEnvFile, 'VAR=1\n', 'utf8');
     await assert.rejects(
       async () => {
-        await assertSkillDirectoryIntegrity(skillDir);
+        await assertSkillDirectoryIntegrity(tempSkillDir);
       },
       /C3 violation: sensitive path segment "\.env\.local"/
     );
-  } finally {
     await rm(tempEnvFile, { force: true });
-  }
+  });
 });
 
 test('skills/xmemo security guard rejects disallowed file paths and extensions (negative tests)', async () => {
-  const skillDir = path.join(repoRoot, 'skills/xmemo');
-
-  // Negative 1: text file in scripts/lib
-  const tempLibDir = path.join(skillDir, 'scripts', 'lib');
-  const tempTxtFile = path.join(tempLibDir, 'extra.txt');
-  try {
+  await withTempSkillDir(async (tempSkillDir) => {
+    // Negative 1: text file in scripts/lib
+    const tempLibDir = path.join(tempSkillDir, 'scripts', 'lib');
+    const tempTxtFile = path.join(tempLibDir, 'extra.txt');
     await mkdir(tempLibDir, { recursive: true });
     await writeFile(tempTxtFile, 'text content\n', 'utf8');
     await assert.rejects(
       async () => {
-        await assertSkillDirectoryIntegrity(skillDir);
+        await assertSkillDirectoryIntegrity(tempSkillDir);
       },
       /Allowlist violation: unexpected file "scripts\/lib\/extra\.txt"/
     );
-  } finally {
     await rm(tempTxtFile, { force: true });
-    const remaining = await readdir(tempLibDir).catch(() => []);
-    if (remaining.length === 0) {
-      await rm(tempLibDir, { recursive: true, force: true });
-    }
-  }
 
-  // Negative 2: rogue file at root
-  const rogueFile = path.join(skillDir, 'rogue.mjs');
-  try {
+    // Negative 2: rogue file at root
+    const rogueFile = path.join(tempSkillDir, 'rogue.mjs');
     await writeFile(rogueFile, 'export const rogue = true;\n', 'utf8');
     await assert.rejects(
       async () => {
-        await assertSkillDirectoryIntegrity(skillDir);
+        await assertSkillDirectoryIntegrity(tempSkillDir);
       },
       /Allowlist violation: unexpected file "rogue\.mjs"/
     );
-  } finally {
     await rm(rogueFile, { force: true });
-  }
+  });
 });
 
 test('skills/xmemo security guard rejects dangerous code patterns (negative tests)', async () => {
-  const skillDir = path.join(repoRoot, 'skills/xmemo');
-  const tempLibDir = path.join(skillDir, 'scripts', 'lib');
+  await withTempSkillDir(async (tempSkillDir) => {
+    const tempLibDir = path.join(tempSkillDir, 'scripts', 'lib');
+    await mkdir(tempLibDir, { recursive: true });
 
-  const dangerousCases = [
-    {
-      file: 'bad-cp.mjs',
-      content: "import cp from 'child_process';\n",
-      patternName: 'child_process',
-    },
-    {
-      file: 'bad-eval.mjs',
-      content: 'export function run(x) { return eval(x); }\n',
-      patternName: 'eval()',
-    },
-    {
-      file: 'bad-func.mjs',
-      content: 'export const fn = new Function("a", "return a");\n',
-      patternName: 'new Function',
-    },
-    {
-      file: 'bad-dyn-import.mjs',
-      content: 'export async function load(m) { return import(m); }\n',
-      patternName: 'dynamic import()',
-    },
-  ];
+    const dangerousCases = [
+      {
+        file: 'bad-cp.mjs',
+        content: "import cp from 'child_process';\n",
+        patternName: 'child_process',
+      },
+      {
+        file: 'bad-eval.mjs',
+        content: 'export function run(x) { return eval(x); }\n',
+        patternName: 'eval()',
+      },
+      {
+        file: 'bad-func.mjs',
+        content: 'export const fn = new Function("a", "return a");\n',
+        patternName: 'new Function',
+      },
+      {
+        file: 'bad-dyn-import.mjs',
+        content: 'export async function load(m) { return import(m); }\n',
+        patternName: 'dynamic import()',
+      },
+    ];
 
-  for (const { file, content, patternName } of dangerousCases) {
-    const targetPath = path.join(tempLibDir, file);
-    try {
-      await mkdir(tempLibDir, { recursive: true });
+    for (const { file, content, patternName } of dangerousCases) {
+      const targetPath = path.join(tempLibDir, file);
       await writeFile(targetPath, content, 'utf8');
       await assert.rejects(
         async () => {
-          await assertSkillDirectoryIntegrity(skillDir);
+          await assertSkillDirectoryIntegrity(tempSkillDir);
         },
         new RegExp(`Security violation: forbidden pattern "${patternName.replace('(', '\\(').replace(')', '\\)')}"`)
       );
-    } finally {
       await rm(targetPath, { force: true });
-      const remaining = await readdir(tempLibDir).catch(() => []);
-      if (remaining.length === 0) {
-        await rm(tempLibDir, { recursive: true, force: true });
-      }
     }
-  }
+  });
 });
 

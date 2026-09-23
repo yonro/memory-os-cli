@@ -455,15 +455,17 @@ async function runSnapshotScript(args, { baseUrl, homeDir, stdin, env = {} }) {
     let stderr = '';
     const childEnv = {
       ...process.env,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
-      XMEMO_BASE_URL: baseUrl,
-      XMEMO_FORCE_TTY: '1',
-      ...env,
     };
-    if (!env.XMEMO_KEY) {
-      delete childEnv.XMEMO_KEY;
+    for (const key of Object.keys(childEnv)) {
+      if (key.startsWith('XMEMO_')) {
+        delete childEnv[key];
+      }
     }
+    childEnv.HOME = homeDir;
+    childEnv.USERPROFILE = homeDir;
+    childEnv.XMEMO_BASE_URL = baseUrl;
+    childEnv.XMEMO_FORCE_TTY = '1';
+    Object.assign(childEnv, env);
 
     const child = spawn(process.execPath, [skillScript, ...args], {
       env: childEnv,
@@ -684,6 +686,10 @@ const SNAPSHOT_CASES = [
   { id: 'auth-status-verify-terminal', group: 'auth', args: ['auth', 'status', '--verify'], useAuth: true },
   { id: 'auth-status-verify-json', group: 'auth', args: ['auth', 'status', '--verify', '--json'], useAuth: true },
   { id: 'auth-status-help', group: 'auth', args: ['auth', 'status', '--help'] },
+  { id: 'auth-status-alias-logged-out-terminal', group: 'auth', args: ['auth-status'] },
+  { id: 'auth-status-alias-logged-out-json', group: 'auth', args: ['auth-status', '--json'] },
+  { id: 'auth-status-alias-logged-in-terminal', group: 'auth', args: ['auth-status'], useAuth: true },
+  { id: 'auth-status-alias-logged-in-json', group: 'auth', args: ['auth-status', '--json'], useAuth: true },
   { id: 'auth-add-terminal', group: 'auth', args: ['auth', 'add', '--from-stdin', '--allow-plaintext'], stdin: 'mos_token_golden_stdin' },
   { id: 'auth-add-json', group: 'auth', args: ['auth', 'add', '--from-stdin', '--allow-plaintext', '--json'], stdin: 'mos_token_golden_stdin' },
   { id: 'auth-add-error-no-plaintext', group: 'auth', args: ['auth', 'add', '--from-stdin'], stdin: 'mos_token_golden_stdin' },
@@ -702,7 +708,159 @@ const SNAPSHOT_CASES = [
   { id: 'auth-claim-status-terminal', group: 'auth', args: ['auth', 'claim-status', '--allow-plaintext'], useTemporaryCredential: true },
   { id: 'auth-claim-status-json', group: 'auth', args: ['auth', 'claim-status', '--allow-plaintext', '--json'], useTemporaryCredential: true },
   { id: 'auth-claim-status-help', group: 'auth', args: ['auth', 'claim-status', '--help'] },
+  {
+    id: 'auth-claim-confirm-formal-terminal',
+    group: 'auth',
+    args: ['auth', 'claim-confirm', '--allow-plaintext'],
+    useTemporaryCredential: true,
+    serverHandler: (req, res) => {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+      if (parsedUrl.pathname === '/v1/agents/status') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'claimed',
+          formal_token: 'mos_formal_golden_token',
+        }));
+        return true;
+      }
+      return false;
+    },
+  },
+  {
+    id: 'auth-claim-confirm-formal-json',
+    group: 'auth',
+    args: ['auth', 'claim-confirm', '--allow-plaintext', '--json'],
+    useTemporaryCredential: true,
+    serverHandler: (req, res) => {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+      if (parsedUrl.pathname === '/v1/agents/status') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          status: 'claimed',
+          formal_token: 'mos_formal_golden_token',
+        }));
+        return true;
+      }
+      return false;
+    },
+  },
+  (() => {
+    let callCount = 0;
+    return {
+      id: 'auth-claim-confirm-2step-terminal',
+      group: 'auth',
+      args: ['auth', 'claim-confirm', '--allow-plaintext'],
+      useTemporaryCredential: true,
+      before: () => {
+        callCount = 0;
+      },
+      serverHandler: (req, res) => {
+        const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+        if (parsedUrl.pathname === '/v1/agents/status') {
+          callCount++;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          if (callCount === 1) {
+            res.end(JSON.stringify({
+              status: 'pending_confirmation',
+              confirmation_token: 'confirm_golden_token_123',
+            }));
+          } else {
+            res.end(JSON.stringify({
+              status: 'claimed',
+              formal_token: 'mos_formal_confirmed_step2_token',
+            }));
+          }
+          return true;
+        }
+        if (parsedUrl.pathname === '/v1/agents/bind/confirm-current-user') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, status: 'confirmed' }));
+          return true;
+        }
+        return false;
+      },
+    };
+  })(),
+  (() => {
+    let callCount = 0;
+    return {
+      id: 'auth-claim-confirm-2step-json',
+      group: 'auth',
+      args: ['auth', 'claim-confirm', '--allow-plaintext', '--json'],
+      useTemporaryCredential: true,
+      before: () => {
+        callCount = 0;
+      },
+      serverHandler: (req, res) => {
+        const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+        if (parsedUrl.pathname === '/v1/agents/status') {
+          callCount++;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          if (callCount === 1) {
+            res.end(JSON.stringify({
+              status: 'pending_confirmation',
+              confirmation_token: 'confirm_golden_token_123',
+            }));
+          } else {
+            res.end(JSON.stringify({
+              status: 'claimed',
+              formal_token: 'mos_formal_confirmed_step2_token',
+            }));
+          }
+          return true;
+        }
+        if (parsedUrl.pathname === '/v1/agents/bind/confirm-current-user') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true, status: 'confirmed' }));
+          return true;
+        }
+        return false;
+      },
+    };
+  })(),
   { id: 'auth-claim-confirm-help', group: 'auth', args: ['auth', 'claim-confirm', '--help'] },
+  {
+    id: 'auth-claim-deny-terminal',
+    group: 'auth',
+    args: ['auth', 'claim-deny', '--allow-plaintext'],
+    useTemporaryCredential: true,
+  },
+  {
+    id: 'auth-claim-deny-json',
+    group: 'auth',
+    args: ['auth', 'claim-deny', '--allow-plaintext', '--json'],
+    useTemporaryCredential: true,
+  },
+  {
+    id: 'auth-claim-deny-error-terminal',
+    group: 'auth',
+    args: ['auth', 'claim-deny', '--allow-plaintext'],
+    useTemporaryCredential: true,
+    serverHandler: (req, res) => {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+      if (parsedUrl.pathname === '/v1/agents/bind/deny-current-user') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { code: 'invalid_state', message: 'No pending claim to decline' } }));
+        return true;
+      }
+      return false;
+    },
+  },
+  {
+    id: 'auth-claim-deny-error-json',
+    group: 'auth',
+    args: ['auth', 'claim-deny', '--allow-plaintext', '--json'],
+    useTemporaryCredential: true,
+    serverHandler: (req, res) => {
+      const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+      if (parsedUrl.pathname === '/v1/agents/bind/deny-current-user') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { code: 'invalid_state', message: 'No pending claim to decline' } }));
+        return true;
+      }
+      return false;
+    },
+  },
   { id: 'auth-claim-deny-help', group: 'auth', args: ['auth', 'claim-deny', '--help'] },
 
   // Prerequisites: 3 dedicated paths
@@ -749,6 +907,9 @@ test('XMemo Skill Golden Snapshot behavior suite across all commands and prerequ
 
       for (const tc of cases) {
         mockServer.requests.length = 0;
+        if (tc.before) {
+          tc.before();
+        }
         if (tc.serverHandler) {
           mockServer.setHandler(tc.serverHandler);
         } else {
