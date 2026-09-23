@@ -187,6 +187,16 @@ export async function assertSkillDirectoryIntegrity(skillDir) {
         throw new Error(`Security violation: forbidden pattern "${name}" found in "${relPath}"`);
       }
     }
+
+    if (isCodeFile && relPath.startsWith('scripts/')) {
+      const versionMatches = [...content.matchAll(/(?<![\d.])\b\d+\.\d+\.\d+\b(?![\d.])/g)];
+      if (relPath === 'scripts/xmemo-skill.mjs') {
+        assert.equal(versionMatches.length, 1, `Expected entrypoint to declare single version literal, found ${versionMatches.length}`);
+        assert.match(content, /const\s+SKILL_VERSION\s*=\s*['"]\d+\.\d+\.\d+['"]/);
+      } else if (versionMatches.length > 0) {
+        throw new Error(`Single source of truth violation: unexpected version literal "${versionMatches[0][0]}" found in "${relPath}". Entrypoint SKILL_VERSION is the only permitted version literal under scripts.`);
+      }
+    }
   }
 }
 

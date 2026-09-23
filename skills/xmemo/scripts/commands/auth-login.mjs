@@ -31,8 +31,10 @@ import {
 } from '../lib/api.mjs';
 
 export async function handleAuthLogin(ctx) {
-  const { command, options, flags } = ctx;
-  const skillVersion = ctx.skillVersion || '1.1.22';
+  const { command, options, flags, skillVersion } = ctx;
+  if (!skillVersion) {
+    throw new Error('handleAuthLogin requires ctx.skillVersion to be provided');
+  }
 
   // 1. LOGIN
   if (command === 'login') {
