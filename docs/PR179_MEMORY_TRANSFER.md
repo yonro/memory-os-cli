@@ -25,7 +25,11 @@ same file, key, bucket and scope for a deliberate retry. Per-page skipped/error
 details are retained in the result; a response envelope alone does not establish
 that every record imported. Malformed JSONL is rejected before network writes.
 
-Validation: 43 command/registry/transfer tests passed and JavaScript lint passed.
+Validation: the full 297-test CLI suite and JavaScript lint passed.
 Transport fixtures cover exact routes, Unicode, pagination, broken JSONL and
-nonadvancing cursors. Deployed server integration and logout acceptance remain
+nonadvancing cursors. The server's `scripts/pr179_local_cli_acceptance.py` ran this
+CLI as a child Node process against real loopback HTTP, authentication, domain
+services and fixture storage. Seven scenarios passed: Unicode literal listing,
+paged export, dry-run import, two-page import/retry deduplication, ledger deletion,
+repeat alias 404 / exit 5, and import permission denial. Deployed server and logout acceptance remain
 blocked pending a dedicated environment and revocable account.
