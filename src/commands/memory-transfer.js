@@ -7,20 +7,19 @@ import { confirmRemoteAction } from '../api/confirmation.js';
 const common = ['--json', '--base-url', '--url', '--timeout-ms', '--allow-legacy-credential'];
 const number = (args, flag, fallback, max) => parseIntegerInRange(optionValue(args, flag) ?? String(fallback), flag, { min: flag === '--offset' ? 0 : 1, max });
 
-export async function memoryTransfer(command, args, io, context) {
+export async function prepareMemoryTransfer(command, args) {
   if (command.endsWith('-delete')) {
     assertKnownOptions(args, [...common, '--id', '--yes']);
     const id = optionValue(args, '--id');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id ?? '')) throw new UsageError('An exact transaction UUID is required with --id.');
-    await confirmRemoteAction(args, io, 'Soft-delete this ledger transaction?');
-    return context.client.request({ method: 'POST', path: '/v1/skill/operations', body: { operation: command, arguments: { id } }, sideEffect: true });
+    return { method: 'POST', path: '/v1/skill/operations', body: { operation: command, arguments: { id } }, sideEffect: true };
   }
   if (command === 'list') {
     assertKnownOptions(args, [...common, '--path-prefix', '--limit', '--offset']);
-    return context.client.request({ method: 'GET', path: '/v1/memories', query: {
+    return { method: 'GET', path: '/v1/memories', query: {
       path_prefix: optionValue(args, '--path-prefix') ?? '', limit: number(args, '--limit', 100, 500),
       offset: number(args, '--offset', 0, Number.MAX_SAFE_INTEGER),
-    }});
+    }};
   }
   assertKnownOptions(args, [...common, '--limit', '--bucket', '--scope', ...(command === 'import' ? ['--file', '--dry-run', '--idempotency-key', '--yes'] : [])]);
   const limit = number(args, '--limit', 500, 5000);
@@ -40,9 +39,19 @@ export async function memoryTransfer(command, args, io, context) {
     body.idempotency_key = optionValue(args, '--idempotency-key');
     if (!body.dry_run) {
       if (!body.idempotency_key?.trim()) throw new UsageError('Applied import requires --idempotency-key for safe manual retries.');
-      await confirmRemoteAction(args, io, 'Import these memories into the selected space?');
     }
   }
+  return body;
+}
+
+export async function memoryTransfer(command, args, io, context, prepared) {
+  const body = prepared ?? await prepareMemoryTransfer(command, args);
+  if (command.endsWith('-delete')) {
+    await confirmRemoteAction(args, io, 'Soft-delete this ledger transaction?');
+    return context.client.request(body);
+  }
+  if (command === 'list') return context.client.request(body);
+  if (command === 'import' && !body.dry_run) await confirmRemoteAction(args, io, 'Import these memories into the selected space?');
   const pages = [];
   let cursor = 0;
   do {

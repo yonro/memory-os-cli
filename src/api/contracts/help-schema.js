@@ -48,6 +48,9 @@ const COMMAND_OPTIONS = Object.freeze({
 });
 
 const CONFIRMATION = Object.freeze({
+  'memory.import': { when: 'dry-run=false', flag: '--yes' },
+  'memory.ledger-delete': { when: 'always', flag: '--yes' },
+  'memory.expense-delete': { when: 'always', flag: '--yes' },
   'knowledge.add': { when: 'publish=true', flag: '--yes' },
   'knowledge.update': { when: 'publish=true', flag: '--yes' },
   'dream.apply': { when: 'always', flag: '--yes' },
