@@ -437,7 +437,7 @@ export function printHelp() {
   console.log(`XMemo Skill Pre-Release Smoke Test Runner
 
 Usage:
-  node skills/xmemo/scripts/smoke-test.mjs [options]
+  node scripts/xmemo-skill-smoke-test.mjs [options]
 
 Options:
   --base-url <url>        XMemo service URL (default: $XMEMO_BASE_URL or https://xmemo.dev)
