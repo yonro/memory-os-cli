@@ -1781,9 +1781,17 @@ async function main() {
       const data = parseJsonResponse(res, `${label} request`);
       const succeeded = res.statusCode >= 200 && res.statusCode < 300;
       if (options.json) {
+        if (succeeded) {
+          const payload = (data && typeof data === 'object') ? data : { result: data };
+          console.log(safeJson({
+            ok: true,
+            ...payload,
+          }));
+          process.exit(EXIT_CODE.SUCCESS);
+        }
         console.log(safeJson(data));
         const failCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
-        process.exit(succeeded ? EXIT_CODE.SUCCESS : failCode);
+        process.exit(failCode);
       }
       if (!succeeded) {
         const reqId = extractRequestId(data);
