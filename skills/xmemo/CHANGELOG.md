@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.1.21
+
 ### Fixed
 
 - Wrap `restart-snapshot` and `restart-restore` successful `--json` output in standard `{"ok": true}` envelope matching other skill commands.
