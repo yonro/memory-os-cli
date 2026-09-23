@@ -72,3 +72,48 @@ When publishing updates for `skills/xmemo` to ClawHub:
    curl -s "https://clawhub.ai/api/skill?slug=xmemo"
    ```
    Ensure the response returns HTTP 200 with `latestVersion.version` matching the release version and `owner.handle` equals `"xmemo"`. If the endpoint returns HTTP 409 (`AMBIGUOUS_SKILL_SLUG`), verify whether duplicate slugs exist across publishers.
+
+---
+
+## 3. How to Add a Command
+
+The XMemo skill uses a modular architecture separating command-line dispatch from domain implementations. To introduce a new CLI command or subcommand, update the three canonical integration points:
+
+### Step 1: Implement the Command Handler (`scripts/commands/`)
+- Add or extend an existing domain module in `skills/xmemo/scripts/commands/` (e.g., `memory.mjs`, `ledger.mjs`, `account.mjs`, `auth-login.mjs`, `auth-manage.mjs`, or `ops.mjs`).
+- Export an async function conforming to the standard handler signature:
+  ```javascript
+  export async function handleMyCommand(ctx) {
+    // ctx contains: { command, subcommand, positionals, options, flags, credential, token }
+  }
+  ```
+- Treat `ctx` as read-only.
+- Use helpers from `lib/core.mjs`, `lib/api.mjs`, and `lib/auth-state.mjs` for network calls and output formatting.
+- Preserve standard CLI exit conventions using `process.exit(EXIT_CODE.OK)` or normalized error exit codes.
+- Ensure the module file size remains strictly under 12KB (12,288 bytes) and introduces no circular dependencies.
+
+### Step 2: Register Dispatch in `scripts/xmemo-skill.mjs`
+- Import the new handler into `skills/xmemo/scripts/xmemo-skill.mjs`.
+- Register the dispatch condition in `main()`, respecting the established precedence sequence:
+  1. **Pre-credential commands**: e.g., `login`, `register`, `logout`, `auth status`.
+  2. **Anonymous / diagnostic bypasses**: e.g., `doctor --anonymous`.
+  3. **Credential assertion**: unauthenticated invocations exit with `EXIT_CODE.AUTH_REQUIRED`.
+  4. **Temporary / ephemeral token diversion**: route restricted operations if running under a temporary token.
+  5. **Authenticated domain dispatch**: route the command/subcommand to your handler.
+- Perform any command name canonicalization (e.g., `cmd === 'save-state' || cmd === 'state-save'`) at the dispatch layer before calling the handler.
+
+### Step 3: Register Usage & Help in `scripts/lib/help.mjs`
+- Add the command entry to `COMMAND_USAGE_REGISTRY` in `skills/xmemo/scripts/lib/help.mjs`:
+  - Define `usage`: CLI syntax string (e.g., `xmemo-skill.mjs my-command <arg> [options]`).
+  - Define `description`: concise explanation of command purpose.
+  - Define `category`: grouping key (e.g., `memory`, `ledger`, `account`, `auth`, `ops`).
+- If the command accepts recognized flags or options, declare them in `COMMAND_FLAGS` within `skills/xmemo/scripts/lib/core.mjs` to ensure argument parsing and validation recognize them properly.
+
+### Verification Checklist
+After adding a command, verify the full test and packaging suite:
+```bash
+npm run lint
+node --test test/xmemo-skill-snapshot.test.js
+npm test
+node scripts/verify-release-packaging.mjs
+```
