@@ -10,10 +10,10 @@ import {
   WRITE_COMMANDS,
   parseArgs,
   runSmokeTests,
-} from '../skills/xmemo/scripts/smoke-test.mjs';
+} from '../scripts/xmemo-skill-smoke-test.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const smokeScript = path.join(repoRoot, 'skills/xmemo/scripts/smoke-test.mjs');
+const smokeScript = path.join(repoRoot, 'scripts/xmemo-skill-smoke-test.mjs');
 const skillScript = path.join(repoRoot, 'skills/xmemo/scripts/xmemo-skill.mjs');
 
 function createTestServer() {

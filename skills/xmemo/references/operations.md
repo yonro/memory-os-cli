@@ -463,46 +463,6 @@ All CLI operations conform to normalized, deterministic exit codes across all ex
 | `2` | Auth Error | Missing credentials (unauthenticated), expired or invalid token, HTTP 401 Unauthorized, HTTP 403 Forbidden / Tenant Forbidden, `auth status --verify` failure, or `doctor` auth invalid. | Run `login --allow-plaintext` or configure `XMEMO_KEY`. |
 | `3` | Server / Network Error | HTTP 5xx server errors, connection refused (`ECONNREFUSED`), host unreachable (`ENOTFOUND`), request timeout (`ETIMEDOUT`), or response size exceeding safety limit (> 8 MiB). | Retry with exponential backoff or check network reachability via `doctor --anonymous`. |
 
-## Pre-Release Smoke Testing
-
-Before releasing or publishing changes to the XMemo skill, run the automated smoke test script to verify end-to-end command execution, exit code normalization, and `--json` envelope compliance against live or mock endpoints:
-
-```bash
-# Run read-only verification against default or target base URL
-node skills/xmemo/scripts/smoke-test.mjs --base-url https://xmemo.dev
-
-# Machine-readable output in CI pipelines
-node skills/xmemo/scripts/smoke-test.mjs --json
-
-# Execute write-side commands against disposable test accounts or local mocks
-node skills/xmemo/scripts/smoke-test.mjs --execute-writes --base-url http://127.0.0.1:8080
-```
-
-### Safety & Write Gating
-- **Read-Only Commands (Always Executed)**:
-  `overview`, `activity`, `stats`, `ledger-list`, `ledger-summary`, `todo-list`, `search`, `recall`, `recall-context`, `read`, `restore-state`, `doctor --anonymous`, `auth status`, `--version`, `--help`.
-- **Write Commands (Explicitly Gated)**:
-  `remember`, `update`, `forget`, `todo-add`, `todo-done`, `expense-add`, `save-state`, `restart-snapshot`, `restart-restore`.
-  Write commands are skipped by default with status `skipped`. They only execute when the `--execute-writes` CLI flag is explicitly passed, protecting production accounts from data pollution or unwanted modifications during smoke testing.
-
-### Validation Semantics
-- **Exit Codes**: Asserts that successful commands exit with code 0 (or expected exit code).
-- **JSON Envelopes**: Verifies that commands invoked with `--json` produce valid JSON output containing required envelope keys (`ok: true`, or `status`, `context_text`, and structured `error.code` string on failure).
-- **Fail-Fast & Failure Inventory**: If any command unexpectedly fails or produces an invalid envelope, the runner terminates with exit code 1 and prints a detailed checklist of failed commands, their exit codes, and error descriptions (or a `{ "ok": false, "failures": [...] }` envelope in JSON mode).
-
-### CLI Options
-
-| Option | Default | Description |
-|---|---|---|
-| `--base-url <url>` | `https://xmemo.dev` | XMemo backend service URL |
-| `--timeout-ms <ms>` | `30000` | Request timeout per command in milliseconds |
-| `--execute-writes` | `false` | Enable write command execution (otherwise skipped) |
-| `--token <token>` | (env / stored) | Auth token for skill execution (`XMEMO_KEY` fallback) |
-| `--script-path <path>` | (bundled) | Path to `xmemo-skill.mjs` |
-| `--json` | `false` | Output structured JSON summary |
-| `--verbose` | `false` | Print detailed sub-process stdout/stderr |
-| `--help` | `false` | Display command help and exit |
-
 ## Limitations
 
 - The commands call the hosted endpoints on `xmemo.dev`. They require a network connection and a valid credential.
@@ -519,25 +479,4 @@ node skills/xmemo/scripts/smoke-test.mjs --execute-writes --base-url http://127.
   `--include_knowledge true` requests the bounded mixed context only when the
   service feature and `knowledge:read` authorization are both present.
 - Offline memory storage or local sync is not implemented.
-
-## Publishing to ClawHub
-
-When publishing updates for `skills/xmemo` to ClawHub:
-
-1. **Explicit Publisher Handle**:
-   Always pass `--owner xmemo` to target the official organizational publisher namespace:
-   ```bash
-   clawhub publish skills/xmemo --owner xmemo --version <semver> --slug xmemo --name "XMemo Memory"
-   ```
-2. **Pre-Publish Namespace Assertion**:
-   Before executing the publish command, verify that the active token belongs to or is authorized by the `@xmemo` organization. Do not rely solely on `clawhub whoami` returning success:
-   - Verify `clawhub whoami` identity.
-   - Assert that the effective publishing namespace matches `ownerHandle=xmemo`.
-   - Ensure the token is not a personal account token without `@xmemo` publisher permissions to prevent publishing accidental duplicate skills under personal namespaces.
-3. **Post-Publish Verification**:
-   Query the public API to verify the release without ambiguity:
-   ```bash
-   curl -s "https://clawhub.ai/api/skill?slug=xmemo"
-   ```
-   Ensure the response returns HTTP 200 with `latestVersion.version` matching the release version and `owner.handle` equals `"xmemo"`. If the endpoint returns HTTP 409 (`AMBIGUOUS_SKILL_SLUG`), verify whether duplicate slugs exist across publishers.
 

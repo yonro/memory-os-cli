@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -97,5 +97,67 @@ test('standalone Skill installers remain HTTPS-only and package the expected ent
   // into every install destination.
   for (const skillRootPath of ['skills/xmemo/install.sh', 'skills/xmemo/install.ps1']) {
     await assert.rejects(access(path.join(repoRoot, skillRootPath)), { code: 'ENOENT' });
+  }
+});
+
+test('skills/xmemo package directory strictly contains only allowed consumer assets', async () => {
+  const skillDir = path.join(repoRoot, 'skills/xmemo');
+  async function getFiles(dir) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.map(async (entry) => {
+        const res = path.join(dir, entry.name);
+        return entry.isDirectory() ? getFiles(res) : res;
+      })
+    );
+    return files.flat();
+  }
+
+  const allFiles = (await getFiles(skillDir))
+    .map((f) => path.relative(skillDir, f).split(path.sep).join('/'))
+    .sort();
+
+  const requiredFiles = [
+    'CHANGELOG.md',
+    'SKILL.md',
+    'references/operations.md',
+    'references/troubleshooting.md',
+    'scripts/xmemo-skill.mjs',
+  ];
+
+  // If skill-card.md exists in repo, it is permitted alongside the required consumer files
+  const hasSkillCard = allFiles.includes('skill-card.md');
+  const expectedFiles = hasSkillCard
+    ? [...requiredFiles, 'skill-card.md'].sort()
+    : [...requiredFiles].sort();
+
+  assert.deepEqual(allFiles, expectedFiles);
+});
+
+test('skills/xmemo does not import or execute child_process outside the entrypoint', async () => {
+  const skillDir = path.join(repoRoot, 'skills/xmemo');
+  async function getFiles(dir) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const files = await Promise.all(
+      entries.map(async (entry) => {
+        const res = path.join(dir, entry.name);
+        return entry.isDirectory() ? getFiles(res) : res;
+      })
+    );
+    return files.flat();
+  }
+
+  const allFiles = await getFiles(skillDir);
+  for (const filePath of allFiles) {
+    const relPath = path.relative(skillDir, filePath).split(path.sep).join('/');
+    if (relPath === 'scripts/xmemo-skill.mjs') {
+      continue;
+    }
+    const content = await readFile(filePath, 'utf8');
+    assert.doesNotMatch(
+      content,
+      /child_process/,
+      `${relPath} should not reference or import child_process`
+    );
   }
 });
