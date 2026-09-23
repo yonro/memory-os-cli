@@ -11,7 +11,7 @@ import {
   exitCodeForError,
 } from './core.mjs';
 
-const warnedCredentialOrigins = new Set();
+export const warnedCredentialOrigins = new Set();
 
 export function redactSensitiveResponse(value) {
   if (value === null || typeof value !== 'object') return value;
