@@ -20,6 +20,11 @@ const INPUT_COMMANDS = new Set([
 
 const option = (type, description) => ({ type, description });
 const COMMAND_OPTIONS = Object.freeze({
+  'memory.list': {'--path-prefix':option('string','Literal prefix.'),'--limit':option('integer 1..500','Page size.'),'--offset':option('integer>=0','Live offset.')},
+  'memory.export': {'--limit':option('integer 1..5000','Page size.'),'--bucket':option('string','Bucket filter.'),'--scope':option('string','Authorized scope.')},
+  'memory.import': {'--file':option('path','Memory JSONL.'),'--dry-run':option('boolean','Validate without writes.'),'--idempotency-key':option('string','Stable retry key.'),'--yes':option('boolean','Confirm writes.'),'--limit':option('integer 1..5000','Page size.'),'--bucket':option('string','Target bucket.'),'--scope':option('string','Authorized target scope.')},
+  'memory.ledger-delete': {'--id':option('uuid','Exact transaction ID.'),'--yes':option('boolean','Confirm soft deletion.')},
+  'memory.expense-delete': {'--id':option('uuid','Exact transaction ID.'),'--yes':option('boolean','Confirm soft deletion.')},
   'memory.add': { '--content': option('string', '记忆正文。'), '--path': option('string', '记忆路径。'), '--bucket': option('string', '数据桶。'), '--scope': option('string', '空间。'), '--team': option('id', '团队 ID。') },
   'memory.search': { '<query>': option('string', '检索文本。'), '--limit': option('integer>0', '结果上限。'), '--team': option('id', '团队 ID。'), '--bucket': option('string', '数据桶。'), '--path': option('string', '路径过滤。'), '--prefer-working': option('boolean', '优先 working 记忆。') },
   'memory.read': { '<memory-id>': option('id', '完整记忆 ID。'), '--team': option('id', '团队 ID。') },
@@ -65,7 +70,7 @@ export function serviceHelpSchema(command) {
     sideEffect: spec.sideEffect,
     availability: spec.availability,
     inputSchema: commandInputSchema(command),
-    examples: [{ input: commandInputSchema(command).examples[0], invocation: `xmemo ${command.replace('.', ' ')} --input params.json --json`, additionalFlags: command.startsWith('cloud-skill.') && ['cloud-skill.add', 'cloud-skill.update'].includes(command) ? ['--file SKILL.md (or --dir folder)'] : command === 'cloud-skill.run' ? ['<skill-id>', '--from skill-view.json', '--yes'] : CONFIRMATION[command]?.when === 'always' ? ['--yes'] : [] }],
+    examples: [{ input: commandInputSchema(command).examples[0], invocation: INPUT_COMMANDS.has(command) ? `xmemo ${command.replace('.', ' ')} --input params.json --json` : `xmemo ${command.replace('.', ' ')} --help`, additionalFlags: command.startsWith('cloud-skill.') && ['cloud-skill.add', 'cloud-skill.update'].includes(command) ? ['--file SKILL.md (or --dir folder)'] : command === 'cloud-skill.run' ? ['<skill-id>', '--from skill-view.json', '--yes'] : CONFIRMATION[command]?.when === 'always' ? ['--yes'] : [] }],
     options: {
       ...common,
       ...(INPUT_COMMANDS.has(command) ? { '--input': option('path|-', '从 JSON 文件或 stdin 读取命令参数。') } : {}),

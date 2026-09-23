@@ -8,6 +8,7 @@ import { serviceContext } from '../api/service-context.js';
 import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
 import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/service-output.js';
 import { confirmRemoteAction } from '../api/confirmation.js';
+import { memoryTransfer } from './memory-transfer.js';
 
 export async function memoryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -23,6 +24,10 @@ export async function memoryCommand(args, io) {
   if (subcommand === 'add') return await runServiceCommand('memory.add', args.slice(1), io, memoryAdd, validateMemoryAdd);
   if (subcommand === 'search') return await runServiceCommand('memory.search', args.slice(1), io, memorySearch, validateMemorySearch);
   if (subcommand === 'read') return await runServiceCommand('memory.read', args.slice(1), io, memoryRead, validateMemoryRead);
+  if (['list', 'export', 'import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
+    return await runServiceCommand(`memory.${subcommand}`, args.slice(1), io,
+      (options, streams, context) => memoryTransfer(subcommand, options, streams, context));
+  }
   throw new UsageError(`Unknown memory command: ${subcommand}`);
 }
 

@@ -1,4 +1,9 @@
 const definitions = {
+  'memory.list': ['path_prefix limit:integer offset:integer', {path_prefix:'notes/',limit:100,offset:0}],
+  'memory.export': ['limit:integer bucket scope', {limit:500}],
+  'memory.import': ['file dry_run:boolean idempotency_key bucket scope limit:integer', {file:'memories.jsonl',dry_run:true}],
+  'memory.ledger-delete': ['id', {id:'00000000-0000-4000-8000-000000000001'}],
+  'memory.expense-delete': ['id', {id:'00000000-0000-4000-8000-000000000001'}],
   'memory.add': ['content path bucket scope team_id metadata:object memory_type', { content: 'Synthetic memory', path: 'examples/cli' }],
   'memory.search': ['query limit:integer team_id bucket path prefer_working:boolean', { query: 'Synthetic', limit: 5 }],
   'memory.read': ['memory_id team_id', { memory_id: 'memory-id' }],

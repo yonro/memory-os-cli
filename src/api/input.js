@@ -58,7 +58,7 @@ export function optionalBooleanInput(input, key) {
 
 export function assertKnownOptions(args, allowed) {
   const allowedSet = new Set([...allowed, '--deadline']);
-  const optionsWithValue = new Set(allowed.filter((option) => !['--services', '--json', '--yes', '--wait', '--publish', '--draft', '--include-knowledge', '--prefer-working', '--allow-legacy-credential', '--preview', '--apply'].includes(option)));
+  const optionsWithValue = new Set(allowed.filter((option) => !['--services', '--json', '--yes', '--wait', '--publish', '--draft', '--include-knowledge', '--prefer-working', '--allow-legacy-credential', '--preview', '--apply', '--dry-run'].includes(option)));
   const seen = new Set();
   let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {
