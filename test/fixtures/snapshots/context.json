@@ -1,0 +1,82 @@
+{
+  "recall-context-terminal": {
+    "id": "recall-context-terminal",
+    "args": [
+      "recall-context",
+      "--query",
+      "Golden context query"
+    ],
+    "code": 0,
+    "stdout": "XMemo Context: 1 item\nGolden recall context summary\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/recall/context",
+        "body": {
+          "query": "Golden context query",
+          "path": "%",
+          "bucket": "%",
+          "memory_type": "auto",
+          "status": "active",
+          "prefer_working": true
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "recall-context-json": {
+    "id": "recall-context-json",
+    "args": [
+      "recall-context",
+      "--query",
+      "Golden context query",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"context_text\":\"Golden recall context summary\",\"items\":[{\"id\":\"mem_golden_123\",\"content\":\"Context note\"}]}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/recall/context",
+        "body": {
+          "query": "Golden context query",
+          "path": "%",
+          "bucket": "%",
+          "memory_type": "auto",
+          "status": "active",
+          "prefer_working": true
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "recall-context-error-missing-query": {
+    "id": "recall-context-error-missing-query",
+    "args": [
+      "recall-context"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: recall-context requires --query.\n",
+    "httpRequests": []
+  },
+  "recall-context-help": {
+    "id": "recall-context-help",
+    "args": [
+      "recall-context",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  }
+}

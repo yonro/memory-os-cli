@@ -7,7 +7,7 @@
  * and asserts process exit codes and JSON envelope contracts.
  *
  * Usage:
- *   node skills/xmemo/scripts/smoke-test.mjs [options]
+ *   node scripts/xmemo-skill-smoke-test.mjs [options]
  *
  * Options:
  *   --base-url <url>        XMemo service URL (default: $XMEMO_BASE_URL or https://xmemo.dev)
@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DEFAULT_SKILL_SCRIPT = path.resolve(__dirname, 'xmemo-skill.mjs');
+const DEFAULT_SKILL_SCRIPT = path.resolve(__dirname, '../skills/xmemo/scripts/xmemo-skill.mjs');
 
 export const READ_ONLY_COMMANDS = Object.freeze([
   {
@@ -437,7 +437,7 @@ export function printHelp() {
   console.log(`XMemo Skill Pre-Release Smoke Test Runner
 
 Usage:
-  node skills/xmemo/scripts/smoke-test.mjs [options]
+  node scripts/xmemo-skill-smoke-test.mjs [options]
 
 Options:
   --base-url <url>        XMemo service URL (default: $XMEMO_BASE_URL or https://xmemo.dev)

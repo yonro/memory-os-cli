@@ -1,0 +1,322 @@
+{
+  "overview-terminal": {
+    "id": "overview-terminal",
+    "args": [
+      "overview"
+    ],
+    "code": 0,
+    "stdout": "XMemo Account Overview:\n- Memories: 0 total (0 active, 0 archived, 0 forgotten)\n- Active Agents: 0\n- Storage: 0 MB\n- Tokens (30d): 0\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "overview",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "overview-json": {
+    "id": "overview-json",
+    "args": [
+      "overview",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"memory_count\":42,\"storage_bytes\":1048576,\"active_agents\":2,\"total_tokens\":15000,\"result\":{\"memory_count\":42,\"storage_bytes\":1048576,\"active_agents\":2,\"total_tokens\":15000}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "overview",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "overview-help": {
+    "id": "overview-help",
+    "args": [
+      "overview",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs overview [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "activity-terminal": {
+    "id": "activity-terminal",
+    "args": [
+      "activity"
+    ],
+    "code": 0,
+    "stdout": "No recent activity found.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "activity",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "activity-json": {
+    "id": "activity-json",
+    "args": [
+      "activity",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"0\":{\"event\":\"memory_created\",\"memory_id\":\"mem_golden_123\",\"timestamp\":\"2026-09-24T00:00:00Z\"},\"ok\":true,\"result\":[{\"event\":\"memory_created\",\"memory_id\":\"mem_golden_123\",\"timestamp\":\"2026-09-24T00:00:00Z\"}]}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "activity",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "activity-help": {
+    "id": "activity-help",
+    "args": [
+      "activity",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs activity [--limit <n>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "stats-terminal": {
+    "id": "stats-terminal",
+    "args": [
+      "stats"
+    ],
+    "code": 0,
+    "stdout": "No memory statistics available.\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/memories/stats",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "stats-json": {
+    "id": "stats-json",
+    "args": [
+      "stats",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"total\":42,\"breakdown\":{\"facts\":30,\"plans\":12}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/memories/stats",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "stats-error-top-n-invalid": {
+    "id": "stats-error-top-n-invalid",
+    "args": [
+      "stats",
+      "--top-n",
+      "999"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: --top-n must be between 1 and 200.\n",
+    "httpRequests": []
+  },
+  "stats-help": {
+    "id": "stats-help",
+    "args": [
+      "stats",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  },
+  "doctor-auth-terminal": {
+    "id": "doctor-auth-terminal",
+    "args": [
+      "doctor"
+    ],
+    "code": 2,
+    "stdout": "XMemo Service Status: OK\nAuthentication: Invalid\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "doctor-auth-json": {
+    "id": "doctor-auth-json",
+    "args": [
+      "doctor",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{\"ok\":true,\"status\":\"healthy\",\"version\":\"2.0.0\"},\"clientDiagnostics\":{\"discovery\":{\"status\":\"available\",\"url\":\"http://127.0.0.1:<PORT>/.well-known/agent-discovery.json\",\"schemaVersion\":\"1.0\",\"protocol\":\"https\",\"service\":\"XMemo Cloud\",\"serviceVersion\":\"2.0.0\",\"mcpUrl\":\"https://xmemo.dev/mcp\",\"supportedClients\":[\"cli\",\"skill\",\"mcp\"],\"standaloneSkill\":{\"status\":\"ready\",\"runtimeModel\":\"standalone_cli\",\"packageVersion\":\"1.1.22\",\"operations\":[\"remember\",\"recall\",\"doctor\"],\"defaultScopes\":[\"memory:read\",\"memory:write\"]}},\"nextAction\":{\"command\":\"node scripts/xmemo-skill.mjs auth status --verify\",\"reason\":\"Verify the credential separately when an authenticated follow-up is needed.\"}}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/.well-known/agent-discovery.json",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "doctor-anon-terminal": {
+    "id": "doctor-anon-terminal",
+    "args": [
+      "doctor",
+      "--anonymous"
+    ],
+    "code": 0,
+    "stdout": "XMemo Service Status: OK\nAuthentication: Not checked (anonymous mode)\n",
+    "stderr": "",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "doctor-anon-json": {
+    "id": "doctor-anon-json",
+    "args": [
+      "doctor",
+      "--anonymous",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"result\":{\"ok\":true,\"status\":\"healthy\",\"version\":\"2.0.0\"},\"clientDiagnostics\":{\"discovery\":{\"status\":\"available\",\"url\":\"http://127.0.0.1:<PORT>/.well-known/agent-discovery.json\",\"schemaVersion\":\"1.0\",\"protocol\":\"https\",\"service\":\"XMemo Cloud\",\"serviceVersion\":\"2.0.0\",\"mcpUrl\":\"https://xmemo.dev/mcp\",\"supportedClients\":[\"cli\",\"skill\",\"mcp\"],\"standaloneSkill\":{\"status\":\"ready\",\"runtimeModel\":\"standalone_cli\",\"packageVersion\":\"1.1.22\",\"operations\":[\"remember\",\"recall\",\"doctor\"],\"defaultScopes\":[\"memory:read\",\"memory:write\"]}},\"nextAction\":{\"command\":\"node scripts/xmemo-skill.mjs auth status --verify\",\"reason\":\"Verify the credential separately when an authenticated follow-up is needed.\"}}}\n",
+    "stderr": "",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/.well-known/agent-discovery.json",
+        "headers": {
+          "content-type": "application/json"
+        }
+      },
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "doctor-error-503": {
+    "id": "doctor-error-503",
+    "args": [
+      "doctor"
+    ],
+    "code": 3,
+    "stdout": "",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\nError: Service maintenance (Code: service_unavailable)\n",
+    "httpRequests": [
+      {
+        "method": "POST",
+        "url": "/v1/skill/operations",
+        "body": {
+          "operation": "doctor",
+          "arguments": {}
+        },
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "doctor-help": {
+    "id": "doctor-help",
+    "args": [
+      "doctor",
+      "--help"
+    ],
+    "code": 0,
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs doctor [--anonymous] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stderr": "",
+    "httpRequests": []
+  }
+}

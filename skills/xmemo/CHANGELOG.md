@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## 1.1.24
+
+### Changed
+
+- Enforce a 512 KiB input size limit on `remember` via stdin and `--file` (matching the server single-item limit), using bounded reads that reject non-regular files and prevent unbounded buffering.
+- Standardize `restart-snapshot` and `restart-restore` failure output under `--json` mode into the unified `{ok: false, error: {code, message, request_id}}` envelope, preserving HTTP exit code mapping.
+- Split monolithic operations reference into scoped `memory-operations.md`, `ledger-operations.md`, and `runtime-operations.md` guides (each under 12 KB), updating cross-document links and security documentation phrasing.
+
+## 1.1.23
+
+### Changed
+
+- Split the runtime into a small entrypoint plus `scripts/lib/` and `scripts/commands/` modules (12 files, each under 12 KB). Commands, options, terminal and `--json` output, exit codes, and installation are unchanged.
+
+## 1.1.22
+
+### Changed
+
+- Lean skill package: removed maintainer smoke test script (`smoke-test.mjs`) and release workflow documentation, keeping only consumer skill assets; maintainer workflows migrated to repository-level `scripts/` and `docs/`.
+
 ## 1.1.21
 
 ### Fixed
