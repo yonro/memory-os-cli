@@ -104,31 +104,17 @@ export function extractExpiresInSeconds(data) {
     const num = Number(data.expires_in);
     if (Number.isFinite(num) && num > 0) return num;
   }
-  if (data?.expires !== undefined && data?.expires !== null) {
-    if (typeof data.expires === 'number' && Number.isFinite(data.expires) && data.expires > 0) {
-      if (data.expires > 1e11) {
-        return Math.max(1, Math.round((data.expires - Date.now()) / 1000));
-      }
-      if (data.expires > 1e8) {
-        return Math.max(1, Math.round(data.expires - Date.now() / 1000));
-      }
-      return data.expires;
-    }
-    if (typeof data.expires === 'string') {
-      const parsedNum = Number(data.expires);
-      if (Number.isFinite(parsedNum) && parsedNum > 0) {
-        if (parsedNum > 1e11) {
-          return Math.max(1, Math.round((parsedNum - Date.now()) / 1000));
-        }
-        if (parsedNum > 1e8) {
-          return Math.max(1, Math.round(parsedNum - Date.now() / 1000));
-        }
-        return parsedNum;
-      }
-      const parsedDate = Date.parse(data.expires);
-      if (Number.isFinite(parsedDate) && parsedDate > Date.now()) {
-        return Math.max(1, Math.round((parsedDate - Date.now()) / 1000));
-      }
+  const raw = data?.expires;
+  const exp = (typeof raw === 'number' || typeof raw === 'string') ? Number(raw) : NaN;
+  if (Number.isFinite(exp) && exp > 0) {
+    if (exp > 1e11) return Math.max(1, Math.round((exp - Date.now()) / 1000));
+    if (exp > 1e8) return Math.max(1, Math.round(exp - Date.now() / 1000));
+    return exp;
+  }
+  if (typeof raw === 'string') {
+    const parsedDate = Date.parse(raw);
+    if (Number.isFinite(parsedDate) && parsedDate > Date.now()) {
+      return Math.max(1, Math.round((parsedDate - Date.now()) / 1000));
     }
   }
   return 600;
@@ -167,6 +153,16 @@ export function outputRestError(code, message, options, dataOrRequestId, explici
     : (exitCodeForErrorCode(code) ?? EXIT_CODE.USER_ERROR);
   process.exit(resolvedExitCode);
 }
+
+export function outputContentTooLarge(message, options) {
+  if (options && options.json) {
+    console.log(safeJson({ ok: false, error: { code: 'content_too_large', message } }));
+  } else {
+    console.error(`Error: ${message}`);
+  }
+  process.exit(EXIT_CODE.USER_ERROR);
+}
+
 
 export function handleRestError(res, { notFoundMessage, context = 'REST request', options }) {
   if (res.statusCode === 401 || res.statusCode === 403) {

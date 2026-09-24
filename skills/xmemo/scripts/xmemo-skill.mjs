@@ -93,7 +93,7 @@ async function main() {
   options.baseUrl = normalizeBaseUrl(options.baseUrl);
   options.timeoutMs = parsePositiveInteger(options.timeoutMs, '--timeout-ms', MAX_TIMEOUT_MS);
   validateCommandInput(command, subcommand, positionals, options, flags);
-  await resolveCommandInputs(command, flags);
+  await resolveCommandInputs(command, flags, options);
 
   const ctx = { command, subcommand, positionals, options, flags, skillVersion: SKILL_VERSION };
 

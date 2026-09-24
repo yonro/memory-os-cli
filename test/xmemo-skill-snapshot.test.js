@@ -501,6 +501,7 @@ const SNAPSHOT_CASES = [
   { id: 'flags-help', group: 'flags', args: ['--help'] },
   { id: 'flags-no-args', group: 'flags', args: [] },
   { id: 'flags-unknown-command', group: 'flags', args: ['unknown-command'] },
+  { id: 'flags-reject-boolean-value', group: 'flags', args: ['overview', '--json=1'] },
 
   // Direct memory
   { id: 'remember-terminal', group: 'direct-memory', args: ['remember', '--content', 'Golden memory content'], useAuth: true },
