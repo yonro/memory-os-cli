@@ -2,11 +2,17 @@
 
 ## [Unreleased]
 
+## 1.1.23
+
+### Changed
+
+- Split the runtime into a small entrypoint plus `scripts/lib/` and `scripts/commands/` modules (12 files, each under 12 KB). Commands, options, terminal and `--json` output, exit codes, and installation are unchanged.
+
 ## 1.1.22
 
 ### Changed
 
-- 发布包精简：移出维护者预发测试脚本（`smoke-test.mjs`）与发版流程文档，仅保留消费者核心技能资产；维护者流程迁移至仓库级 `scripts/` 与 `docs/`。
+- Lean skill package: removed maintainer smoke test script (`smoke-test.mjs`) and release workflow documentation, keeping only consumer skill assets; maintainer workflows migrated to repository-level `scripts/` and `docs/`.
 
 ## 1.1.21
 
