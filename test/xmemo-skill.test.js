@@ -10,7 +10,7 @@ const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'
 
 test('XMemo Skill describes standalone CLI-backed runtime selection', async () => {
   const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
-  const operations = (await readFile(path.join(repoRoot, 'skills/xmemo/references/operations.md'), 'utf8')).replace(/\r\n/g, '\n');
+  const memoryOps = (await readFile(path.join(repoRoot, 'skills/xmemo/references/memory-operations.md'), 'utf8')).replace(/\r\n/g, '\n');
 
   assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
   assert.match(skill, /Runtime Selection/);
@@ -58,16 +58,18 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /14 days/);
   assert.match(skill, /30 days/);
   assert.match(skill, /`forget`/);
-  assert.match(skill, /references\/operations\.md/);
+  assert.match(skill, /references\/memory-operations\.md/);
+  assert.match(skill, /references\/ledger-operations\.md/);
+  assert.match(skill, /references\/runtime-operations\.md/);
   assert.match(skill, /references\/troubleshooting\.md/);
   assert.match(skill, /Do not simulate a successful memory read or write/i);
   assert.doesNotMatch(skill, /mos_[A-Za-z0-9_-]+:r-[A-Za-z0-9_-]+/);
-  assert.match(operations, /## Discovery boundary/);
-  assert.match(operations, /generic `POST \/v1\/skill\/operations` dispatcher/);
-  assert.match(operations, /unauthenticated `401` only\nproves that the protected route is reachable/);
-  assert.match(operations, /`recall-context`/);
-  assert.match(operations, /Knowledge/);
-  assert.match(operations, /knowledge:read/);
+  assert.match(memoryOps, /## Discovery boundary/);
+  assert.match(memoryOps, /generic `POST \/v1\/skill\/operations` dispatcher/);
+  assert.match(memoryOps, /unauthenticated `401` only\nproves that the protected route is reachable/);
+  assert.match(memoryOps, /`recall-context`/);
+  assert.match(memoryOps, /Knowledge/);
+  assert.match(memoryOps, /knowledge:read/);
 });
 
 test('npm package includes the XMemo Skill, script, and references', async () => {
@@ -124,7 +126,9 @@ export function validateSkillPathAllowlist(relPath) {
     'CHANGELOG.md',
     'SKILL.md',
     'skill-card.md',
-    'references/operations.md',
+    'references/memory-operations.md',
+    'references/ledger-operations.md',
+    'references/runtime-operations.md',
     'references/troubleshooting.md',
     'scripts/xmemo-skill.mjs',
   ]);
@@ -151,7 +155,9 @@ export async function assertSkillDirectoryIntegrity(skillDir) {
   const requiredFiles = [
     'CHANGELOG.md',
     'SKILL.md',
-    'references/operations.md',
+    'references/memory-operations.md',
+    'references/ledger-operations.md',
+    'references/runtime-operations.md',
     'references/troubleshooting.md',
     'scripts/xmemo-skill.mjs',
   ];

@@ -47,6 +47,7 @@ export async function handleLedger(ctx) {
     if (flags.type) args.transaction_type = String(flags.type);
 
     try {
+      // Dispatches query to XMemo API over HTTPS with Bearer authorization.
       const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
         operation: 'ledger-list',
         arguments: args,
@@ -109,6 +110,7 @@ export async function handleLedger(ctx) {
     if (flags.type) args.transaction_type = String(flags.type);
 
     try {
+      // Dispatches query to XMemo API over HTTPS with Bearer authorization.
       const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
         operation: 'ledger-summary',
         arguments: args,

@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, or diagnose XMemo when MCP tools are unavailable.
+description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, or diagnose XMemo when MCP tools are unavailable.
 ---
 
 # XMemo Memory
@@ -115,7 +115,7 @@ PowerShell:
 $env:XMEMO_KEY | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
-Never ask the user to paste a raw token into chat, logs, or project files.
+Collect credentials only through XMEMO_KEY or the device login flow; do not request raw tokens in chat, logs, or project files.
 
 ## Core Workflows
 
@@ -396,7 +396,7 @@ items, verify the credential scopes first. A valid `memory:read` token alone is
 not proof of Knowledge authorization; do not fall back to a broader token or
 attempt to inspect another user's Knowledge space.
 
-For detailed examples, read `references/operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
+For memory and session workflows, read `references/memory-operations.md`. For ledger accounting and diagnostics, read `references/ledger-operations.md`. For command matrix, output formatting, and exit codes, read `references/runtime-operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
 
 ## Exit Codes
 
