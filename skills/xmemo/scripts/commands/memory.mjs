@@ -17,6 +17,7 @@ import {
   apiErrorMessage,
   outputRestError,
   handleRestError,
+  outputJsonFailure,
   safeJson,
   sanitizeTerminalText,
   formatMemoryContent,
@@ -58,8 +59,7 @@ export async function handleMemory(ctx) {
           console.log(safeJson({ ok: true, ...payload }));
           process.exit(EXIT_CODE.SUCCESS);
         }
-        console.log(safeJson(data));
-        process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
+        outputJsonFailure(data, res.statusCode);
       }
       if (!succeeded) {
         failRequest(data, res.statusCode, `${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})`);

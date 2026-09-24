@@ -4200,3 +4200,229 @@ test('F1-6c: rejectBooleanValue rejects inline values for boolean flags with exa
   assert.equal(res.stdout, '');
   assert.match(res.stderr, /Error: --json does not accept a value; pass it as a bare flag\./);
 });
+
+test('F1-7: restart-snapshot --json maps 400 detail to invalid_request envelope and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Invalid snapshot arguments' }, 400);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Invalid snapshot arguments',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-8: restart-snapshot --json preserves request_id in failure envelope', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Invalid snapshot key', request_id: 'req-snap-400' }, 400);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Invalid snapshot key',
+        request_id: 'req-snap-400',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-9: restart-snapshot --json maps 404 to HTTP 404 code and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Session context not found' }, 404);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 404',
+        message: 'Session context not found',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-10: restart-snapshot --json maps 500 to HTTP 500 code and exit code 3', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Database transaction failed', request_id: 'req-snap-500' }, 500);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 3);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 500',
+        message: 'Database transaction failed',
+        request_id: 'req-snap-500',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-11: restart-snapshot --json preserves server { ok: false, error } structure', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({
+    ok: false,
+    error: {
+      code: 'quota_exceeded',
+      message: 'Snapshot storage quota reached',
+      current_usage: 10,
+    },
+  }, 429);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'quota_exceeded',
+        message: 'Snapshot storage quota reached',
+        current_usage: 10,
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-12: restart-restore --json maps 400 detail to invalid_request envelope and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Invalid restore arguments' }, 400);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Invalid restore arguments',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-13: restart-restore --json maps 404 to HTTP 404 code and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Snapshot not found', request_id: 'req-rst-404' }, 404);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 404',
+        message: 'Snapshot not found',
+        request_id: 'req-rst-404',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-14: restart-restore --json maps 500 to HTTP 500 code and exit code 3', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Internal restore crash' }, 500);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 3);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 500',
+        message: 'Internal restore crash',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-15: restart-restore --json preserves server { ok: false, error } structure', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({
+    ok: false,
+    error: {
+      code: 'snapshot_conflict',
+      message: 'Active session state conflicts with target snapshot',
+      conflict_key: 'active_task',
+    },
+  }, 409);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'snapshot_conflict',
+        message: 'Active session state conflicts with target snapshot',
+        conflict_key: 'active_task',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});

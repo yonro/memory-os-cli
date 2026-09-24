@@ -163,6 +163,22 @@ export function outputContentTooLarge(message, options) {
   process.exit(EXIT_CODE.USER_ERROR);
 }
 
+export function outputJsonFailure(data, statusCode) {
+  const reqId = extractRequestId(data);
+  let payload;
+  if (data && typeof data === 'object' && data.ok === false && data.error && typeof data.error === 'object') {
+    const errorObj = { ...data.error };
+    if (reqId && !errorObj.request_id) errorObj.request_id = reqId;
+    payload = { ...data, ok: false, error: errorObj };
+  } else {
+    const code = data?.error?.code || (Number(statusCode) === 400 ? 'invalid_request' : `HTTP ${statusCode}`);
+    const errorObj = { code, message: apiErrorMessage(data) };
+    if (reqId) errorObj.request_id = reqId;
+    payload = { ok: false, error: errorObj };
+  }
+  console.log(safeJson(payload));
+  process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(statusCode));
+}
 
 export function handleRestError(res, { notFoundMessage, context = 'REST request', options }) {
   if (res.statusCode === 401 || res.statusCode === 403) {
