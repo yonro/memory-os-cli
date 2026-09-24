@@ -14,6 +14,10 @@ const write = Object.freeze({ sideEffect: true, retry: 'none' });
 export const SERVICE_CONTRACT_VERSION = 'memory-os-openapi@2026-09-03';
 
 export const COMMAND_REGISTRY = Object.freeze([
+  { command: 'memory.list', domain: 'memory', method: 'GET', path: '/v1/memories', scopes: ['memory:read'], availability: 'current', ...read },
+  { command: 'memory.import', domain: 'memory', method: 'POST', path: '/v1/memories/import', scopes: ['memory:write'], availability: 'current', ...write },
+  { command: 'memory.ledger-delete', domain: 'memory', method: 'POST', path: '/v1/skill/operations', scopes: ['memory:delete', 'ledger:read'], availability: 'current', ...write },
+  { command: 'memory.expense-delete', domain: 'memory', method: 'POST', path: '/v1/skill/operations', scopes: ['memory:delete', 'ledger:read'], availability: 'current', ...write },
   {
     command: 'memory.add',
     domain: 'memory',
