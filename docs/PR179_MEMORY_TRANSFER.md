@@ -1,10 +1,9 @@
-# PR179 memory transfer and ledger deletion
+# PR179 memory list, import and ledger deletion
 
 Requires the server contracts in memory-os PR179. No npm release is performed.
 
 ```sh
 xmemo memory list --path-prefix 'notes/_literal%' --limit 100 --offset 0 --json
-xmemo memory export --bucket private --limit 500 --json
 xmemo memory import --file memories.jsonl --dry-run --bucket private --json
 xmemo memory import --file memories.jsonl --idempotency-key stable-import-key --yes --json
 xmemo memory ledger-delete --id TRANSACTION_UUID --yes --json
@@ -15,9 +14,7 @@ UUID and requires memory:delete plus ledger:read. It is recoverable soft deletio
 
 List sends a literal prefix, including `%`, `_`, backslashes and Unicode, through
 URL query encoding. Offset pagination is live, not a point-in-time snapshot.
-Export/import follow increasing cursors until null. Export's JSON envelope contains
-the concatenated `data.jsonl`; extract this string into an import file. Export is
-memory JSONL, not a full-account, ledger, DSAR or point-in-time backup.
+Import processes input JSONL memory records and follows increasing cursors until null.
 
 Import defaults to private. Apply requires a stable idempotency key and explicit
 confirmation; network-uncertain writes are not automatically replayed. Keep the
@@ -29,7 +26,7 @@ Validation: the full 297-test CLI suite and JavaScript lint passed.
 Transport fixtures cover exact routes, Unicode, pagination, broken JSONL and
 nonadvancing cursors. The server's `scripts/pr179_local_cli_acceptance.py` ran this
 CLI as a child Node process against real loopback HTTP, authentication, domain
-services and fixture storage. Seven scenarios passed: Unicode literal listing,
-paged export, dry-run import, two-page import/retry deduplication, ledger deletion,
+services and fixture storage. Scenarios passed: Unicode literal listing,
+dry-run import, two-page import/retry deduplication, ledger deletion,
 repeat alias 404 / exit 5, and import permission denial. Deployed server and logout acceptance remain
 blocked pending a dedicated environment and revocable account.

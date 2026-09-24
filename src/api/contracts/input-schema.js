@@ -1,6 +1,5 @@
 const definitions = {
   'memory.list': ['path_prefix limit:integer offset:integer', {path_prefix:'notes/',limit:100,offset:0}],
-  'memory.export': ['limit:integer bucket scope', {limit:500}],
   'memory.import': ['file dry_run:boolean idempotency_key bucket scope limit:integer', {file:'memories.jsonl',dry_run:true}],
   'memory.ledger-delete': ['id', {id:'00000000-0000-4000-8000-000000000001'}],
   'memory.expense-delete': ['id', {id:'00000000-0000-4000-8000-000000000001'}],

@@ -22,16 +22,14 @@ test('literal list prefix and bounded pagination use public API', async () => {
   assert.equal(await run(['memory','list','--path-prefix','中文_%\\','--offset','2','--json'], io), 0);
 });
 
-test('export follows cursor through empty terminal page', async () => {
-  let count = 0;
-  const io = ioFor((url, init) => {
-    assert.equal(new URL(url).pathname, '/v1/memories/export');
-    assert.equal(JSON.parse(init.body).cursor, count);
-    return count++ === 0 ? { jsonl: '{"content":"中文"}\n', next_cursor: 1 } : { jsonl: '', next_cursor: null };
-  });
-  assert.equal(await run(['memory','export','--limit','1','--json'], io), 0);
-  assert.equal(count, 2);
-  assert.equal(JSON.parse(io.stdout.value).data.jsonl, '{"content":"中文"}\n');
+test('xmemo memory export is rejected as unknown subcommand with zero network requests', async () => {
+  const io = ioFor(() => { throw new Error('must not call network'); });
+  const code = await run(['memory', 'export', '--json'], io);
+  assert.equal(code, 2);
+  const output = JSON.parse(io.stdout.value);
+  assert.equal(output.ok, false);
+  assert.equal(output.error.code, 'INPUT_ERROR');
+  assert.match(output.error.message, /Unknown memory command: export/);
 });
 
 test('import preserves dry-run and idempotency across pages', async () => {
@@ -56,8 +54,13 @@ test('import preserves dry-run and idempotency across pages', async () => {
 });
 
 test('nonadvancing cursor fails rather than looping', async () => {
-  const io = ioFor(() => ({ jsonl: '', next_cursor: 0 }));
-  assert.notEqual(await run(['memory','export','--json'], io), 0);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'pr179-'));
+  const file = path.join(dir, 'memories.jsonl');
+  try {
+    await fs.writeFile(file, '{"content":"test"}\n');
+    const io = ioFor(() => ({ next_cursor: 0, errors: [] }));
+    assert.notEqual(await run(['memory','import','--file',file,'--dry-run','--json'], io), 0);
+  } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
 
 test('ledger deletion sends exact alias and requires confirmation', async () => {

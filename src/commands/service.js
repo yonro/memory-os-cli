@@ -20,7 +20,6 @@ export async function memoryCommand(args, io) {
     writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--json]');
     writeLine(io.stdout, '  xmemo memory read <memory-id> [--team <id>] [--json]');
     writeLine(io.stdout, '  xmemo memory list [--path-prefix <literal-prefix>] [--limit <n>] [--offset <n>]');
-    writeLine(io.stdout, '  xmemo memory export [--bucket <name>] [--limit <n>] [--json]');
     writeLine(io.stdout, '  xmemo memory import --file <jsonl> [--dry-run | --idempotency-key <key> --yes]');
     writeLine(io.stdout, '  xmemo memory ledger-delete|expense-delete --id <transaction-uuid> --yes');
     return 0;
@@ -28,7 +27,7 @@ export async function memoryCommand(args, io) {
   if (subcommand === 'add') return await runServiceCommand('memory.add', args.slice(1), io, memoryAdd, validateMemoryAdd);
   if (subcommand === 'search') return await runServiceCommand('memory.search', args.slice(1), io, memorySearch, validateMemorySearch);
   if (subcommand === 'read') return await runServiceCommand('memory.read', args.slice(1), io, memoryRead, validateMemoryRead);
-  if (['list', 'export', 'import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
+  if (['list', 'import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
     let prepared;
     return await runServiceCommand(`memory.${subcommand}`, args.slice(1), io,
       (options, streams, context) => memoryTransfer(subcommand, options, streams, context, prepared),

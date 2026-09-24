@@ -21,7 +21,6 @@ const INPUT_COMMANDS = new Set([
 const option = (type, description) => ({ type, description });
 const COMMAND_OPTIONS = Object.freeze({
   'memory.list': {'--path-prefix':option('string','Literal prefix.'),'--limit':option('integer 1..500','Page size.'),'--offset':option('integer>=0','Live offset.')},
-  'memory.export': {'--limit':option('integer 1..5000','Page size.'),'--bucket':option('string','Bucket filter.'),'--scope':option('string','Authorized scope.')},
   'memory.import': {'--file':option('path','Memory JSONL.'),'--dry-run':option('boolean','Validate without writes.'),'--idempotency-key':option('string','Stable retry key.'),'--yes':option('boolean','Confirm writes.'),'--limit':option('integer 1..5000','Page size.'),'--bucket':option('string','Target bucket.'),'--scope':option('string','Authorized target scope.')},
   'memory.ledger-delete': {'--id':option('uuid','Exact transaction ID.'),'--yes':option('boolean','Confirm soft deletion.')},
   'memory.expense-delete': {'--id':option('uuid','Exact transaction ID.'),'--yes':option('boolean','Confirm soft deletion.')},
