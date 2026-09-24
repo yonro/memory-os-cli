@@ -9,6 +9,8 @@ export const DEFAULT_BASE_URL = 'https://xmemo.dev';
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const MAX_TIMEOUT_MS = 300_000;
 export const MAX_RESPONSE_BYTES = 8_388_608;
+// Maximum memory content limit (512 KiB), matching memory-os server models/memory_schema.py: MAX_MEMORY_CONTENT_BYTES
+export const MAX_MEMORY_CONTENT_BYTES = 524_288;
 export const MAX_STATE_TTL_SECONDS = 2_592_000;
 export const DEFAULT_TEMPORARY_LIMITS = Object.freeze({
   max_items: 100,

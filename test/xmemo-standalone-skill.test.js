@@ -16,6 +16,7 @@ import {
   exitCodeForHttpStatus,
   exitCodeForErrorCode,
   exitCodeForError,
+  resolveCommandInputs,
 } from '../skills/xmemo/scripts/xmemo-skill.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -3294,6 +3295,8 @@ test('S1-2: login polling wait prints remaining validity countdown and duration 
   // 2b. Test extractExpiresInSeconds
   assert.equal(extractExpiresInSeconds({ expires_in: 572 }), 572);
   assert.equal(extractExpiresInSeconds({ expires: 300 }), 300);
+  assert.equal(extractExpiresInSeconds({ expires: true }), 600);
+  assert.equal(extractExpiresInSeconds({ expires: [123] }), 600);
   assert.equal(extractExpiresInSeconds({}), 600);
 
   // 2c. Test login output includes (valid for 9m32s) when server returns expires_in: 572
@@ -3976,4 +3979,450 @@ test('S3-5: unit tests asserting exported EXIT_CODE and exit code classification
 
   const errGeneric = new Error('User input invalid');
   assert.equal(exitCodeForError(errGeneric), EXIT_CODE.USER_ERROR);
+});
+
+// =====================================================================
+// F1 Slice: Input Limits (OH3) & Restart Envelope Harmonization
+// =====================================================================
+
+test('F1-1: remember via stdin accepts exactly MAX_MEMORY_CONTENT_BYTES (524288) and passes to server', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const exactContent = 'a'.repeat(524288);
+  try {
+    const res = await runScript(['remember', '--content', '-', '--path', 'tests/exact', '--json'], {
+      baseUrl,
+      stdin: exactContent,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 0);
+    assert.equal(testServer.requests.length, 1);
+    assert.equal(testServer.requests[0].body.arguments.content.length, 524288);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-2: remember via stdin rejects 524289 bytes in terminal mode with code 1 and 0 network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const overContent = 'b'.repeat(524289);
+  try {
+    const res = await runScript(['remember', '--content', '-', '--path', 'tests/over', '--terminal'], {
+      baseUrl,
+      stdin: overContent,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    assert.match(res.stderr, /Error: Memory content exceeds maximum limit of 524288 bytes\./);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-3: remember via stdin rejects 524289 bytes under --json with content_too_large and 0 network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const overContent = 'c'.repeat(524289);
+  try {
+    const res = await runScript(['remember', '--content', '-', '--path', 'tests/over', '--json'], {
+      baseUrl,
+      stdin: overContent,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'content_too_large',
+        message: 'Memory content exceeds maximum limit of 524288 bytes.',
+      },
+    });
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-4: remember via --file accepts exactly 524288 bytes and passes to server', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-file-test-'));
+  const filePath = path.join(tempDir, 'exact.txt');
+  await fs.writeFile(filePath, 'd'.repeat(524288), 'utf8');
+  try {
+    const res = await runScript(['remember', '--file', filePath, '--path', 'tests/file-exact', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 0);
+    assert.equal(testServer.requests.length, 1);
+    assert.equal(testServer.requests[0].body.arguments.content.length, 524288);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('F1-5: remember via --file rejects 524289 bytes in terminal mode with code 1 and 0 network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-file-test-'));
+  const filePath = path.join(tempDir, 'over.txt');
+  await fs.writeFile(filePath, 'e'.repeat(524289), 'utf8');
+  try {
+    const res = await runScript(['remember', '--file', filePath, '--path', 'tests/file-over', '--terminal'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    assert.match(res.stderr, /Error: File '.*' exceeds maximum limit of 524288 bytes\./);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('F1-6: remember via --file rejects 524289 bytes under --json with content_too_large and 0 network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-file-test-'));
+  const filePath = path.join(tempDir, 'over.txt');
+  await fs.writeFile(filePath, 'f'.repeat(524289), 'utf8');
+  try {
+    const res = await runScript(['remember', '--file', filePath, '--path', 'tests/file-over', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'content_too_large');
+    assert.match(payload.error.message, /exceeds maximum limit of 524288 bytes\./);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('F1-5b: remember via --file rejects directory path as non-regular file with code 1 and 0 network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-dir-test-'));
+  try {
+    const resTerm = await runScript(['remember', '--file', tempDir, '--path', 'tests/file-dir', '--terminal'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resTerm.code, 1);
+    assert.match(resTerm.stderr, /Error: Failed to read file '.*': --file must be a regular file\./);
+
+    const resJson = await runScript(['remember', '--file', tempDir, '--path', 'tests/file-dir', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resJson.code, 1);
+    assert.match(resJson.stderr, /Error: Failed to read file '.*': --file must be a regular file\./);
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await testServer.stop();
+  }
+});
+
+test('F1-6b: remember via --file bounded reader rejects 524289 bytes even if fs.stat size is 0', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-bounded-test-'));
+  const filePath = path.join(tempDir, 'grow.txt');
+  await fs.writeFile(filePath, 'g'.repeat(524289), 'utf8');
+
+  const fsPromises = await import('node:fs/promises');
+  const originalStat = fsPromises.default.stat;
+  fsPromises.default.stat = async (p) => {
+    if (p === filePath) {
+      return { isFile: () => true, size: 0 };
+    }
+    return originalStat(p);
+  };
+
+  let captured = null;
+  const originalExit = process.exit;
+  const originalLog = console.log;
+  try {
+    process.exit = (code) => {
+      captured.exitCode = code;
+      throw new Error(`EXIT_${code}`);
+    };
+    console.log = (msg) => {
+      try { captured.payload = JSON.parse(msg); } catch {}
+    };
+
+    captured = {};
+    await assert.rejects(
+      async () => {
+        await resolveCommandInputs('remember', { file: filePath, path: 'tests/bounded' }, { json: true });
+      },
+      /EXIT_1/
+    );
+    assert.equal(captured.exitCode, 1);
+    assert.equal(captured.payload.ok, false);
+    assert.equal(captured.payload.error.code, 'content_too_large');
+    assert.match(captured.payload.error.message, /exceeds maximum limit of 524288 bytes\./);
+  } finally {
+    fsPromises.default.stat = originalStat;
+    process.exit = originalExit;
+    console.log = originalLog;
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+});
+test('F1-6c: rejectBooleanValue rejects inline values for boolean flags with exact error text', async () => {
+  const { rejectBooleanValue, parseArgs } = await import('../skills/xmemo/scripts/lib/cli-input.mjs');
+
+  assert.throws(
+    () => rejectBooleanValue('json', '1'),
+    (err) => err.message === '--json does not accept a value; pass it as a bare flag.'
+  );
+  assert.throws(
+    () => rejectBooleanValue('terminal', 'true'),
+    (err) => err.message === '--terminal does not accept a value; pass it as a bare flag.'
+  );
+
+  assert.throws(
+    () => parseArgs(['overview', '--json=1']),
+    (err) => err.message === '--json does not accept a value; pass it as a bare flag.'
+  );
+
+  const res = await runScript(['overview', '--json=1']);
+  assert.equal(res.code, 1);
+  assert.equal(res.stdout, '');
+  assert.match(res.stderr, /Error: --json does not accept a value; pass it as a bare flag\./);
+});
+
+test('F1-7: restart-snapshot --json maps 400 detail to invalid_request envelope and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Invalid snapshot arguments' }, 400);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Invalid snapshot arguments',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-8: restart-snapshot --json preserves request_id in failure envelope', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Invalid snapshot key', request_id: 'req-snap-400' }, 400);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Invalid snapshot key',
+        request_id: 'req-snap-400',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-9: restart-snapshot --json maps 404 to HTTP 404 code and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Session context not found' }, 404);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 404',
+        message: 'Session context not found',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-10: restart-snapshot --json maps 500 to HTTP 500 code and exit code 3', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Database transaction failed', request_id: 'req-snap-500' }, 500);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 3);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 500',
+        message: 'Database transaction failed',
+        request_id: 'req-snap-500',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-11: restart-snapshot --json preserves server { ok: false, error } structure', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({
+    ok: false,
+    error: {
+      code: 'quota_exceeded',
+      message: 'Snapshot storage quota reached',
+      current_usage: 10,
+    },
+  }, 429);
+  try {
+    const res = await runScript(['restart-snapshot', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'quota_exceeded',
+        message: 'Snapshot storage quota reached',
+        current_usage: 10,
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-12: restart-restore --json maps 400 detail to invalid_request envelope and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Invalid restore arguments' }, 400);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Invalid restore arguments',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-13: restart-restore --json maps 404 to HTTP 404 code and exit code 1', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Snapshot not found', request_id: 'req-rst-404' }, 404);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 404',
+        message: 'Snapshot not found',
+        request_id: 'req-rst-404',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-14: restart-restore --json maps 500 to HTTP 500 code and exit code 3', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ detail: 'Internal restore crash' }, 500);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 3);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'HTTP 500',
+        message: 'Internal restore crash',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('F1-15: restart-restore --json preserves server { ok: false, error } structure', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({
+    ok: false,
+    error: {
+      code: 'snapshot_conflict',
+      message: 'Active session state conflicts with target snapshot',
+      conflict_key: 'active_task',
+    },
+  }, 409);
+  try {
+    const res = await runScript(['restart-restore', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 1);
+    const payload = JSON.parse(res.stdout);
+    assert.deepEqual(payload, {
+      ok: false,
+      error: {
+        code: 'snapshot_conflict',
+        message: 'Active session state conflicts with target snapshot',
+        conflict_key: 'active_task',
+      },
+    });
+  } finally {
+    await testServer.stop();
+  }
 });

@@ -130,7 +130,7 @@ If this fails:
 | `--metadata must be a JSON object` | Metadata is invalid JSON, an array, or a scalar | Pass one JSON object, for example `'{"source":"review"}'` |
 | `--explain must be true or false` | A boolean parameter used another spelling | Pass the literal `true` or `false` |
 | `Method not found` | Server does not expose the requested operation | Server-side capability gap |
-| `Knowledge requested but unavailable` | Knowledge runtime is disabled, the credential lacks `knowledge:read`, or the current owner/scope is unsupported | Check `auth status --verify`, reauthorize the formal credential if the scope is missing, then retry `recall-context --include_knowledge true`; do not broaden scope or inspect another owner |
+| `Knowledge requested but unavailable` | Knowledge runtime is disabled, the credential lacks `knowledge:read`, or the current owner/scope is unsupported | Check `auth status --verify`, reauthorize the formal credential if the scope is missing, then retry `recall-context --include_knowledge true`; do not attempt unauthorized scope expansion or inspect another owner |
 
 ## Security reminders
 

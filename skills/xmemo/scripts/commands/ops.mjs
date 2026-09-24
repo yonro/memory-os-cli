@@ -159,6 +159,7 @@ export async function handleOps(ctx) {
     const discovery = command === 'doctor' && options.json
       ? await fetchDoctorDiscovery(options.baseUrl, options.timeoutMs)
       : null;
+    // Dispatches operation query to XMemo API over HTTPS with Bearer authorization.
     const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
       operation: opName,
       arguments: flags,
