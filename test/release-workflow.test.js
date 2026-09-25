@@ -44,3 +44,20 @@ test('the Skill release is verified against the public endpoint before it is cal
   assert.match(workflow, /\[\[ "\$location" == \*"\/\$RELEASE_TAG" \]\]/);
   assert.match(workflow, /still does not serve \$RELEASE_TAG/);
 });
+
+test('CLI release workflow creates releases with --latest=false and explicit CLI title', async () => {
+  const cliWorkflowPath = path.join(repoRoot, '.github/workflows/release.yml');
+  const cliWorkflow = await readFile(cliWorkflowPath, 'utf8');
+
+  assert.match(cliWorkflow, /--latest=false/);
+  assert.match(cliWorkflow, /--title "XMemo CLI v\$\{VERSION\}"/);
+});
+
+test('Skill release documentation explicitly specifies --latest for GitHub Release creation', async () => {
+  const docPath = path.join(repoRoot, 'docs/xmemo-skill-release.md');
+  const doc = await readFile(docPath, 'utf8');
+
+  assert.match(doc, /gh release create skill-v/);
+  assert.match(doc, /--latest/);
+  assert.match(doc, /--title "XMemo Skill v/);
+});

@@ -46,7 +46,30 @@ node scripts/xmemo-skill-smoke-test.mjs --execute-writes --base-url http://127.0
 
 ---
 
-## 2. Publishing to ClawHub
+## 2. Creating the GitHub Release
+
+After the skill release PR is merged into `main`, create the corresponding GitHub Release to trigger asset packaging (`.github/workflows/release-xmemo-skill.yml`):
+
+```bash
+gh release create skill-v<version> \
+  --title "XMemo Skill v<version>" \
+  --latest \
+  --generate-notes
+```
+
+### Critical: Explicit `--latest`
+Always include `--latest` when creating a Skill release.
+
+**Why this matters**:
+The XMemo backend server (`memory-os`) falls back to downloading the skill archive directly from:
+`https://github.com/yonro/memory-os-cli/releases/latest/download/xmemo-skill.tar.gz`
+whenever the internal skill package cache is empty or cold (`routes/skill_package.py`). The GitHub `Latest` release pointer must strictly belong to the newest Skill release (`skill-v*`).
+
+In contrast, CLI releases (`.github/workflows/release.yml`) are explicitly configured with `--latest=false` so they never hijack the `Latest` release pointer.
+
+---
+
+## 3. Publishing to ClawHub
 
 When publishing updates for `skills/xmemo` to ClawHub:
 
@@ -75,7 +98,7 @@ When publishing updates for `skills/xmemo` to ClawHub:
 
 ---
 
-## 3. How to Add a Command
+## 4. How to Add a Command
 
 The XMemo skill uses a modular architecture separating command-line dispatch from domain implementations. To introduce a new CLI command or subcommand, update the three canonical integration points:
 

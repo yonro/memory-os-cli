@@ -45,9 +45,12 @@ jobs:
       
       - name: Create GitHub Release
         run: |
-          gh release create "${{ github.ref_name }}" \
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#cli-v}"
+          gh release create "$TAG" \
             --verify-tag \
-            --title "${{ github.ref_name }}" \
+            --title "XMemo CLI v${VERSION}" \
+            --latest=false \
             --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
