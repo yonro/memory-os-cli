@@ -32,9 +32,14 @@ import {
 
 import {
   isOpenClawSentinel,
+  looksLikeOpenClawSentinel,
 } from './openclaw-egress.mjs';
 
-export { warnedCredentialOrigins, isSurrogateToken, isOpenClawSentinel };
+import {
+  printAuthErrorHint,
+} from './auth-hint.mjs';
+
+export { warnedCredentialOrigins, isSurrogateToken, isOpenClawSentinel, looksLikeOpenClawSentinel };
 
 // Read credential helper
 export async function getStoredToken() {
@@ -47,7 +52,12 @@ export async function getStoredCredential() {
     const raw = process.env.XMEMO_KEY;
     const token = typeof raw === 'string' ? raw.trim() : '';
     if (token) {
-      if (isOpenClawSentinel(token)) {
+      if (looksLikeOpenClawSentinel(token)) {
+        if (!isOpenClawSentinel(token)) {
+          const error = new Error('XMEMO_KEY looks like an OpenClaw secret sentinel in a format this skill version does not support. Update the xmemo skill.');
+          error.exitCode = EXIT_CODE.USER_ERROR;
+          throw error;
+        }
         return { token, credential_type: 'environment', storage: 'openclaw-secret' };
       }
       return { token, credential_type: 'environment', storage: 'environment' };
@@ -104,7 +114,7 @@ export async function saveToken(token, details = {}, { allowPlaintext = false, w
   if (isSurrogateToken(token)) {
     throw new Error('Refusing to persist Meta Muse surrogate token to disk. Surrogate tokens are dynamically managed by Meta Muse.');
   }
-  if (isOpenClawSentinel(token)) {
+  if (isOpenClawSentinel(token) || looksLikeOpenClawSentinel(token)) {
     throw new Error('Refusing to persist OpenClaw sentinel token to disk. Sentinels are dynamic and managed by OpenClaw.');
   }
   if (!allowPlaintext) {
@@ -209,6 +219,9 @@ export async function requestTemporaryMemoryOperation(command, options, flags, c
       console.error(`Temporary ${command} failed: ${apiErrorMessage(data, safeJson(data))}${reqSuffix}`);
     }
     const exitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+    if (exitCode === EXIT_CODE.AUTH_ERROR && (!options || !options.json)) {
+      printAuthErrorHint(credential);
+    }
     process.exit(exitCode);
   }
 

@@ -11,6 +11,7 @@ import {
   exitCodeForError,
 } from './core.mjs';
 import { configureEgressRequest, sanitizeSensitiveValue } from './openclaw-egress.mjs';
+import { printAuthErrorHint } from './auth-hint.mjs';
 
 export const warnedCredentialOrigins = new Set();
 
@@ -154,6 +155,9 @@ export function outputRestError(code, message, options, dataOrRequestId, explici
   const resolvedExitCode = explicitExitCode !== null
     ? explicitExitCode
     : (exitCodeForErrorCode(code) ?? EXIT_CODE.USER_ERROR);
+  if (resolvedExitCode === EXIT_CODE.AUTH_ERROR && (!options || !options.json)) {
+    printAuthErrorHint(options?.credential);
+  }
   process.exit(resolvedExitCode);
 }
 

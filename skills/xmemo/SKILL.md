@@ -102,6 +102,17 @@ permissions where supported, never prints the token, and never writes it into
 the project. Prefer `XMEMO_KEY` or a managed secret store when plaintext local
 storage is not acceptable.
 
+Formal account tokens issued by the service can expire or be revoked remotely.
+The local user credential file stores no access-token expiry information (the
+`expires_in` value returned during the interactive device-login flow applies
+strictly to the device-code authorization window, not to the issued token). When
+a formal token expires or is revoked, normal commands fail with exit code 2, an
+`Invalid or expired token` error (or HTTP 401), and a hint indicating the
+credential source. To restore access, run
+`node scripts/xmemo-skill.mjs login --allow-plaintext` again (or refresh
+`XMEMO_KEY` if using environment credentials). Verify the active credential with
+`node scripts/xmemo-skill.mjs auth status --verify`.
+
 Formal registration/login is the default and recommended path. It gives the
 user account-backed memory and the full command set.
 

@@ -18,6 +18,10 @@ import {
   formatMemoryContent,
 } from '../lib/api.mjs';
 
+import {
+  printAuthErrorHint,
+} from '../lib/auth-hint.mjs';
+
 function discoveryString(value) {
   if (typeof value !== 'string') return null;
   const sanitized = sanitizeTerminalText(value).trim();
@@ -186,6 +190,9 @@ export async function handleOps(ctx) {
       const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
       console.error(`Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})${reqSuffix}`);
       const failureExitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode);
+      if (failureExitCode === EXIT_CODE.AUTH_ERROR && (!options || !options.json)) {
+        printAuthErrorHint(credential);
+      }
       process.exit(failureExitCode);
     }
 

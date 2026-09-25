@@ -75,7 +75,9 @@ node scripts/xmemo-skill.mjs auth-status --verify
 
 If verification fails:
 
-- The token may be expired. Run the `login` command to refresh it.
+- The token may be expired or revoked by the service. Formal tokens can expire or be revoked remotely, and the local credential file stores no access-token expiry information (the `expires_in` value parsed during device login applies strictly to the device-code authorization window).
+- When a credential expires or is revoked, normal commands fail with exit code 2, an `Invalid or expired token` error (or HTTP 401), and a `Credential source: ...` hint on stderr.
+- Fix: run `node scripts/xmemo-skill.mjs login --allow-plaintext` to log in again, or refresh `XMEMO_KEY` if using environment credentials. Verify access with `node scripts/xmemo-skill.mjs auth status --verify`.
 - A proxy or firewall may block HTTPS traffic to `xmemo.dev`.
 
 For Knowledge access, a successful token verification is necessary but not
@@ -120,7 +122,7 @@ If this fails:
 |---------|--------------|--------|
 | `No XMemo credential found` | Not logged in | Set `XMEMO_KEY`, or run `node scripts/xmemo-skill.mjs login --allow-plaintext` |
 | `Refusing unencrypted credential storage` | Missing explicit consent | Prefer `XMEMO_KEY`, or rerun the credential-writing command with `--allow-plaintext` |
-| `Authentication failed (HTTP 401)` | Token invalid/expired | Run `login` or add a new token |
+| `Authentication failed (HTTP 401)` / `Invalid or expired token` (exit 2) | Formal token expired or revoked (local credential file stores no token expiry) | Run `node scripts/xmemo-skill.mjs login --allow-plaintext` (or refresh `XMEMO_KEY`); verify with `auth status --verify` |
 | Restart command is missing from `agent-discovery` operations | That list covers only the generic `/v1/skill/operations` dispatcher; restart continuity uses dedicated protected routes | Use the bundled Skill command with a formal credential; do not infer access from discovery alone or test by creating a real snapshot |
 | `Restart snapshot not found` | The requested ID/session is unavailable in the current scope | Omit the selector to restore the latest accessible snapshot, or run `restart-snapshot` first |
 | Restart command reports temporary access | Temporary sandboxes expose only memory save/recall/search | Complete formal account claim/login, then retry |

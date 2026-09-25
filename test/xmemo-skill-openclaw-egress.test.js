@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   isOpenClawSentinel,
+  looksLikeOpenClawSentinel,
   isProxyEnvActive,
   assertOpenClawEgress,
   assertEgressSecurity,
@@ -17,6 +18,8 @@ import {
   OPENCLAW_SENTINEL_REGEX,
   ALLOWED_EGRESS_ORIGIN,
 } from '../skills/xmemo/scripts/lib/openclaw-egress.mjs';
+
+import { EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
 
 import {
   getStoredCredential,
@@ -155,14 +158,16 @@ test('openclaw-egress: getStoredCredential handles sentinels as openclaw-secret 
       storage: 'environment',
     });
 
-    // 3. Look-alike invalid sentinel is treated as ordinary environment token
+    // 3. Look-alike invalid sentinel fails closed with USER_ERROR
     process.env.XMEMO_KEY = 'oc-sent-v2.invalid!token';
-    const credLookalike = await getStoredCredential();
-    assert.deepEqual(credLookalike, {
-      token: 'oc-sent-v2.invalid!token',
-      credential_type: 'environment',
-      storage: 'environment',
-    });
+    await assert.rejects(
+      async () => getStoredCredential(),
+      (err) => {
+        assert.equal(err.message, 'XMEMO_KEY looks like an OpenClaw secret sentinel in a format this skill version does not support. Update the xmemo skill.');
+        assert.equal(err.exitCode, EXIT_CODE.USER_ERROR);
+        return true;
+      }
+    );
   } finally {
     if (originalKey === undefined) delete process.env.XMEMO_KEY;
     else process.env.XMEMO_KEY = originalKey;
@@ -482,12 +487,27 @@ test('openclaw-egress: saveToken and auth add reject sentinel tokens', async () 
       exists = true;
     } catch {}
     assert.equal(exists, false, 'No credentials file should be created for sentinel token');
+    // 3. Look-alike sentinel rejection in saveToken and auth add
+    const lookalikeToken = 'oc-sent-v3.attempt-to-persist-lookalike.end';
+    await assert.rejects(
+      async () => {
+        await saveToken(lookalikeToken, {}, { allowPlaintext: true });
+      },
+      /Refusing to persist OpenClaw sentinel token to disk/
+    );
+
+    const resLookalike = await runCli(['auth', 'add', '--from-stdin', '--allow-plaintext'], {
+      homeDir: tmpHome,
+      stdin: lookalikeToken,
+    });
+    assert.equal(resLookalike.code, 1);
+    assert.match(resLookalike.stderr, /Refusing to store OpenClaw sentinel token/);
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true }).catch(() => {});
   }
 });
 
-test('openclaw-egress: redaction covers sentinel strings', () => {
+test('openclaw-egress: redaction covers sentinel strings and look-alikes', () => {
   const sentinel = 'oc-sent-v2.secret_data_123.end';
 
   // 1. Direct sentinel value
@@ -511,4 +531,48 @@ test('openclaw-egress: redaction covers sentinel strings', () => {
   const jsonStr = safeJson(payload);
   assert.equal(jsonStr.includes('oc-sent-v2.'), false, 'JSON output must never contain sentinel strings');
   assert.equal(jsonStr.includes('[REDACTED]'), true);
+
+  // 4. Look-alike sentinels redacted
+  assert.equal(sanitizeSensitiveValue('oc-sent-v3.abc.end'), '[REDACTED]');
+  assert.equal(sanitizeSensitiveValue('OC-SENT-v2.x'), '[REDACTED]');
+  assert.equal(sanitizeSensitiveValue('oc-sent-v2.bad!.end'), '[REDACTED]');
+  assert.equal(sanitizeSensitiveValue('prefix oc-sent-v3.abc.end suffix'), 'prefix [REDACTED] suffix');
+});
+
+test('openclaw-egress: look-alike sentinels fail closed with exit code 1, zero requests, and no value printed', async () => {
+  let requestsMade = 0;
+  const mockServer = http.createServer((req, res) => {
+    requestsMade += 1;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  });
+
+  await new Promise((resolve) => mockServer.listen(0, '127.0.0.1', resolve));
+  const port = mockServer.address().port;
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  const lookalikes = [
+    'oc-sent-v3.abc.end',
+    'OC-SENT-v2.x',
+    'oc-sent-v2.bad!.end',
+  ];
+
+  try {
+    for (const lookalike of lookalikes) {
+      const res = await runCli(['recall', '--query', 'test', '--base-url', baseUrl], {
+        env: {
+          XMEMO_KEY: lookalike,
+        },
+      });
+
+      assert.equal(res.code, 1, `Look-alike ${lookalike} must exit with code 1 (USER_ERROR)`);
+      assert.match(res.stderr, /XMEMO_KEY looks like an OpenClaw secret sentinel in a format this skill version does not support\. Update the xmemo skill\./);
+      assert.equal(res.stderr.includes(lookalike), false, `Token value ${lookalike} must never be printed to stderr`);
+      assert.equal(res.stdout.includes(lookalike), false, `Token value ${lookalike} must never be printed to stdout`);
+    }
+
+    assert.equal(requestsMade, 0, 'Zero requests must be made when sentinel look-alike fails closed');
+  } finally {
+    await new Promise((resolve) => mockServer.close(resolve));
+  }
 });

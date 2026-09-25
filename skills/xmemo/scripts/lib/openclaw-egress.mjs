@@ -8,6 +8,10 @@ export function isOpenClawSentinel(value) {
   return typeof value === 'string' && OPENCLAW_SENTINEL_REGEX.test(value);
 }
 
+export function looksLikeOpenClawSentinel(value) {
+  return typeof value === 'string' && value.trim().toLowerCase().startsWith('oc-sent-');
+}
+
 export function isProxyEnvActive(env = process.env) {
   const proxy = env.HTTPS_PROXY || env.https_proxy;
   const nodeProxy = env.NODE_USE_ENV_PROXY;
@@ -19,13 +23,15 @@ export function isProxyEnvActive(env = process.env) {
 
 export function sanitizeSensitiveValue(value) {
   if (typeof value !== 'string') return value;
-  if (value.startsWith('hsurr:') || isOpenClawSentinel(value)) return '[REDACTED]';
-  if (value.includes('oc-sent-v2.') || value.includes('hsurr:')) {
-    return value
-      .replace(/hsurr:[^\s"'>]+/g, '[REDACTED]')
-      .replace(/oc-sent-v2\.[A-Za-z0-9_-]+\.end/g, '[REDACTED]');
+  if (value.startsWith('hsurr:') || looksLikeOpenClawSentinel(value)) return '[REDACTED]';
+  let sanitized = value;
+  if (sanitized.includes('hsurr:')) {
+    sanitized = sanitized.replace(/hsurr:[^\s"'>]+/g, '[REDACTED]');
   }
-  return value;
+  if (/oc-sent-[A-Za-z0-9._-]+/i.test(sanitized)) {
+    sanitized = sanitized.replace(/oc-sent-[A-Za-z0-9._-]+/gi, '[REDACTED]');
+  }
+  return sanitized;
 }
 
 export function assertOpenClawEgress(token, targetUrl, env = process.env) {
@@ -57,7 +63,14 @@ export function assertEgressSecurity(authHeader, targetUrl, env = process.env) {
 
   if (isSurrogateToken(token)) {
     assertSurrogateOrigin(authHeader, targetUrl);
-  } else if (isOpenClawSentinel(token)) {
+  } else if (looksLikeOpenClawSentinel(token)) {
+    if (!isOpenClawSentinel(token)) {
+      const error = new Error(
+        'XMEMO_KEY looks like an OpenClaw secret sentinel in a format this skill version does not support. Update the xmemo skill.'
+      );
+      error.exitCode = EXIT_CODE.USER_ERROR;
+      throw error;
+    }
     assertOpenClawEgress(token, targetUrl, env);
   }
 }
