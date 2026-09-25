@@ -289,9 +289,11 @@ remain limited to `remember`, `recall`, and `search`.
 - `ledger-list` is a strictly read-only query backed by
   `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring
   `ledger:read` scope). It retrieves financial and expense transactions without
-  any write or delete capabilities. There is no separate `ledger-delete` command;
-  to remove or void a transaction, obtain its `id` from `ledger-list` and invoke
-  `forget --id <transaction_id> --confirm`. It accepts `--limit <n>`, `--offset <n>`,
+  any write or delete capabilities; `ledger-list` only reads and lists records.
+  Deleting or voiding a transaction is a separate operation that requires
+  explicit confirmation (`forget --id <id> --confirm`) and a delete-capable
+  scope (for example `memory:delete`; see the forget section for the full list).
+  It accepts `--limit <n>`, `--offset <n>`,
   `--currency <code>`, `--from <date>` (`date_from`), `--to <date>` (`date_to`),
   `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and `--type <type>`
   (`transaction_type`). As a convenience, `--month <YYYY-MM>` can be specified to
@@ -416,7 +418,11 @@ items, verify the credential scopes first. A valid `memory:read` token alone is
 not proof of Knowledge authorization; do not fall back to a broader token or
 attempt to inspect another user's Knowledge space.
 
-For memory and session workflows, read `references/memory-operations.md`. For ledger accounting and diagnostics, read `references/ledger-operations.md`. For command matrix, output formatting, and exit codes, read `references/runtime-operations.md`. For auth, network, and service diagnosis, read `references/troubleshooting.md`.
+For detailed guides and operational references, see:
+- [memory-operations.md](references/memory-operations.md): Core memory, knowledge context, and continuity workflows.
+- [ledger-operations.md](references/ledger-operations.md): Ledger accounting, financial transactions, and account diagnostics.
+- [runtime-operations.md](references/runtime-operations.md): Command matrix, output safety, JSON envelopes, and exit codes.
+- [troubleshooting.md](references/troubleshooting.md): Auth, network, and service diagnosis and recovery.
 
 ## Exit Codes
 

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Clarified documentation for `ledger-list` in `references/ledger-operations.md` and `SKILL.md` to consistently describe it as a strictly read-only query command, explicitly noting that deleting or voiding a ledger entry is a separate operation requiring explicit confirmation (`forget --id <id> --confirm`) and a delete-capable scope (for example `memory:delete`; see the forget section for the full list).
+- Structured reference links in `SKILL.md` as direct Markdown links with one-line descriptions.
+
+### Changed
+
+- Modularized stdin and file input reading into a dedicated helper module (`scripts/lib/bounded-read.mjs`) with explicit streaming byte counting: capped at `MAX_MEMORY_CONTENT_BYTES` (512 KiB) for memory content and `MAX_STDIN_INPUT_BYTES` (64 KiB) for single-value stdin inputs (`auth add`), with early rejection on stream overflow.
+
 ## 1.1.25
 
 ### Added

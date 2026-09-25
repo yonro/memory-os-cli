@@ -651,6 +651,50 @@ test('skill script requires explicit consent before storing plaintext credential
   }
 });
 
+test('skill script auth add via stdin respects 64 KiB bounded input limit', async () => {
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-auth-stdin-limit-test-'));
+  const credentialPath = path.join(homeDir, '.xmemo', 'skill-credentials.json');
+  try {
+    // 1. Normal token is accepted and stored trimmed
+    const normalToken = '  mos_normal_test_token_12345  \n';
+    const normalRes = await runScript(['auth', 'add', '--from-stdin', '--allow-plaintext'], {
+      homeDir,
+      env: {},
+      stdin: normalToken,
+    });
+    assert.equal(normalRes.code, 0);
+    let stored = JSON.parse(await fs.readFile(credentialPath, 'utf8'));
+    assert.equal(stored.token, 'mos_normal_test_token_12345');
+
+    // 2. Exactly 65536 bytes token is accepted and stored
+    const exactToken = 't'.repeat(65536);
+    const exactRes = await runScript(['auth', 'add', '--from-stdin', '--allow-plaintext'], {
+      homeDir,
+      env: {},
+      stdin: exactToken,
+    });
+    assert.equal(exactRes.code, 0);
+    stored = JSON.parse(await fs.readFile(credentialPath, 'utf8'));
+    assert.equal(stored.token, exactToken);
+
+    // 3. 65537 bytes (64 KiB + 1) is rejected with USER_ERROR (exit code 1)
+    await fs.rm(credentialPath, { force: true });
+
+    const overToken = 't'.repeat(65537);
+    const overRes = await runScript(['auth', 'add', '--from-stdin', '--allow-plaintext'], {
+      homeDir,
+      env: {},
+      stdin: overToken,
+    });
+    assert.equal(overRes.code, 1);
+    assert.match(overRes.stderr, /Error: Input exceeds maximum limit of 65536 bytes\./);
+    // Assert nothing was written to the credential file on rejection
+    await assert.rejects(fs.readFile(credentialPath, 'utf8'), { code: 'ENOENT' });
+  } finally {
+    await fs.rm(homeDir, { recursive: true, force: true });
+  }
+});
+
 test('skill script device login preserves formal-account scopes and respects authorization expiry', async () => {
   const successServer = createTestServer();
   const successBaseUrl = await successServer.start();
