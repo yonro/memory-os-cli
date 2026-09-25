@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## 1.1.25
+
+### Added
+
+- Support Meta Muse Secure Vault credentials (credential resolution order: `XMEMO_KEY` → `muse-vault` surrogate token via local socket → user credential file; surrogate tokens are restricted strictly to `https://xmemo.dev` and are never stored to disk or printed).
+- Support OpenClaw secret egress proxying: `XMEMO_KEY` holding an OpenClaw sentinel token is reported as `openclaw-secret`; outbound requests fail closed unless the egress proxy environment (`HTTPS_PROXY` or `https_proxy`, and truthy `NODE_USE_ENV_PROXY`) is active, and sentinels are only sent to `https://xmemo.dev`.
+
 ## 1.1.24
 
 ### Changed
