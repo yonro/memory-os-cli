@@ -111,6 +111,9 @@ async function main() {
   // 2. Doctor anonymous check
   const credential = command === 'doctor' && options.anonymous ? null : await getStoredCredential();
   const token = credential?.token;
+  if (credential) {
+    options.credential = credential;
+  }
 
   if (command === 'doctor' && !token) {
     await handleOps({ ...ctx, credential, token });

@@ -23,14 +23,22 @@ import {
   formatMemoryContent,
 } from '../lib/api.mjs';
 
+import {
+  printAuthErrorHint,
+} from '../lib/auth-hint.mjs';
+
 function reqSuffix(data) {
   const reqId = extractRequestId(data);
   return reqId ? ` (request_id: ${reqId})` : '';
 }
 
-function failRequest(data, statusCode, prefix) {
+function failRequest(data, statusCode, prefix, options) {
   console.error(`${prefix}${reqSuffix(data)}`);
-  process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(statusCode));
+  const exitCode = exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(statusCode);
+  if (exitCode === EXIT_CODE.AUTH_ERROR && (!options || !options.json)) {
+    printAuthErrorHint(options?.credential);
+  }
+  process.exit(exitCode);
 }
 
 function extractRecord(data) {
@@ -62,7 +70,7 @@ export async function handleMemory(ctx) {
         outputJsonFailure(data, res.statusCode);
       }
       if (!succeeded) {
-        failRequest(data, res.statusCode, `${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})`);
+        failRequest(data, res.statusCode, `${label} failed: ${apiErrorMessage(data)} (HTTP ${res.statusCode})`, options);
       }
       if (command === 'restart-snapshot') {
         console.log(`✅ Restart snapshot saved.\nID: ${sanitizeTerminalText(extractId(data))}${data.expires_at ? `\nExpires: ${sanitizeTerminalText(data.expires_at)}` : ''}`);
@@ -110,7 +118,7 @@ export async function handleMemory(ctx) {
         process.exit(succeeded ? EXIT_CODE.SUCCESS : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode)));
       }
       if (!succeeded) {
-        failRequest(data, res.statusCode, `Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
+        failRequest(data, res.statusCode, `Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`, options);
       }
       const items = Array.isArray(data.items) ? data.items.length : 0;
       const contextText = sanitizeTerminalText(data.context_text || '');
@@ -181,11 +189,9 @@ export async function handleMemory(ctx) {
   if (command === 'update') {
     const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}`;
     const body = {};
-    if (flags.content !== undefined) body.content = flags.content;
-    if (flags.path !== undefined) body.path = flags.path;
-    if (flags.metadata !== undefined) body.metadata = flags.metadata;
-    if (flags.bucket !== undefined) body.bucket = flags.bucket;
-    if (flags.scope !== undefined) body.scope = flags.scope;
+    for (const k of ['content', 'path', 'metadata', 'bucket', 'scope']) {
+      if (flags[k] !== undefined) body[k] = flags[k];
+    }
 
     try {
       const res = await makeHttpRequest(options.baseUrl, endpoint, 'PATCH', body, {
@@ -288,7 +294,7 @@ export async function handleMemory(ctx) {
       }
 
       if (!succeeded) {
-        failRequest(data, res.statusCode, `Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`);
+        failRequest(data, res.statusCode, `Error: ${apiErrorMessage(data)} (Code: ${data.error?.code || `HTTP ${res.statusCode}`})`, options);
       }
 
       if (command === 'recall' || command === 'search') {

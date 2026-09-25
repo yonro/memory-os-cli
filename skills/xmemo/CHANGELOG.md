@@ -11,6 +11,8 @@
 - Sanitize error messages in catch blocks across `auth-login.mjs`, `memory.mjs`, and `ops.mjs` before printing to terminal output.
 - Merge duplicate `console.error` branches in Meta Muse vault resolution and silently fall through on expected `unavailable` or `missing` keys.
 - Write back parsed integer for `--ttl_seconds` across `save-state` and `state-save` commands, ensuring consistent numeric representation in serialized payloads.
+- Fail closed on OpenClaw secret sentinel look-alikes (`oc-sent-*`) that do not match exact v2 syntax, exiting with code 1 (`USER_ERROR`) and zero network requests while refusing persistence in `saveToken` and `auth add` and redacting look-alike sentinels in output sanitization.
+- Print credential source hint on stderr when commands fail with `AUTH_ERROR` (HTTP 401/403 or authentication error codes) in terminal mode, while keeping `--json` envelopes unchanged.
 
 ### Added
 
@@ -21,6 +23,7 @@
 - Document in `SKILL.md` that `remember --file` follows symbolic links and requires the resolved target to be a regular file.
 - Document 64 KiB input size limit for `auth add --from-stdin` in `SKILL.md` and `references/troubleshooting.md`.
 - Document LF-clean ClawHub publishing instructions using GitHub Release tarball extractions in `docs/xmemo-skill-release.md`.
+- Document credential lifetime characteristics and symptom/repair steps for file-backed credentials in `SKILL.md` and `references/troubleshooting.md`, clarifying that local credential files store no access-token expiry.
 
 ## 1.1.26
 

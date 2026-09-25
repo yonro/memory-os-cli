@@ -24,6 +24,7 @@ import {
 
 import {
   isOpenClawSentinel,
+  looksLikeOpenClawSentinel,
 } from '../lib/openclaw-egress.mjs';
 
 import {
@@ -112,7 +113,7 @@ export async function handleAuthManage(ctx) {
         console.error('Error: Refusing to store Meta Muse surrogate token. Surrogate tokens are dynamic and managed by Meta Muse.');
         process.exit(EXIT_CODE.USER_ERROR);
       }
-      if (isOpenClawSentinel(token)) {
+      if (isOpenClawSentinel(token) || looksLikeOpenClawSentinel(token)) {
         console.error('Error: Refusing to store OpenClaw sentinel token. Sentinels are dynamic and managed by OpenClaw.');
         process.exit(EXIT_CODE.USER_ERROR);
       }

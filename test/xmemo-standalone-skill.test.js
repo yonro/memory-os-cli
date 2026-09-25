@@ -4582,3 +4582,88 @@ test('R3: ledger and account output sanitizes control characters and ANSI sequen
     await testServer.stop();
   }
 });
+
+test('Part B: 401 on recall in terminal mode prints hint with correct credential source and preserves --json', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-auth-hint-test-'));
+  const credDir = path.join(tmpHome, '.xmemo');
+  await fs.mkdir(credDir, { recursive: true });
+  await fs.writeFile(
+    path.join(credDir, 'skill-credentials.json'),
+    JSON.stringify({
+      token: 'file-stored-token',
+      credential_type: 'formal',
+      storage: 'plaintext',
+      plaintext_storage_consent: true,
+    }),
+    'utf8'
+  );
+
+  try {
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'unauthorized', message: 'Invalid or expired token' },
+    }, 401);
+
+    // 1. Recall in terminal mode with XMEMO_KEY -> source: environment
+    const resEnv = await runScript([
+      'recall',
+      '--query', 'test query',
+      '--terminal',
+    ], {
+      baseUrl,
+      env: {
+        XMEMO_KEY: 'env-test-token',
+        HOME: tmpHome,
+        USERPROFILE: tmpHome,
+      },
+    });
+
+    assert.equal(resEnv.code, 2);
+    assert.match(resEnv.stderr, /Error: Invalid or expired token/);
+    assert.match(resEnv.stderr, /Credential source: environment\. Run `node scripts\/xmemo-skill\.mjs auth status --verify` to check it\./);
+
+    // 2. Recall in terminal mode with file credential -> source: file
+    const resFile = await runScript([
+      'recall',
+      '--query', 'test query',
+      '--terminal',
+    ], {
+      baseUrl,
+      env: {
+        XMEMO_KEY: '',
+        HOME: tmpHome,
+        USERPROFILE: tmpHome,
+      },
+    });
+
+    assert.equal(resFile.code, 2);
+    assert.match(resFile.stderr, /Error: Invalid or expired token/);
+    assert.match(resFile.stderr, /Credential source: file\. Run `node scripts\/xmemo-skill\.mjs auth status --verify` to check it\./);
+
+    // 3. Recall in --json mode with XMEMO_KEY -> byte-identical envelope, no hint on stderr
+    const resJson = await runScript([
+      'recall',
+      '--query', 'test query',
+      '--json',
+    ], {
+      baseUrl,
+      env: {
+        XMEMO_KEY: 'env-test-token',
+        HOME: tmpHome,
+        USERPROFILE: tmpHome,
+      },
+    });
+
+    assert.equal(resJson.code, 2);
+    const parsed = JSON.parse(resJson.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.error.code, 'unauthorized');
+    assert.equal(resJson.stderr.includes('Credential source:'), false, '--json mode must not print hint to stderr');
+  } finally {
+    await testServer.stop();
+    await fs.rm(tmpHome, { recursive: true, force: true }).catch(() => {});
+  }
+});

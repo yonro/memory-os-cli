@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { exitCodeForError, exitCodeForErrorCode, exitCodeForHttpStatus, EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
 import { getStoredCredential } from '../skills/xmemo/scripts/lib/auth-state.mjs';
 import { sanitizeTerminalText } from '../skills/xmemo/scripts/lib/api.mjs';
+import { looksLikeOpenClawSentinel } from '../skills/xmemo/scripts/lib/openclaw-egress.mjs';
+import { resolveCredentialSource, formatAuthErrorHint } from '../skills/xmemo/scripts/lib/auth-hint.mjs';
 import {
   readStdin,
   readStdinContent,
@@ -431,4 +433,42 @@ test('R4: exitCodeForHttpStatus maps 401/403 to AUTH_ERROR, 4xx to USER_ERROR, 5
   assert.equal(exitCodeForHttpStatus(503), EXIT_CODE.SERVER_ERROR);
 });
 
+test('Part A: looksLikeOpenClawSentinel identifies sentinels and look-alikes', () => {
+  assert.equal(looksLikeOpenClawSentinel('oc-sent-v2.abc.end'), true);
+  assert.equal(looksLikeOpenClawSentinel('oc-sent-v3.abc.end'), true);
+  assert.equal(looksLikeOpenClawSentinel('OC-SENT-v2.x'), true);
+  assert.equal(looksLikeOpenClawSentinel('  oc-sent-v2.trimmed  '), true);
+  assert.equal(looksLikeOpenClawSentinel('oc-sent-v2.bad!.end'), true);
+  assert.equal(looksLikeOpenClawSentinel('token_regular_123'), false);
+  assert.equal(looksLikeOpenClawSentinel('hsurr:abc'), false);
+  assert.equal(looksLikeOpenClawSentinel(''), false);
+  assert.equal(looksLikeOpenClawSentinel(null), false);
+  assert.equal(looksLikeOpenClawSentinel(undefined), false);
+});
 
+test('Part B: resolveCredentialSource and formatAuthErrorHint map credential sources correctly', () => {
+  assert.equal(resolveCredentialSource({ storage: 'openclaw-secret' }), 'openclaw-secret');
+  assert.equal(resolveCredentialSource({ storage: 'vault' }), 'vault');
+  assert.equal(resolveCredentialSource({ storage: 'environment' }), 'environment');
+  assert.equal(resolveCredentialSource({ storage: 'plaintext' }), 'file');
+  assert.equal(resolveCredentialSource({ storage: 'unknown' }), 'file');
+  assert.equal(resolveCredentialSource(null), 'file');
+  assert.equal(resolveCredentialSource(undefined), 'file');
+
+  assert.equal(
+    formatAuthErrorHint({ storage: 'environment' }),
+    'Credential source: environment. Run `node scripts/xmemo-skill.mjs auth status --verify` to check it.'
+  );
+  assert.equal(
+    formatAuthErrorHint({ storage: 'file' }),
+    'Credential source: file. Run `node scripts/xmemo-skill.mjs auth status --verify` to check it.'
+  );
+  assert.equal(
+    formatAuthErrorHint({ storage: 'openclaw-secret' }),
+    'Credential source: openclaw-secret. Run `node scripts/xmemo-skill.mjs auth status --verify` to check it.'
+  );
+  assert.equal(
+    formatAuthErrorHint({ storage: 'vault' }),
+    'Credential source: vault. Run `node scripts/xmemo-skill.mjs auth status --verify` to check it.'
+  );
+});
