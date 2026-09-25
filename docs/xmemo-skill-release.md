@@ -181,18 +181,33 @@ Real publishing to npm is **gated off** by default:
 - The publish step checks `vars.XMEMO_SKILL_NPM_PUBLISH == 'true'`.
 - If the repository variable is not set or not `'true'`, the workflow logs a notice and skips publishing without error.
 
-### Provenance Verification
+### Trusted Publishing (OIDC) & Release Configuration
 
-When published with `--provenance`, npm records a Sigstore-signed attestation linking the published artifact directly to the GitHub Actions workflow run in this repository:
-- Run `npm audit signatures` to verify package signature and transparency log status.
-- Inspect the provenance badge on `https://www.npmjs.com/package/@xmemo/skill`.
+The `@xmemo/skill` package uses **npm Trusted Publishing** (OIDC) instead of static tokens:
+1. **Bootstrap Complete**: Initial package bootstrap (`@xmemo/skill@1.1.25`) was published to npm by the organization owner.
+2. **Trusted Publisher Configured**: An npm Trusted Publisher is configured on `npmjs.com` for `@xmemo/skill`:
+   - Provider: GitHub Actions
+   - Repository: `yonro/memory-os-cli`
+   - Workflow: `.github/workflows/release-xmemo-skill.yml`
+   - Environment: `npm`
+   - Permissions: `npm publish` and `npm stage publish`
+3. **No `NPM_TOKEN` Secret**: Skill publishing uses short-lived GitHub Actions OIDC identity tokens exchanged directly with npm (`permissions: id-token: write`). Static `NPM_TOKEN` is not used by the skill release job (it remains used only for CLI releases).
+4. **Publish Gating**: Repository variable `XMEMO_SKILL_NPM_PUBLISH=true` is set, enabling automated publishing on GitHub Release tags matching `skill-v*`.
+5. **CLI Requirement**: Trusted publishing requires npm CLI `>= 11.5.1`. The workflow explicitly installs a pinned `npm@11.6.4` before publishing.
 
-### Human Prerequisite (Before First Real Publish)
+### Verifying Published Provenance
 
-Because `@xmemo/skill` is a new package:
-1. The first publish requires an npm authentication token authorized to create packages under the `@xmemo` scope (configured via `NPM_TOKEN` secret in the `npm` GitHub Actions environment), or an initial manual publish by an organization owner.
-2. After initial creation, configure npm **Trusted Publishing** for `yonro/memory-os-cli`, workflow `.github/workflows/release-xmemo-skill.yml`, environment `npm`.
-3. Set GitHub repository variable `XMEMO_SKILL_NPM_PUBLISH=true` to enable automated publishing on subsequent releases.
+After publication, npm records a Sigstore-signed attestation linking the published artifact directly to the GitHub Actions workflow run in this repository:
+- **Registry Inspection**:
+  ```bash
+  npm view @xmemo/skill@<version> version
+  npm view @xmemo/skill@<version> dist.attestations
+  ```
+- **Attestation Signatures**:
+  ```bash
+  npm audit signatures
+  ```
+- **Web UI**: View the verified provenance badge on `https://www.npmjs.com/package/@xmemo/skill`.
 
 ### CLI Delegation (`xmemo skill install`)
 
