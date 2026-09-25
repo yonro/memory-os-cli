@@ -286,3 +286,76 @@ jobs:
               sleep 10
             done
           done
+
+  npm:
+    needs: package
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Check out the released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build standalone @xmemo/skill npm package
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-skill-npm-package.mjs --out dist/npm-skill
+
+      - name: Verify package version matches release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg_version="$(node -p 'JSON.parse(require("fs").readFileSync("dist/npm-skill/package.json", "utf8")).version')"
+          expected_tag="skill-v$pkg_version"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Package version $pkg_version does not match release tag $RELEASE_TAG; expected $expected_tag" >&2
+            exit 1
+          fi
+
+      - name: Validate npm package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist/npm-skill
+          npm pack --dry-run
+
+      - name: Check whether version is already published
+        id: check_published
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg_version="$(node -p 'JSON.parse(require("fs").readFileSync("dist/npm-skill/package.json", "utf8")).version')"
+          if npm view "@xmemo/skill@$pkg_version" version >/dev/null 2>&1; then
+            echo "Version $pkg_version of @xmemo/skill is already published on npm; skipping publish."
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish @xmemo/skill to npm (gated)
+        if: vars.XMEMO_SKILL_NPM_PUBLISH == 'true' && steps.check_published.outputs.already_published != 'true'
+        shell: bash
+        working-directory: dist/npm-skill
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish --access public --provenance
+
+      - name: Publish notice (gated off)
+        if: vars.XMEMO_SKILL_NPM_PUBLISH != 'true'
+        shell: bash
+        run: |
+          echo "Notice: npm publish is gated off because vars.XMEMO_SKILL_NPM_PUBLISH != 'true'."

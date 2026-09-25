@@ -1,0 +1,5 @@
+{
+  "name": "@xmemo/skill-installer",
+  "private": true,
+  "type": "module"
+}
