@@ -22,7 +22,7 @@ async function invoke(args, options = {}) {
   }
 
   const code = await run(args, {
-    env: options.env ?? {},
+    env: options.env !== undefined ? options.env : process.env,
     stdin,
     stdout: { write: (chunk) => { stdout += chunk; } },
     stderr: { write: (chunk) => { stderr += chunk; } },

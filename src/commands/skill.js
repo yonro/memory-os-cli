@@ -226,7 +226,19 @@ async function validateFromSource(cwd, fromArg) {
 }
 
 function sanitizeEnv(baseEnv) {
-  const env = { ...(baseEnv ?? process.env) };
+  const source = baseEnv ?? process.env;
+  const env = { ...source };
+  const hasPath = Object.keys(env).some((k) => k.toUpperCase() === 'PATH');
+  if (!hasPath) {
+    if (process.env.PATH) env.PATH = process.env.PATH;
+    if (process.env.Path) env.Path = process.env.Path;
+  }
+  if (!env.HOME && process.env.HOME) env.HOME = process.env.HOME;
+  if (!env.USERPROFILE && process.env.USERPROFILE) env.USERPROFILE = process.env.USERPROFILE;
+  if (!env.SYSTEMROOT && process.env.SYSTEMROOT) env.SYSTEMROOT = process.env.SYSTEMROOT;
+  if (!env.SystemRoot && process.env.SystemRoot) env.SystemRoot = process.env.SystemRoot;
+  if (!env.ComSpec && process.env.ComSpec) env.ComSpec = process.env.ComSpec;
+
   for (const key of Object.keys(env)) {
     if (key.startsWith('XMEMO_') && key !== 'XMEMO_SKILL_DIR') {
       delete env[key];
