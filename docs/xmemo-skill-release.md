@@ -77,29 +77,52 @@ When publishing updates for `skills/xmemo` to ClawHub:
    The ClawHub upload must come from an LF tree, not a Windows working copy with `core.autocrlf=true` (versions 1.1.24–1.1.26 on ClawHub were CRLF because they were uploaded from Windows working trees). ClawHub preserves raw byte content and file line endings, which alters sha256 checksums and unnecessarily increases file sizes against the 12 KiB cap.
    
    To ensure LF line endings:
-   - Extract the GitHub Release archive `xmemo-skill.tar.gz` (built on Ubuntu Linux with strict LF line endings) into a temporary directory:
+   - Extract the GitHub Release archive `xmemo-skill.tar.gz` (built on Ubuntu Linux with strict LF line endings) into an empty temporary directory.
+     *Note*: The release archive packages the skill directly at its root (`SKILL.md`, `scripts/`, `references/`). Do not append `/skills/xmemo` to the extraction path.
      ```bash
-     mkdir -p /tmp/clawhub-skill-v<version>
-     tar -xzf xmemo-skill.tar.gz -C /tmp/clawhub-skill-v<version>
+     # POSIX:
+     TMPDIR="/tmp/clawhub-skill-v<version>"
+     mkdir -p "$TMPDIR"
+     tar -xzf xmemo-skill.tar.gz -C "$TMPDIR"
+
+     # Windows (PowerShell using bundled bsdtar):
+     # $TMPDIR = "$env:TEMP/clawhub-skill-v<version>"
+     # New-Item -ItemType Directory -Force -Path $TMPDIR
+     # tar -xzf xmemo-skill.tar.gz -C $TMPDIR
      ```
-   - Publish from that extracted directory, passing `--owner xmemo`:
+   - Pre-publish integrity and LF check:
+     Verify that key files exist directly at the extraction root and contain no CR (`\r`) bytes:
      ```bash
-     clawhub publish /tmp/clawhub-skill-v<version>/skills/xmemo --owner xmemo --version <semver> --slug xmemo --name "XMemo Memory"
+     # POSIX:
+     test -f "$TMPDIR/SKILL.md" && test -f "$TMPDIR/scripts/xmemo-skill.mjs"
+     grep -q $'\r' "$TMPDIR/SKILL.md" "$TMPDIR/scripts/xmemo-skill.mjs" && echo "CR detected!" || echo "Clean LF"
+
+     # Windows (PowerShell):
+     # Test-Path "$TMPDIR/SKILL.md", "$TMPDIR/scripts/xmemo-skill.mjs"
+     # if ((Get-Content -Raw "$TMPDIR/SKILL.md") -match "`r") { Write-Error "CR detected!" } else { "Clean LF" }
+     ```
+   - Publish from the extracted root directory, passing `--owner xmemo`:
+     ```bash
+     clawhub publish "$TMPDIR" --owner xmemo --version <semver> --slug xmemo --name "XMemo Memory"
      ```
    - Verify post-upload file sha256 checksums:
+     Compare the sha256 checksums reported by ClawHub with the extracted LF files:
      ```bash
      clawhub inspect xmemo --version <semver> --files
+     # Compare with local sha256 hashes from the extraction directory:
+     (cd "$TMPDIR" && sha256sum SKILL.md scripts/xmemo-skill.mjs references/*.md)
+     # Windows (PowerShell):
+     # Get-FileHash "$TMPDIR/SKILL.md", "$TMPDIR/scripts/xmemo-skill.mjs" -Algorithm SHA256
      ```
-     Verify that the reported sha256 checksums match the LF files from the GitHub Release archive.
 2. **Pre-Publish Namespace Assertion**:
    Before executing the publish command, verify that the active token belongs to or is authorized by the `@xmemo` organization. Do not rely solely on `clawhub whoami` returning success:
    - Verify `clawhub whoami` identity.
    - Assert that the effective publishing namespace matches `ownerHandle=xmemo`.
    - Ensure the token is not a personal account token without `@xmemo` publisher permissions to prevent publishing accidental duplicate skills under personal namespaces.
 3. **Dry-Run Validation**:
-   Always dry-run the publish command first to inspect the payload file list:
+   Always dry-run the publish command first from the extraction root directory to inspect the payload file list:
    ```bash
-   clawhub publish /tmp/clawhub-skill-v<version>/skills/xmemo --dry-run
+   clawhub publish "$TMPDIR" --dry-run
    ```
    Ensure no test files or repository-level maintenance scripts are bundled.
 4. **Post-Publish Verification**:
