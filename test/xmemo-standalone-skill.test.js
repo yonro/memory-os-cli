@@ -92,16 +92,20 @@ async function runScript(args, options = {}) {
       : (options.isTty !== undefined
           ? (options.isTty ? '1' : '0')
           : (options.env?.XMEMO_FORCE_TTY ?? '1'));
+    const childEnv = {
+      ...process.env,
+      HOME: options.homeDir || process.env.HOME,
+      USERPROFILE: options.homeDir || process.env.USERPROFILE,
+      XMEMO_BASE_URL: options.baseUrl,
+      XMEMO_KEY: options.env?.XMEMO_KEY,
+      XMEMO_FORCE_TTY: forceTty,
+      ...options.env,
+    };
+    if (!options.env || !('JARVIS_AUTHD_SOCK' in options.env)) {
+      delete childEnv.JARVIS_AUTHD_SOCK;
+    }
     const child = spawn(process.execPath, [skillScript, ...args], {
-      env: {
-        ...process.env,
-        HOME: options.homeDir || process.env.HOME,
-        USERPROFILE: options.homeDir || process.env.USERPROFILE,
-        XMEMO_BASE_URL: options.baseUrl,
-        XMEMO_KEY: options.env?.XMEMO_KEY,
-        XMEMO_FORCE_TTY: forceTty,
-        ...options.env,
-      },
+      env: childEnv,
       cwd: repoRoot
     });
 

@@ -461,6 +461,7 @@ async function runSnapshotScript(args, { baseUrl, homeDir, stdin, env = {} }) {
         delete childEnv[key];
       }
     }
+    delete childEnv.JARVIS_AUTHD_SOCK;
     childEnv.HOME = homeDir;
     childEnv.USERPROFILE = homeDir;
     childEnv.XMEMO_BASE_URL = baseUrl;

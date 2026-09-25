@@ -10,11 +10,15 @@ import {
   exitCodeForErrorCode,
   exitCodeForError,
 } from './core.mjs';
+import { assertSurrogateOrigin } from './muse-vault.mjs';
 
 export const warnedCredentialOrigins = new Set();
 
 export function redactSensitiveResponse(value) {
-  if (value === null || typeof value !== 'object') return value;
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'string' && value.startsWith('hsurr:')) return '[REDACTED]';
+    return value;
+  }
   if (Array.isArray(value)) return value.map(redactSensitiveResponse);
   const sensitiveKeys = new Set([
     'access_token', 'refresh_token', 'id_token', 'temporary_token', 'formal_token',
@@ -233,6 +237,7 @@ export function makeHttpRequest(baseUrl, apiPath, method, body = null, headers =
       };
       const authorizationHeader = Object.entries(reqHeaders)
         .find(([key]) => key.toLowerCase() === 'authorization')?.[1];
+      assertSurrogateOrigin(authorizationHeader, url);
       if (authorizationHeader && url.origin !== new URL(DEFAULT_BASE_URL).origin && !warnedCredentialOrigins.has(url.origin)) {
         warnedCredentialOrigins.add(url.origin);
         console.error(`⚠️ Sending an XMemo credential to custom origin ${url.origin}. Continue only if this host is trusted.`);

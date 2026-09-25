@@ -24,7 +24,13 @@ import {
   warnedCredentialOrigins,
 } from './api.mjs';
 
-export { warnedCredentialOrigins };
+import {
+  getVaultSurrogate,
+  isSurrogateToken,
+  VaultKeyError,
+} from './muse-vault.mjs';
+
+export { warnedCredentialOrigins, isSurrogateToken };
 
 // Read credential helper
 export async function getStoredToken() {
@@ -35,6 +41,20 @@ export async function getStoredToken() {
 export async function getStoredCredential() {
   if (process.env.XMEMO_KEY) {
     return { token: process.env.XMEMO_KEY, credential_type: 'environment', storage: 'environment' };
+  }
+  try {
+    const surrogate = await getVaultSurrogate();
+    if (surrogate) {
+      return { token: surrogate, credential_type: 'vault', storage: 'vault' };
+    }
+  } catch (err) {
+    if (err instanceof VaultKeyError) {
+      if (err.code === 'authd_error') {
+        console.error(`⚠️ Meta Muse vault error: ${sanitizeTerminalText(err.message)}`);
+      }
+    } else {
+      console.error(`⚠️ Meta Muse vault error: ${sanitizeTerminalText(err.message)}`);
+    }
   }
   try {
     const data = await fs.readFile(credentialsPath, 'utf8');
@@ -73,6 +93,9 @@ export function warnPlaintextStorage() {
 
 // Save credential helper. Every caller must prove explicit consent or carry forward recorded consent.
 export async function saveToken(token, details = {}, { allowPlaintext = false, warn = false } = {}) {
+  if (isSurrogateToken(token)) {
+    throw new Error('Refusing to persist Meta Muse surrogate token to disk. Surrogate tokens are dynamically managed by Meta Muse.');
+  }
   if (!allowPlaintext) {
     throw new Error(`Refusing unencrypted credential storage without --allow-plaintext. Prefer XMEMO_KEY.`);
   }
