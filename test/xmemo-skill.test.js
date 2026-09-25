@@ -72,9 +72,10 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(memoryOps, /knowledge:read/);
 });
 
-test('npm package includes the XMemo Skill, script, and references', async () => {
-  assert.ok(packageJson.files.includes('skills'));
+test('npm package excludes bundled skills and excludes build-skill-npm-package script', async () => {
+  assert.equal(packageJson.files.includes('skills'), false);
   assert.ok(packageJson.files.includes('plugins/xmemo'));
+  assert.ok(packageJson.files.includes('!scripts/build-skill-npm-package.mjs'));
 });
 
 test('standalone Skill installers remain HTTPS-only and package the expected entrypoint', async () => {

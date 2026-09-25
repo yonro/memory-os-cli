@@ -208,14 +208,17 @@ test('CLI-09 actual npm archive runs outside repo with CLI and independent Skill
   const info = JSON.parse(packed.stdout)[0];
   assert.ok(info.files.some((f) => f.path === 'src/api/client.js'));
   assert.ok(!info.files.some((f) => /credentials\.json|\.env$|npm-cache-review|\.progress/.test(f.path)));
+  assert.ok(!info.files.some((f) => /^skills[\\/]/.test(f.path)));
+  assert.ok(!info.files.some((f) => /build-skill-npm-package\.mjs/.test(f.path)));
   const unpacked = path.join(directory, 'unpacked');
   await fs.mkdir(unpacked);
   const extraction = await child('tar', ['-xf', path.basename(info.filename), '-C', 'unpacked'], { cwd: directory, env });
   assert.equal(extraction.code, 0, extraction.stderr);
+  await assert.rejects(fs.access(path.join(unpacked, 'package/skills')));
   const cliOnly = path.join(directory, 'cli only'), skillOnly = path.join(directory, 'skill only');
   await fs.mkdir(cliOnly);
   for (const entry of ['bin', 'src', 'package.json']) await fs.cp(path.join(unpacked, 'package', entry), path.join(cliOnly, entry), { recursive: true });
-  await fs.cp(path.join(unpacked, 'package/skills/xmemo'), skillOnly, { recursive: true });
+  await fs.cp(path.join(root, 'skills/xmemo'), skillOnly, { recursive: true });
   await assert.rejects(fs.access(path.join(cliOnly, 'skills')));
   await assert.rejects(fs.access(path.join(skillOnly, 'src')));
   const api = await fixture(t, (_r, res) => respond(res, [{ memory_id: 'packaged', content: 'synthetic' }]));

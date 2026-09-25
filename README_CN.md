@@ -222,6 +222,9 @@ xmemo doctor
 xmemo discovery show
 xmemo status
 xmemo privacy
+xmemo skill install
+xmemo skill install --version <semver>
+xmemo skill install --from <dir|tgz>
 ```
 
 </details>
@@ -420,7 +423,6 @@ xmemo privacy
 bin/
 docs/assets/
 src/
-skills/
 plugins/xmemo/
 README.md
 README_CN.md
