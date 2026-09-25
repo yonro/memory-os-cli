@@ -193,3 +193,8 @@ Because `@xmemo/skill` is a new package:
 1. The first publish requires an npm authentication token authorized to create packages under the `@xmemo` scope (configured via `NPM_TOKEN` secret in the `npm` GitHub Actions environment), or an initial manual publish by an organization owner.
 2. After initial creation, configure npm **Trusted Publishing** for `yonro/memory-os-cli`, workflow `.github/workflows/release-xmemo-skill.yml`, environment `npm`.
 3. Set GitHub repository variable `XMEMO_SKILL_NPM_PUBLISH=true` to enable automated publishing on subsequent releases.
+
+### CLI Delegation (`xmemo skill install`)
+
+The CLI command `xmemo skill install` delegates installation to the `@xmemo/skill` npm package via `npm exec --yes --package @xmemo/skill@<spec> -- xmemo-skill install ...` (`latest` or validated `--version <semver>`). In air-gapped or offline environments, `--from <dir|tgz>` allows installing from a locally built package directory or an `npm pack` tarball with zero network access and no token transmission.
+

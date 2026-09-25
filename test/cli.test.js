@@ -27,15 +27,46 @@ test('help documents privacy defaults', async () => {
   assert.match(result.stdout, /never written to project configs/i);
 });
 
-test('skill install is an offline bundled compatibility command', async () => {
-  const result = await invoke(['skill', 'install', '--dry-run', '--target', 'xmemo-skill-test', '--json']);
+test('skill install delegates to @xmemo/skill npm package', async () => {
+  const calls = [];
+  const mockChildOutput = JSON.stringify({
+    package: '@xmemo/skill',
+    skillVersion: '1.1.25',
+    target: path.resolve('xmemo-skill-test'),
+    dryRun: true,
+    force: false,
+    replaced: false,
+    installed: false,
+    networkUsed: false,
+    tokenSent: false
+  });
+  const result = await invoke(['skill', 'install', '--dry-run', '--target', 'xmemo-skill-test', '--json'], {
+    spawn: spawnStub(calls, { code: 0, stdout: mockChildOutput })
+  });
 
   assert.equal(result.code, 0);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].command, /^npm(\.cmd)?$/);
+  assert.equal(calls[0].options.shell, false);
+  assert.deepEqual(calls[0].args, [
+    'exec',
+    '--yes',
+    '--package',
+    '@xmemo/skill@latest',
+    '--',
+    'xmemo-skill',
+    'install',
+    '--target',
+    path.resolve('xmemo-skill-test'),
+    '--dry-run',
+    '--json'
+  ]);
   const report = JSON.parse(result.stdout);
   assert.equal(report.installed, false);
-  assert.equal(report.networkUsed, false);
+  assert.equal(report.networkUsed, true);
+  assert.equal(report.source, 'npm');
+  assert.equal(report.spec, 'latest');
   assert.equal(report.tokenSent, false);
-  assert.match(report.source, /skills[\\/]xmemo/);
 });
 
 test('update dry-run documents npm global install command', async () => {

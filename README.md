@@ -251,6 +251,9 @@ xmemo doctor
 xmemo discovery show
 xmemo status
 xmemo privacy
+xmemo skill install
+xmemo skill install --version <semver>
+xmemo skill install --from <dir|tgz>
 ```
 
 </details>
@@ -474,7 +477,6 @@ Published to npm:
 bin/
 docs/assets/
 src/
-skills/
 plugins/xmemo/
 README.md
 LICENSE
