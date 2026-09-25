@@ -1,4 +1,4 @@
-import { DEFAULT_BASE_URL } from './core.mjs';
+import { DEFAULT_BASE_URL, EXIT_CODE } from './core.mjs';
 import { isSurrogateToken, assertSurrogateOrigin } from './muse-vault.mjs';
 
 export const OPENCLAW_SENTINEL_REGEX = /^oc-sent-v2\.[A-Za-z0-9_-]+\.end$/;
@@ -32,16 +32,20 @@ export function assertOpenClawEgress(token, targetUrl, env = process.env) {
   if (!isOpenClawSentinel(token)) return;
 
   if (!isProxyEnvActive(env)) {
-    throw new Error(
+    const error = new Error(
       'OpenClaw egress proxy is required when using OpenClaw secrets. Enable secrets.egressProxy.enabled and ensure execution runs in Gateway-hosted exec (HTTPS_PROXY and NODE_USE_ENV_PROXY=1 must be set).'
     );
+    error.exitCode = EXIT_CODE.USER_ERROR;
+    throw error;
   }
 
   const urlObj = typeof targetUrl === 'string' ? new URL(targetUrl) : targetUrl;
   if (urlObj.origin !== ALLOWED_EGRESS_ORIGIN) {
-    throw new Error(
+    const error = new Error(
       `OpenClaw secret sentinels are restricted to ${ALLOWED_EGRESS_ORIGIN} and cannot be sent to ${urlObj.origin}. Unset XMEMO_BASE_URL or use a standard credential.`
     );
+    error.exitCode = EXIT_CODE.USER_ERROR;
+    throw error;
   }
 }
 

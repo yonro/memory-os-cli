@@ -120,9 +120,8 @@ export function exitCodeForError(err) {
     return EXIT_CODE.SERVER_ERROR;
   }
   if (
-    msg.includes('401') ||
+    /\b40[13]\b/.test(msg) ||
     msg.includes('unauthorized') ||
-    msg.includes('403') ||
     msg.includes('forbidden') ||
     msg.includes('invalid or expired token') ||
     msg.includes('no xmemo credential found') ||

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { exitCodeForError, EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
@@ -331,5 +332,22 @@ test('skills/xmemo security guard rejects dangerous code patterns (negative test
       await rm(targetPath, { force: true });
     }
   });
+});
+
+test('exitCodeForError matches HTTP 401 and 403 as whole numbers without false positives on ports or ids', () => {
+  // Whole numbers should match AUTH_ERROR
+  assert.equal(exitCodeForError(new Error('HTTP 401')), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForError(new Error('status 403 Forbidden')), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForError(new Error('error 401')), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForError(new Error('error 403')), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForError(new Error('Request failed with [401]')), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForError(new Error('status: 403')), EXIT_CODE.AUTH_ERROR);
+
+  // Numbers embedded in ports, ids, or strings must NOT match AUTH_ERROR
+  assert.equal(exitCodeForError(new Error('connect ECONNREFUSED 127.0.0.1:54013')), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForError(new Error('cannot connect to http://127.0.0.1:54013/v1')), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForError(new Error('memory id 14032 not found')), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForError(new Error('entity_4010_missing')), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForError(new Error('item 24031')), EXIT_CODE.USER_ERROR);
 });
 
