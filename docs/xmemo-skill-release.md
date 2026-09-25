@@ -140,3 +140,56 @@ node --test test/xmemo-skill-snapshot.test.js
 npm test
 node scripts/verify-release-packaging.mjs
 ```
+
+---
+
+## 5. Standalone `@xmemo/skill` npm Package
+
+The `@xmemo/skill` package provides a standalone, zero-dependency npm distribution of the XMemo agent skill. It decouples skill distribution from the CLI (`@xmemo/client`) releases and provides independent npm registry verification with Sigstore provenance.
+
+### Local Package Builder
+
+To build the standalone package artifact locally from `skills/xmemo`:
+
+```bash
+node scripts/build-skill-npm-package.mjs --out <output_directory>
+```
+
+The build script enforces release packaging invariants:
+1. **Empty Output Directory**: Refuses to overwrite non-empty directories.
+2. **Version Derivation**: Derives package version strictly from `SKILL_VERSION` in `skills/xmemo/scripts/xmemo-skill.mjs`.
+3. **C3 & Symlink Invariants**: Recursively checks for symlinks and sensitive naming patterns (`.env*`, `*secret*`, `*token*`, `*key*`, `*credential*`), rejecting offending files immediately.
+4. **Sorted Manifest Match**: Asserts that staged skill files in `<out>/skill/` match `skills/xmemo/` byte-for-byte.
+5. **Standalone Installer**: Copies `packages/skill-installer/install.mjs` to `<out>/bin/install.mjs` with executable permissions.
+
+To preview tarball contents:
+```bash
+cd <output_directory>
+npm pack --dry-run
+```
+
+### Automated Release Workflow (`release-xmemo-skill.yml`)
+
+The Skill release workflow contains a dedicated `npm` job that runs after archive packaging:
+- Verifies the built package version exactly matches the `skill-v<version>` release tag.
+- Checks if the target version is already published on npm (idempotent rerun).
+- Publishes with `--access public --provenance` from the built directory.
+
+### Publish Gating (`vars.XMEMO_SKILL_NPM_PUBLISH`)
+
+Real publishing to npm is **gated off** by default:
+- The publish step checks `vars.XMEMO_SKILL_NPM_PUBLISH == 'true'`.
+- If the repository variable is not set or not `'true'`, the workflow logs a notice and skips publishing without error.
+
+### Provenance Verification
+
+When published with `--provenance`, npm records a Sigstore-signed attestation linking the published artifact directly to the GitHub Actions workflow run in this repository:
+- Run `npm audit signatures` to verify package signature and transparency log status.
+- Inspect the provenance badge on `https://www.npmjs.com/package/@xmemo/skill`.
+
+### Human Prerequisite (Before First Real Publish)
+
+Because `@xmemo/skill` is a new package:
+1. The first publish requires an npm authentication token authorized to create packages under the `@xmemo` scope (configured via `NPM_TOKEN` secret in the `npm` GitHub Actions environment), or an initial manual publish by an organization owner.
+2. After initial creation, configure npm **Trusted Publishing** for `yonro/memory-os-cli`, workflow `.github/workflows/release-xmemo-skill.yml`, environment `npm`.
+3. Set GitHub repository variable `XMEMO_SKILL_NPM_PUBLISH=true` to enable automated publishing on subsequent releases.

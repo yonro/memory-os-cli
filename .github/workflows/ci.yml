@@ -22,6 +22,10 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run pack:dry-run
+      - name: Build standalone @xmemo/skill npm package
+        run: node scripts/build-skill-npm-package.mjs --out dist/npm-skill
+      - name: Verify @xmemo/skill pack dry-run
+        run: cd dist/npm-skill && npm pack --dry-run
 
   compatibility:
     name: ${{ matrix.os }} / Node ${{ matrix.node }}
