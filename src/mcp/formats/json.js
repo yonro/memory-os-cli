@@ -25,7 +25,7 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   httpClientDefinition('antigravity-ide', 'Antigravity IDE', 'defaultAntigravityIdeConfigPath', { urlKey: 'serverUrl', authentication: 'oauth', defaultIdentityId: 'antigravity' }),
   httpClientDefinition('antigravity2', 'Antigravity 2.0', 'defaultAntigravity2ConfigPath', { urlKey: 'serverUrl', authentication: 'oauth', defaultIdentityId: 'antigravity' }),
   httpClientDefinition('antigravity-cli', 'Antigravity CLI', 'defaultAntigravityCliConfigPath', { urlKey: 'serverUrl', authentication: 'oauth', defaultIdentityId: 'antigravity' }),
-  httpClientDefinition('windsurf', 'Windsurf', 'defaultWindsurfConfigPath', { urlKey: 'serverUrl', authentication: 'env-bearer' }),
+  httpClientDefinition('windsurf', 'Devin Desktop (formerly Windsurf)', 'defaultWindsurfConfigPath', { urlKey: 'serverUrl', authentication: 'env-bearer' }),
   httpClientDefinition('cline', 'Cline', 'defaultClineConfigPath', { urlKey: 'httpUrl', authentication: 'env-bearer' }),
   nestedTransportClientDefinition('continue', 'Continue', 'defaultContinueConfigPath'),
   commandClientDefinition('claude-desktop', 'Claude Desktop', 'defaultClaudeConfigPath'),
@@ -96,7 +96,8 @@ function remoteClientDefinition(id, label, defaultConfigPath) {
 }
 
 export function jsonMcpClientDefinition(clientId) {
-  return JSON_MCP_CLIENTS_BY_ID.get(clientId) ?? null;
+  const resolved = clientId === 'devin-desktop' || clientId === 'devin' ? 'windsurf' : clientId;
+  return JSON_MCP_CLIENTS_BY_ID.get(resolved) ?? null;
 }
 
 export function jsonMcpClientIds() {
@@ -399,6 +400,10 @@ export const windsurfJsonConfig = (mcpUrl, identity = envReferenceIdentity('wind
 export const windsurfJsonSnippet = (mcpUrl, identity = envReferenceIdentity('windsurf')) => jsonClientSnippet('windsurf', mcpUrl, identity);
 export const windsurfJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('windsurf')) => jsonClientServerConfig('windsurf', mcpUrl, identity);
 export const mergeWindsurfMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('windsurf', configPath, mcpUrl, identity);
+export const devinDesktopJsonConfig = windsurfJsonConfig;
+export const devinDesktopJsonSnippet = windsurfJsonSnippet;
+export const devinDesktopJsonServerConfig = windsurfJsonServerConfig;
+export const mergeDevinDesktopMcpConfig = mergeWindsurfMcpConfig;
 
 export const clineJsonConfig = (mcpUrl, identity = envReferenceIdentity('cline')) => jsonClientConfig('cline', mcpUrl, identity);
 export const clineJsonSnippet = (mcpUrl, identity = envReferenceIdentity('cline')) => jsonClientSnippet('cline', mcpUrl, identity);

@@ -28,6 +28,8 @@ const SETUP_CLIENT_ALIASES = new Map([
   ['antigravity2', 'antigravity2'],
   ['antigravity-cli', 'antigravity-cli'],
   ['windsurf', 'windsurf'],
+  ['devin-desktop', 'windsurf'],
+  ['devin', 'windsurf'],
   ['cline', 'cline'],
   ['continue', 'continue'],
   ['claude', 'claude-desktop'],

@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- Updated Devin Desktop (formerly Windsurf) configuration detection and writing path to `~/.config/devin/mcp_config.json` (or `%APPDATA%\devin\mcp_config.json` on Windows) with automatic fallback to legacy `~/.codeium/windsurf/mcp_config.json`.
+- Updated agent integrations panel label to "Devin Desktop (formerly Windsurf)".
+
 ## 0.1.0 (unreleased)
 
 - Native commands: Sign In/Out, Remember, Recall, **Search Memory**, Save Selection as Memory.

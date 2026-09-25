@@ -106,7 +106,7 @@ xmemo setup cursor --dry-run
 | **Grok** | `xmemo setup grok` | 托管 MCP |
 | **其他 MCP 客户端** | `xmemo mcp config --client generic` | 通用配置模板生成 |
 
-客户端注册表同时还支持 Windsurf、Cline、Continue、Claude Desktop、Claude Code、Kimi Code、Zed、JetBrains、OpenCode、Qwen、Trae 等众多兼容 MCP 宿主。运行 `xmemo mcp list` 可获取当前完整的机器可读目录。
+客户端注册表同时还支持 Devin Desktop (formerly Windsurf)、Cline、Continue、Claude Desktop、Claude Code、Kimi Code、Zed、JetBrains、OpenCode、Qwen、Trae 等众多兼容 MCP 宿主。运行 `xmemo mcp list` 可获取当前完整的机器可读目录。
 
 ## 连接模式
 

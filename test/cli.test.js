@@ -8,6 +8,7 @@ import { EventEmitter } from 'node:events';
 import { run } from '../src/cli.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { defaultWindsurfConfigPath } from '../src/mcp/identity/paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
@@ -2662,4 +2663,118 @@ function agentDiscoveryFetch(requests) {
     return { ok: false, status: 404 };
   };
 }
+
+test('defaultWindsurfConfigPath resolves Devin Desktop path across platforms and falls back to legacy path', async (t) => {
+  const tmpBase = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-windsurf-path-'));
+  t.after(async () => {
+    await fs.rm(tmpBase, { recursive: true, force: true }).catch(() => {});
+  });
+
+  // 1. HOME only -> ~/.config/devin/mcp_config.json
+  const homeOnlyPath = defaultWindsurfConfigPath({ HOME: path.join(tmpBase, 'home-only') }, 'linux');
+  assert.equal(homeOnlyPath, path.join(tmpBase, 'home-only', '.config', 'devin', 'mcp_config.json'));
+
+  // 2. XDG_CONFIG_HOME set -> $XDG_CONFIG_HOME/devin/mcp_config.json
+  const xdgPath = defaultWindsurfConfigPath({
+    HOME: path.join(tmpBase, 'home-xdg'),
+    XDG_CONFIG_HOME: path.join(tmpBase, 'custom-xdg')
+  }, 'linux');
+  assert.equal(xdgPath, path.join(tmpBase, 'custom-xdg', 'devin', 'mcp_config.json'));
+
+  // 3. Windows with APPDATA -> %APPDATA%\devin\mcp_config.json
+  const winAppDataPath = defaultWindsurfConfigPath({
+    APPDATA: path.join(tmpBase, 'roaming-appdata'),
+    USERPROFILE: path.join(tmpBase, 'win-home')
+  }, 'win32');
+  assert.equal(winAppDataPath, path.join(tmpBase, 'roaming-appdata', 'devin', 'mcp_config.json'));
+
+  // 4. New dir missing + ~/.codeium/windsurf present -> legacy path
+  const legacyHome = path.join(tmpBase, 'legacy-home');
+  const legacyDir = path.join(legacyHome, '.codeium', 'windsurf');
+  await fs.mkdir(legacyDir, { recursive: true });
+  const fallbackPath = defaultWindsurfConfigPath({ HOME: legacyHome }, 'linux');
+  assert.equal(fallbackPath, path.join(legacyDir, 'mcp_config.json'));
+
+  // 5. Neither exists -> new path
+  const neitherHome = path.join(tmpBase, 'neither-home');
+  const neitherPath = defaultWindsurfConfigPath({ HOME: neitherHome }, 'linux');
+  assert.equal(neitherPath, path.join(neitherHome, '.config', 'devin', 'mcp_config.json'));
+
+  // 6. Both exist -> new path
+  const bothHome = path.join(tmpBase, 'both-home');
+  await fs.mkdir(path.join(bothHome, '.codeium', 'windsurf'), { recursive: true });
+  await fs.mkdir(path.join(bothHome, '.config', 'devin'), { recursive: true });
+  const bothPath = defaultWindsurfConfigPath({ HOME: bothHome }, 'linux');
+  assert.equal(bothPath, path.join(bothHome, '.config', 'devin', 'mcp_config.json'));
+});
+
+test('mcp add and setup support windsurf and devin-desktop alias, writing serverUrl and agentId windsurf', async (t) => {
+  const tmpBase = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-devin-desktop-cli-'));
+  t.after(async () => {
+    await fs.rm(tmpBase, { recursive: true, force: true }).catch(() => {});
+  });
+
+  const env = {
+    HOME: tmpBase,
+    USERPROFILE: tmpBase,
+    XMEMO_KEY: 'test-secret-key-1234'
+  };
+
+  // 1. mcp add windsurf --json
+  const rWindsurfJson = await invoke(['mcp', 'add', 'windsurf', '--json'], { env });
+  assert.equal(rWindsurfJson.code, 0, rWindsurfJson.stderr);
+  const pWindsurf = JSON.parse(rWindsurfJson.stdout);
+  assert.equal(pWindsurf.client, 'windsurf');
+  assert.equal(pWindsurf.label, 'Devin Desktop (formerly Windsurf)');
+  assert.equal(pWindsurf.agentId, 'windsurf');
+  assert.equal(pWindsurf.tokenEnvVar, 'XMEMO_KEY');
+
+  // 2. mcp add devin-desktop --json (alias resolution)
+  const rDevinJson = await invoke(['mcp', 'add', 'devin-desktop', '--json'], { env });
+  assert.equal(rDevinJson.code, 0, rDevinJson.stderr);
+  const pDevin = JSON.parse(rDevinJson.stdout);
+  assert.equal(pDevin.client, 'windsurf');
+  assert.equal(pDevin.label, 'Devin Desktop (formerly Windsurf)');
+  assert.equal(pDevin.agentId, 'windsurf');
+  assert.equal(pDevin.tokenEnvVar, 'XMEMO_KEY');
+
+  // 3. mcp add devin-desktop --write writes to new devin path
+  const rWrite = await invoke(['mcp', 'add', 'devin-desktop', '--write', '--force'], { env });
+  assert.equal(rWrite.code, 0, rWrite.stderr);
+  const expectedNewPath = defaultWindsurfConfigPath(env);
+  const writtenContent = JSON.parse(await fs.readFile(expectedNewPath, 'utf8'));
+  assert.ok(writtenContent.mcpServers?.XMemo);
+  assert.equal(writtenContent.mcpServers.XMemo.serverUrl, 'https://xmemo.dev/mcp');
+  assert.equal(writtenContent.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'windsurf');
+  assert.equal(writtenContent.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
+
+  // 4. setup --client devin-desktop --write
+  const tmpSetup = path.join(tmpBase, 'setup-test');
+  const setupEnv = { HOME: tmpSetup, USERPROFILE: tmpSetup, XMEMO_KEY: 'test-secret-key-1234' };
+  const rSetup = await invoke(['setup', '--client', 'devin-desktop', '--write', '--force'], {
+    env: setupEnv,
+    fetch: discoveryFetch()
+  });
+  assert.equal(rSetup.code, 0, rSetup.stderr);
+  const setupPath = defaultWindsurfConfigPath(setupEnv);
+  const setupContent = JSON.parse(await fs.readFile(setupPath, 'utf8'));
+  assert.ok(setupContent.mcpServers?.XMemo);
+  assert.equal(setupContent.mcpServers.XMemo.serverUrl, 'https://mcp.example.test/mcp');
+  assert.equal(setupContent.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'windsurf');
+
+  // 5. setup windsurf --write with legacy directory writes to legacy path
+  const tmpLegacy = path.join(tmpBase, 'legacy-setup');
+  await fs.mkdir(path.join(tmpLegacy, '.codeium', 'windsurf'), { recursive: true });
+  const legacyEnv = { HOME: tmpLegacy, USERPROFILE: tmpLegacy, XMEMO_KEY: 'test-secret-key-1234' };
+  const rLegacySetup = await invoke(['setup', 'windsurf', '--write', '--force'], {
+    env: legacyEnv,
+    fetch: discoveryFetch()
+  });
+  assert.equal(rLegacySetup.code, 0, rLegacySetup.stderr);
+  const legacyConfigFile = path.join(tmpLegacy, '.codeium', 'windsurf', 'mcp_config.json');
+  const legacyContent = JSON.parse(await fs.readFile(legacyConfigFile, 'utf8'));
+  assert.ok(legacyContent.mcpServers?.XMemo);
+  assert.equal(legacyContent.mcpServers.XMemo.serverUrl, 'https://mcp.example.test/mcp');
+  assert.equal(legacyContent.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'windsurf');
+});
 
