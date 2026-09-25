@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
+## 1.1.26
+
 ### Fixed
 
+- Classify HTTP 401 and 403 status codes using whole-number word boundaries, avoiding false-positive authentication error classifications on port numbers and identifiers.
 - Clarified documentation for `ledger-list` in `references/ledger-operations.md` and `SKILL.md` to consistently describe it as a strictly read-only query command, explicitly noting that deleting or voiding a ledger entry is a separate operation requiring explicit confirmation (`forget --id <id> --confirm`) and a delete-capable scope (for example `memory:delete`; see the forget section for the full list).
 - Structured reference links in `SKILL.md` as direct Markdown links with one-line descriptions.
 
