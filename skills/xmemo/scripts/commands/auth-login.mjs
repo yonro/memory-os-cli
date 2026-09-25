@@ -1,37 +1,19 @@
 import fs from 'node:fs/promises';
 
 import {
-  credentialsPath,
-  SCRIPT_COMMAND,
-  EXIT_CODE,
-  exitCodeForHttpStatus,
-  exitCodeForErrorCode,
-  exitCodeForError,
+  credentialsPath, SCRIPT_COMMAND, EXIT_CODE,
+  exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError,
 } from '../lib/core.mjs';
 
 import {
-  requirePlaintextStorageConsent,
-  saveToken,
-  getStoredToken,
-  getStoredCredential,
-  getInstallationFingerprint,
+  requirePlaintextStorageConsent, saveToken, getStoredToken,
+  getStoredCredential, getInstallationFingerprint,
 } from '../lib/auth-state.mjs';
 
 import {
-  handleOpenClawLogout,
-} from '../lib/openclaw-egress.mjs';
-
-import {
-  makeHttpRequest,
-  parseJsonResponse,
-  extractRequestId,
-  apiErrorMessage,
-  safeJson,
-  extractExpiresInSeconds,
-  formatRemainingValidity,
-  sanitizeTerminalText,
-  formatDuration,
-  fetchTemporaryLimits,
+  makeHttpRequest, parseJsonResponse, extractRequestId, apiErrorMessage, safeJson,
+  extractExpiresInSeconds, formatRemainingValidity, sanitizeTerminalText,
+  formatDuration, fetchTemporaryLimits,
 } from '../lib/api.mjs';
 
 export async function handleAuthLogin(ctx) {
@@ -45,9 +27,7 @@ export async function handleAuthLogin(ctx) {
     try {
       requirePlaintextStorageConsent(options, 'Device login');
       const res = await makeHttpRequest(options.baseUrl, '/v1/auth/device/start', 'POST', {
-        client_id: 'xmemo-skill',
-        surface: 'standalone_skill',
-        token_type: 'skill_token',
+        client_id: 'xmemo-skill', surface: 'standalone_skill', token_type: 'skill_token',
         client_version: skillVersion,
         scopes: ['memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read', 'knowledge:read']
       }, {}, options.timeoutMs);
@@ -67,10 +47,7 @@ export async function handleAuthLogin(ctx) {
       const expiresInMs = Math.max(1, expiresInSeconds * 1000);
       const loginDeadline = Date.now() + expiresInMs;
       const countdownText = formatRemainingValidity(expiresInSeconds);
-      console.log(`To verify this device, open the following URL in your browser:\n`);
-      console.log(`  ${sanitizeTerminalText(verificationUrl)}\n`);
-      console.log(`Or enter the code: ${sanitizeTerminalText(data.user_code)}`);
-      console.log(`\nWaiting for authorization... (valid for ${countdownText})`);
+      console.log(`To verify this device, open the following URL in your browser:\n\n  ${sanitizeTerminalText(verificationUrl)}\n\nOr enter the code: ${sanitizeTerminalText(data.user_code)}\n\nWaiting for authorization... (valid for ${countdownText})`);
 
       const deviceCode = data.device_code;
       const intervalSeconds = Number(data.interval);
@@ -102,8 +79,7 @@ export async function handleAuthLogin(ctx) {
           } else if (pollData.access_token) {
             try {
               await saveToken(pollData.access_token, { credential_type: 'formal' }, { allowPlaintext: options.allowPlaintext, warn: true });
-              console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}`);
-              console.log('Token value was not printed. Project files were not modified.');
+              console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}\nToken value was not printed. Project files were not modified.`);
               process.exit(EXIT_CODE.SUCCESS);
             } catch (err) {
               console.error('Failed to save credentials file:', err.message);
@@ -192,38 +168,23 @@ export async function handleAuthLogin(ctx) {
       process.exit(EXIT_CODE.SUCCESS);
     }
 
-    if (credential.storage === 'openclaw-secret') {
-      handleOpenClawLogout(options);
-    }
-
-    if (credential.storage === 'vault') {
-      const result = {
-        status: 'vault_credential_unchanged',
-        credential_source: 'muse-vault',
-        remote_revoked: false,
-        local_file_removed: false,
-      };
-      if (options.json) {
-        console.log(safeJson(result));
-      } else {
-        console.log('XMemo credential is provided by Meta Muse (muse-vault). No remote token was revoked and no local credential file was changed.');
-        console.log('To disconnect, remove the credential in Meta Muse.');
+    if (['openclaw-secret', 'vault'].includes(credential.storage) || (credential.storage === 'environment' && !options.revokeEnvironmentToken)) {
+      if (credential.storage === 'openclaw-secret' && options.revokeEnvironmentToken) {
+        console.error('Error: OpenClaw secret sentinels are managed by OpenClaw and cannot be revoked remotely. Use "openclaw secrets delete" or the OpenClaw Control UI to manage secrets.');
+        process.exit(EXIT_CODE.USER_ERROR);
       }
-      process.exit(EXIT_CODE.SUCCESS);
-    }
-
-    if (credential.storage === 'environment' && !options.revokeEnvironmentToken) {
-      const result = {
-        status: 'environment_credential_unchanged',
-        credential_source: 'XMEMO_KEY',
-        remote_revoked: false,
-        local_file_removed: false,
-      };
+      const isOc = credential.storage === 'openclaw-secret';
+      const isVault = credential.storage === 'vault';
+      const status = isOc ? 'openclaw_secret_unchanged' : isVault ? 'vault_credential_unchanged' : 'environment_credential_unchanged';
+      const source = isOc ? 'openclaw-secret' : isVault ? 'muse-vault' : 'XMEMO_KEY';
       if (options.json) {
-        console.log(safeJson(result));
+        console.log(safeJson({ status, credential_source: source, remote_revoked: false, local_file_removed: false }));
+      } else if (isOc) {
+        console.log('XMemo credential is provided by OpenClaw (openclaw-secret). No remote token was revoked and no local credential file was changed.\nTo disconnect or rotate, use "openclaw secrets delete" or the OpenClaw Control UI.');
+      } else if (isVault) {
+        console.log('XMemo credential is provided by Meta Muse (muse-vault). No remote token was revoked and no local credential file was changed.\nTo disconnect, remove the credential in Meta Muse.');
       } else {
-        console.log('XMEMO_KEY is externally managed. No token was revoked and no local credential file was changed.');
-        console.log('Unset XMEMO_KEY in the launching environment to log out, or pass --revoke-environment-token to explicitly revoke that token.');
+        console.log('XMEMO_KEY is externally managed. No token was revoked and no local credential file was changed.\nUnset XMEMO_KEY in the launching environment to log out, or pass --revoke-environment-token to explicitly revoke that token.');
       }
       process.exit(EXIT_CODE.SUCCESS);
     }

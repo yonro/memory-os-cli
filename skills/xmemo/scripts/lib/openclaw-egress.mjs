@@ -1,5 +1,4 @@
-import { DEFAULT_BASE_URL, EXIT_CODE } from './core.mjs';
-import { safeJson } from './api.mjs';
+import { DEFAULT_BASE_URL } from './core.mjs';
 import { isSurrogateToken, assertSurrogateOrigin } from './muse-vault.mjs';
 
 export const OPENCLAW_SENTINEL_REGEX = /^oc-sent-v2\.[A-Za-z0-9_-]+\.end$/;
@@ -61,24 +60,4 @@ export function assertEgressSecurity(authHeader, targetUrl, env = process.env) {
 
 export function configureEgressRequest(reqOptions, authHeader, targetUrl, env = process.env) {
   assertEgressSecurity(authHeader, targetUrl, env);
-}
-
-export function handleOpenClawLogout(options) {
-  if (options?.revokeEnvironmentToken) {
-    console.error('Error: OpenClaw secret sentinels are managed by OpenClaw and cannot be revoked remotely. Use "openclaw secrets delete" or the OpenClaw Control UI to manage secrets.');
-    process.exit(EXIT_CODE.USER_ERROR);
-  }
-  const result = {
-    status: 'openclaw_secret_unchanged',
-    credential_source: 'openclaw-secret',
-    remote_revoked: false,
-    local_file_removed: false,
-  };
-  if (options?.json) {
-    console.log(safeJson(result));
-  } else {
-    console.log('XMemo credential is provided by OpenClaw (openclaw-secret). No remote token was revoked and no local credential file was changed.');
-    console.log('To disconnect or rotate, use "openclaw secrets delete" or the OpenClaw Control UI.');
-  }
-  process.exit(EXIT_CODE.SUCCESS);
 }

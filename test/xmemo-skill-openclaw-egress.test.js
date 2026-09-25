@@ -29,6 +29,48 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
 
 
+function createMockConnectProxy(expectedAuth) {
+  let connectRequest = null;
+  const directRequests = [];
+
+  const server = http.createServer((req, res) => {
+    directRequests.push({ method: req.method, url: req.url, headers: req.headers });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  });
+
+  server.on('connect', (req, clientSocket, head) => {
+    connectRequest = {
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+    };
+    if (expectedAuth && req.headers['proxy-authorization'] !== expectedAuth) {
+      clientSocket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="openclaw"\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
+    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    clientSocket.destroy();
+  });
+
+  return {
+    getConnectRequest: () => connectRequest,
+    getDirectRequests: () => directRequests,
+    start: () =>
+      new Promise((resolve, reject) => {
+        server.listen(0, '127.0.0.1', () => {
+          resolve(server.address().port);
+        });
+        server.on('error', reject);
+      }),
+    stop: () =>
+      new Promise((resolve) => {
+        server.close(() => resolve());
+      }),
+  };
+}
+
 async function runCli(args, { homeDir, env = {}, stdin } = {}) {
   return new Promise((resolve, reject) => {
     let stdout = '';
@@ -279,6 +321,47 @@ test('openclaw-egress: precheck accepts authenticated proxy with credentials in 
     assert.equal(res.code, 0);
     assert.match(res.stdout, /Credential Source: openclaw-secret/);
   } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('openclaw-egress: request is tunnelled via CONNECT proxy to xmemo.dev:443 with Proxy-Authorization', async (t) => {
+  const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(Number);
+  const supportsNativeEnvProxy = nodeMajor > 22 || (nodeMajor === 22 && nodeMinor >= 21);
+  if (!supportsNativeEnvProxy) {
+    t.skip(`Native NODE_USE_ENV_PROXY requires Node >= 22.21 (running on Node ${process.versions.node})`);
+    return;
+  }
+
+  const sentinelToken = 'oc-sent-v2.test-connect-proxy.end';
+  const proxyUser = 'openclaw-proc';
+  const proxyPass = 'secret-token-12345';
+  const expectedAuth = 'Basic ' + Buffer.from(`${proxyUser}:${proxyPass}`).toString('base64');
+
+  const proxy = createMockConnectProxy(expectedAuth);
+  const port = await proxy.start();
+  const authProxyUrl = `http://${proxyUser}:${proxyPass}@127.0.0.1:${port}`;
+
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-oc-home-'));
+
+  try {
+    // Run CLI with sentinel + proxy env
+    await runCli(['auth', 'status', '--verify'], {
+      homeDir: tmpHome,
+      env: {
+        XMEMO_KEY: sentinelToken,
+        HTTPS_PROXY: authProxyUrl,
+        NODE_USE_ENV_PROXY: '1',
+      },
+    });
+
+    const connectReq = proxy.getConnectRequest();
+    assert.ok(connectReq, 'Proxy must have received a CONNECT request');
+    assert.match(connectReq.url, /^xmemo\.dev:443$/);
+    assert.equal(connectReq.headers['proxy-authorization'], expectedAuth);
+    assert.equal(proxy.getDirectRequests().length, 0, 'Target server must not receive any direct requests');
+  } finally {
+    await proxy.stop();
     await fs.rm(tmpHome, { recursive: true, force: true }).catch(() => {});
   }
 });
