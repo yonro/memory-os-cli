@@ -9,6 +9,7 @@ CLIs, and autonomous agents from one production-ready command line.
 
 [![CI](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@xmemo/client)
+[![Skill version](https://img.shields.io/github/v/release/yonro/memory-os-cli?filter=skill-v*&label=skill&style=flat-square)](https://clawhub.ai/skill/xmemo)
 [![npm downloads](https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/@xmemo/client)
 [![Node.js version](https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/@xmemo/client)
 [![MIT license](https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license)](./LICENSE)
@@ -21,7 +22,7 @@ CLIs, and autonomous agents from one production-ready command line.
 
 [English](README.md) · [简体中文](README_CN.md)
 
-[Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Commands](#command-reference) · [Security](#security-by-default)
+[Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Commands](#command-reference) · [Versioning](#versioning) · [Security](#security-by-default)
 
 ---
 
@@ -515,6 +516,19 @@ The local stdio server can be inspected directly:
 ```bash
 node bin/mcp-stdio.js
 ```
+
+## Versioning
+
+This repository distributes two independent products with decoupled version tracks:
+
+- **CLI (`@xmemo/client`)**: Published to [npm](https://www.npmjs.com/package/@xmemo/client).
+  - Version source: `package.json`.
+  - Tag convention: `cli-v*` (legacy tags through version 0.4.181 used `v0.4.xxx`).
+  - View versions on [npm (@xmemo/client)](https://www.npmjs.com/package/@xmemo/client).
+- **Skill (`xmemo`)**: Published to [ClawHub](https://clawhub.ai/skill/xmemo) and distributed via [xmemo.dev](https://xmemo.dev/v1/skill/package).
+  - Version source: `skills/xmemo/scripts/xmemo-skill.mjs` (`SKILL_VERSION`).
+  - Tag convention: `skill-v*`.
+  - View versions on [ClawHub (xmemo)](https://clawhub.ai/skill/xmemo). GitHub Releases for skill releases explicitly carry the `Latest` release badge to support automated installer and server fallback downloads.
 
 ## Release model
 

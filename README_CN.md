@@ -8,6 +8,7 @@
 
 [![CI](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@xmemo/client)
+[![Skill version](https://img.shields.io/github/v/release/yonro/memory-os-cli?filter=skill-v*&label=skill&style=flat-square)](https://clawhub.ai/skill/xmemo)
 [![npm downloads](https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/@xmemo/client)
 [![Node.js version](https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/@xmemo/client)
 [![MIT license](https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license)](./LICENSE)
@@ -20,7 +21,7 @@
 
 [English](README.md) · [简体中文](README_CN.md)
 
-[快速开始](#快速开始) · [集成列表](#支持的客户端集成) · [连接模式](#连接模式) · [命令大全](#命令参考) · [安全与隐私](#默认安全隐私原则)
+[快速开始](#快速开始) · [集成列表](#支持的客户端集成) · [连接模式](#连接模式) · [命令大全](#命令参考) · [版本说明](#版本说明) · [安全与隐私](#默认安全隐私原则)
 
 ---
 
@@ -462,6 +463,19 @@ npm run prepublishOnly
 ```bash
 node bin/mcp-stdio.js
 ```
+
+## 版本说明
+
+本仓库包含两个独立发布的产品，各自维护独立演进的版本线与标签规则：
+
+- **CLI 工具（`@xmemo/client`）**：发布到 [npm](https://www.npmjs.com/package/@xmemo/client)。
+  - 当前版本：由根目录 `package.json` 维护。
+  - Git Tag 规则：`cli-v*`（历史版本截至 0.4.181 使用 `v0.4.xxx`）。
+  - 可在 [npm (@xmemo/client)](https://www.npmjs.com/package/@xmemo/client) 查看版本与变更。
+- **Skill 智能体技能（`xmemo`）**：发布到 [ClawHub](https://clawhub.ai/skill/xmemo) 并由 [xmemo.dev](https://xmemo.dev/v1/skill/package) 分发。
+  - 当前版本：由 `skills/xmemo/scripts/xmemo-skill.mjs` 中的 `SKILL_VERSION` 维护。
+  - Git Tag 规则：`skill-v*`。
+  - 可在 [ClawHub (xmemo)](https://clawhub.ai/skill/xmemo) 查看版本与安装方式。Skill 版本的 GitHub Release 会显式标记为 `Latest`，以确保服务端与安装脚本的下载回退正常运作。
 
 ## 发布流水线模型
 
