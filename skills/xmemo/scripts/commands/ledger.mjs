@@ -91,7 +91,7 @@ export async function handleLedger(ctx) {
         const type = tx.transaction_type || tx.type || 'expense';
         const cat = tx.category ? ` [${tx.category}]` : '';
         const desc = tx.description || tx.item || tx.note || '';
-        console.log(`[${idx + 1}] ${sanitizeTerminalText(date)} | ${type.toUpperCase()} | ${amount} ${curr}${sanitizeTerminalText(cat)}${desc ? ` | ${sanitizeTerminalText(desc)}` : ''}`);
+        console.log(`[${idx + 1}] ${sanitizeTerminalText(date)} | ${sanitizeTerminalText(type).toUpperCase()} | ${sanitizeTerminalText(amount)} ${sanitizeTerminalText(curr)}${sanitizeTerminalText(cat)}${desc ? ` | ${sanitizeTerminalText(desc)}` : ''}`);
       });
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
@@ -145,12 +145,12 @@ export async function handleLedger(ctx) {
       if (summaryList.length > 0) {
         console.log(`XMemo Ledger Monthly Summary (${summaryList.length} month${summaryList.length === 1 ? '' : 's'}):`);
         summaryList.forEach((item) => {
-          const month = item.month || '(unknown month)';
-          const curr = item.currency || 'UNKNOWN';
-          const expense = item.expense_total !== undefined ? `${item.expense_total} ${curr}` : null;
-          const income = item.income_total !== undefined ? `${item.income_total} ${curr}` : null;
-          const net = item.net_total !== undefined ? `${item.net_total} ${curr}` : null;
-          const count = item.transaction_count !== undefined ? `${item.transaction_count} tx` : '';
+          const month = sanitizeTerminalText(item.month || '(unknown month)');
+          const curr = sanitizeTerminalText(item.currency || 'UNKNOWN');
+          const expense = item.expense_total !== undefined ? `${sanitizeTerminalText(item.expense_total)} ${curr}` : null;
+          const income = item.income_total !== undefined ? `${sanitizeTerminalText(item.income_total)} ${curr}` : null;
+          const net = item.net_total !== undefined ? `${sanitizeTerminalText(item.net_total)} ${curr}` : null;
+          const count = item.transaction_count !== undefined ? `${sanitizeTerminalText(item.transaction_count)} tx` : '';
           const parts = [];
           if (expense !== null) parts.push(`Expense: ${expense}`);
           if (income !== null) parts.push(`Income: ${income}`);
@@ -165,7 +165,7 @@ export async function handleLedger(ctx) {
       const curr = result.currency || 'UNKNOWN';
       const total = result.total !== undefined ? result.total : 0;
       const count = result.count !== undefined ? result.count : 0;
-      console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${total} ${curr} across ${count} transaction${count === 1 ? '' : 's'}.`);
+      console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${sanitizeTerminalText(total)} ${sanitizeTerminalText(curr)} across ${count} transaction${count === 1 ? '' : 's'}.`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Get ledger monthly summary failed:', e.message);

@@ -73,11 +73,24 @@ In contrast, CLI releases (`.github/workflows/release.yml`) are explicitly confi
 
 When publishing updates for `skills/xmemo` to ClawHub:
 
-1. **Explicit Publisher Handle**:
-   Always pass `--owner xmemo` to target the official organizational publisher namespace:
-   ```bash
-   clawhub publish skills/xmemo --owner xmemo --version <semver> --slug xmemo --name "XMemo Memory"
-   ```
+1. **Explicit Publisher Handle & LF-Clean Tree Requirement**:
+   The ClawHub upload must come from an LF tree, not a Windows working copy with `core.autocrlf=true` (versions 1.1.24–1.1.26 on ClawHub were CRLF because they were uploaded from Windows working trees). ClawHub preserves raw byte content and file line endings, which alters sha256 checksums and unnecessarily increases file sizes against the 12 KiB cap.
+   
+   To ensure LF line endings:
+   - Extract the GitHub Release archive `xmemo-skill.tar.gz` (built on Ubuntu Linux with strict LF line endings) into a temporary directory:
+     ```bash
+     mkdir -p /tmp/clawhub-skill-v<version>
+     tar -xzf xmemo-skill.tar.gz -C /tmp/clawhub-skill-v<version>
+     ```
+   - Publish from that extracted directory, passing `--owner xmemo`:
+     ```bash
+     clawhub publish /tmp/clawhub-skill-v<version>/skills/xmemo --owner xmemo --version <semver> --slug xmemo --name "XMemo Memory"
+     ```
+   - Verify post-upload file sha256 checksums:
+     ```bash
+     clawhub inspect xmemo --version <semver> --files
+     ```
+     Verify that the reported sha256 checksums match the LF files from the GitHub Release archive.
 2. **Pre-Publish Namespace Assertion**:
    Before executing the publish command, verify that the active token belongs to or is authorized by the `@xmemo` organization. Do not rely solely on `clawhub whoami` returning success:
    - Verify `clawhub whoami` identity.
@@ -86,7 +99,7 @@ When publishing updates for `skills/xmemo` to ClawHub:
 3. **Dry-Run Validation**:
    Always dry-run the publish command first to inspect the payload file list:
    ```bash
-   clawhub publish skills/xmemo --dry-run
+   clawhub publish /tmp/clawhub-skill-v<version>/skills/xmemo --dry-run
    ```
    Ensure no test files or repository-level maintenance scripts are bundled.
 4. **Post-Publish Verification**:

@@ -157,8 +157,7 @@ export function validateCommandInput(command, subcommand, positionals, options, 
     if (flags[key] !== undefined) flags[key] = parsePositiveInteger(flags[key], `--${key}`, key === 'max_items' ? 100 : 50_000);
   }
   if (flags.ttl_seconds !== undefined) {
-    const parsedTtl = parseIntegerInRange(flags.ttl_seconds, '--ttl_seconds', 0, command.startsWith('restart-') ? MAX_STATE_TTL_SECONDS : 604_800);
-    if (command.startsWith('restart-')) flags.ttl_seconds = parsedTtl;
+    flags.ttl_seconds = parseIntegerInRange(flags.ttl_seconds, '--ttl_seconds', 0, command.startsWith('restart-') ? MAX_STATE_TTL_SECONDS : 604_800);
   }
   if (flags.metadata !== undefined) flags.metadata = parseJsonObject(flags.metadata, '--metadata');
   for (const b of ['explain', 'prefer_working', 'include_knowledge', 'restore_state', 'record_restore_event']) {

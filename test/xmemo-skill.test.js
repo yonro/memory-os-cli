@@ -4,7 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { exitCodeForError, EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
+import { exitCodeForError, exitCodeForErrorCode, exitCodeForHttpStatus, EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
+import { getStoredCredential } from '../skills/xmemo/scripts/lib/auth-state.mjs';
+import { sanitizeTerminalText } from '../skills/xmemo/scripts/lib/api.mjs';
 import {
   readStdin,
   readStdinContent,
@@ -372,4 +374,61 @@ test('bounded-read module exports expected functions and bounded constants', () 
   assert.equal(typeof cliReadStdinContent, 'function');
   assert.equal(typeof cliReadBoundedFile, 'function');
 });
+
+test('R1: getStoredCredential trims XMEMO_KEY and treats empty/whitespace as unset', async () => {
+  const origKey = process.env.XMEMO_KEY;
+  try {
+    process.env.XMEMO_KEY = 'my-token\n';
+    const cred1 = await getStoredCredential();
+    assert.deepEqual(cred1, {
+      token: 'my-token',
+      credential_type: 'environment',
+      storage: 'environment',
+    });
+
+    process.env.XMEMO_KEY = '   my-token   ';
+    const cred2 = await getStoredCredential();
+    assert.deepEqual(cred2, {
+      token: 'my-token',
+      credential_type: 'environment',
+      storage: 'environment',
+    });
+
+    process.env.XMEMO_KEY = '   \n\t  ';
+    const cred3 = await getStoredCredential();
+    assert.equal(cred3, null);
+  } finally {
+    if (origKey !== undefined) {
+      process.env.XMEMO_KEY = origKey;
+    } else {
+      delete process.env.XMEMO_KEY;
+    }
+  }
+});
+
+test('R2: exitCodeForErrorCode regex /^http 40[13](?!\\d)/ matches 401/403 and falls back for 4010/4031', () => {
+  assert.equal(exitCodeForErrorCode('http 401'), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForErrorCode('http 403 forbidden'), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForErrorCode('http 4010'), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForErrorCode('http 4031'), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForErrorCode('http 500'), EXIT_CODE.SERVER_ERROR);
+});
+
+test('R3: sanitizeTerminalText strips ANSI escape sequences and control characters', () => {
+  assert.equal(sanitizeTerminalText('\x1b[31mRed Text\x1b[0m'), 'Red Text');
+  assert.equal(sanitizeTerminalText('Line1\x00\x08NullBell'), 'Line1NullBell');
+  assert.equal(sanitizeTerminalText(null), '');
+  assert.equal(sanitizeTerminalText(undefined), '');
+  assert.equal(sanitizeTerminalText(12345), '12345');
+});
+
+test('R4: exitCodeForHttpStatus maps 401/403 to AUTH_ERROR, 4xx to USER_ERROR, 5xx to SERVER_ERROR', () => {
+  assert.equal(exitCodeForHttpStatus(401), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForHttpStatus(403), EXIT_CODE.AUTH_ERROR);
+  assert.equal(exitCodeForHttpStatus(404), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(429), EXIT_CODE.USER_ERROR);
+  assert.equal(exitCodeForHttpStatus(500), EXIT_CODE.SERVER_ERROR);
+  assert.equal(exitCodeForHttpStatus(503), EXIT_CODE.SERVER_ERROR);
+});
+
 

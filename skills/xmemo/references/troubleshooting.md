@@ -38,6 +38,7 @@ $env:XMEMO_KEY | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plai
 `XMEMO_KEY` remains the preferred credential source and is never copied to the
 local credential file. The commands above include `--allow-plaintext` because
 device login and `auth add` must retain a token for later standalone commands.
+Standard input for `auth add --from-stdin` is bounded to a maximum of 64 KiB.
 The flag explicitly permits unencrypted storage in the current user's XMemo
 directory; the script prints the exact path and a warning before writing it.
 

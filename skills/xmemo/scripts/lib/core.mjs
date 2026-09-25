@@ -78,7 +78,7 @@ export function exitCodeForErrorCode(code) {
   ) {
     return EXIT_CODE.USER_ERROR;
   }
-  if (normalized.startsWith('http 401') || normalized.startsWith('http 403')) {
+  if (/^http 40[13](?!\d)/.test(normalized)) {
     return EXIT_CODE.AUTH_ERROR;
   }
   if (normalized.startsWith('http 5')) {

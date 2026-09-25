@@ -97,8 +97,8 @@ export async function handleAccount(ctx) {
         const ts = item.ts || '(unknown date)';
         const type = item.type || 'unknown';
         const summary = item.summary || '';
-        const ref = item.ref_id ? ` [ref: ${item.ref_id}]` : '';
-        console.log(`[${idx + 1}] ${sanitizeTerminalText(ts)} | ${type.toUpperCase()} | ${sanitizeTerminalText(summary)}${ref}`);
+        const ref = item.ref_id ? ` [ref: ${sanitizeTerminalText(item.ref_id)}]` : '';
+        console.log(`[${idx + 1}] ${sanitizeTerminalText(ts)} | ${sanitizeTerminalText(type).toUpperCase()} | ${sanitizeTerminalText(summary)}${ref}`);
       });
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
@@ -164,25 +164,25 @@ export async function handleAccount(ctx) {
 
       console.log('XMemo Memory Statistics:');
       console.log(`- Total Memories: ${data.total_count ?? 0} (filtered: ${data.filtered_count ?? 0}, scanned: ${data.scanned_count ?? 0})`);
-      if (data.latest_at) console.log(`- Latest Memory: ${data.latest_at}`);
-      if (data.oldest_at) console.log(`- Oldest Memory: ${data.oldest_at}`);
+      if (data.latest_at) console.log(`- Latest Memory: ${sanitizeTerminalText(data.latest_at)}`);
+      if (data.oldest_at) console.log(`- Oldest Memory: ${sanitizeTerminalText(data.oldest_at)}`);
       if (data.type_counts && Object.keys(data.type_counts).length > 0) {
-        const counts = Object.entries(data.type_counts).map(([k, v]) => `${k}: ${v}`).join(', ');
+        const counts = Object.entries(data.type_counts).map(([k, v]) => `${sanitizeTerminalText(k)}: ${sanitizeTerminalText(v)}`).join(', ');
         console.log(`- Types: ${counts}`);
       }
       if (data.status_counts && Object.keys(data.status_counts).length > 0) {
-        const counts = Object.entries(data.status_counts).map(([k, v]) => `${k}: ${v}`).join(', ');
+        const counts = Object.entries(data.status_counts).map(([k, v]) => `${sanitizeTerminalText(k)}: ${sanitizeTerminalText(v)}`).join(', ');
         console.log(`- Status: ${counts}`);
       }
       if (data.bucket_counts && Object.keys(data.bucket_counts).length > 0) {
-        const counts = Object.entries(data.bucket_counts).map(([k, v]) => `${k}: ${v}`).join(', ');
+        const counts = Object.entries(data.bucket_counts).map(([k, v]) => `${sanitizeTerminalText(k)}: ${sanitizeTerminalText(v)}`).join(', ');
         console.log(`- Buckets: ${counts}`);
       }
       if (Array.isArray(data.groups) && data.groups.length > 0) {
         console.log(`- Groups (${data.groups.length}):`);
         data.groups.forEach((g) => {
-          const dims = g.group_by ? Object.entries(g.group_by).map(([k, v]) => `${k}=${v}`).join(', ') : '';
-          console.log(`  * [${dims}]: ${g.count}`);
+          const dims = g.group_by ? Object.entries(g.group_by).map(([k, v]) => `${sanitizeTerminalText(k)}=${sanitizeTerminalText(v)}`).join(', ') : '';
+          console.log(`  * [${dims}]: ${sanitizeTerminalText(g.count)}`);
         });
       }
       process.exit(EXIT_CODE.SUCCESS);

@@ -2,6 +2,7 @@ import {
   credentialsPath,
   SCRIPT_COMMAND,
   EXIT_CODE,
+  exitCodeForHttpStatus,
   exitCodeForError,
 } from '../lib/core.mjs';
 
@@ -76,7 +77,7 @@ export async function handleAuthManage(ctx) {
           } else {
             console.error(`Status: Invalid or expired token.${data ? ` ${apiErrorMessage(data, '')}` : ''}`);
           }
-          const exitCode = res.statusCode >= 500 ? EXIT_CODE.SERVER_ERROR : EXIT_CODE.AUTH_ERROR;
+          const exitCode = exitCodeForHttpStatus(res.statusCode);
           process.exit(exitCode);
         }
       } catch (e) {

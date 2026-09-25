@@ -1049,7 +1049,7 @@ test('skill script normalizes JSON, boolean, and state TTL arguments to the serv
     testServer.setResponse({ ok: true, result: 'state_saved' });
     const ttlZero = await runScript(['save-state', '--key', 'active', '--ttl_seconds', '0'], { baseUrl, env });
     assert.equal(ttlZero.code, 0);
-    assert.equal(testServer.requests.at(-1).body.arguments.ttl_seconds, '0');
+    assert.equal(testServer.requests.at(-1).body.arguments.ttl_seconds, 0);
 
     const invalidMetadata = await runScript(['remember', '--content', 'bad', '--metadata', '[]'], { baseUrl, env });
     assert.notEqual(invalidMetadata.code, 0);
@@ -4475,6 +4475,109 @@ test('F1-15: restart-restore --json preserves server { ok: false, error } struct
         conflict_key: 'active_task',
       },
     });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('R1: XMEMO_KEY with trailing newline or leading/trailing spaces sends trimmed Bearer token', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  testServer.setResponse({ ok: true, result: 'mem_123' });
+  try {
+    const res1 = await runScript(['remember', '--content', 'hello'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'tok\n' },
+    });
+    assert.equal(res1.code, 0);
+    assert.equal(testServer.requests.at(-1).headers.authorization, 'Bearer tok');
+
+    const res2 = await runScript(['remember', '--content', 'world'], {
+      baseUrl,
+      env: { XMEMO_KEY: '  tok  ' },
+    });
+    assert.equal(res2.code, 0);
+    assert.equal(testServer.requests.at(-1).headers.authorization, 'Bearer tok');
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('R4: auth status --verify maps HTTP status codes via exitCodeForHttpStatus', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'test-token' };
+  try {
+    // 401 -> exit code 2 (AUTH_ERROR)
+    testServer.setResponse({ error: { code: 'unauthorized', message: 'Token expired' } }, 401);
+    const res401 = await runScript(['auth', 'status', '--verify'], { baseUrl, env });
+    assert.equal(res401.code, 2);
+
+    // 429 -> exit code 1 (USER_ERROR)
+    testServer.setResponse({ error: { code: 'rate_limited', message: 'Rate limit exceeded' } }, 429);
+    const res429 = await runScript(['auth', 'status', '--verify'], { baseUrl, env });
+    assert.equal(res429.code, 1);
+
+    // 503 -> exit code 3 (SERVER_ERROR)
+    testServer.setResponse({ error: { code: 'service_unavailable', message: 'Backend maintenance' } }, 503);
+    const res503 = await runScript(['auth', 'status', '--verify'], { baseUrl, env });
+    assert.equal(res503.code, 3);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('R3: ledger and account output sanitizes control characters and ANSI sequences', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'test-token' };
+  try {
+    // ledger-list with ANSI red and null bytes
+    testServer.setResponse({
+      ok: true,
+      result: {
+        transactions: [
+          {
+            transaction_date: '2026-09-25\x00',
+            amount: 100,
+            currency: 'USD\x1b[31m',
+            transaction_type: 'expense\x08',
+            category: 'food\x1b[0m',
+            description: 'lunch\x07',
+          },
+        ],
+        total: 1,
+      },
+    });
+    const ledgerRes = await runScript(['ledger-list', '--terminal'], { baseUrl, env });
+    assert.equal(ledgerRes.code, 0);
+    assert.doesNotMatch(ledgerRes.stdout, /\x1b/);
+    assert.doesNotMatch(ledgerRes.stdout, /[\x00\x07\x08]/);
+    assert.match(ledgerRes.stdout, /USD/);
+    assert.match(ledgerRes.stdout, /lunch/);
+
+    // stats with ANSI escape sequences
+    testServer.setResponse({
+      ok: true,
+      total_count: 5,
+      filtered_count: 5,
+      scanned_count: 5,
+      latest_at: '2026-09-25T12:00:00Z\x1b[32m',
+      oldest_at: '2026-09-20T12:00:00Z\x00',
+      type_counts: {
+        'episodic\x1b[34m': 3,
+        procedural: 2,
+      },
+      status_counts: {
+        'active\x08': 5,
+      },
+    });
+    const statsRes = await runScript(['stats', '--terminal'], { baseUrl, env });
+    assert.equal(statsRes.code, 0);
+    assert.doesNotMatch(statsRes.stdout, /\x1b/);
+    assert.doesNotMatch(statsRes.stdout, /[\x00\x08]/);
+    assert.match(statsRes.stdout, /episodic: 3/);
+    assert.match(statsRes.stdout, /active: 5/);
   } finally {
     await testServer.stop();
   }
