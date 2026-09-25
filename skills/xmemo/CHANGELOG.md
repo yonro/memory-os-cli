@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.1.27
+
 ### Fixed
 
 - Trim whitespace from `XMEMO_KEY` in `getStoredCredential` and treat empty/whitespace-only values as unset, allowing fallback to Meta Muse Secure Vault or user credential files.
