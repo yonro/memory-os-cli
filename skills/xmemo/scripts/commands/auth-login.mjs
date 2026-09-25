@@ -188,6 +188,22 @@ export async function handleAuthLogin(ctx) {
       process.exit(EXIT_CODE.SUCCESS);
     }
 
+    if (credential.storage === 'vault') {
+      const result = {
+        status: 'vault_credential_unchanged',
+        credential_source: 'muse-vault',
+        remote_revoked: false,
+        local_file_removed: false,
+      };
+      if (options.json) {
+        console.log(safeJson(result));
+      } else {
+        console.log('XMemo credential is provided by Meta Muse (muse-vault). No remote token was revoked and no local credential file was changed.');
+        console.log('To disconnect, remove the credential in Meta Muse.');
+      }
+      process.exit(EXIT_CODE.SUCCESS);
+    }
+
     if (credential.storage === 'environment' && !options.revokeEnvironmentToken) {
       const result = {
         status: 'environment_credential_unchanged',

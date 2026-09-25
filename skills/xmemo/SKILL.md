@@ -60,8 +60,22 @@ the service must authorize the specific request. The temporary-agent manifest
 intentionally omits restart continuity: temporary access stays limited to
 `remember`, `recall`, and `search` in its isolated sandbox.
 
-Credential lookup always prefers the `XMEMO_KEY` environment variable. When it
-is present, the script does not copy its value into a local credential file.
+Credential lookup follows a strict priority order:
+
+1. **`XMEMO_KEY` environment variable**: Always highest priority. When set, credential resolution short-circuits with no daemon socket or file access, and the token is never copied to disk.
+2. **Meta Muse Secure Vault (`muse-vault`)**: When running inside Meta Muse, the runtime requests an ephemeral surrogate token (`hsurr:...`) from Muse's auth daemon over `$JARVIS_AUTHD_SOCK` (default `/run/hatch/auth/authd.sock`). The plaintext key remains stored in Secure Vault and is substituted outbound by Muse's egress proxy strictly for requests to `https://xmemo.dev`. Neither scripts, agents, nor logs ever see the real key. Generate access in Muse via:
+
+   ```python
+   credentials.request_api_access(
+       provider="xmemo",
+       api_hosts=["xmemo.dev"],
+       auth_scheme="api_key",
+       placement="bearer_header",
+   )
+   ```
+
+   When connected, `node scripts/xmemo-skill.mjs auth status` reports `Credential Source: muse-vault`. Surrogates are rejected by `saveToken` / `auth add`, redacted in responses, and never stored on disk. `logout` preserves vault credentials and instructs the user to disconnect in Meta Muse.
+3. **Local user credential file**: Used when neither `XMEMO_KEY` nor a Muse Vault surrogate is present.
 
 If no credential is available, use formal account login (recommended):
 
