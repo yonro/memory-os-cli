@@ -36,7 +36,7 @@
 | | |
 | --- | --- |
 | **NPM 包名** | [`@xmemo/client`](https://www.npmjs.com/package/@xmemo/client) |
-| **主命令** | `xmemo` |
+| **主命令** | `xmemo`（别名：`client`） |
 | **本地 MCP 命令** | `xmemo-mcp` |
 | **托管版 MCP** | `https://xmemo.dev/mcp` |
 | **运行环境** | Node.js 20 或更高版本 |
@@ -53,12 +53,30 @@
 
 ## 快速开始
 
+### 全局安装
+
 ```bash
 npm install -g @xmemo/client
 xmemo login
 xmemo doctor
 xmemo setup codex
 xmemo status
+```
+
+全局安装后主要使用 `xmemo` 命令，同时也提供 `client` 与 `memory-os` 作为等价别名。
+
+### 使用 npx 即时执行
+
+无需全局安装，亦可直接使用 `npx @xmemo/client <command>` 执行任意 CLI 命令：
+
+```bash
+# 查看版本或执行健康检查
+npx @xmemo/client --version
+npx @xmemo/client doctor
+
+# 安装 Skill 或启动 MCP stdio 服务
+npx @xmemo/client skill install
+npx @xmemo/client mcp serve
 ```
 
 将 `codex` 替换为你正在使用的客户端。在实际写入配置前可先通过预览检查变更：

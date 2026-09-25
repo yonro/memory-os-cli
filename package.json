@@ -5,6 +5,7 @@
   "mcpName": "io.github.yonro/xmemo",
   "type": "module",
   "bin": {
+    "client": "bin/memory-os.js",
     "xmemo-mcp": "bin/mcp-stdio.js",
     "xmemo": "bin/memory-os.js",
     "memory-os": "bin/memory-os.js"

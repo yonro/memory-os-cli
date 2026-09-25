@@ -23,6 +23,9 @@ test('LobeHub manifest uses the dedicated MCP server and mirrors its catalog', a
   assert.equal(manifest.version, serverJson.version);
   assert.equal(serverJson.packages[0].version, packageJson.version);
   assert.equal(packageJson.bin['xmemo-mcp'], 'bin/mcp-stdio.js');
+  assert.equal(packageJson.bin.client, 'bin/memory-os.js');
+  assert.equal(packageJson.bin.xmemo, 'bin/memory-os.js');
+  assert.equal(packageJson.bin['memory-os'], 'bin/memory-os.js');
   assert.equal(manifest.description, serverJson.description);
   assert.deepEqual(
     serverJson.remotes[0].headers.map((header) => header.name),
