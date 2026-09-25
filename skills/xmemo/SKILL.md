@@ -291,8 +291,9 @@ remain limited to `remember`, `recall`, and `search`.
   `ledger:read` scope). It retrieves financial and expense transactions without
   any write or delete capabilities; `ledger-list` only reads and lists records.
   Deleting or voiding a transaction is a separate operation that requires
-  explicit confirmation (`forget --id <id> --confirm`) and delete permission
-  (`memory:delete` scope). It accepts `--limit <n>`, `--offset <n>`,
+  explicit confirmation (`forget --id <id> --confirm`) and a delete-capable
+  scope (for example `memory:delete`; see the forget section for the full list).
+  It accepts `--limit <n>`, `--offset <n>`,
   `--currency <code>`, `--from <date>` (`date_from`), `--to <date>` (`date_to`),
   `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and `--type <type>`
   (`transaction_type`). As a convenience, `--month <YYYY-MM>` can be specified to

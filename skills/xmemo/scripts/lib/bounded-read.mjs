@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { MAX_MEMORY_CONTENT_BYTES } from './core.mjs';
+import { MAX_MEMORY_CONTENT_BYTES, EXIT_CODE } from './core.mjs';
 import { outputContentTooLarge } from './api.mjs';
 
 // Maximum bounded payload for single-value stdin inputs: 65536 bytes (64 KiB).
@@ -33,8 +33,9 @@ export function readStdin(maxBytes = MAX_STDIN_INPUT_BYTES) {
         done = true;
         cleanup();
         try { process.stdin.pause(); } catch {}
-        try { process.stdin.destroy(); } catch {}
-        reject(new Error(`Input exceeds maximum limit of ${maxBytes} bytes.`));
+        const err = new Error(`Input exceeds maximum limit of ${maxBytes} bytes.`);
+        err.exitCode = EXIT_CODE.USER_ERROR;
+        reject(err);
         return;
       }
       chunks.push(buf);
