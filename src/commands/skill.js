@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import os from 'node:os';
@@ -21,16 +22,15 @@ export async function skillCommand(args, io) {
 
   const options = parseInstallOptions(optionArgs);
   const cwd = io.cwd ?? process.cwd();
+  const rawTarget = options.target ?? io.env?.XMEMO_SKILL_DIR ?? DEFAULT_INSTALL_DIR;
+  const target = path.resolve(cwd, rawTarget);
 
   let fromInfo = null;
   if (options.from) {
     fromInfo = await validateFromSource(cwd, options.from);
   }
 
-  const installerArgs = ['install'];
-  if (options.target) {
-    installerArgs.push('--target', path.resolve(cwd, options.target));
-  }
+  const installerArgs = ['install', '--target', target];
   if (options.dryRun) {
     installerArgs.push('--dry-run');
   }
@@ -53,27 +53,33 @@ export async function skillCommand(args, io) {
       command = process.execPath;
       cmdArgs = [fromInfo.binPath, ...installerArgs];
     } else {
-      command = npmExecutable();
-      cmdArgs = ['exec', '--offline', '--package', fromInfo.resolved, '--', 'xmemo-skill', ...installerArgs];
+      const npmRunner = resolveNpmRunner();
+      if (!npmRunner) {
+        throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+      }
+      command = npmRunner.command;
+      cmdArgs = [...npmRunner.prefixArgs, 'exec', '--offline', '--package', fromInfo.resolved, '--', 'xmemo-skill', ...installerArgs];
     }
   } else {
     sourceType = 'npm';
     spec = options.version ?? 'latest';
     networkUsed = true;
-    command = npmExecutable();
-    cmdArgs = ['exec', '--yes', '--package', `@xmemo/skill@${spec}`, '--', 'xmemo-skill', ...installerArgs];
+    const npmRunner = resolveNpmRunner();
+    if (!npmRunner) {
+      throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+    }
+    command = npmRunner.command;
+    cmdArgs = [...npmRunner.prefixArgs, 'exec', '--yes', '--package', `@xmemo/skill@${spec}`, '--', 'xmemo-skill', ...installerArgs];
   }
 
   const cleanEnv = sanitizeEnv(io.env);
 
   let result;
   try {
-    result = await executeSubprocess(command, cmdArgs, io, cleanEnv);
+    result = await executeSubprocess(command, cmdArgs, io, cleanEnv, cwd);
   } catch (error) {
     if (error?.code === 'ENOENT') {
-      if (command === npmExecutable()) {
-        throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
-      }
+      throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
     }
     throw new UsageError(`Failed to execute ${command}: ${error.message}`);
   }
@@ -96,20 +102,33 @@ export async function skillCommand(args, io) {
   }
 
   const childReport = extractJsonReport(result.stdout);
-  const target = childReport?.target ?? (options.target ? path.resolve(cwd, options.target) : path.resolve(cwd, io.env?.XMEMO_SKILL_DIR ?? DEFAULT_INSTALL_DIR));
-  const skillVersion = childReport?.skillVersion ?? 'unknown';
+  const isValidReport = Boolean(
+    childReport &&
+    childReport.package === '@xmemo/skill' &&
+    typeof childReport.skillVersion === 'string' &&
+    STRICT_SEMVER_REGEX.test(childReport.skillVersion) &&
+    typeof childReport.target === 'string' &&
+    path.resolve(childReport.target) === path.resolve(target) &&
+    childReport.installed === !options.dryRun
+  );
+
+  if (!isValidReport) {
+    const rawOutput = (result.stderr || result.stdout || '').trim();
+    const detail = rawOutput ? `\nInstaller output: ${rawOutput}` : '';
+    throw new UsageError(`Skill installation failed: installer did not return a valid installation report.${detail}`);
+  }
 
   const report = {
-    package: childReport?.package ?? '@xmemo/skill',
+    package: childReport.package,
     cliVersion: CLI_VERSION,
-    skillVersion,
+    skillVersion: childReport.skillVersion,
     source: sourceType,
     spec,
     target,
     dryRun: options.dryRun,
     force: options.force,
-    replaced: childReport?.replaced ?? false,
-    installed: childReport?.installed ?? false,
+    replaced: Boolean(childReport.replaced),
+    installed: childReport.installed,
     networkUsed,
     tokenSent: false
   };
@@ -250,11 +269,28 @@ function sanitizeEnv(baseEnv) {
   return env;
 }
 
-function npmExecutable() {
-  return os.platform() === 'win32' ? 'npm.cmd' : 'npm';
+function resolveNpmRunner() {
+  if (process.platform === 'win32') {
+    const execPath = process.env.npm_execpath;
+    if (execPath && (execPath.endsWith('npm-cli.js') || execPath.endsWith('npm-cli.mjs')) && fsSync.existsSync(execPath)) {
+      return { command: process.execPath, prefixArgs: [execPath] };
+    }
+    const standardNpmCli = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    if (fsSync.existsSync(standardNpmCli)) {
+      return { command: process.execPath, prefixArgs: [standardNpmCli] };
+    }
+    const appDataNpmCli = process.env.APPDATA
+      ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+      : null;
+    if (appDataNpmCli && fsSync.existsSync(appDataNpmCli)) {
+      return { command: process.execPath, prefixArgs: [appDataNpmCli] };
+    }
+    return null;
+  }
+  return { command: 'npm', prefixArgs: [] };
 }
 
-async function executeSubprocess(command, args, io, env) {
+async function executeSubprocess(command, args, io, env, cwd) {
   const spawnFn = io.spawn ?? spawn;
   return await new Promise((resolve, reject) => {
     let child;
@@ -262,22 +298,11 @@ async function executeSubprocess(command, args, io, env) {
       child = spawnFn(command, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: false,
-        env
+        env,
+        cwd
       });
     } catch (err) {
-      if (process.platform === 'win32' && err?.code === 'EINVAL') {
-        try {
-          child = spawnFn(command, args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            shell: true,
-            env
-          });
-        } catch (innerErr) {
-          return reject(innerErr);
-        }
-      } else {
-        return reject(err);
-      }
+      return reject(err);
     }
 
     let stdout = '';
@@ -299,14 +324,45 @@ async function executeSubprocess(command, args, io, env) {
 }
 
 function extractJsonReport(stdout) {
-  const start = stdout.indexOf('{');
-  const end = stdout.lastIndexOf('}');
-  if (start !== -1 && end !== -1 && end > start) {
-    try {
-      return JSON.parse(stdout.slice(start, end + 1));
-    } catch {
-      // ignore
+  let lastReport = null;
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < stdout.length; i++) {
+    const ch = stdout[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (ch === '{') {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (ch === '}') {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          try {
+            const parsed = JSON.parse(stdout.slice(start, i + 1));
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              lastReport = parsed;
+            }
+          } catch {
+            // ignore non-JSON or invalid syntax
+          }
+          start = -1;
+        }
+      }
     }
   }
-  return null;
+  return lastReport;
 }

@@ -46,9 +46,8 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
 
   assert.equal(result.code, 0);
   assert.equal(calls.length, 1);
-  assert.match(calls[0].command, /^npm(\.cmd)?$/);
   assert.equal(calls[0].options.shell, false);
-  assert.deepEqual(calls[0].args, [
+  const expectedArgs = [
     'exec',
     '--yes',
     '--package',
@@ -60,7 +59,15 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
     path.resolve('xmemo-skill-test'),
     '--dry-run',
     '--json'
-  ]);
+  ];
+  if (process.platform === 'win32') {
+    assert.equal(calls[0].command, process.execPath);
+    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[0].args.slice(1), expectedArgs);
+  } else {
+    assert.equal(calls[0].command, 'npm');
+    assert.deepEqual(calls[0].args, expectedArgs);
+  }
   const report = JSON.parse(result.stdout);
   assert.equal(report.installed, false);
   assert.equal(report.networkUsed, true);
