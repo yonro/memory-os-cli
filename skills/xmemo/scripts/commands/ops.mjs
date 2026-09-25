@@ -230,7 +230,7 @@ export async function handleOps(ctx) {
     }
     process.exit(EXIT_CODE.SUCCESS);
   } catch (e) {
-    console.error('Request failed:', e.message);
+    console.error('Request failed:', sanitizeTerminalText(e.message));
     process.exit(exitCodeForError(e));
   }
 }

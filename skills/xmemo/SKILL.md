@@ -62,7 +62,7 @@ intentionally omits restart continuity: temporary access stays limited to
 
 Credential lookup follows a strict priority order:
 
-1. **`XMEMO_KEY` environment variable**: Always highest priority. When set, credential resolution short-circuits with no daemon socket or file access, and the token is never copied to disk.
+1. **`XMEMO_KEY` environment variable**: Always highest priority. When set, credential resolution trims leading and trailing whitespace and returns the token. If the trimmed value is non-empty, resolution short-circuits with no daemon socket or file access, and the token is never copied to disk. If the trimmed value is empty, `XMEMO_KEY` is treated as unset and resolution continues to Meta Muse Vault or the local user credential file.
    - **OpenClaw Secret Egress (`openclaw-secret`)**: When `XMEMO_KEY` contains an OpenClaw egress sentinel (`oc-sent-v2.<name>.end`), OpenClaw's egress proxy manages the plaintext key in its Gateway shared store and injects it outbound strictly for `https://xmemo.dev`. The skill requires `secrets.egressProxy.enabled: true` and Gateway-hosted execution (`HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1`). Neither scripts, agents, nor logs ever see the real key. In OpenClaw, configure the secret:
      - Secret entry name: `XMEMO_KEY`
      - Allowed hosts: `xmemo.dev`
@@ -236,7 +236,7 @@ standalone Skill package version and operations so compatibility can be checked
 without inspecting the raw discovery document. If discovery is unavailable,
 `clientDiagnostics.discovery.status` is `unavailable`; a successful doctor
 health check still succeeds. It never prints token values or prefixes.
-`remember` accepts direct text via `--content "<text>"`, piped standard input via `--content -`, or a file via `--file <path>`. These content options are mutually exclusive; file or stdin inputs undergo identical local validation and outbound request payload formatting without modifying server request structures. Missing or unreadable files exit with code 1 and issue zero network requests.
+`remember` accepts direct text via `--content "<text>"`, piped standard input via `--content -`, or a file via `--file <path>`. These content options are mutually exclusive; file or stdin inputs undergo identical local validation and outbound request payload formatting without modifying server request structures. Missing or unreadable files exit with code 1 and issue zero network requests. The path is followed if it is a symbolic link and must resolve to a regular file (directories and non-regular files are rejected).
 
 When native XMemo MCP tools are present, use `create_restart_snapshot` and
 `restore_restart_snapshot` for the same full-continuity workflow. The bundled
@@ -389,7 +389,7 @@ printing the token. Temporary credentials never gain Knowledge access.
   token values. Append `--verify` to validate credentials against the server.
   The `auth-status` spelling remains supported as an alias.
 - `auth add` imports an existing token piped from standard input
-  (`--from-stdin --allow-plaintext`) without exposing token strings on the
+  (`--from-stdin --allow-plaintext`, capped at 64 KiB) without exposing token strings on the
   command line or in shell history.
 - `auth claim-*` completes or cancels temporary-to-formal token transition
   (`auth claim-status`, `auth claim-confirm`, `auth claim-deny`).

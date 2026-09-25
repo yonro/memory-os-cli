@@ -39,18 +39,23 @@ export const COMMAND_USAGE_REGISTRY = {
   },
   read: {
     usage: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
+    desc: 'Read a memory by ID with optional character pagination',
   },
   update: {
     usage: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
+    desc: 'Update an existing memory content, path, or metadata',
   },
   forget: {
     usage: 'forget --id <id> [--reason <text>] --confirm',
+    desc: 'Soft-delete a memory by ID with confirmation',
   },
   'ledger-list': {
     usage: 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
+    desc: 'List ledger transactions with optional filters',
   },
   'ledger-summary': {
     usage: 'ledger-summary [--months <n>] [--currency <code>] [--type <type>]',
+    desc: 'Show monthly ledger summary totals',
   },
   overview: {
     usage: 'overview',
@@ -66,12 +71,15 @@ export const COMMAND_USAGE_REGISTRY = {
   },
   remember: {
     usage: 'remember (--content <text> | --content - | --file <path>) [--path <path>] [--metadata <json-object>]',
+    desc: 'Save a memory from text, stdin, or file',
   },
   recall: {
     usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+    desc: 'Recall memories matching a query',
   },
   search: {
     usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+    desc: 'Search memories matching a query',
   },
   'recall-context': {
     usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
@@ -103,18 +111,23 @@ export const COMMAND_USAGE_REGISTRY = {
   },
   'todo-add': {
     usage: 'todo-add --content <text>',
+    desc: 'Add a new TODO item',
   },
   'todo-list': {
     usage: 'todo-list',
+    desc: 'List active TODO items',
   },
   'todo-done': {
     usage: 'todo-done --id <todo_id>',
+    desc: 'Mark a TODO item as completed',
   },
   'expense-add': {
     usage: 'expense-add --item <text> --amount <number> --currency <code>',
+    desc: 'Record an expense transaction in the ledger',
   },
   doctor: {
     usage: 'doctor [--anonymous]',
+    desc: 'Inspect runtime health, credentials, and connectivity',
   },
 };
 

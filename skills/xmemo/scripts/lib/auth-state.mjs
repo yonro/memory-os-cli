@@ -46,10 +46,12 @@ export async function getStoredCredential() {
   if (process.env.XMEMO_KEY) {
     const raw = process.env.XMEMO_KEY;
     const token = typeof raw === 'string' ? raw.trim() : '';
-    if (isOpenClawSentinel(token)) {
-      return { token, credential_type: 'environment', storage: 'openclaw-secret' };
+    if (token) {
+      if (isOpenClawSentinel(token)) {
+        return { token, credential_type: 'environment', storage: 'openclaw-secret' };
+      }
+      return { token, credential_type: 'environment', storage: 'environment' };
     }
-    return { token: raw, credential_type: 'environment', storage: 'environment' };
   }
   try {
     const surrogate = await getVaultSurrogate();
@@ -57,11 +59,8 @@ export async function getStoredCredential() {
       return { token: surrogate, credential_type: 'vault', storage: 'vault' };
     }
   } catch (err) {
-    if (err instanceof VaultKeyError) {
-      if (err.code === 'authd_error') {
-        console.error(`⚠️ Meta Muse vault error: ${sanitizeTerminalText(err.message)}`);
-      }
-    } else {
+    // Silently fall through when the vault socket is unavailable or no key is stored.
+    if (!(err instanceof VaultKeyError && (err.code === 'unavailable' || err.code === 'missing'))) {
       console.error(`⚠️ Meta Muse vault error: ${sanitizeTerminalText(err.message)}`);
     }
   }

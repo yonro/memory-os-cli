@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Trim whitespace from `XMEMO_KEY` in `getStoredCredential` and treat empty/whitespace-only values as unset, allowing fallback to Meta Muse Secure Vault or user credential files.
+- Refine `exitCodeForErrorCode` in `core.mjs` using `/^http 40[13](?!\d)/` regex matching to avoid misclassifying non-standard error codes starting with 401/403 (such as `http 4010`).
+- Ensure consistent terminal output sanitization across `ledger-list`, `ledger-summary`, `overview`, `activity`, and `stats` commands.
+- Map non-2xx status codes in `auth status --verify` via `exitCodeForHttpStatus(res.statusCode)` rather than classifying all non-5xx errors as authentication errors (e.g., 429/404 exit 1, 503 exits 3).
+- Sanitize error messages in catch blocks across `auth-login.mjs`, `memory.mjs`, and `ops.mjs` before printing to terminal output.
+- Merge duplicate `console.error` branches in Meta Muse vault resolution and silently fall through on expected `unavailable` or `missing` keys.
+- Write back parsed integer for `--ttl_seconds` across `save-state` and `state-save` commands, ensuring consistent numeric representation in serialized payloads.
+
+### Added
+
+- Add missing one-line descriptions to `COMMAND_USAGE_REGISTRY` in `help.mjs` for `read`, `update`, `forget`, `ledger-list`, `ledger-summary`, `remember`, `recall`, `search`, `todo-add`, `todo-list`, `todo-done`, `expense-add`, and `doctor`.
+
+### Documentation
+
+- Document in `SKILL.md` that `remember --file` follows symbolic links and requires the resolved target to be a regular file.
+- Document 64 KiB input size limit for `auth add --from-stdin` in `SKILL.md` and `references/troubleshooting.md`.
+- Document LF-clean ClawHub publishing instructions using GitHub Release tarball extractions in `docs/xmemo-skill-release.md`.
+
 ## 1.1.26
 
 ### Fixed

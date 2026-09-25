@@ -82,7 +82,7 @@ export async function handleAuthLogin(ctx) {
               console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}\nToken value was not printed. Project files were not modified.`);
               process.exit(EXIT_CODE.SUCCESS);
             } catch (err) {
-              console.error('Failed to save credentials file:', err.message);
+              console.error('Failed to save credentials file:', sanitizeTerminalText(err.message));
               process.exit(EXIT_CODE.USER_ERROR);
             }
           } else {
@@ -94,13 +94,13 @@ export async function handleAuthLogin(ctx) {
             console.error('Login failed: the device authorization window expired after repeated polling errors.');
             process.exit(EXIT_CODE.AUTH_ERROR);
           }
-          console.error('Login polling error:', e.message);
+          console.error('Login polling error:', sanitizeTerminalText(e.message));
           setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
         }
       };
       setTimeout(poll, Math.min(pollInterval, expiresInMs));
     } catch (e) {
-      console.error('Login error:', e.message);
+      console.error('Login error:', sanitizeTerminalText(e.message));
       process.exit(exitCodeForError(e));
     }
     return;
