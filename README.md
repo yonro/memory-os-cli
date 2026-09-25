@@ -43,7 +43,7 @@ npm distribution.
 | | |
 | --- | --- |
 | **Package** | [`@xmemo/client`](https://www.npmjs.com/package/@xmemo/client) |
-| **Primary command** | `xmemo` |
+| **Primary command** | `xmemo` (alias: `client`) |
 | **Local MCP command** | `xmemo-mcp` |
 | **Hosted MCP** | `https://xmemo.dev/mcp` |
 | **Runtime** | Node.js 20 or later |
@@ -66,12 +66,30 @@ npm distribution.
 
 ## Quick start
 
+### Global install
+
 ```bash
 npm install -g @xmemo/client
 xmemo login
 xmemo doctor
 xmemo setup codex
 xmemo status
+```
+
+Global installation exposes `xmemo` as the primary command, and also provides `client` and `memory-os` as aliases.
+
+### Running with npx
+
+You can also run any CLI command directly without a global install via `npx @xmemo/client <command>`:
+
+```bash
+# Check version or health
+npx @xmemo/client --version
+npx @xmemo/client doctor
+
+# Install skill or run MCP stdio server
+npx @xmemo/client skill install
+npx @xmemo/client mcp serve
 ```
 
 Replace `codex` with your client. Preview a configuration before writing it:
