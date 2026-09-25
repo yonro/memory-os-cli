@@ -267,7 +267,7 @@ test('openclaw-egress: origin guard rejects custom base URL with zero network re
       },
     });
 
-    assert.equal(res.code, 1);
+    assert.equal(res.code, 1, `Failed with exit code ${res.code}: ${res.stderr}`);
     assert.match(res.stderr, /OpenClaw secret sentinels are restricted to https:\/\/xmemo\.dev/);
     assert.match(res.stderr, /Unset XMEMO_BASE_URL or use a standard credential/);
     assert.equal(requestsReceived, 0, 'Target server must not receive any request');
