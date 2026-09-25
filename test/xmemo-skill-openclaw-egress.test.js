@@ -28,42 +28,6 @@ import { redactSensitiveResponse, safeJson } from '../skills/xmemo/scripts/lib/a
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
 
-function createMockConnectProxy() {
-  let connectRequest = null;
-  const requests = [];
-
-  const server = http.createServer((req, res) => {
-    requests.push({ method: req.method, url: req.url, headers: req.headers });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true }));
-  });
-
-  server.on('connect', (req, clientSocket, head) => {
-    connectRequest = {
-      method: req.method,
-      url: req.url,
-      headers: req.headers,
-    };
-    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-    clientSocket.destroy();
-  });
-
-  return {
-    getConnectRequest: () => connectRequest,
-    getRequests: () => requests,
-    start: () =>
-      new Promise((resolve, reject) => {
-        server.listen(0, '127.0.0.1', () => {
-          resolve(`http://127.0.0.1:${server.address().port}`);
-        });
-        server.on('error', reject);
-      }),
-    stop: () =>
-      new Promise((resolve) => {
-        server.close(() => resolve());
-      }),
-  };
-}
 
 async function runCli(args, { homeDir, env = {}, stdin } = {}) {
   return new Promise((resolve, reject) => {
@@ -271,29 +235,50 @@ test('openclaw-egress: origin guard rejects custom base URL with zero network re
   }
 });
 
-test('openclaw-egress: request is tunnelled via CONNECT proxy to xmemo.dev:443', async () => {
-  const sentinelToken = 'oc-sent-v2.test-connect-proxy.end';
-  const proxy = createMockConnectProxy();
-  const proxyUrl = await proxy.start();
+test('openclaw-egress: precheck accepts authenticated proxy with credentials in HTTPS_PROXY', async () => {
+  const sentinelToken = 'oc-sent-v2.test-auth-proxy.end';
+  const authProxyUrl = 'http://openclaw-proc:secret-token-12345@127.0.0.1:18789';
 
+  // 1. isProxyEnvActive recognizes auth-requiring proxy URL
+  assert.equal(
+    isProxyEnvActive({ HTTPS_PROXY: authProxyUrl, NODE_USE_ENV_PROXY: '1' }),
+    true
+  );
+  assert.equal(
+    isProxyEnvActive({ https_proxy: authProxyUrl, NODE_USE_ENV_PROXY: '1' }),
+    true
+  );
+
+  // 2. assertOpenClawEgress passes with auth-requiring proxy URL
+  assert.doesNotThrow(() => {
+    assertOpenClawEgress(sentinelToken, 'https://xmemo.dev', {
+      HTTPS_PROXY: authProxyUrl,
+      NODE_USE_ENV_PROXY: '1',
+    });
+  });
+
+  // 3. assertEgressSecurity passes with auth-requiring proxy URL
+  assert.doesNotThrow(() => {
+    assertEgressSecurity(`Bearer ${sentinelToken}`, 'https://xmemo.dev', {
+      HTTPS_PROXY: authProxyUrl,
+      NODE_USE_ENV_PROXY: '1',
+    });
+  });
+
+  // 4. CLI with auth-requiring proxy executes precheck and reports openclaw-secret
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-oc-home-'));
-
   try {
-    // Run CLI with sentinel + proxy env
-    await runCli(['auth', 'status', '--verify'], {
+    const res = await runCli(['auth', 'status'], {
       homeDir: tmpHome,
       env: {
         XMEMO_KEY: sentinelToken,
-        HTTPS_PROXY: proxyUrl,
+        HTTPS_PROXY: authProxyUrl,
         NODE_USE_ENV_PROXY: '1',
       },
     });
-
-    const connectReq = proxy.getConnectRequest();
-    assert.ok(connectReq, 'Proxy must have received a CONNECT request');
-    assert.match(connectReq.url, /^xmemo\.dev:443$/);
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /Credential Source: openclaw-secret/);
   } finally {
-    await proxy.stop();
     await fs.rm(tmpHome, { recursive: true, force: true }).catch(() => {});
   }
 });
@@ -376,7 +361,7 @@ test('openclaw-egress: logout preserves openclaw-secret and refuses --revoke-env
       },
     });
 
-    assert.equal(resRefused.code, 2);
+    assert.equal(resRefused.code, 1);
     assert.match(resRefused.stderr, /OpenClaw secret sentinels are managed by OpenClaw and cannot be revoked remotely/);
     assert.match(resRefused.stderr, /openclaw secrets delete/);
   } finally {

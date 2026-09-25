@@ -1,6 +1,5 @@
-import http from 'node:http';
-import tls from 'node:tls';
-import { DEFAULT_BASE_URL } from './core.mjs';
+import { DEFAULT_BASE_URL, EXIT_CODE } from './core.mjs';
+import { safeJson } from './api.mjs';
 import { isSurrogateToken, assertSurrogateOrigin } from './muse-vault.mjs';
 
 export const OPENCLAW_SENTINEL_REGEX = /^oc-sent-v2\.[A-Za-z0-9_-]+\.end$/;
@@ -28,48 +27,6 @@ export function sanitizeSensitiveValue(value) {
       .replace(/oc-sent-v2\.[A-Za-z0-9_-]+\.end/g, '[REDACTED]');
   }
   return value;
-}
-
-export function createTunneledConnection(targetUrl, proxyUrl) {
-  return function (options, callback) {
-    const rawProxy = proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')
-      ? proxyUrl
-      : `http://${proxyUrl}`;
-    const parsedProxy = new URL(rawProxy);
-    const proxyPort = parsedProxy.port || (parsedProxy.protocol === 'https:' ? 443 : 80);
-    const targetHost = targetUrl.hostname;
-    const targetPort = targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80);
-
-    const connectReq = http.request({
-      host: parsedProxy.hostname,
-      port: proxyPort,
-      method: 'CONNECT',
-      path: `${targetHost}:${targetPort}`,
-      headers: {
-        Host: `${targetHost}:${targetPort}`,
-      },
-    });
-
-    connectReq.on('connect', (res, socket, head) => {
-      if (res.statusCode !== 200) {
-        socket.destroy();
-        return callback(new Error(`Proxy CONNECT failed with HTTP ${res.statusCode}`));
-      }
-      if (targetUrl.protocol === 'https:') {
-        const tlsSocket = tls.connect({
-          socket,
-          servername: targetHost,
-          ...options,
-        }, callback);
-        tlsSocket.on('error', callback);
-      } else {
-        callback(null, socket);
-      }
-    });
-
-    connectReq.on('error', callback);
-    connectReq.end();
-  };
 }
 
 export function assertOpenClawEgress(token, targetUrl, env = process.env) {
@@ -104,23 +61,12 @@ export function assertEgressSecurity(authHeader, targetUrl, env = process.env) {
 
 export function configureEgressRequest(reqOptions, authHeader, targetUrl, env = process.env) {
   assertEgressSecurity(authHeader, targetUrl, env);
-  if (!authHeader || typeof authHeader !== 'string') return;
-  const match = authHeader.match(/^Bearer\s+(\S+)$/i);
-  if (!match) return;
-  const token = match[1];
-
-  if (isOpenClawSentinel(token) && isProxyEnvActive(env)) {
-    const proxyUrl = env.HTTPS_PROXY || env.https_proxy;
-    if (proxyUrl) {
-      reqOptions.createConnection = createTunneledConnection(targetUrl, proxyUrl);
-    }
-  }
 }
 
 export function handleOpenClawLogout(options) {
   if (options?.revokeEnvironmentToken) {
     console.error('Error: OpenClaw secret sentinels are managed by OpenClaw and cannot be revoked remotely. Use "openclaw secrets delete" or the OpenClaw Control UI to manage secrets.');
-    process.exit(2);
+    process.exit(EXIT_CODE.USER_ERROR);
   }
   const result = {
     status: 'openclaw_secret_unchanged',
@@ -129,10 +75,10 @@ export function handleOpenClawLogout(options) {
     local_file_removed: false,
   };
   if (options?.json) {
-    console.log(JSON.stringify(result));
+    console.log(safeJson(result));
   } else {
     console.log('XMemo credential is provided by OpenClaw (openclaw-secret). No remote token was revoked and no local credential file was changed.');
     console.log('To disconnect or rotate, use "openclaw secrets delete" or the OpenClaw Control UI.');
   }
-  process.exit(0);
+  process.exit(EXIT_CODE.SUCCESS);
 }
