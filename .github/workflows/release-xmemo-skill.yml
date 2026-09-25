@@ -306,7 +306,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pinned npm for Trusted Publishing (OIDC)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.6.4
+          npm --version
 
       - name: Build standalone @xmemo/skill npm package
         shell: bash
@@ -349,10 +355,42 @@ jobs:
         if: vars.XMEMO_SKILL_NPM_PUBLISH == 'true' && steps.check_published.outputs.already_published != 'true'
         shell: bash
         working-directory: dist/npm-skill
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm publish --access public --provenance
+
+      - name: Verify published package and provenance
+        if: vars.XMEMO_SKILL_NPM_PUBLISH == 'true' && steps.check_published.outputs.already_published != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg_version="$(node -p 'JSON.parse(require("fs").readFileSync("dist/npm-skill/package.json", "utf8")).version')"
+          echo "Verifying publication and provenance for @xmemo/skill@$pkg_version..."
+
+          # Registry propagation can take ~4 minutes; retry up to 5 minutes (300 seconds)
+          deadline=$((SECONDS + 300))
+          verified=false
+
+          while (( SECONDS < deadline )); do
+            current_version="$(npm view "@xmemo/skill@$pkg_version" version 2>/dev/null || true)"
+            attestations="$(npm view "@xmemo/skill@$pkg_version" dist.attestations 2>/dev/null || true)"
+
+            if [[ "$current_version" == "$pkg_version" && -n "$attestations" ]]; then
+              echo "Verified: @xmemo/skill@$pkg_version is published with provenance attestations:"
+              echo "$attestations"
+              verified=true
+              break
+            fi
+
+            echo "Waiting for npm registry and provenance propagation (version: '${current_version:-none}', elapsed: ${SECONDS}s)..."
+            sleep 10
+          done
+
+          if [[ "$verified" != "true" ]]; then
+            echo "ERROR: Timed out waiting for @xmemo/skill@$pkg_version with dist.attestations on npm registry." >&2
+            echo "Last observed version: '${current_version:-none}'" >&2
+            echo "Last observed attestations: '${attestations:-none}'" >&2
+            exit 1
+          fi
 
       - name: Publish notice (gated off)
         if: vars.XMEMO_SKILL_NPM_PUBLISH != 'true'
