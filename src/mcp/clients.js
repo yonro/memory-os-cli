@@ -93,3 +93,9 @@ export function supportedMcpClientIds() {
   return registrySupportedMcpClientIds(MCP_CLIENTS);
 }
 
+export {
+  JSON_MCP_CLIENT_DEFINITIONS,
+  MCP_CLIENT_INPUT_ALIASES,
+  resolveClientAlias
+} from './formats/json.js';
+

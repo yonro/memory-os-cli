@@ -2776,5 +2776,16 @@ test('mcp add and setup support windsurf and devin-desktop alias, writing server
   assert.ok(legacyContent.mcpServers?.XMemo);
   assert.equal(legacyContent.mcpServers.XMemo.serverUrl, 'https://mcp.example.test/mcp');
   assert.equal(legacyContent.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'windsurf');
-});
 
+  // 6. Bare 'devin' alias is rejected as unknown client (only 'devin-desktop' is supported)
+  const rDevinBare = await invoke(['mcp', 'add', 'devin', '--json'], { env });
+  assert.equal(rDevinBare.code, 2);
+  assert.match(rDevinBare.stderr, /Supported MCP setup command/);
+
+  const rSetupDevin = await invoke(['setup', '--client', 'devin', '--write'], {
+    env,
+    fetch: discoveryFetch()
+  });
+  assert.equal(rSetupDevin.code, 2);
+  assert.match(rSetupDevin.stderr, /Unsupported setup client: devin/);
+});

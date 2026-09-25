@@ -95,9 +95,19 @@ function remoteClientDefinition(id, label, defaultConfigPath) {
   };
 }
 
+export const MCP_CLIENT_INPUT_ALIASES = Object.freeze(new Map([
+  ['devin-desktop', 'windsurf']
+]));
+
+export function resolveClientAlias(clientId) {
+  if (typeof clientId !== 'string') {
+    return clientId;
+  }
+  return MCP_CLIENT_INPUT_ALIASES.get(clientId) ?? clientId;
+}
+
 export function jsonMcpClientDefinition(clientId) {
-  const resolved = clientId === 'devin-desktop' || clientId === 'devin' ? 'windsurf' : clientId;
-  return JSON_MCP_CLIENTS_BY_ID.get(resolved) ?? null;
+  return JSON_MCP_CLIENTS_BY_ID.get(resolveClientAlias(clientId)) ?? null;
 }
 
 export function jsonMcpClientIds() {

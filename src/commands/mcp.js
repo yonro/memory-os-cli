@@ -14,6 +14,7 @@ import { endpointUrl, normalizeBaseUrl } from '../network/http.js';
 import { writeLine } from '../core/io.js';
 import {
   MCP_CLIENTS,
+  resolveClientAlias,
   supportedMcpClientIds,
   supportedMcpClients
 } from '../mcp/clients.js';
@@ -34,12 +35,7 @@ import {
 } from '../config/profile.js';
 import { startStdioServer } from '../mcp/stdio-server.js';
 
-export function resolveMcpClientTarget(candidate) {
-  if (candidate === 'devin-desktop' || candidate === 'devin') {
-    return 'windsurf';
-  }
-  return candidate;
-}
+export const resolveMcpClientTarget = resolveClientAlias;
 
 export async function mcpCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -79,7 +75,7 @@ export async function mcpCommand(args, io) {
 
   if (subcommand === 'config') {
     const rawClientId = optionValue(args, '--client') ?? args[1] ?? 'generic';
-    const clientId = resolveMcpClientTarget(rawClientId);
+    const clientId = resolveClientAlias(rawClientId);
     const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
     const mcpUrl = endpointUrl(baseUrl, '/mcp');
     const useLocalProxy = clientId === 'copilot-cli' && !hasFlag(args, '--remote-env');
@@ -147,7 +143,7 @@ export async function mcpCommand(args, io) {
   }
 
   const rawTarget = args[1] ?? '';
-  const target = resolveMcpClientTarget(rawTarget);
+  const target = resolveClientAlias(rawTarget);
   const auth = optionValue(args, '--auth');
   if (auth && (target !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key is supported only for Kiro.');
   const client = MCP_CLIENTS.get(target);
