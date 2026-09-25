@@ -8,7 +8,7 @@
     "url": "https://github.com/yonro/memory-os-cli",
     "source": "github"
   },
-  "version": "0.4.345",
+  "version": "0.4.346",
   "remotes": [
     {
       "type": "streamable-http",
@@ -51,7 +51,7 @@
     {
       "registryType": "npm",
       "identifier": "@xmemo/client",
-      "version": "0.4.185",
+      "version": "0.4.186",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
