@@ -1,10 +1,11 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import { DEFAULT_BASE_URL } from './core.mjs';
 
 export const VAULT_CREDENTIAL_NAME = 'custom.xmemo';
 export const VAULT_ENTRY_NAME = 'access_token';
 export const DEFAULT_AUTHD_SOCKET = '/run/hatch/auth/authd.sock';
-export const VAULT_ALLOWED_ORIGIN = 'https://xmemo.dev';
+export const VAULT_ALLOWED_ORIGIN = new URL(DEFAULT_BASE_URL).origin;
 export const AUTHD_TIMEOUT_MS = 2000;
 export const MAX_AUTHD_RESPONSE_BYTES = 65536;
 
@@ -79,14 +80,23 @@ export async function getVaultSurrogate(options = {}) {
 
     const timeout = options.timeoutMs || AUTHD_TIMEOUT_MS;
     let settled = false;
+    let deadlineTimer = null;
+    const cleanup = () => {
+      if (deadlineTimer) {
+        clearTimeout(deadlineTimer);
+        deadlineTimer = null;
+      }
+    };
     const settleResolve = (val) => {
       if (settled) return;
       settled = true;
+      cleanup();
       resolve(val);
     };
     const settleReject = (err) => {
       if (settled) return;
       settled = true;
+      cleanup();
       reject(err);
     };
 
@@ -156,6 +166,12 @@ export async function getVaultSurrogate(options = {}) {
         }));
       });
     });
+
+    deadlineTimer = setTimeout(() => {
+      req.destroy();
+      settleReject(new VaultKeyError(`Auth daemon request timed out (exceeded total deadline of ${timeout} ms)`, 'authd_error'));
+    }, timeout);
+    if (deadlineTimer.unref) deadlineTimer.unref();
 
     req.setTimeout(timeout, () => {
       req.destroy();

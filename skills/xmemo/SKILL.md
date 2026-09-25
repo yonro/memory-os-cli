@@ -63,6 +63,12 @@ intentionally omits restart continuity: temporary access stays limited to
 Credential lookup follows a strict priority order:
 
 1. **`XMEMO_KEY` environment variable**: Always highest priority. When set, credential resolution short-circuits with no daemon socket or file access, and the token is never copied to disk.
+   - **OpenClaw Secret Egress (`openclaw-secret`)**: When `XMEMO_KEY` contains an OpenClaw egress sentinel (`oc-sent-v2.<name>.end`), OpenClaw's egress proxy manages the plaintext key in its Gateway shared store and injects it outbound strictly for `https://xmemo.dev`. The skill requires `secrets.egressProxy.enabled: true` and Gateway-hosted execution (`HTTPS_PROXY` and `NODE_USE_ENV_PROXY=1`). Neither scripts, agents, nor logs ever see the real key. In OpenClaw, configure the secret:
+     - Secret entry name: `XMEMO_KEY`
+     - Allowed hosts: `xmemo.dev`
+     - Egress proxy: enable `secrets.egressProxy.enabled`
+     - Execution target: Gateway-hosted exec only (sandboxed or remote `node` exec environments do not receive egress proxy sentinels).
+     `auth status` reports `Credential Source: openclaw-secret`. Sentinels are rejected by `saveToken` / `auth add`, redacted in responses, and never stored on disk. `logout` preserves OpenClaw secrets, refuses `--revoke-environment-token`, and instructs the user to manage them via `openclaw secrets delete` or the OpenClaw Control UI.
 2. **Meta Muse Secure Vault (`muse-vault`)**: When running inside Meta Muse, the runtime requests an ephemeral surrogate token (`hsurr:...`) from Muse's auth daemon over `$JARVIS_AUTHD_SOCK` (default `/run/hatch/auth/authd.sock`). The plaintext key remains stored in Secure Vault and is substituted outbound by Muse's egress proxy strictly for requests to `https://xmemo.dev`. Neither scripts, agents, nor logs ever see the real key. Generate access in Muse via:
 
    ```python

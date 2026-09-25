@@ -30,7 +30,11 @@ import {
   VaultKeyError,
 } from './muse-vault.mjs';
 
-export { warnedCredentialOrigins, isSurrogateToken };
+import {
+  isOpenClawSentinel,
+} from './openclaw-egress.mjs';
+
+export { warnedCredentialOrigins, isSurrogateToken, isOpenClawSentinel };
 
 // Read credential helper
 export async function getStoredToken() {
@@ -40,7 +44,12 @@ export async function getStoredToken() {
 
 export async function getStoredCredential() {
   if (process.env.XMEMO_KEY) {
-    return { token: process.env.XMEMO_KEY, credential_type: 'environment', storage: 'environment' };
+    const raw = process.env.XMEMO_KEY;
+    const token = typeof raw === 'string' ? raw.trim() : '';
+    if (isOpenClawSentinel(token)) {
+      return { token, credential_type: 'environment', storage: 'openclaw-secret' };
+    }
+    return { token: raw, credential_type: 'environment', storage: 'environment' };
   }
   try {
     const surrogate = await getVaultSurrogate();
@@ -95,6 +104,9 @@ export function warnPlaintextStorage() {
 export async function saveToken(token, details = {}, { allowPlaintext = false, warn = false } = {}) {
   if (isSurrogateToken(token)) {
     throw new Error('Refusing to persist Meta Muse surrogate token to disk. Surrogate tokens are dynamically managed by Meta Muse.');
+  }
+  if (isOpenClawSentinel(token)) {
+    throw new Error('Refusing to persist OpenClaw sentinel token to disk. Sentinels are dynamic and managed by OpenClaw.');
   }
   if (!allowPlaintext) {
     throw new Error(`Refusing unencrypted credential storage without --allow-plaintext. Prefer XMEMO_KEY.`);
