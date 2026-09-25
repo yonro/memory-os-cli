@@ -38,6 +38,11 @@ export function clientConfigPathCandidates(clientId, env, mcpClients) {
     }
   }
 
+  if (clientId === 'windsurf') {
+    const home = env.USERPROFILE || env.HOME || os.homedir();
+    candidates.push(path.join(home, '.codeium', 'windsurf', 'mcp_config.json'));
+  }
+
   const client = mcpClients.get(clientId);
   if (client) {
     candidates.push(client.defaultConfigPath(env));

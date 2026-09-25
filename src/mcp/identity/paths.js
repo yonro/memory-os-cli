@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -62,10 +63,28 @@ export function defaultCopilotConfigPath(env) {
   return path.join(env.COPILOT_HOME ?? path.join(home, '.copilot'), 'mcp-config.json');
 }
 
-export function defaultWindsurfConfigPath(env) {
+export function defaultWindsurfConfigPath(env, platform = process.platform) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
-  return path.join(home, '.codeium', 'windsurf', 'mcp_config.json');
+  const legacyDir = path.join(home, '.codeium', 'windsurf');
+  const legacyPath = path.join(legacyDir, 'mcp_config.json');
+
+  let newPath;
+  if (platform === 'win32' && env.APPDATA) {
+    newPath = path.join(env.APPDATA, 'devin', 'mcp_config.json');
+  } else if (env.XDG_CONFIG_HOME) {
+    newPath = path.join(env.XDG_CONFIG_HOME, 'devin', 'mcp_config.json');
+  } else {
+    newPath = path.join(home, '.config', 'devin', 'mcp_config.json');
+  }
+
+  const newDir = path.dirname(newPath);
+  if (!fs.existsSync(newDir) && fs.existsSync(legacyDir)) {
+    return legacyPath;
+  }
+  return newPath;
 }
+
+export const defaultDevinDesktopConfigPath = defaultWindsurfConfigPath;
 
 export function defaultClineConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();

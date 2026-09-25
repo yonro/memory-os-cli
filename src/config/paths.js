@@ -22,6 +22,7 @@ export {
   defaultQwenConfigPath,
   defaultTraeConfigPath,
   defaultTraeSoloConfigPath,
+  defaultDevinDesktopConfigPath,
   defaultWindsurfConfigPath,
   defaultZedConfigPath
 } from '../mcp/identity/paths.js';

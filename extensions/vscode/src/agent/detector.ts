@@ -44,9 +44,26 @@ export const AGENT_CLIENTS: AgentClientDefinition[] = [
   },
   {
     id: 'windsurf',
-    label: 'Windsurf',
+    label: 'Devin Desktop (formerly Windsurf)',
     configKind: 'json',
-    defaultConfigPath: () => path.join(homeDir(), '.codeium', 'windsurf', 'mcp_config.json')
+    defaultConfigPath: () => {
+      const home = homeDir();
+      const legacyDir = path.join(home, '.codeium', 'windsurf');
+      const legacyPath = path.join(legacyDir, 'mcp_config.json');
+      let newPath: string;
+      if (process.platform === 'win32' && process.env.APPDATA) {
+        newPath = path.join(process.env.APPDATA, 'devin', 'mcp_config.json');
+      } else if (process.env.XDG_CONFIG_HOME) {
+        newPath = path.join(process.env.XDG_CONFIG_HOME, 'devin', 'mcp_config.json');
+      } else {
+        newPath = path.join(home, '.config', 'devin', 'mcp_config.json');
+      }
+      const newDir = path.dirname(newPath);
+      if (!fs.existsSync(newDir) && fs.existsSync(legacyDir)) {
+        return legacyPath;
+      }
+      return newPath;
+    }
   },
   {
     id: 'cline',

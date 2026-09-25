@@ -92,7 +92,7 @@ const JSON_CLIENT_WRITERS: ClientWriter[] = [
   },
   {
     id: 'windsurf',
-    label: 'Windsurf',
+    label: 'Devin Desktop (formerly Windsurf)',
     section: 'mcpServers',
     buildServerConfig: (mcpUrl, identity) => httpServerConfig('serverUrl', mcpUrl, identity),
     detectExisting: (parsed) => isPlainObject(parsed?.mcpServers?.[MCP_SERVER_NAME])

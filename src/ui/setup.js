@@ -9,6 +9,7 @@ import {
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
 import { supportedMcpClientIds, usesClientOAuth } from '../mcp/clients/registry.js';
+import { resolveClientAlias } from '../mcp/clients.js';
 import { mcpLocalProxyTemplate } from '../mcp/core/templates.js';
 import { defaultCopilotConfigPath } from '../mcp/identity/paths.js';
 import { profileClientConfig } from '../config/profile.js';
@@ -79,7 +80,8 @@ export function normalizeSetupClientId(candidate, mcpClients) {
     return null;
   }
 
-  const normalized = SETUP_CLIENT_ALIASES.get(candidate);
+  const resolved = resolveClientAlias(candidate);
+  const normalized = SETUP_CLIENT_ALIASES.get(resolved);
   if (!normalized) {
     throw new UsageError(`Unsupported setup client: ${candidate}. Supported clients: ${supportedSetupClientIds(mcpClients).join(', ')}.`);
   }

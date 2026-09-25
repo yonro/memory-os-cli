@@ -138,7 +138,7 @@ xmemo-mcp
 `xmemo-mcp` 是专用的 stdio MCP 入口；`xmemo mcp serve` 与它等价。
 能力发现（Tools、Prompts、Resources）不需要 Token，实际工具执行仍需认证。
 
-支持的 `xmemo setup` 客户端包括：`codex`、`cursor`、`copilot`、`gemini`、`antigravity`、`grok`、`kiro`、`claude-desktop`、`windsurf`、`cline`、`kimi-code`、`qwen`、`trae`、`zed` 和 `opencode`。底层 `xmemo mcp add` 使用注册表 ID（例如 `gemini-cli`、`copilot-cli`）；Copilot CLI 的推荐入口仍是 `xmemo setup copilot`。
+支持的 `xmemo setup` 客户端包括：`codex`、`cursor`、`copilot`、`gemini`、`antigravity`、`grok`、`kiro`、`claude-desktop`、`windsurf` (或别名 `devin-desktop`)、`cline`、`kimi-code`、`qwen`、`trae`、`zed` 和 `opencode`。底层 `xmemo mcp add` 使用注册表 ID（例如 `gemini-cli`、`copilot-cli`）；Copilot CLI 的推荐入口仍是 `xmemo setup copilot`。
 
 ---
 
@@ -218,7 +218,7 @@ xmemo-mcp
 | **Gemini CLI** | Streamable HTTP + MCP OAuth | `xmemo setup gemini` |
 | **Grok (xAI)** | Streamable HTTP + Bearer Token | `xmemo setup grok` |
 | **Antigravity 系列** | Streamable HTTP + MCP OAuth | `xmemo setup antigravity` |
-| **Windsurf** | Streamable HTTP + Bearer Token | `xmemo setup windsurf` |
+| **Devin Desktop (formerly Windsurf)** | Streamable HTTP + Bearer Token | `xmemo setup windsurf` |
 | **Cline** | Streamable HTTP + Bearer Token | `xmemo setup cline` |
 | **Trae / Trae Solo** | `mcp-remote` + Bearer Token（`XMEMO_KEY`） | `xmemo setup trae` |
 | **Qwen CLI** | Streamable HTTP + MCP OAuth | `xmemo setup qwen` |

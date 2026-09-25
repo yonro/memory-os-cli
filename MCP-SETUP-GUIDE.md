@@ -228,9 +228,9 @@ Antigravity 2.0 支持 OAuth，首次使用时会自动打开浏览器完成授�
 
 ---
 
-### Windsurf / Cline
+### Devin Desktop (formerly Windsurf) / Cline
 
-这些客户端使用 Bearer Token。不同版本的配置键可能不同，推荐用对应的 CLI ID 生成配置：`xmemo setup windsurf` 或 `xmemo setup cline`。
+这些客户端使用 Bearer Token。不同版本的配置键可能不同，推荐用对应的 CLI ID 生成配置：`xmemo setup windsurf`（或别名 `xmemo setup devin-desktop`）或 `xmemo setup cline`。
 
 ```json
 {

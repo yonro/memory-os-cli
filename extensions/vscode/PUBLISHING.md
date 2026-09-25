@@ -5,7 +5,7 @@ The extension ships to **two** registries from one build:
 | Registry | Reaches | Tool |
 | --- | --- | --- |
 | Visual Studio Marketplace | Official VS Code | `vsce` |
-| Open VSX | Cursor, Windsurf, VSCodium, Gitpod | `ovsx` |
+| Open VSX | Cursor, Devin Desktop (formerly Windsurf), VSCodium, Gitpod | `ovsx` |
 
 CI does both automatically on a `vscode-v*` tag (`.github/workflows/publish-vscode-extension.yml`). It packages the `.vsix` once and pushes the *same artifact* to both registries.
 
