@@ -22,6 +22,10 @@ import {
 } from '../lib/auth-state.mjs';
 
 import {
+  isOpenClawSentinel,
+} from '../lib/openclaw-egress.mjs';
+
+import {
   makeHttpRequest,
   parseJsonResponse,
   apiErrorMessage,
@@ -44,13 +48,15 @@ export async function handleAuthManage(ctx) {
       process.exit(EXIT_CODE.SUCCESS);
     }
     
-    const credentialSource = credential?.storage === 'vault'
-      ? 'muse-vault'
-      : credential?.storage === 'environment'
-        ? 'XMEMO_KEY'
-        : credential?.credential_type === 'temporary'
-          ? 'temporary-user-credential-file'
-          : 'formal-user-credential-file';
+    const credentialSource = credential?.storage === 'openclaw-secret'
+      ? 'openclaw-secret'
+      : credential?.storage === 'vault'
+        ? 'muse-vault'
+        : credential?.storage === 'environment'
+          ? 'XMEMO_KEY'
+          : credential?.credential_type === 'temporary'
+            ? 'temporary-user-credential-file'
+            : 'formal-user-credential-file';
     if (options.verify) {
       try {
         const res = await makeHttpRequest(options.baseUrl, '/v1/auth/token/validate', 'GET', null, {
@@ -103,6 +109,10 @@ export async function handleAuthManage(ctx) {
       }
       if (typeof token === 'string' && token.startsWith('hsurr:')) {
         console.error('Error: Refusing to store Meta Muse surrogate token. Surrogate tokens are dynamic and managed by Meta Muse.');
+        process.exit(EXIT_CODE.USER_ERROR);
+      }
+      if (isOpenClawSentinel(token)) {
+        console.error('Error: Refusing to store OpenClaw sentinel token. Sentinels are dynamic and managed by OpenClaw.');
         process.exit(EXIT_CODE.USER_ERROR);
       }
       try {

@@ -18,6 +18,10 @@ import {
 } from '../lib/auth-state.mjs';
 
 import {
+  handleOpenClawLogout,
+} from '../lib/openclaw-egress.mjs';
+
+import {
   makeHttpRequest,
   parseJsonResponse,
   extractRequestId,
@@ -186,6 +190,10 @@ export async function handleAuthLogin(ctx) {
     if (!token) {
       console.log('No active login found.');
       process.exit(EXIT_CODE.SUCCESS);
+    }
+
+    if (credential.storage === 'openclaw-secret') {
+      handleOpenClawLogout(options);
     }
 
     if (credential.storage === 'vault') {

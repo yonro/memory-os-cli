@@ -104,6 +104,11 @@ async function runScript(args, options = {}) {
     if (!options.env || !('JARVIS_AUTHD_SOCK' in options.env)) {
       delete childEnv.JARVIS_AUTHD_SOCK;
     }
+    if (!options.env || !('HTTPS_PROXY' in options.env)) delete childEnv.HTTPS_PROXY;
+    if (!options.env || !('https_proxy' in options.env)) delete childEnv.https_proxy;
+    if (!options.env || !('HTTP_PROXY' in options.env)) delete childEnv.HTTP_PROXY;
+    if (!options.env || !('http_proxy' in options.env)) delete childEnv.http_proxy;
+    if (!options.env || !('NODE_USE_ENV_PROXY' in options.env)) delete childEnv.NODE_USE_ENV_PROXY;
     const child = spawn(process.execPath, [skillScript, ...args], {
       env: childEnv,
       cwd: repoRoot

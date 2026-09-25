@@ -462,6 +462,11 @@ async function runSnapshotScript(args, { baseUrl, homeDir, stdin, env = {} }) {
       }
     }
     delete childEnv.JARVIS_AUTHD_SOCK;
+    delete childEnv.HTTPS_PROXY;
+    delete childEnv.https_proxy;
+    delete childEnv.HTTP_PROXY;
+    delete childEnv.http_proxy;
+    delete childEnv.NODE_USE_ENV_PROXY;
     childEnv.HOME = homeDir;
     childEnv.USERPROFILE = homeDir;
     childEnv.XMEMO_BASE_URL = baseUrl;
