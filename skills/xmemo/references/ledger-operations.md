@@ -28,7 +28,7 @@ node scripts/xmemo-skill.mjs ledger-list --month 2026-09 --json
 ```
 
 `ledger-list` queries personal financial transactions via `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring `ledger:read` scope).
-This command is strictly read-only and possesses zero write or deletion capabilities. To delete or void a transaction, obtain its `id` from `ledger-list` and invoke `forget --id <transaction_id> --confirm`.
+This command is strictly read-only and possesses zero write or deletion capabilities; `ledger-list` only reads and lists recorded transactions. Deleting or voiding a ledger entry is a separate operation that requires explicit confirmation (`forget --id <id> --confirm`) and delete permission (`memory:delete` scope).
 Allowed server arguments:
 - `--limit <n>`: Page limit (default 30, max 100).
 - `--offset <n>`: Pagination offset (default 0).

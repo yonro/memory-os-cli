@@ -5,6 +5,17 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { exitCodeForError, EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
+import {
+  readStdin,
+  readStdinContent,
+  readBoundedFile,
+  MAX_STDIN_INPUT_BYTES,
+} from '../skills/xmemo/scripts/lib/bounded-read.mjs';
+import {
+  readStdin as cliReadStdin,
+  readStdinContent as cliReadStdinContent,
+  readBoundedFile as cliReadBoundedFile,
+} from '../skills/xmemo/scripts/lib/cli-input.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8'));
@@ -349,5 +360,16 @@ test('exitCodeForError matches HTTP 401 and 403 as whole numbers without false p
   assert.equal(exitCodeForError(new Error('memory id 14032 not found')), EXIT_CODE.USER_ERROR);
   assert.equal(exitCodeForError(new Error('entity_4010_missing')), EXIT_CODE.USER_ERROR);
   assert.equal(exitCodeForError(new Error('item 24031')), EXIT_CODE.USER_ERROR);
+});
+
+test('bounded-read module exports expected functions and bounded constants', () => {
+  assert.equal(typeof readStdin, 'function');
+  assert.equal(typeof readStdinContent, 'function');
+  assert.equal(typeof readBoundedFile, 'function');
+  assert.equal(MAX_STDIN_INPUT_BYTES, 65536);
+
+  assert.equal(typeof cliReadStdin, 'function');
+  assert.equal(typeof cliReadStdinContent, 'function');
+  assert.equal(typeof cliReadBoundedFile, 'function');
 });
 

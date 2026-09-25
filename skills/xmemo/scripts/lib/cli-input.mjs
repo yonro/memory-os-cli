@@ -1,9 +1,7 @@
-import fs from 'node:fs/promises';
 import {
   DEFAULT_BASE_URL,
   DEFAULT_TIMEOUT_MS,
   MAX_STATE_TTL_SECONDS,
-  MAX_MEMORY_CONTENT_BYTES,
   COMMAND_FLAGS,
   AUTH_FLAGS,
   parseStrictBoolean,
@@ -11,7 +9,11 @@ import {
   parseIntegerInRange,
   parseJsonObject,
 } from './core.mjs';
-import { outputContentTooLarge } from './api.mjs';
+import {
+  readStdin,
+  readStdinContent,
+  readBoundedFile,
+} from './bounded-read.mjs';
 
 export function isStdoutTty() {
   const env = process.env;
@@ -185,98 +187,18 @@ export function validateCommandInput(command, subcommand, positionals, options, 
   }
 }
 
-// Read stdin helper
-export async function readStdin() {
-  return new Promise((resolve) => {
-    let data = '';
-    process.stdin.on('data', (chunk) => { data += chunk; });
-    process.stdin.on('end', () => { resolve(data.trim()); });
-  });
-}
-
-// Read full stdin content helper (exact UTF-8 content without trimming) with byte limit
-export function readStdinContent(options = {}) {
-  return new Promise((resolve, reject) => {
-    let totalBytes = 0;
-    const chunks = [];
-    let done = false;
-    const cleanup = () => {
-      process.stdin.removeListener('data', onData);
-      process.stdin.removeListener('end', onEnd);
-      process.stdin.removeListener('error', onError);
-    };
-    const onData = (chunk) => {
-      if (done) return;
-      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      totalBytes += buf.length;
-      if (totalBytes > MAX_MEMORY_CONTENT_BYTES) {
-        done = true;
-        cleanup();
-        try { process.stdin.pause(); } catch {}
-        try { process.stdin.destroy(); } catch {}
-        outputContentTooLarge(`Memory content exceeds maximum limit of ${MAX_MEMORY_CONTENT_BYTES} bytes.`, options);
-        return;
-      }
-      chunks.push(buf);
-    };
-    const onEnd = () => {
-      if (done) return;
-      cleanup();
-      resolve(Buffer.concat(chunks).toString('utf8'));
-    };
-    const onError = (err) => {
-      if (done) return;
-      cleanup();
-      reject(err);
-    };
-    process.stdin.on('data', onData).on('end', onEnd).on('error', onError).resume();
-  });
-}
+export {
+  readStdin,
+  readStdinContent,
+  readBoundedFile,
+};
 
 export async function resolveCommandInputs(command, flags, options = {}) {
   if (command === 'remember') {
     if (flags.file !== undefined) {
-      let stats;
-      try {
-        stats = await fs.stat(flags.file);
-      } catch (err) {
-        throw new Error(`Failed to read file '${flags.file}': ${err.message}`);
-      }
-      if (!stats.isFile()) {
-        throw new Error(`Failed to read file '${flags.file}': --file must be a regular file.`);
-      }
-      if (stats.size > MAX_MEMORY_CONTENT_BYTES) {
-        outputContentTooLarge(`File '${flags.file}' exceeds maximum limit of ${MAX_MEMORY_CONTENT_BYTES} bytes.`, options);
-        return;
-      }
-      let handle;
-      try {
-        handle = await fs.open(flags.file, 'r');
-      } catch (err) {
-        throw new Error(`Failed to read file '${flags.file}': ${err.message}`);
-      }
-      const chunks = [];
-      let totalBytes = 0;
-      const chunkBuf = Buffer.alloc(65536);
-      try {
-        while (true) {
-          const toRead = Math.min(65536, (MAX_MEMORY_CONTENT_BYTES + 1) - totalBytes);
-          const { bytesRead } = await handle.read(chunkBuf, 0, toRead, null);
-          if (bytesRead === 0) break;
-          totalBytes += bytesRead;
-          chunks.push(Buffer.from(chunkBuf.subarray(0, bytesRead)));
-          if (totalBytes > MAX_MEMORY_CONTENT_BYTES) break;
-        }
-      } catch (err) {
-        throw new Error(`Failed to read file '${flags.file}': ${err.message}`);
-      } finally {
-        await handle.close();
-      }
-      if (totalBytes > MAX_MEMORY_CONTENT_BYTES) {
-        outputContentTooLarge(`File '${flags.file}' exceeds maximum limit of ${MAX_MEMORY_CONTENT_BYTES} bytes.`, options);
-        return;
-      }
-      flags.content = Buffer.concat(chunks).toString('utf8');
+      const content = await readBoundedFile(flags.file, options);
+      if (content === null) return;
+      flags.content = content;
       delete flags.file;
     } else if (flags.content === '-') {
       flags.content = await readStdinContent(options);
