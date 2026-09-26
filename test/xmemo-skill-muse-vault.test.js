@@ -584,3 +584,37 @@ test('muse-vault: response size cap rejects oversized responses from authd', asy
   }
 });
 
+test('muse-vault: auth daemon response split inside multi-byte CJK character decodes correctly without U+FFFD', async () => {
+  const authd = createMockAuthdServer();
+  await authd.start();
+
+  const testPayload = {
+    access_token: 'hsurr:mock-surrogate-token-cjk-split-999',
+    description: '中文密钥描述，测试跨TCP分块解码完整性',
+  };
+  const jsonStr = JSON.stringify(testPayload);
+  const buf = Buffer.from(jsonStr, 'utf8');
+
+  // Split deliberately inside '中' (1 + 2 bytes across chunks)
+  const cjkIndex = buf.indexOf(Buffer.from('中', 'utf8'));
+  assert.ok(cjkIndex >= 0);
+  const splitPoint = cjkIndex + 1;
+
+  try {
+    authd.setHandler((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.write(buf.subarray(0, splitPoint));
+      setTimeout(() => {
+        res.write(buf.subarray(splitPoint));
+        res.end();
+      }, 15);
+    });
+
+    const surrogate = await getVaultSurrogate({ socketPath: authd.socketPath });
+    assert.equal(surrogate, 'hsurr:mock-surrogate-token-cjk-split-999');
+  } finally {
+    await authd.stop();
+  }
+});
+
+

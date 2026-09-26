@@ -101,7 +101,7 @@ export async function getVaultSurrogate(options = {}) {
     };
 
     const req = http.request(reqOptions, (res) => {
-      let responseData = '';
+      const chunks = [];
       let byteCount = 0;
 
       res.on('data', (chunk) => {
@@ -111,10 +111,11 @@ export async function getVaultSurrogate(options = {}) {
           settleReject(new VaultKeyError('Auth daemon response exceeded size limit', 'authd_error'));
           return;
         }
-        responseData += chunk;
+        chunks.push(chunk);
       });
 
       res.on('end', () => {
+        const responseData = Buffer.concat(chunks).toString('utf8');
         if (res.statusCode === 403 || res.statusCode === 404) {
           settleReject(new VaultKeyError(`Vault credential missing or access denied (HTTP ${res.statusCode})`, {
             code: 'missing',
