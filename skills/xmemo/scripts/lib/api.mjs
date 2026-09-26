@@ -259,7 +259,7 @@ export function makeHttpRequest(baseUrl, apiPath, method, body = null, headers =
         reject(error);
       };
       const req = client.request(url, options, (res) => {
-        let data = '';
+        const chunks = [];
         let responseBytes = 0;
         res.on('data', (chunk) => {
           responseBytes += Buffer.byteLength(chunk);
@@ -269,9 +269,10 @@ export function makeHttpRequest(baseUrl, apiPath, method, body = null, headers =
             res.destroy();
             return;
           }
-          data += chunk;
+          chunks.push(chunk);
         });
         res.on('end', () => {
+          const data = Buffer.concat(chunks).toString('utf8');
           settleResolve({
             statusCode: res.statusCode,
             headers: res.headers,

@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { access, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { exitCodeForError, exitCodeForErrorCode, exitCodeForHttpStatus, EXIT_CODE } from '../skills/xmemo/scripts/lib/core.mjs';
 import { getStoredCredential } from '../skills/xmemo/scripts/lib/auth-state.mjs';
-import { sanitizeTerminalText } from '../skills/xmemo/scripts/lib/api.mjs';
+import { makeHttpRequest, sanitizeTerminalText } from '../skills/xmemo/scripts/lib/api.mjs';
 import { looksLikeOpenClawSentinel } from '../skills/xmemo/scripts/lib/openclaw-egress.mjs';
 import { resolveCredentialSource, formatAuthErrorHint } from '../skills/xmemo/scripts/lib/auth-hint.mjs';
 import {
@@ -542,3 +544,109 @@ test('Skill package includes references/auth-setup.md and references/command-det
   assert.ok(relPaths.includes('references/auth-setup.md'), 'skills/xmemo source directory must include references/auth-setup.md');
   assert.ok(relPaths.includes('references/command-details.md'), 'skills/xmemo source directory must include references/command-details.md');
 });
+
+test('api.mjs: makeHttpRequest correctly decodes UTF-8 response split across TCP chunk boundaries without U+FFFD corruption', async () => {
+  const originalContent = '中文记忆测试：深度解析多字节字符边界 🚀 繁體字與日本語テスト';
+  const testPayload = JSON.stringify({ ok: true, memory: { id: 'm1', content: originalContent } });
+  const buf = Buffer.from(testPayload, 'utf8');
+
+  // Find index of '中' (3 bytes: 0xE4, 0xB8, 0xAD) and split after 1st byte (1 + 2 bytes split)
+  const cjkIndex = buf.indexOf(Buffer.from('中', 'utf8'));
+  assert.ok(cjkIndex >= 0);
+  const splitPoint = cjkIndex + 1;
+
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.write(buf.subarray(0, splitPoint));
+    setTimeout(() => {
+      res.write(buf.subarray(splitPoint));
+      res.end();
+    }, 15);
+  });
+
+  const port = await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+  });
+
+  try {
+    const res = await makeHttpRequest(`http://127.0.0.1:${port}`, '/v1/memories/m1', 'GET');
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.includes('\uFFFD'), false, 'Response body must not contain U+FFFD replacement characters');
+    assert.equal(res.body, testPayload);
+
+    const parsed = JSON.parse(res.body);
+    assert.equal(parsed.memory.content, originalContent);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('skill read --id --json correctly decodes CJK response split across TCP chunk boundaries without corruption', async () => {
+  const originalContent = '中文记忆测试内容：前后端一致性验证。多字节边界不应产生乱码字符。';
+  const testPayload = JSON.stringify({
+    ok: true,
+    memory: {
+      id: 'mem_test_cjk_123',
+      path: '/test/cjk',
+      content: originalContent,
+      updated_at: '2026-09-26T12:00:00Z',
+    },
+  });
+  const buf = Buffer.from(testPayload, 'utf8');
+
+  // Split deliberately after first byte of '中'
+  const cjkIndex = buf.indexOf(Buffer.from('中', 'utf8'));
+  assert.ok(cjkIndex >= 0);
+  const splitPoint = cjkIndex + 1;
+
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.write(buf.subarray(0, splitPoint));
+    setTimeout(() => {
+      res.write(buf.subarray(splitPoint));
+      res.end();
+    }, 15);
+  });
+
+  const port = await new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+  });
+
+  const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
+
+  try {
+    const runResult = await new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [
+        skillScript,
+        'read',
+        '--id', 'mem_test_cjk_123',
+        '--json',
+        '--base-url', `http://127.0.0.1:${port}`,
+      ], {
+        env: {
+          ...process.env,
+          XMEMO_KEY: 'test-token-cjk',
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (d) => (stdout += String(d)));
+      child.stderr.on('data', (d) => (stderr += String(d)));
+      child.on('error', reject);
+      child.on('close', (code) => resolve({ code: code ?? 0, stdout, stderr }));
+    });
+
+    assert.equal(runResult.code, 0, `Expected exit code 0, got ${runResult.code}: ${runResult.stderr}`);
+    assert.equal(runResult.stdout.includes('\uFFFD'), false, 'Subprocess stdout must not contain U+FFFD');
+
+    const parsed = JSON.parse(runResult.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.id, 'mem_test_cjk_123');
+    assert.equal(parsed.content, originalContent);
+    assert.equal(parsed.content.includes('\uFFFD'), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
