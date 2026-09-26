@@ -17,7 +17,7 @@
 - Rephrase credential path references across `SKILL.md` and references to cite the local credential file without hardcoding specific filenames.
 - Narrow trigger scope description in `SKILL.md` frontmatter with clear counter-examples (excluding codebase search, web search, or transient session notes).
 - Update recall workflow guidance in `SKILL.md` to emphasize non-trivial project context recall and data boundary awareness.
-- Rephrase safety rules in `SKILL.md` and `references/auth-setup.md` to avoid scanner false positives while maintaining strict prohibitions on credential pasting.
+- Reworded safety rules in `SKILL.md` and `references/auth-setup.md`; the ban on pasting credentials is unchanged.
 
 ## 1.1.28
 
