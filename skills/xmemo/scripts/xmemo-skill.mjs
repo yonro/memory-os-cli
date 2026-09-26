@@ -58,6 +58,7 @@ import { handleMemory } from './commands/memory.mjs';
 import { handleLedger } from './commands/ledger.mjs';
 import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
+import { handleProfile } from './commands/profile.mjs';
 
 const SKILL_VERSION = '1.1.30';
 
@@ -85,7 +86,7 @@ async function main() {
     process.exit(EXIT_CODE.SUCCESS);
   }
 
-  if (!['login', 'register', 'logout', 'auth'].includes(command) && !REST_COMMANDS.has(command)) {
+  if (!['login', 'register', 'logout', 'auth', 'profile'].includes(command) && !REST_COMMANDS.has(command)) {
     console.error(`Unknown command: ${command}`);
     printUsage();
     process.exit(EXIT_CODE.USER_ERROR);
@@ -98,7 +99,7 @@ async function main() {
 
   const ctx = { command, subcommand, positionals, options, flags, skillVersion: SKILL_VERSION };
 
-  // 1. Auth commands executed before credential check
+  // 1. Auth and profile commands executed before credential check
   if (['login', 'register', 'logout'].includes(command)) {
     await handleAuthLogin(ctx);
     return;
@@ -106,6 +107,11 @@ async function main() {
 
   if (command === 'auth') {
     await handleAuthManage(ctx);
+    return;
+  }
+
+  if (command === 'profile') {
+    await handleProfile(ctx);
     return;
   }
 
