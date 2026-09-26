@@ -164,6 +164,16 @@ node scripts/xmemo-skill.mjs doctor
 
 Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `agent_instance_id`, and `agent_boundary` are attribution signals, not authorization boundaries.
 
+## Use XMemo in every session (optional)
+
+If the user wants XMemo used automatically in every session:
+1. Run `node scripts/xmemo-skill.mjs profile` to generate the recommended instruction block.
+2. Show the block to the user and offer to add it to the project's agent instruction file (for example `AGENTS.md` or `CLAUDE.md`).
+3. Add the block only after the user agrees.
+4. Keep it as one section under its `## XMemo memory` heading so a later update replaces that section instead of duplicating it.
+
+Do not suggest this unprompted during first-run sign-in.
+
 ## Command Reference
 
 | Command & Syntax | Description |
@@ -189,6 +199,7 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `activity [--limit <n>]` | Recent account activity |
 | `stats [--scope <scope>] [--group-by <dims>] [--top-n <1..200>]` | Multidimensional memory stats |
 | `doctor [--anonymous]` | Diagnose runtime health |
+| `profile` | Print recommended agent instructions |
 | `login --allow-plaintext` | Start device login |
 | `register --reason <unattended\|declined> --allow-plaintext` | Temporary sandbox |
 | `auth status [--verify]` | Credential status (alias: `auth-status`) |
