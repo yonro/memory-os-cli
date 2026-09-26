@@ -148,6 +148,7 @@ export function validateSkillPathAllowlist(relPath) {
     'CHANGELOG.md',
     'SKILL.md',
     'skill-card.md',
+    'references/agent-profile.md',
     'references/auth-setup.md',
     'references/command-details.md',
     'references/memory-operations.md',
@@ -179,6 +180,7 @@ export async function assertSkillDirectoryIntegrity(skillDir) {
   const requiredFiles = [
     'CHANGELOG.md',
     'SKILL.md',
+    'references/agent-profile.md',
     'references/auth-setup.md',
     'references/command-details.md',
     'references/memory-operations.md',
@@ -536,26 +538,32 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
   assert.match(skill, /tell the user in one line that XMemo is connected/);
   assert.match(skill, /Want XMemo used automatically in every session of this project\?/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile/);
+  assert.match(skill, /follow \[references\/agent-profile\.md\]\(references\/agent-profile\.md\)/);
+  assert.match(skill, /Read \[references\/agent-profile\.md\]\(references\/agent-profile\.md\) before writing to AGENTS\.md, CLAUDE\.md, or any other agent instruction file\./);
+  assert.match(skill, /\|\s*`profile`\s*\|\s*Print recommended agent instructions\s*\|/);
   assert.match(skill, /do not ask again in the same session/);
   assert.match(skill, /Do not explain runtime selection/);
+  assert.ok(!skill.includes('## Use XMemo in every session (optional)'), 'SKILL.md must not include full every-session section');
 });
 
-test('SKILL.md specifies one-time opt-in profile rules for AGENTS.md / CLAUDE.md', async () => {
-  const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
+test('references/agent-profile.md specifies one-time opt-in profile rules for AGENTS.md / CLAUDE.md', async () => {
+  const profileRef = (await readFile(path.join(repoRoot, 'skills/xmemo/references/agent-profile.md'), 'utf8')).replace(/\r\n/g, '\n');
 
-  assert.match(skill, /## Use XMemo in every session \(optional\)/);
-  assert.match(skill, /Offer once at the end of first-run sign-in/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile/);
-  assert.match(skill, /Never repeat the offer unprompted/);
-  assert.match(skill, /write or modify the file only after the user gives explicit confirmation/);
-  assert.match(skill, /If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user explicitly asks to update it/);
-  assert.match(skill, /Keep it as one section under its `## XMemo memory` heading so any future update replaces that section instead of duplicating it/);
+  assert.match(profileRef, /# XMemo Agent Profile & Session Integration/);
+  assert.match(profileRef, /## Integration Rules/);
+  assert.match(profileRef, /Offer once at the end of first-run sign-in/);
+  assert.match(profileRef, /node scripts\/xmemo-skill\.mjs profile/);
+  assert.match(profileRef, /Never repeat the offer unprompted/);
+  assert.match(profileRef, /write or modify the file only after the user gives explicit confirmation/);
+  assert.match(profileRef, /If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user explicitly asks to update it/);
+  assert.match(profileRef, /Keep it as one section under its `## XMemo memory` heading so any future update replaces that section instead of duplicating it/);
+  assert.match(profileRef, /## Example Workflow Conversation/);
 });
 
 test('Skill package includes references/auth-setup.md and references/command-details.md in builder output and release package manifest', async () => {
   const allFiles = await getSkillDirectoryFiles(path.join(repoRoot, 'skills', 'xmemo'));
   const relPaths = allFiles.map((f) => path.relative(path.join(repoRoot, 'skills', 'xmemo'), f).split(path.sep).join('/'));
+  assert.ok(relPaths.includes('references/agent-profile.md'), 'skills/xmemo source directory must include references/agent-profile.md');
   assert.ok(relPaths.includes('references/auth-setup.md'), 'skills/xmemo source directory must include references/auth-setup.md');
   assert.ok(relPaths.includes('references/command-details.md'), 'skills/xmemo source directory must include references/command-details.md');
 });

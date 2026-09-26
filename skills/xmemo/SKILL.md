@@ -30,7 +30,7 @@ After ClawHub installs this Skill, run these commands from the Skill root to ver
 When no credential exists, follow this exact sequence:
 1. Ask once in the user's language: "XMemo is not signed in yet. Signing in opens a browser page; afterwards the token is saved unencrypted on this computer (or you can provide XMEMO_KEY from a secret store instead). Start sign-in now?"
 2. On yes: run `node scripts/xmemo-skill.mjs login --allow-plaintext` and show only the verification URL, the one-time code, and "approve it in your browser" — nothing else.
-3. When login finishes: run `node scripts/xmemo-skill.mjs auth status --verify` and tell the user in one line that XMemo is connected. In the same message, if the project does not already contain a `## XMemo memory` section, add one short offer in the user's language, e.g. "Want XMemo used automatically in every session of this project? I can add a short XMemo section to AGENTS.md." Only if the user says yes: run `node scripts/xmemo-skill.mjs profile`, show the block, and write it only after the user confirms it. If the user says no, continue the original task and do not offer again (not in later sessions either, unless the user asks).
+3. When login finishes: run `node scripts/xmemo-skill.mjs auth status --verify` and tell the user in one line that XMemo is connected. In the same message, if the project does not already contain a `## XMemo memory` section, add one short offer in the user's language, e.g. "Want XMemo used automatically in every session of this project? I can add a short XMemo section to AGENTS.md." If the user says yes, follow [references/agent-profile.md](references/agent-profile.md); if no, continue the original task and do not offer again.
 4. On no: continue the original task without XMemo; do not ask again in the same session unless the user brings it up.
 5. Do not explain runtime selection, doctor details, secret-store setup, or other features during sign-in unless the user asks.
 
@@ -164,13 +164,6 @@ node scripts/xmemo-skill.mjs doctor
 
 Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `agent_instance_id`, and `agent_boundary` are attribution signals, not authorization boundaries.
 
-## Use XMemo in every session (optional)
-
-To have XMemo used automatically in every session, the project's agent instruction file (for example `AGENTS.md` or `CLAUDE.md`) can include an XMemo profile block:
-- **When to offer**: Offer once at the end of first-run sign-in (in the connection confirmation message), or whenever the user explicitly asks for every-session use. Never repeat the offer unprompted if the user says no or in subsequent sessions.
-- **If already configured**: If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user explicitly asks to update it.
-- **Consent before write**: Run `node scripts/xmemo-skill.mjs profile`, display the block to the user, and write or modify the file only after the user gives explicit confirmation in the same conversation.
-- **Single section**: Keep it as one section under its `## XMemo memory` heading so any future update replaces that section instead of duplicating it.
 
 ## Command Reference
 
@@ -221,6 +214,7 @@ When a command fails with "No XMemo credential found" (exit code 2) and no `XMEM
 Do not request that the user pastes a raw token into chat, logs, or repository files. Muse vault surrogates and OpenClaw sentinels are refused by `saveToken` / `auth add` and are never stored on disk or printed.
 The temporary sandbox is limited (as reported by the service: 100 items, 14 days inactivity, 30 days max lifetime); run `register` only with `--reason unattended` or `--reason declined`.
 Read [references/auth-setup.md](references/auth-setup.md) before running any auth, login, register or logout command other than the first-run login above.
+Read [references/agent-profile.md](references/agent-profile.md) before writing to AGENTS.md, CLAUDE.md, or any other agent instruction file.
 
 ## Exit Codes
 
@@ -235,6 +229,7 @@ When a command returns exit code 2 with "No XMemo credential found", follow Firs
 
 ## Operational References
 
+- [agent-profile.md](references/agent-profile.md): Agent instruction configuration (AGENTS.md / CLAUDE.md), session setup, profile command.
 - [auth-setup.md](references/auth-setup.md): Auth setup, secret stores, vault integration, token lifecycle.
 - [command-details.md](references/command-details.md): Direct memory operations (read, update, forget), REST endpoints, scopes.
 - [memory-operations.md](references/memory-operations.md): Core memory, knowledge context, continuity workflows.
