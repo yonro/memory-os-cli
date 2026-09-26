@@ -166,13 +166,11 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 
 ## Use XMemo in every session (optional)
 
-If the user wants XMemo used automatically in every session:
-1. Run `node scripts/xmemo-skill.mjs profile` to generate the recommended instruction block.
-2. Show the block to the user and offer to add it to the project's agent instruction file (for example `AGENTS.md` or `CLAUDE.md`).
-3. Add the block only after the user agrees.
-4. Keep it as one section under its `## XMemo memory` heading so a later update replaces that section instead of duplicating it.
-
-Do not suggest this unprompted during first-run sign-in.
+Writing the instruction block into a project file (for example `AGENTS.md` or `CLAUDE.md`) is a one-time, user-requested action:
+- Only when the user explicitly asks for XMemo to be used in every session; never during first-run sign-in and never proposed unprompted.
+- Never write or modify the file without showing the block and getting the user's yes in the same conversation.
+- If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user asks to update it.
+- Keep it as one section under its `## XMemo memory` heading so a later update replaces that section instead of duplicating it.
 
 ## Command Reference
 

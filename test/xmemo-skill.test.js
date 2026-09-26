@@ -538,6 +538,17 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /Do not explain runtime selection/);
 });
 
+test('SKILL.md specifies one-time opt-in profile rules for AGENTS.md / CLAUDE.md', async () => {
+  const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
+
+  assert.match(skill, /## Use XMemo in every session \(optional\)/);
+  assert.match(skill, /one-time, user-requested action/);
+  assert.match(skill, /Only when the user explicitly asks for XMemo to be used in every session/);
+  assert.match(skill, /never during first-run sign-in and never proposed unprompted/);
+  assert.match(skill, /Never write or modify the file without showing the block and getting the user's yes in the same conversation/);
+  assert.match(skill, /If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user asks to update it/);
+});
+
 test('Skill package includes references/auth-setup.md and references/command-details.md in builder output and release package manifest', async () => {
   const allFiles = await getSkillDirectoryFiles(path.join(repoRoot, 'skills', 'xmemo'));
   const relPaths = allFiles.map((f) => path.relative(path.join(repoRoot, 'skills', 'xmemo'), f).split(path.sep).join('/'));
