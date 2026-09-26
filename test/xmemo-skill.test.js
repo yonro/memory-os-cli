@@ -525,6 +525,17 @@ test('SKILL.md retains standalone first-run and daily-use command lines and exit
   assert.match(skill, /No XMemo credential found/);
 });
 
+test('SKILL.md specifies concise first-run sign-in sequence without extraneous explanations', async () => {
+  const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
+
+  assert.match(skill, /### First-run sign-in \(keep it short\)/);
+  assert.match(skill, /Ask once in the user's language/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
+  assert.match(skill, /do not ask again in the same session/);
+  assert.match(skill, /Do not explain runtime selection/);
+});
+
 test('Skill package includes references/auth-setup.md and references/command-details.md in builder output and release package manifest', async () => {
   const allFiles = await getSkillDirectoryFiles(path.join(repoRoot, 'skills', 'xmemo'));
   const relPaths = allFiles.map((f) => path.relative(path.join(repoRoot, 'skills', 'xmemo'), f).split(path.sep).join('/'));

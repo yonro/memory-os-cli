@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- Refine agent login guidance to request user confirmation once before initiating `login --allow-plaintext` when no credential is found, disclosing unencrypted local file storage and secret-store alternatives.
+- Rephrase credential path references across `SKILL.md` and references to cite the local credential file without hardcoding specific filenames.
+- Narrow trigger scope description in `SKILL.md` frontmatter with clear counter-examples (excluding codebase search, web search, or transient session notes).
+- Update recall workflow guidance in `SKILL.md` to emphasize non-trivial project context recall and data boundary awareness.
+- Rephrase safety rules in `SKILL.md` and `references/auth-setup.md` to avoid scanner false positives while maintaining strict prohibitions on credential pasting.
+
 ## 1.1.28
 
 ### Fixed
@@ -13,7 +21,7 @@
 ### Documentation
 
 - Restructure `SKILL.md` to prioritize core memory workflows (expanded session recall, what/when to remember, update vs. new memory, forget guards, restart continuity, TODOs, expenses, and diagnostics) while compacting the command reference table into a single unified syntax summary and moving detailed authentication setup to `references/auth-setup.md` and direct memory operations / REST details to `references/command-details.md` without dropping any facts.
-- Update `SKILL.md` First Successful Run and credential sections with Option B guidance: run `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately upon exit code 2 ("No XMemo credential found") without separate chat confirmation; inform the user that browser approval authorizes unencrypted token storage in `~/.xmemo` (0600) or they may configure `XMEMO_KEY` from a secret store; browser approval constitutes consent; forbid silent token pasting and enforce that `register` remains strictly restricted to unattended or declined scenarios.
+- Update `SKILL.md` First Successful Run and credential sections with device login guidance (version 1.1.28 briefly documented starting login without a chat confirmation; version 1.1.29 restores a single user confirmation prompt prior to starting login); inform the user that browser approval authorizes unencrypted token storage in the local credential file (0600 on POSIX) or they may configure `XMEMO_KEY` from a secret store; forbid silent token pasting and enforce that `register` remains strictly restricted to unattended or declined scenarios.
 - Document `expense-add` in `SKILL.md`, `references/ledger-operations.md`, and `references/runtime-operations.md` as a WRITE operation requiring `ledger:write` scope that creates a persistent ledger entry on the XMemo service, requiring explicit confirmation when agent-inferred (SQP-2 Medium).
 
 ## 1.1.27
