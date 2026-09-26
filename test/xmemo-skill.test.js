@@ -27,6 +27,7 @@ const packageJson = JSON.parse(await readFile(path.join(repoRoot, 'package.json'
 test('XMemo Skill describes standalone CLI-backed runtime selection', async () => {
   const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
   const memoryOps = (await readFile(path.join(repoRoot, 'skills/xmemo/references/memory-operations.md'), 'utf8')).replace(/\r\n/g, '\n');
+  const authSetup = (await readFile(path.join(repoRoot, 'skills/xmemo/references/auth-setup.md'), 'utf8')).replace(/\r\n/g, '\n');
 
   assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
   assert.match(skill, /Runtime Selection/);
@@ -53,10 +54,10 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /restore-state/);
   assert.match(skill, /restart-snapshot/);
   assert.match(skill, /restart-restore/);
-  assert.match(skill, /Hosted Discovery Boundary/);
-  assert.match(skill, /standalone_skill\.operations/);
-  assert.match(skill, /\/v1\/restart\/snapshot/);
-  assert.match(skill, /temporary-agent manifest/i);
+  assert.match(authSetup, /Hosted Discovery Boundary/);
+  assert.match(authSetup, /standalone_skill\.operations/);
+  assert.match(authSetup, /\/v1\/restart\/snapshot/);
+  assert.match(authSetup, /temporary-agent manifest/i);
   assert.match(skill, /create_restart_snapshot/);
   assert.match(skill, /restore_restart_snapshot/);
   assert.match(skill, /todo-add/);
@@ -65,7 +66,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /--timeout-ms/);
   assert.match(skill, /doctor --anonymous/);
   assert.match(skill, /--revoke-environment-token/);
-  assert.match(skill, /PowerShell/);
+  assert.match(authSetup, /PowerShell/);
   assert.match(skill, /register --reason/);
   assert.match(skill, /auth claim-confirm/);
   assert.match(skill, /auth claim-deny/);
@@ -74,6 +75,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /14 days/);
   assert.match(skill, /30 days/);
   assert.match(skill, /`forget`/);
+  assert.match(skill, /references\/auth-setup\.md/);
   assert.match(skill, /references\/memory-operations\.md/);
   assert.match(skill, /references\/ledger-operations\.md/);
   assert.match(skill, /references\/runtime-operations\.md/);
@@ -143,6 +145,7 @@ export function validateSkillPathAllowlist(relPath) {
     'CHANGELOG.md',
     'SKILL.md',
     'skill-card.md',
+    'references/auth-setup.md',
     'references/memory-operations.md',
     'references/ledger-operations.md',
     'references/runtime-operations.md',
@@ -172,6 +175,7 @@ export async function assertSkillDirectoryIntegrity(skillDir) {
   const requiredFiles = [
     'CHANGELOG.md',
     'SKILL.md',
+    'references/auth-setup.md',
     'references/memory-operations.md',
     'references/ledger-operations.md',
     'references/runtime-operations.md',
@@ -471,4 +475,55 @@ test('Part B: resolveCredentialSource and formatAuthErrorHint map credential sou
     formatAuthErrorHint({ storage: 'vault' }),
     'Credential source: vault. Run `node scripts/xmemo-skill.mjs auth status --verify` to check it.'
   );
+});
+
+test('SKILL.md retains standalone first-run and daily-use command lines and exit code table', async () => {
+  const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
+
+  // First run: doctor --anonymous, login --allow-plaintext, auth status --verify
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs doctor --anonymous/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
+
+  // Daily use: recall, search, recall-context, remember, read, update, forget,
+  // save-state, restore-state, restart-snapshot, restart-restore, todo-add,
+  // todo-list, todo-done, expense-add, ledger-list, ledger-summary, overview,
+  // activity, stats, doctor
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs recall --query/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs search --query/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs recall-context --query/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs remember --content/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs remember --content -/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs remember --file/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs read --id/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs update --id/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs forget --id/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs save-state --key/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs restore-state --key/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs restart-snapshot/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs restart-restore/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs todo-add --content/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs todo-list/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs todo-done --id/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs expense-add --item/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs ledger-list/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs ledger-summary/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs overview/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs activity/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs stats/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs doctor/);
+
+  // Failure handling and exit codes table
+  assert.match(skill, /\| Exit Code \| Classification \| Conditions & Semantics \| Next Action \|/);
+  assert.match(skill, /\| `0` \| Success \|/);
+  assert.match(skill, /\| `1` \| User Error \|/);
+  assert.match(skill, /\| `2` \| Auth Error \|/);
+  assert.match(skill, /\| `3` \| Server \/ Network Error \|/);
+  assert.match(skill, /No XMemo credential found/);
+});
+
+test('Skill package includes references/auth-setup.md in builder output and release package manifest', async () => {
+  const allFiles = await getSkillDirectoryFiles(path.join(repoRoot, 'skills', 'xmemo'));
+  const relPaths = allFiles.map((f) => path.relative(path.join(repoRoot, 'skills', 'xmemo'), f).split(path.sep).join('/'));
+  assert.ok(relPaths.includes('references/auth-setup.md'), 'skills/xmemo source directory must include references/auth-setup.md');
 });
