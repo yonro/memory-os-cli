@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.1.28
+
 ### Fixed
 
 - Prevent empty error messages (such as `Get activity failed: ` or `Login polling error: `) when Node throws `AggregateError` with an empty message string or network connection failures occur; introduce `describeError` helper in `error-text.mjs` to unpack nested errors, preserve error codes, and sanitize output against terminal control codes and credential leakage.
