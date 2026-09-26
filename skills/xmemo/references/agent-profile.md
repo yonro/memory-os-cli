@@ -34,7 +34,7 @@ This command has zero side effects:
 
 ### Block Content and Delimiters
 
-The generated block provides lightweight, scanner-safe instructions for coding agents:
+The generated block provides short instructions for coding agents:
 1. `## XMemo memory` heading marking the start of the section.
 2. Note to run commands from the XMemo Skill folder.
 3. Core recall and persistence patterns:
@@ -44,8 +44,6 @@ The generated block provides lightweight, scanner-safe instructions for coding a
    - Keeping secrets, tokens, and sensitive personal data out of memories.
    - Guided device sign-in when no credential exists.
 4. `_End of the XMemo memory section._` visible line marking the section boundary.
-
-No HTML comments are used in the generated block or in documentation, preventing security scanners from flagging hidden instructions.
 
 ## Example Workflow Conversation
 

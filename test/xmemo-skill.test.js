@@ -733,3 +733,57 @@ test('profile command prints recommended agent instruction block with visible ma
   }
 });
 
+test('skills/xmemo markdown documentation contains zero internal or scanner-oriented wording', async () => {
+  const skillsDir = path.join(repoRoot, 'skills', 'xmemo');
+
+  async function getMarkdownFiles(dir) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const files = [];
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...(await getMarkdownFiles(fullPath)));
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        files.push(fullPath);
+      }
+    }
+    return files;
+  }
+
+  const mdFiles = await getMarkdownFiles(skillsDir);
+  assert.equal(mdFiles.length >= 9, true, `Expected at least 9 markdown files in ${skillsDir}`);
+
+  const prohibitedPatterns = [
+    { pattern: /\bscanner[s]?\b/i, label: 'scanner' },
+    { pattern: /\bfalse\s+positive[s]?\b/i, label: 'false positive' },
+    { pattern: /\bskillspector\b/i, label: 'SkillSpector' },
+    { pattern: /\bclawscan\b/i, label: 'ClawScan' },
+    { pattern: /\boption\s+[ab]\b/i, label: 'Option A/B' },
+    { pattern: /\boption\s*a\s*\/\s*b\b/i, label: 'Option A/B' },
+    { pattern: /\breviewer[s]?\b/i, label: 'reviewer' },
+    { pattern: /\bhuman\s+decision[s]?\b/i, label: 'human decision' },
+    { pattern: /\bhidden\s+instruction[s]?\b/i, label: 'hidden instruction' },
+  ];
+
+  const violations = [];
+  for (const filePath of mdFiles) {
+    const content = await readFile(filePath, 'utf8');
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const { pattern, label } of prohibitedPatterns) {
+        if (pattern.test(line)) {
+          violations.push({
+            file: path.relative(repoRoot, filePath),
+            line: i + 1,
+            matched: label,
+            text: line.trim(),
+          });
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(violations, [], `Prohibited wording found in skill markdown files: ${JSON.stringify(violations, null, 2)}`);
+});
+
