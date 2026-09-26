@@ -19,12 +19,16 @@ confirm the service and choose an authentication path in a few minutes:
    ```
 
 2. For account-backed memory, prefer an `XMEMO_KEY` supplied by a managed
-   secret store. Otherwise, start the formal device-login flow only when you
-   explicitly accept local plaintext credential storage:
+   secret store. When a command fails with "No XMemo credential found" (exit code 2)
+   and no `XMEMO_KEY` or secret store is configured, the agent runs
+   `node scripts/xmemo-skill.mjs login --allow-plaintext` right away without a separate
+   chat confirmation, and presents the verification URL and one-time code it prints:
 
    ```text
    node scripts/xmemo-skill.mjs login --allow-plaintext
    ```
+
+   In the same message the agent must inform the user, in one sentence, that approving the code in the browser issues a token stored unencrypted in `~/.xmemo` (0600 on POSIX), and that they can instead provide `XMEMO_KEY` from a secret store; the browser approval is the user's consent.
 
 3. Confirm the credential before running memory operations:
 
@@ -83,7 +87,7 @@ Credential lookup follows a strict priority order:
    When connected, `node scripts/xmemo-skill.mjs auth status` reports `Credential Source: muse-vault`. Surrogates are rejected by `saveToken` / `auth add`, redacted in responses, and never stored on disk. `logout` preserves vault credentials and instructs the user to disconnect in Meta Muse.
 3. **Local user credential file**: Used when neither `XMEMO_KEY` nor a Muse Vault surrogate is present.
 
-If no credential is available, use formal account login (recommended):
+If no credential is available, formal account login is the recommended path. When an XMemo command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, the agent runs `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately without waiting for a separate chat confirmation, and presents the verification URL and one-time code to the user. In the same message, the agent must inform the user, in one sentence, that approving the code in the browser issues a token stored unencrypted in `~/.xmemo` (permissions 0600 on POSIX), and that they can instead provide `XMEMO_KEY` from a secret store; browser approval constitutes the user's consent.
 
 ```text
 node scripts/xmemo-skill.mjs login --allow-plaintext
@@ -95,12 +99,11 @@ code; approve that code in the browser account session to issue the Skill's
 scoped `skill_token`.
 
 The standalone zero-dependency script has no cross-platform operating-system
-keychain integration. `--allow-plaintext` is therefore an explicit decision to
-store the issued token unencrypted in the current user's XMemo directory so
+keychain integration. `--allow-plaintext` stores the issued token unencrypted in the current user's XMemo directory (`~/.xmemo/skill-credentials.json`) so
 later commands can use it. The script prints the exact path, restricts POSIX
-permissions where supported, never prints the token, and never writes it into
+permissions where supported (0600), never prints the token, and never writes it into
 the project. Prefer `XMEMO_KEY` or a managed secret store when plaintext local
-storage is not acceptable.
+storage is not acceptable. Never run `register` (temporary sandbox) unless no human can complete login (`unattended`) or the user explicitly declined registration; never ask the user to paste a token into chat.
 
 Formal account tokens issued by the service can expire or be revoked remotely.
 The local user credential file stores no access-token expiry information (the
@@ -168,7 +171,10 @@ Collect credentials only through XMEMO_KEY or the device login flow; do not requ
   needs the broader continuity pack: active state, recent events, TODOs, and
   pending decisions.
 - **Track tasks and expenses.** Record action items with `todo-add` / `todo-list`
-  / `todo-done`, and track purchases or income with `expense-add`.
+  / `todo-done`. `expense-add` is a **WRITE** operation that sends transaction details to
+  the XMemo service and records purchases or income in the user's financial ledger (requires
+  `ledger:write` scope). If the user explicitly asked to record the transaction, run it;
+  if the agent inferred or suggested it, confirm item, amount, and currency first.
 - **Audit ledger and inspect diagnostics.** Query personal transactions with
   `ledger-list` / `ledger-summary` (read-only), and inspect account metrics via
   `overview`, `activity`, and `stats`.
@@ -295,8 +301,14 @@ remain limited to `remember`, `recall`, and `search`.
   under `--json`. Missing records return 404 `not_found`, and 401/403 errors are
   preserved without downgrade (e.g. 403 `delete scope required`).
 
-### Ledger Bookkeeping (`ledger-list`, `ledger-summary`)
+### Ledger Bookkeeping (`ledger-list`, `ledger-summary`, `expense-add`)
 
+- `expense-add` is a **WRITE** operation backed by `POST /v1/skill/operations`
+  (`operation: "expense-add"`, requiring `ledger:write` scope). It sends transaction
+  details to the XMemo service to create a persistent ledger record and prints the
+  server-assigned transaction ID. If the user explicitly requested recording the
+  transaction, run it directly; if the agent suggested or inferred it, confirm
+  item, amount, and currency with the user before execution.
 - `ledger-list` is a strictly read-only query backed by
   `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring
   `ledger:read` scope). It retrieves financial and expense transactions without

@@ -22,6 +22,7 @@ import {
   extractList,
   extractId,
   warnedCredentialOrigins,
+  describeError,
 } from './api.mjs';
 
 import {
@@ -71,7 +72,7 @@ export async function getStoredCredential() {
   } catch (err) {
     // Silently fall through when the vault socket is unavailable or no key is stored.
     if (!(err instanceof VaultKeyError && (err.code === 'unavailable' || err.code === 'missing'))) {
-      console.error(`⚠️ Meta Muse vault error: ${sanitizeTerminalText(err.message)}`);
+      console.error(`⚠️ Meta Muse vault error: ${describeError(err)}`);
     }
   }
   try {

@@ -8,6 +8,7 @@ import {
   handleRestError,
   safeJson,
   sanitizeTerminalText,
+  describeError,
 } from '../lib/api.mjs';
 
 export async function handleLedger(ctx) {
@@ -95,7 +96,7 @@ export async function handleLedger(ctx) {
       });
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('List ledger transactions failed:', e.message);
+      console.error('List ledger transactions failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -168,7 +169,7 @@ export async function handleLedger(ctx) {
       console.log(`XMemo ledger summary for ${sanitizeTerminalText(month)}: ${sanitizeTerminalText(total)} ${sanitizeTerminalText(curr)} across ${count} transaction${count === 1 ? '' : 's'}.`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Get ledger monthly summary failed:', e.message);
+      console.error('Get ledger monthly summary failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }

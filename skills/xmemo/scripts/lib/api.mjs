@@ -12,6 +12,21 @@ import {
 } from './core.mjs';
 import { configureEgressRequest, sanitizeSensitiveValue } from './openclaw-egress.mjs';
 import { printAuthErrorHint } from './auth-hint.mjs';
+import {
+  sanitizeTerminalText,
+  describeError,
+  formatMemoryContent,
+  formatDuration,
+  extractRecord,
+} from './error-text.mjs';
+
+export {
+  sanitizeTerminalText,
+  describeError,
+  formatMemoryContent,
+  formatDuration,
+  extractRecord,
+};
 
 export const warnedCredentialOrigins = new Set();
 
@@ -33,25 +48,6 @@ export function redactSensitiveResponse(value) {
 
 export function safeJson(value) {
   return JSON.stringify(redactSensitiveResponse(value));
-}
-
-export function sanitizeTerminalText(value) {
-  return String(value ?? '')
-    .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
-}
-
-export function formatMemoryContent(content, compact) {
-  const value = sanitizeTerminalText(content);
-  const rendered = compact ? value.replace(/\s+/g, ' ').trim() : value;
-  const limit = compact ? 280 : 2_000;
-  return rendered.length > limit ? `${rendered.slice(0, limit)}… (truncated)` : rendered;
-}
-
-export function formatDuration(seconds) {
-  if (seconds % 86_400 === 0) return `${seconds / 86_400} days`;
-  if (seconds % 3_600 === 0) return `${seconds / 3_600} hours`;
-  return `${seconds} seconds`;
 }
 
 export function parseJsonResponse(res, context) {
@@ -89,8 +85,8 @@ export function extractId(result) {
 
 export function apiErrorMessage(data, fallback = 'Operation failed') {
   const candidate = data?.error?.message || data?.error_description || data?.detail || data?.error;
-  if (typeof candidate === 'string') return sanitizeTerminalText(candidate);
-  if (candidate !== undefined && candidate !== null) return safeJson(candidate);
+  if (typeof candidate === 'string' && candidate.trim()) return sanitizeTerminalText(candidate.trim());
+  if (candidate !== undefined && candidate !== null && String(candidate).trim()) return safeJson(candidate);
   return fallback;
 }
 
@@ -142,15 +138,16 @@ export function outputRestError(code, message, options, dataOrRequestId, explici
   const reqId = typeof dataOrRequestId === 'string'
     ? sanitizeTerminalText(dataOrRequestId.trim())
     : extractRequestId(dataOrRequestId);
+  const safeMessage = (typeof message === 'string' && message.trim()) ? sanitizeTerminalText(message.trim()) : describeError(message);
   if (options && options.json) {
-    const errorObj = { code, message };
+    const errorObj = { code, message: safeMessage };
     if (reqId) {
       errorObj.request_id = reqId;
     }
     console.log(safeJson({ ok: false, error: errorObj }));
   } else {
     const reqSuffix = reqId ? ` (request_id: ${reqId})` : '';
-    console.error(`Error: ${message} (Code: ${code})${reqSuffix}`);
+    console.error(`Error: ${safeMessage} (Code: ${code})${reqSuffix}`);
   }
   const resolvedExitCode = explicitExitCode !== null
     ? explicitExitCode
@@ -175,11 +172,15 @@ export function outputJsonFailure(data, statusCode) {
   let payload;
   if (data && typeof data === 'object' && data.ok === false && data.error && typeof data.error === 'object') {
     const errorObj = { ...data.error };
+    if (!errorObj.message || !String(errorObj.message).trim()) {
+      errorObj.message = `HTTP ${statusCode}`;
+    }
     if (reqId && !errorObj.request_id) errorObj.request_id = reqId;
     payload = { ...data, ok: false, error: errorObj };
   } else {
     const code = data?.error?.code || (Number(statusCode) === 400 ? 'invalid_request' : `HTTP ${statusCode}`);
-    const errorObj = { code, message: apiErrorMessage(data) };
+    const message = apiErrorMessage(data, `HTTP ${statusCode}`);
+    const errorObj = { code, message };
     if (reqId) errorObj.request_id = reqId;
     payload = { ok: false, error: errorObj };
   }

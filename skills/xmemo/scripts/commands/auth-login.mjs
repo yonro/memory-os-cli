@@ -13,7 +13,7 @@ import {
 import {
   makeHttpRequest, parseJsonResponse, extractRequestId, apiErrorMessage, safeJson,
   extractExpiresInSeconds, formatRemainingValidity, sanitizeTerminalText,
-  formatDuration, fetchTemporaryLimits,
+  formatDuration, fetchTemporaryLimits, describeError,
 } from '../lib/api.mjs';
 
 export async function handleAuthLogin(ctx) {
@@ -82,7 +82,7 @@ export async function handleAuthLogin(ctx) {
               console.log(`✅ Authorization successful. Token stored in the explicitly approved user credential file: ${credentialsPath}\nToken value was not printed. Project files were not modified.`);
               process.exit(EXIT_CODE.SUCCESS);
             } catch (err) {
-              console.error('Failed to save credentials file:', sanitizeTerminalText(err.message));
+              console.error('Failed to save credentials file:', describeError(err));
               process.exit(EXIT_CODE.USER_ERROR);
             }
           } else {
@@ -94,13 +94,13 @@ export async function handleAuthLogin(ctx) {
             console.error('Login failed: the device authorization window expired after repeated polling errors.');
             process.exit(EXIT_CODE.AUTH_ERROR);
           }
-          console.error('Login polling error:', sanitizeTerminalText(e.message));
+          console.error('Login polling error:', describeError(e));
           setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
         }
       };
       setTimeout(poll, Math.min(pollInterval, expiresInMs));
     } catch (e) {
-      console.error('Login error:', sanitizeTerminalText(e.message));
+      console.error('Login error:', describeError(e));
       process.exit(exitCodeForError(e));
     }
     return;
@@ -116,7 +116,7 @@ export async function handleAuthLogin(ctx) {
     try {
       requirePlaintextStorageConsent(options, 'Temporary registration');
     } catch (e) {
-      console.error(`Temporary registration refused: ${e.message}`);
+      console.error(`Temporary registration refused: ${describeError(e)}`);
       process.exit(EXIT_CODE.USER_ERROR);
     }
     if (await getStoredToken()) {
@@ -154,7 +154,7 @@ export async function handleAuthLogin(ctx) {
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Temporary registration failed:', e.message);
+      console.error('Temporary registration failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -198,7 +198,7 @@ export async function handleAuthLogin(ctx) {
       remoteRevoked = revokeRes.statusCode >= 200 && revokeRes.statusCode < 300;
       if (!remoteRevoked) revokeError = `HTTP ${revokeRes.statusCode}`;
     } catch (error) {
-      revokeError = sanitizeTerminalText(error.message);
+      revokeError = describeError(error);
     }
 
     let localFileRemoved = false;

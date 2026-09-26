@@ -8,6 +8,7 @@ import {
   handleRestError,
   safeJson,
   sanitizeTerminalText,
+  describeError,
 } from '../lib/api.mjs';
 
 export async function handleAccount(ctx) {
@@ -47,7 +48,7 @@ export async function handleAccount(ctx) {
       console.log(`- Tokens (30d): ${result.tokens_30d ?? 0}`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Get overview failed:', e.message);
+      console.error('Get overview failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -102,7 +103,7 @@ export async function handleAccount(ctx) {
       });
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Get activity failed:', e.message);
+      console.error('Get activity failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -187,7 +188,7 @@ export async function handleAccount(ctx) {
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Get memory stats failed:', e.message);
+      console.error('Get memory stats failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }

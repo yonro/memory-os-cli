@@ -16,6 +16,7 @@ import {
   safeJson,
   sanitizeTerminalText,
   formatMemoryContent,
+  describeError,
 } from '../lib/api.mjs';
 
 import {
@@ -67,7 +68,8 @@ function discoveryFailureCode(error) {
 
 async function fetchDoctorDiscovery(baseUrl, timeoutMs) {
   const discoveryUrl = new URL('/.well-known/agent-discovery.json', baseUrl).toString();
-  try {
+
+  const attempt = async () => {
     const res = await makeHttpRequest(baseUrl, '/.well-known/agent-discovery.json', 'GET', null, {}, timeoutMs);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       return {
@@ -75,15 +77,27 @@ async function fetchDoctorDiscovery(baseUrl, timeoutMs) {
         url: discoveryUrl,
         errorCode: 'http_error',
         httpStatus: res.statusCode ?? null,
+        errorDetail: discoveryString(`HTTP ${res.statusCode}`),
       };
     }
     return summarizeDoctorDiscovery(parseJsonResponse(res, 'Doctor discovery'), discoveryUrl);
+  };
+
+  try {
+    return await attempt();
   } catch (error) {
-    return {
-      status: 'unavailable',
-      url: discoveryUrl,
-      errorCode: discoveryFailureCode(error),
-    };
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return await attempt();
+    } catch (retryError) {
+      const finalError = retryError || error;
+      return {
+        status: 'unavailable',
+        url: discoveryUrl,
+        errorCode: discoveryFailureCode(finalError),
+        errorDetail: discoveryString(describeError(finalError)),
+      };
+    }
   }
 }
 
@@ -149,7 +163,7 @@ export async function handleOps(ctx) {
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Doctor health check failed:', e.message);
+      console.error('Doctor health check failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -237,7 +251,7 @@ export async function handleOps(ctx) {
     }
     process.exit(EXIT_CODE.SUCCESS);
   } catch (e) {
-    console.error('Request failed:', sanitizeTerminalText(e.message));
+    console.error('Request failed:', describeError(e));
     process.exit(exitCodeForError(e));
   }
 }
