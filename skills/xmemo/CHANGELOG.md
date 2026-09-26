@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.31
+
+### Added
+
+- Add a print-only `profile` command and an optional, consent-gated offer at the end of first-run sign-in to add a short XMemo section to the project's agent instruction file.
+
 ## 1.1.30
 
 ### Fixed
