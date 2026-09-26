@@ -2,8 +2,11 @@
 
 ## [Unreleased]
 
+## 1.1.29
+
 ### Documentation
 
+- Add concise first-run sign-in sequence to `SKILL.md` under First Successful Run, providing a 5-point streamlined workflow that prompts once for confirmation, displays only the verification URL and code on approval, verifies connectivity via `auth status --verify`, reports in one line, and continues the user's task without distracting feature lectures.
 - Refine agent login guidance to request user confirmation once before initiating `login --allow-plaintext` when no credential is found, disclosing unencrypted local file storage and secret-store alternatives.
 - Rephrase credential path references across `SKILL.md` and references to cite the local credential file without hardcoding specific filenames.
 - Narrow trigger scope description in `SKILL.md` frontmatter with clear counter-examples (excluding codebase search, web search, or transient session notes).
