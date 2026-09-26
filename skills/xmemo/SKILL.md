@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, or diagnose XMemo when MCP tools are unavailable.
+description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
 ---
 
 # XMemo Memory
@@ -16,11 +16,10 @@ After ClawHub installs this Skill, run these commands from the Skill root to ver
    node scripts/xmemo-skill.mjs doctor --anonymous
    ```
 2. For account-backed memory, prefer an `XMEMO_KEY` supplied by a managed
-   secret store. When a command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, the agent runs `node scripts/xmemo-skill.mjs login --allow-plaintext` right away without a separate chat confirmation, and presents the verification URL and one-time code:
+   secret store. When a command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, ask the user once whether to start XMemo login, stating that the issued token is stored unencrypted in the local credential file (its path is printed by `auth status`, permissions 0600 on POSIX) and that `XMEMO_KEY` from a secret store is the alternative; after the user agrees, run `login --allow-plaintext` and present the verification URL and code:
    ```text
    node scripts/xmemo-skill.mjs login --allow-plaintext
    ```
-   In the same message the agent must inform the user, in one sentence, that approving the code in the browser issues a token stored unencrypted in `~/.xmemo/skill-credentials.json` (0600 on POSIX), and that they can instead provide `XMEMO_KEY` from a secret store; browser approval constitutes the user's consent.
 3. Confirm the credential before running memory operations:
    ```text
    node scripts/xmemo-skill.mjs auth status --verify
@@ -38,7 +37,7 @@ Two parallel integration paths:
 
 ### Session Start & Recall (Before Acting)
 
-Always recall existing context before making design decisions, refactoring, or answering user questions about the project:
+Recall relevant context before non-trivial work on a project where XMemo is in use; queries are sent to xmemo.dev, so keep secrets and sensitive identifiers out of query text:
 
 ```text
 node scripts/xmemo-skill.mjs recall --query "<topic or subsystem>" [--limit <n>] [--compact]
@@ -200,10 +199,10 @@ Credential lookup follows a strict priority order:
 1. `XMEMO_KEY` environment variable: Always highest priority (never stored on disk; preferred from a managed secret store).
 2. Meta Muse Secure Vault (`muse-vault`): Ephemeral surrogates requested over auth daemon socket; plaintext key never exposed.
 3. OpenClaw Secret Egress (`openclaw-secret`): Egress proxy injects token strictly for `https://xmemo.dev` via Gateway store.
-4. Local user credential file (`~/.xmemo/skill-credentials.json`): Used when no environment variable or vault surrogate is present.
+4. Local user credential file (its path is printed by `auth status`): Used when no environment variable or vault surrogate is present.
 
-When a command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, the agent runs `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately without waiting for a separate chat confirmation, presents the verification URL and code, and notes plaintext storage / `XMEMO_KEY` alternative. Browser approval constitutes consent.
-Never ask the user to paste raw tokens into chat, logs, or repository files. Muse vault surrogates and OpenClaw sentinels are refused by `saveToken` / `auth add` and are never stored on disk or printed.
+When a command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, ask the user once whether to start XMemo login, stating that the issued token is stored unencrypted in the local credential file and that `XMEMO_KEY` from a secret store is the alternative; after the user agrees, run `login --allow-plaintext` and present the verification URL and code.
+Do not request that the user pastes a raw token into chat, logs, or repository files. Muse vault surrogates and OpenClaw sentinels are refused by `saveToken` / `auth add` and are never stored on disk or printed.
 The temporary sandbox is limited (as reported by the service: 100 items, 14 days inactivity, 30 days max lifetime); run `register` only with `--reason unattended` or `--reason declined`.
 Read [references/auth-setup.md](references/auth-setup.md) before running any auth, login, register or logout command other than the first-run login above.
 

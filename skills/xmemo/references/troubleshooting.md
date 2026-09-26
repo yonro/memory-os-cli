@@ -58,7 +58,7 @@ maximum from registration. Do not share the bind URL publicly. If the user
 rejects a pending bind, run `node scripts/xmemo-skill.mjs auth claim-deny` to
 reject it server-side and clear the local pending confirmation value.
 
-New users should create or sign in to an XMemo account at `https://xmemo.dev`
+New users can use an XMemo account at `https://xmemo.dev`
 before approving the device-login code. The browser page must show the same
 one-time code printed by the Skill script.
 
@@ -137,7 +137,7 @@ If this fails:
 
 ## Security reminders
 
-- Never commit `skill-credentials.json` or any file containing a token.
+- Never commit the local credential file or any file containing a token.
 - Never pass `--token`, `--api-key`, `--bearer`, or `--xmemo-key` to the Skill script.
 - Prefer `login` for interactive authentication.
 - Prefer `XMEMO_KEY` or a managed secret store over plaintext file storage.

@@ -49,23 +49,23 @@ Credential lookup follows a strict priority order:
 
 ## Device Login & Plaintext Storage
 
-If no credential is available, formal account login is the recommended path. When an XMemo command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, the agent runs `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately without waiting for a separate chat confirmation, and presents the verification URL and one-time code to the user. In the same message, the agent must inform the user, in one sentence, that approving the code in the browser issues a token stored unencrypted in `~/.xmemo` (permissions 0600 on POSIX), and that they can instead provide `XMEMO_KEY` from a secret store; browser approval constitutes the user's consent.
+If no credential is available, formal account login is the recommended path. When an XMemo command fails with "No XMemo credential found" (exit code 2) and no `XMEMO_KEY` or secret store is configured, ask the user once whether to start XMemo login, stating that the issued token is stored unencrypted in the local credential file (its path is printed by `auth status`, permissions 0600 on POSIX) and that `XMEMO_KEY` from a secret store is the alternative; after the user agrees, run `node scripts/xmemo-skill.mjs login --allow-plaintext` and present the verification URL and one-time code to the user.
 
 ```text
 node scripts/xmemo-skill.mjs login --allow-plaintext
 ```
 
-New users should create or sign in to an XMemo account at `https://xmemo.dev`.
+New users can use an XMemo account at `https://xmemo.dev`.
 The `login` command opens the hosted device-login page and shows a one-time
 code; approve that code in the browser account session to issue the Skill's
 scoped `skill_token`.
 
 The standalone zero-dependency script has no cross-platform operating-system
-keychain integration. `--allow-plaintext` stores the issued token unencrypted in the current user's XMemo directory (`~/.xmemo/skill-credentials.json`) so
+keychain integration. `--allow-plaintext` stores the issued token unencrypted in the local credential file (its path is printed by `auth status`) so
 later commands can use it. The script prints the exact path, restricts POSIX
 permissions where supported (0600), never prints the token, and never writes it into
 the project. Prefer `XMEMO_KEY` or a managed secret store when plaintext local
-storage is not acceptable. Never run `register` (temporary sandbox) unless no human can complete login (`unattended`) or the user explicitly declined registration; never ask the user to paste a token into chat.
+storage is not acceptable. Never run `register` (temporary sandbox) unless no human can complete login (`unattended`) or the user explicitly declined registration; do not request that the user pastes a raw token into chat, logs, or files.
 
 ## Token Expiry & Revocation Symptoms
 
