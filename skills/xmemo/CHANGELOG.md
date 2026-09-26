@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.30
+
+### Fixed
+
+- Response bodies are decoded after the final chunk, so multi-byte text such as Chinese is no longer corrupted across TCP chunk boundaries.
+
 ## 1.1.29
 
 ### Documentation
