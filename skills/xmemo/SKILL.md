@@ -106,7 +106,7 @@ To soft-delete an obsolete memory or void a financial transaction, run `forget` 
 node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "<explanation>"]
 ```
 
-**Accidental Deletion Guard**: Omitting `--confirm` immediately prints the target ID and exits with code 1 with **zero network requests**. Requires an owner-scoped API key and a delete-capable scope (`memory:delete` or `memory:write`). Accepts memory UUIDs, logical memory paths, or transaction IDs from `ledger-list`.
+**Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately prints the target ID and exits with code 1 with **zero network requests**. Requires an owner-scoped API key and a delete-capable scope such as `memory:delete` or `memory:write` (see [references/command-details.md](references/command-details.md) for the full list). Accepts memory UUIDs, logical memory paths, or transaction IDs from `ledger-list`.
 
 ### Task Continuity & Restart Snapshots
 
@@ -243,15 +243,15 @@ When a command returns exit code 2 with "No XMemo credential found", follow Firs
 
 ## Never Save
 
-- Secrets, tokens, API keys, OAuth codes, cookies, session IDs, or private keys. Restart `session_id` values must be non-secret labels.
+- Secrets, tokens, API keys, OAuth codes, cookies, auth session IDs, or private keys. Optional restart `session_id` values must be non-secret correlation labels, never credentials.
 - Private customer data or sensitive personal data unless explicitly requested under supported policy.
 - Temporary debugging output that will not help future work.
 - Large code blocks; link to files, commits, or concise summaries instead.
 
 ## Safety
 
-- Keep XMemo credentials private. Never paste tokens into prompts, screenshots, repos, issues, or logs.
-- Prefer `XMEMO_KEY` or a managed secret store. `--allow-plaintext` allows processes running as the same operating-system user to read the local credential file.
-- Default service is `https://xmemo.dev`. Custom origins must use HTTPS; plain HTTP is localhost-only.
-- Use synthetic data for demos.
+- Keep XMemo credentials private. Never paste tokens into prompts, screenshots, repos, issue comments, or shared logs.
+- Prefer `XMEMO_KEY` or a managed secret store. Use `--allow-plaintext` only after accepting that processes running as the same operating-system user may read the local credential file.
+- Default service is `https://xmemo.dev`. Custom HTTPS origins receive credentials; use only trusted hosts. Plain HTTP is rejected except for localhost development.
+- Use synthetic data for demos. Do not claim uncertified integrations.
 - Do not simulate a successful memory read or write when no runtime path is available. Report the exact failing check and the next repair command.
