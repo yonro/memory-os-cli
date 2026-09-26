@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Prevent empty error messages (such as `Get activity failed: ` or `Login polling error: `) when Node throws `AggregateError` with an empty message string or network connection failures occur; introduce `describeError` helper in `error-text.mjs` to unpack nested errors, preserve error codes, and sanitize output against terminal control codes and credential leakage.
+- Enhance `doctor` discovery diagnostics: include `errorDetail` (bounded to 200 characters) in `clientDiagnostics.discovery` when discovery is unavailable while preserving `status: "unavailable"` and `errorCode`, and add a single 500ms retry on non-HTTP discovery network failures before marking discovery unavailable.
+- Ensure API error extractors (`apiErrorMessage`, `outputRestError`, `outputJsonFailure`) never emit blank error text.
+
+### Documentation
+
+- Update `SKILL.md` First Successful Run and credential sections with Option B guidance: run `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately upon exit code 2 ("No XMemo credential found") without separate chat confirmation; inform the user that browser approval authorizes unencrypted token storage in `~/.xmemo` (0600) or they may configure `XMEMO_KEY` from a secret store; browser approval constitutes consent; forbid silent token pasting and enforce that `register` remains strictly restricted to unattended or declined scenarios.
+- Document `expense-add` in `SKILL.md`, `references/ledger-operations.md`, and `references/runtime-operations.md` as a WRITE operation requiring `ledger:write` or `memory:write` scope and mandatory explicit user confirmation before execution (SQP-2 Medium).
+
 ## 1.1.27
 
 ### Fixed

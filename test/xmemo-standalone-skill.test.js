@@ -18,6 +18,7 @@ import {
   exitCodeForError,
   resolveCommandInputs,
 } from '../skills/xmemo/scripts/xmemo-skill.mjs';
+import { describeError } from '../skills/xmemo/scripts/lib/error-text.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills/xmemo/scripts/xmemo-skill.mjs');
@@ -430,23 +431,25 @@ test('skill script accepts wrapped recall, search, and TODO list payloads', asyn
   const baseUrl = await testServer.start();
   const env = { XMEMO_KEY: 'secret-token-key' };
 
-  testServer.setResponse({ ok: true, result: { results: [{ id: 'recall_1', path: 'projects/test', content: 'A'.repeat(500) }], coverage: { matched: 1 } } });
-  const recallRes = await runScript(['recall', '--query', 'test', '--compact'], { baseUrl, env });
-  assert.equal(recallRes.code, 0);
-  assert.match(recallRes.stdout, /ID: recall_1/);
-  assert.match(recallRes.stdout, /truncated/);
+  try {
+    testServer.setResponse({ ok: true, result: { results: [{ id: 'recall_1', path: 'projects/test', content: 'A'.repeat(500) }], coverage: { matched: 1 } } });
+    const recallRes = await runScript(['recall', '--query', 'test', '--compact'], { baseUrl, env });
+    assert.equal(recallRes.code, 0);
+    assert.match(recallRes.stdout, /ID: recall_1/);
+    assert.match(recallRes.stdout, /truncated/);
 
-  testServer.setResponse({ ok: true, result: { results: [{ id: 'search_1', path: 'projects/test', content: 'result' }] } });
-  const searchRes = await runScript(['search', '--query', 'test'], { baseUrl, env });
-  assert.equal(searchRes.code, 0);
-  assert.match(searchRes.stdout, /ID: search_1/);
+    testServer.setResponse({ ok: true, result: { results: [{ id: 'search_1', path: 'projects/test', content: 'result' }] } });
+    const searchRes = await runScript(['search', '--query', 'test'], { baseUrl, env });
+    assert.equal(searchRes.code, 0);
+    assert.match(searchRes.stdout, /ID: search_1/);
 
-  testServer.setResponse({ ok: true, result: { todos: [{ id: 'todo_1', content: 'ship the fix', status: 'open' }] } });
-  const todoListRes = await runScript(['todo-list'], { baseUrl, env });
-  assert.equal(todoListRes.code, 0);
-  assert.match(todoListRes.stdout, /ship the fix \(ID: todo_1\)/);
-
-  await testServer.stop();
+    testServer.setResponse({ ok: true, result: { todos: [{ id: 'todo_1', content: 'ship the fix', status: 'open' }] } });
+    const todoListRes = await runScript(['todo-list'], { baseUrl, env });
+    assert.equal(todoListRes.code, 0);
+    assert.match(todoListRes.stdout, /ship the fix \(ID: todo_1\)/);
+  } finally {
+    await testServer.stop();
+  }
 });
 
 test('skill script renders reminders array from real server todo-list payload in terminal mode', async () => {
@@ -454,30 +457,32 @@ test('skill script renders reminders array from real server todo-list payload in
   const baseUrl = await testServer.start();
   const env = { XMEMO_KEY: 'secret-token-key' };
 
-  testServer.setResponse({
-    ok: true,
-    operation: 'todo-list',
-    result: {
-      reminders: [
-        { id: 'rem_001', content: 'Review ClawHub release checklist', status: 'open' },
-        { id: 'rem_002', content: 'Verify namespace assertion gate', status: 'done' },
-      ],
-    },
-  });
+  try {
+    testServer.setResponse({
+      ok: true,
+      operation: 'todo-list',
+      result: {
+        reminders: [
+          { id: 'rem_001', content: 'Review ClawHub release checklist', status: 'open' },
+          { id: 'rem_002', content: 'Verify namespace assertion gate', status: 'done' },
+        ],
+      },
+    });
 
-  const todoListRes = await runScript(['todo-list'], { baseUrl, env });
-  assert.equal(todoListRes.code, 0);
-  assert.doesNotMatch(todoListRes.stdout, /No TODOs found\./);
-  assert.match(todoListRes.stdout, /- \[ \] Review ClawHub release checklist \(ID: rem_001\)/);
-  assert.match(todoListRes.stdout, /- \[x\] Verify namespace assertion gate \(ID: rem_002\)/);
+    const todoListRes = await runScript(['todo-list'], { baseUrl, env });
+    assert.equal(todoListRes.code, 0);
+    assert.doesNotMatch(todoListRes.stdout, /No TODOs found\./);
+    assert.match(todoListRes.stdout, /- \[ \] Review ClawHub release checklist \(ID: rem_001\)/);
+    assert.match(todoListRes.stdout, /- \[x\] Verify namespace assertion gate \(ID: rem_002\)/);
 
-  const jsonRes = await runScript(['todo-list', '--json'], { baseUrl, env });
-  assert.equal(jsonRes.code, 0);
-  const jsonOutput = JSON.parse(jsonRes.stdout);
-  assert.equal(jsonOutput.ok, true);
-  assert.equal(jsonOutput.result.reminders.length, 2);
-
-  await testServer.stop();
+    const jsonRes = await runScript(['todo-list', '--json'], { baseUrl, env });
+    assert.equal(jsonRes.code, 0);
+    const jsonOutput = JSON.parse(jsonRes.stdout);
+    assert.equal(jsonOutput.ok, true);
+    assert.equal(jsonOutput.result.reminders.length, 2);
+  } finally {
+    await testServer.stop();
+  }
 });
 
 test('skill script exposes usage and preserves non-JSON server diagnostics', async () => {
@@ -4665,5 +4670,73 @@ test('Part B: 401 on recall in terminal mode prints hint with correct credential
   } finally {
     await testServer.stop();
     await fs.rm(tmpHome, { recursive: true, force: true }).catch(() => {});
+  }
+});
+
+test('describeError formats AggregateError with empty message and redacts secrets', () => {
+  // 1. AggregateError with empty message and dual-stack connect ECONNREFUSED errors
+  const err1 = new AggregateError([
+    Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:443'), { code: 'ECONNREFUSED' }),
+    Object.assign(new Error('connect ECONNREFUSED ::1:443'), { code: 'ECONNREFUSED' }),
+  ], '');
+  const desc1 = describeError(err1);
+  assert.equal(desc1.length > 0, true);
+  assert.match(desc1, /ECONNREFUSED/);
+  assert.equal(desc1.endsWith(': '), false);
+
+  // 2. Error with empty message but code
+  const err2 = Object.assign(new Error(''), { code: 'ETIMEDOUT' });
+  assert.equal(describeError(err2), 'ETIMEDOUT');
+
+  // 3. Fallbacks for null / undefined / empty string
+  assert.equal(describeError(null), 'Unknown error');
+  assert.equal(describeError(undefined), 'Unknown error');
+  assert.equal(describeError('   '), 'Unknown error');
+
+  // 4. Secret redaction and terminal ANSI sanitization
+  const err4 = new Error('\x1b[31mBearer oc-sent-v2.secret.end and hsurr:ephemeral-key\x1b[0m\x00');
+  const desc4 = describeError(err4);
+  assert.doesNotMatch(desc4, /\x1b/);
+  assert.doesNotMatch(desc4, /\x00/);
+  assert.doesNotMatch(desc4, /oc-sent-v2\.secret\.end/);
+  assert.doesNotMatch(desc4, /hsurr:ephemeral-key/);
+  assert.match(desc4, /Bearer \[REDACTED\] and \[REDACTED\]/);
+});
+
+test('terminal error output for connection failure does not end with trailing colon', async () => {
+  // Use a non-listening port to provoke a connection error
+  const res = await runScript(['activity'], {
+    baseUrl: 'http://127.0.0.1:1',
+    env: { XMEMO_KEY: 'test-token' },
+  });
+  assert.equal(res.code, 3);
+  assert.equal(res.stderr.endsWith(': '), false);
+  assert.equal(res.stderr.endsWith(':\n'), false);
+  assert.match(res.stderr, /Get activity failed:\s*\S+/);
+  assert.match(res.stderr, /ECONNREFUSED/);
+});
+
+test('doctor --json discovery unavailable includes bounded errorDetail and retries on network error', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 1. HTTP 503 discovery failure
+    testServer.setResponseSeq([
+      { status: 503, body: { error: 'discovery unavailable' } },
+      { status: 200, body: { ok: true, operation: 'doctor', result: { auth_valid: false } } },
+    ]);
+    const res503 = await runScript(['doctor', '--json'], { baseUrl, env: {} });
+    assert.equal(res503.code, 0);
+    const p503 = JSON.parse(res503.stdout);
+    assert.equal(p503.clientDiagnostics.discovery.status, 'unavailable');
+    assert.equal(p503.clientDiagnostics.discovery.errorCode, 'http_error');
+    assert.equal(p503.clientDiagnostics.discovery.httpStatus, 503);
+    assert.equal(typeof p503.clientDiagnostics.discovery.errorDetail, 'string');
+    assert.equal(p503.clientDiagnostics.discovery.errorDetail.length <= 200, true);
+    assert.equal(p503.clientDiagnostics.discovery.errorDetail.length > 0, true);
+    assert.match(p503.clientDiagnostics.discovery.errorDetail, /HTTP 503/);
+  } finally {
+    await testServer.stop();
   }
 });

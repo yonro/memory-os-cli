@@ -21,6 +21,8 @@ import {
   safeJson,
   sanitizeTerminalText,
   formatMemoryContent,
+  describeError,
+  extractRecord,
 } from '../lib/api.mjs';
 
 import {
@@ -39,14 +41,6 @@ function failRequest(data, statusCode, prefix, options) {
     printAuthErrorHint(options?.credential);
   }
   process.exit(exitCode);
-}
-
-function extractRecord(data) {
-  if (data && typeof data === 'object') {
-    if (data.result && typeof data.result === 'object') return data.result;
-    if (data.memory && typeof data.memory === 'object') return data.memory;
-  }
-  return data;
 }
 
 export async function handleMemory(ctx) {
@@ -84,7 +78,7 @@ export async function handleMemory(ctx) {
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error(`${label} failed:`, e.message);
+      console.error(`${label} failed:`, describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -125,7 +119,7 @@ export async function handleMemory(ctx) {
       console.log(`XMemo Context: ${items} item${items === 1 ? '' : 's'}\n${contextText || 'No matching memories found.'}`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Recall context failed:', e.message);
+      console.error('Recall context failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -181,7 +175,7 @@ export async function handleMemory(ctx) {
       console.log(`Content: ${formatMemoryContent(projected.content, options.compact)}`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Read memory failed:', e.message);
+      console.error('Read memory failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -231,7 +225,7 @@ export async function handleMemory(ctx) {
       console.log(`✅ Memory updated.\nID: ${sanitizeTerminalText(memoryId)}${flags.path ? `\nPath: ${sanitizeTerminalText(flags.path)}` : ''}`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Update memory failed:', e.message);
+      console.error('Update memory failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -272,7 +266,7 @@ export async function handleMemory(ctx) {
       console.log(`✅ Record forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Forget failed:', e.message);
+      console.error('Forget failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
@@ -305,7 +299,7 @@ export async function handleMemory(ctx) {
         process.exit(EXIT_CODE.SUCCESS);
       }
     } catch (e) {
-      console.error('Request failed:', sanitizeTerminalText(e.message));
+      console.error('Request failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }

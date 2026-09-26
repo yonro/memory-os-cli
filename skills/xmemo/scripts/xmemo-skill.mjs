@@ -44,6 +44,7 @@ import {
   extractExpiresInSeconds,
   formatRemainingValidity,
   sanitizeTerminalText,
+  describeError,
 } from './lib/api.mjs';
 
 import {
@@ -132,7 +133,7 @@ async function main() {
       try {
         await requestTemporaryMemoryOperation(command, options, flags, credential);
       } catch (e) {
-        console.error('Temporary memory request failed:', e.message);
+        console.error('Temporary memory request failed:', describeError(e));
         process.exit(exitCodeForError(e));
       }
       return;
@@ -181,7 +182,7 @@ const isDirectExecution = process.argv[1] && import.meta.url.endsWith(path.basen
 
 if (isDirectExecution) {
   main().catch((error) => {
-    console.error(`Error: ${sanitizeTerminalText(error?.message || error)}`);
+    console.error(`Error: ${describeError(error)}`);
     process.exit(exitCodeForError(error));
   });
 }

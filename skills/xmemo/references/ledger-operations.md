@@ -9,13 +9,15 @@ For other operations and guides, see:
 
 ## Ledger Commands
 
-### Record an expense
+### Record an expense (write operation)
 
 ```text
 node scripts/xmemo-skill.mjs expense-add --item "team lunch" --amount 42.5 --currency USD
 ```
 
-`expense-add` records a ledger transaction in XMemo and prints the server-assigned transaction ID.
+`expense-add` is a **WRITE** operation that records a transaction in the user's financial ledger via `POST /v1/skill/operations` (`operation: "expense-add"`) and prints the server-assigned transaction ID.
+- **Required scope**: `ledger:write` or `memory:write`.
+- **Agent confirmation requirement**: Agents must obtain explicit user confirmation before executing `expense-add` to prevent unintended or unauthorized financial entries.
 
 ### Query ledger transactions (read-only)
 

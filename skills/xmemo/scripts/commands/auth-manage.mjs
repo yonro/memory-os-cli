@@ -33,6 +33,7 @@ import {
   apiErrorMessage,
   safeJson,
   sanitizeTerminalText,
+  describeError,
 } from '../lib/api.mjs';
 
 export async function handleAuthManage(ctx) {
@@ -82,7 +83,7 @@ export async function handleAuthManage(ctx) {
           process.exit(exitCode);
         }
       } catch (e) {
-        console.error('Verification error:', e.message);
+        console.error('Verification error:', describeError(e));
         process.exit(exitCodeForError(e));
       }
     } else {
@@ -101,7 +102,7 @@ export async function handleAuthManage(ctx) {
       try {
         requirePlaintextStorageConsent(options, 'auth add');
       } catch (e) {
-        console.error(`Credential storage refused: ${e.message}`);
+        console.error(`Credential storage refused: ${describeError(e)}`);
         process.exit(EXIT_CODE.USER_ERROR);
       }
       const token = await readStdin();
@@ -123,7 +124,7 @@ export async function handleAuthManage(ctx) {
         console.log('Token value was not printed. Project files were not modified.');
         process.exit(EXIT_CODE.SUCCESS);
       } catch (err) {
-        console.error('Failed to save credentials file:', err.message);
+        console.error('Failed to save credentials file:', describeError(err));
         process.exit(EXIT_CODE.USER_ERROR);
       }
     } else {
@@ -192,7 +193,7 @@ export async function handleAuthManage(ctx) {
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
-      console.error('Claim flow failed:', e.message);
+      console.error('Claim flow failed:', describeError(e));
       process.exit(exitCodeForError(e));
     }
   }
