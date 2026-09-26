@@ -534,6 +534,9 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /Ask once in the user's language/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
+  assert.match(skill, /tell the user in one line that XMemo is connected/);
+  assert.match(skill, /Want XMemo used automatically in every session of this project\?/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile/);
   assert.match(skill, /do not ask again in the same session/);
   assert.match(skill, /Do not explain runtime selection/);
 });
@@ -542,11 +545,12 @@ test('SKILL.md specifies one-time opt-in profile rules for AGENTS.md / CLAUDE.md
   const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
 
   assert.match(skill, /## Use XMemo in every session \(optional\)/);
-  assert.match(skill, /one-time, user-requested action/);
-  assert.match(skill, /Only when the user explicitly asks for XMemo to be used in every session/);
-  assert.match(skill, /never during first-run sign-in and never proposed unprompted/);
-  assert.match(skill, /Never write or modify the file without showing the block and getting the user's yes in the same conversation/);
-  assert.match(skill, /If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user asks to update it/);
+  assert.match(skill, /Offer once at the end of first-run sign-in/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile/);
+  assert.match(skill, /Never repeat the offer unprompted/);
+  assert.match(skill, /write or modify the file only after the user gives explicit confirmation/);
+  assert.match(skill, /If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user explicitly asks to update it/);
+  assert.match(skill, /Keep it as one section under its `## XMemo memory` heading so any future update replaces that section instead of duplicating it/);
 });
 
 test('Skill package includes references/auth-setup.md and references/command-details.md in builder output and release package manifest', async () => {

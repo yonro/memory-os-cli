@@ -30,7 +30,7 @@ After ClawHub installs this Skill, run these commands from the Skill root to ver
 When no credential exists, follow this exact sequence:
 1. Ask once in the user's language: "XMemo is not signed in yet. Signing in opens a browser page; afterwards the token is saved unencrypted on this computer (or you can provide XMEMO_KEY from a secret store instead). Start sign-in now?"
 2. On yes: run `node scripts/xmemo-skill.mjs login --allow-plaintext` and show only the verification URL, the one-time code, and "approve it in your browser" — nothing else.
-3. When login finishes: run `node scripts/xmemo-skill.mjs auth status --verify`, tell the user in one line that XMemo is connected, then continue the user's original task.
+3. When login finishes: run `node scripts/xmemo-skill.mjs auth status --verify` and tell the user in one line that XMemo is connected. In the same message, if the project does not already contain a `## XMemo memory` section, add one short offer in the user's language, e.g. "Want XMemo used automatically in every session of this project? I can add a short XMemo section to AGENTS.md." Only if the user says yes: run `node scripts/xmemo-skill.mjs profile`, show the block, and write it only after the user confirms it. If the user says no, continue the original task and do not offer again (not in later sessions either, unless the user asks).
 4. On no: continue the original task without XMemo; do not ask again in the same session unless the user brings it up.
 5. Do not explain runtime selection, doctor details, secret-store setup, or other features during sign-in unless the user asks.
 
@@ -166,11 +166,11 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 
 ## Use XMemo in every session (optional)
 
-Writing the instruction block into a project file (for example `AGENTS.md` or `CLAUDE.md`) is a one-time, user-requested action:
-- Only when the user explicitly asks for XMemo to be used in every session; never during first-run sign-in and never proposed unprompted.
-- Never write or modify the file without showing the block and getting the user's yes in the same conversation.
-- If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user asks to update it.
-- Keep it as one section under its `## XMemo memory` heading so a later update replaces that section instead of duplicating it.
+To have XMemo used automatically in every session, the project's agent instruction file (for example `AGENTS.md` or `CLAUDE.md`) can include an XMemo profile block:
+- **When to offer**: Offer once at the end of first-run sign-in (in the connection confirmation message), or whenever the user explicitly asks for every-session use. Never repeat the offer unprompted if the user says no or in subsequent sessions.
+- **If already configured**: If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user explicitly asks to update it.
+- **Consent before write**: Run `node scripts/xmemo-skill.mjs profile`, display the block to the user, and write or modify the file only after the user gives explicit confirmation in the same conversation.
+- **Single section**: Keep it as one section under its `## XMemo memory` heading so any future update replaces that section instead of duplicating it.
 
 ## Command Reference
 
