@@ -11,7 +11,7 @@
 ### Documentation
 
 - Update `SKILL.md` First Successful Run and credential sections with Option B guidance: run `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately upon exit code 2 ("No XMemo credential found") without separate chat confirmation; inform the user that browser approval authorizes unencrypted token storage in `~/.xmemo` (0600) or they may configure `XMEMO_KEY` from a secret store; browser approval constitutes consent; forbid silent token pasting and enforce that `register` remains strictly restricted to unattended or declined scenarios.
-- Document `expense-add` in `SKILL.md`, `references/ledger-operations.md`, and `references/runtime-operations.md` as a WRITE operation requiring `ledger:write` or `memory:write` scope and mandatory explicit user confirmation before execution (SQP-2 Medium).
+- Document `expense-add` in `SKILL.md`, `references/ledger-operations.md`, and `references/runtime-operations.md` as a WRITE operation requiring `ledger:write` scope that creates a persistent ledger entry on the XMemo service, requiring explicit confirmation when agent-inferred (SQP-2 Medium).
 
 ## 1.1.27
 

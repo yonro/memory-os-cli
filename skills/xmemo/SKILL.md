@@ -99,7 +99,7 @@ code; approve that code in the browser account session to issue the Skill's
 scoped `skill_token`.
 
 The standalone zero-dependency script has no cross-platform operating-system
-keychain integration. `--allow-plaintext` stores the issued token unencrypted in the current user's XMemo directory (`~/.xmemo/credentials.json`) so
+keychain integration. `--allow-plaintext` stores the issued token unencrypted in the current user's XMemo directory (`~/.xmemo/skill-credentials.json`) so
 later commands can use it. The script prints the exact path, restricts POSIX
 permissions where supported (0600), never prints the token, and never writes it into
 the project. Prefer `XMEMO_KEY` or a managed secret store when plaintext local
@@ -171,9 +171,10 @@ Collect credentials only through XMEMO_KEY or the device login flow; do not requ
   needs the broader continuity pack: active state, recent events, TODOs, and
   pending decisions.
 - **Track tasks and expenses.** Record action items with `todo-add` / `todo-list`
-  / `todo-done`. `expense-add` is a **WRITE** operation that records purchases or income
-  in the user's financial ledger (requires `ledger:write` or `memory:write` scope).
-  Agents must obtain explicit user confirmation before recording financial transactions.
+  / `todo-done`. `expense-add` is a **WRITE** operation that sends transaction details to
+  the XMemo service and records purchases or income in the user's financial ledger (requires
+  `ledger:write` scope). If the user explicitly asked to record the transaction, run it;
+  if the agent inferred or suggested it, confirm item, amount, and currency first.
 - **Audit ledger and inspect diagnostics.** Query personal transactions with
   `ledger-list` / `ledger-summary` (read-only), and inspect account metrics via
   `overview`, `activity`, and `stats`.
@@ -303,10 +304,11 @@ remain limited to `remember`, `recall`, and `search`.
 ### Ledger Bookkeeping (`ledger-list`, `ledger-summary`, `expense-add`)
 
 - `expense-add` is a **WRITE** operation backed by `POST /v1/skill/operations`
-  (`operation: "expense-add"`, requiring `ledger:write` or `memory:write` scope).
-  It records a financial transaction in the user's ledger and prints the
-  server-assigned transaction ID. Because it directly alters financial records,
-  agents must obtain explicit user confirmation before running `expense-add`.
+  (`operation: "expense-add"`, requiring `ledger:write` scope). It sends transaction
+  details to the XMemo service to create a persistent ledger record and prints the
+  server-assigned transaction ID. If the user explicitly requested recording the
+  transaction, run it directly; if the agent suggested or inferred it, confirm
+  item, amount, and currency with the user before execution.
 - `ledger-list` is a strictly read-only query backed by
   `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring
   `ledger:read` scope). It retrieves financial and expense transactions without
