@@ -59,7 +59,7 @@ import { handleLedger } from './commands/ledger.mjs';
 import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
 
-const SKILL_VERSION = '1.1.28';
+const SKILL_VERSION = '1.1.29';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
