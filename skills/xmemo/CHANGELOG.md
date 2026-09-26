@@ -10,7 +10,7 @@
 
 ### Documentation
 
-- Restructure `SKILL.md` to prioritize core memory workflows (expanded session recall, what/when to remember, update vs. new memory, forget guards, restart continuity, TODOs, expenses, and diagnostics) while compacting the command reference table into a single unified syntax summary and moving detailed authentication setup, secret stores, and credential lifecycle documentation to `references/auth-setup.md` without dropping any facts.
+- Restructure `SKILL.md` to prioritize core memory workflows (expanded session recall, what/when to remember, update vs. new memory, forget guards, restart continuity, TODOs, expenses, and diagnostics) while compacting the command reference table into a single unified syntax summary and moving detailed authentication setup to `references/auth-setup.md` and direct memory operations / REST details to `references/command-details.md` without dropping any facts.
 - Update `SKILL.md` First Successful Run and credential sections with Option B guidance: run `node scripts/xmemo-skill.mjs login --allow-plaintext` immediately upon exit code 2 ("No XMemo credential found") without separate chat confirmation; inform the user that browser approval authorizes unencrypted token storage in `~/.xmemo` (0600) or they may configure `XMEMO_KEY` from a secret store; browser approval constitutes consent; forbid silent token pasting and enforce that `register` remains strictly restricted to unattended or declined scenarios.
 - Document `expense-add` in `SKILL.md`, `references/ledger-operations.md`, and `references/runtime-operations.md` as a WRITE operation requiring `ledger:write` scope that creates a persistent ledger entry on the XMemo service, requiring explicit confirmation when agent-inferred (SQP-2 Medium).
 

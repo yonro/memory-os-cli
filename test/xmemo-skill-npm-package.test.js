@@ -118,6 +118,7 @@ test('builder script: builds standalone @xmemo/skill npm package with verified m
     const stagedFiles = await getAllFilesRelative(path.join(tmpOut, 'skill'));
     assert.deepEqual(stagedFiles, sourceFiles);
     assert.ok(stagedFiles.includes('references/auth-setup.md'), 'references/auth-setup.md must be included in staged npm package');
+    assert.ok(stagedFiles.includes('references/command-details.md'), 'references/command-details.md must be included in staged npm package');
 
     for (const relFile of sourceFiles) {
       const srcBuf = await readFile(path.join(sourceSkillDir, relFile));

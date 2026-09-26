@@ -3,6 +3,8 @@
 This reference describes standalone CLI runtime execution, command matrix, session management, terminal safety, and deterministic exit codes for the bundled `xmemo` Skill.
 
 For other operations and guides, see:
+- [auth-setup.md](auth-setup.md) for full authentication setup, secret stores, vault integration, and token lifecycle.
+- [command-details.md](command-details.md) for direct memory operations, REST endpoints, and scope authorization.
 - [memory-operations.md](memory-operations.md) for core memory, knowledge, and continuity workflows.
 - [ledger-operations.md](ledger-operations.md) for expense tracking, ledger audits, and account diagnostics.
 - [troubleshooting.md](troubleshooting.md) for step-by-step diagnosis and repair.
@@ -76,18 +78,41 @@ validation remain intact.
 
 ## Output and terminal safety
 
-`remember` and `expense-add` print the server-returned memory or ledger ID.
-`recall` and `search` accept `--compact` to render each memory on one shortened
-line; use `--json` when a caller needs the complete redacted response payload.
-When stdout is connected to a non-TTY stream (e.g. piped or redirected) and
-neither `--json` nor `--terminal` was explicitly specified, commands automatically
-default to JSON output. Pass `--terminal` (or `--no-json`) to force human-readable
-terminal formatting even when piping. Terminal error messages display the server
-`request_id` whenever provided in the service response body.
+The script supports JSON output with `--json`, human-readable terminal output
+with `--terminal`, command-specific usage with `--help`, `--version`, per-request
+timeouts with `--timeout-ms`, and compact recall/search output with `--compact`.
+When stdout is piped or redirected to a non-TTY stream and `--json` is not
+explicitly passed, commands automatically default to JSON output; pass `--terminal`
+to explicitly preserve human-readable terminal text. Terminal errors include the
+server `request_id` whenever present in the error response. `login` displays the
+remaining authorization validity countdown while polling. `doctor --json` adds a bounded
+`clientDiagnostics` object: a read-only discovery summary and a `nextAction`
+command for the next credential check or formal sign-in. The summary includes
+the advertised service version when present, MCP URL, supported clients, and
+standalone Skill package version and operations so compatibility can be checked
+without inspecting the raw discovery document. If discovery is unavailable,
+`clientDiagnostics.discovery.status` is `unavailable`; a successful doctor
+health check still succeeds. It never prints token values or prefixes.
+
 Human-readable output removes terminal control sequences. For the exact accepted
 parameters of any command, run
 `node scripts/xmemo-skill.mjs <command> --help`; use `--version` to identify the
 runtime and `--timeout-ms <ms>` to bound each network request.
+
+## Setup and Repair
+
+If the bundled script reports auth or service errors, use the canonical commands
+above: `doctor`, `doctor --anonymous`, `auth status --verify`, and
+`auth claim-status`. The `auth-status` spelling remains a compatibility alias,
+but it is intentionally not repeated in this reference.
+
+`doctor` retains authenticated diagnosis when a credential is available.
+`doctor --anonymous` performs the same service-health check without sending an
+Authorization header. Both forms use only an unauthenticated, read-only
+discovery request for their JSON capability summary; discovery failure does not
+block an otherwise successful health check. In terminal output, an explicit
+anonymous check says authentication was not checked; a normal no-credential
+check instead prints the formal-login next command.
 
 ## Exit Codes
 

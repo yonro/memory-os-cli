@@ -76,6 +76,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /30 days/);
   assert.match(skill, /`forget`/);
   assert.match(skill, /references\/auth-setup\.md/);
+  assert.match(skill, /references\/command-details\.md/);
   assert.match(skill, /references\/memory-operations\.md/);
   assert.match(skill, /references\/ledger-operations\.md/);
   assert.match(skill, /references\/runtime-operations\.md/);
@@ -146,6 +147,7 @@ export function validateSkillPathAllowlist(relPath) {
     'SKILL.md',
     'skill-card.md',
     'references/auth-setup.md',
+    'references/command-details.md',
     'references/memory-operations.md',
     'references/ledger-operations.md',
     'references/runtime-operations.md',
@@ -176,6 +178,7 @@ export async function assertSkillDirectoryIntegrity(skillDir) {
     'CHANGELOG.md',
     'SKILL.md',
     'references/auth-setup.md',
+    'references/command-details.md',
     'references/memory-operations.md',
     'references/ledger-operations.md',
     'references/runtime-operations.md',
@@ -522,8 +525,9 @@ test('SKILL.md retains standalone first-run and daily-use command lines and exit
   assert.match(skill, /No XMemo credential found/);
 });
 
-test('Skill package includes references/auth-setup.md in builder output and release package manifest', async () => {
+test('Skill package includes references/auth-setup.md and references/command-details.md in builder output and release package manifest', async () => {
   const allFiles = await getSkillDirectoryFiles(path.join(repoRoot, 'skills', 'xmemo'));
   const relPaths = allFiles.map((f) => path.relative(path.join(repoRoot, 'skills', 'xmemo'), f).split(path.sep).join('/'));
   assert.ok(relPaths.includes('references/auth-setup.md'), 'skills/xmemo source directory must include references/auth-setup.md');
+  assert.ok(relPaths.includes('references/command-details.md'), 'skills/xmemo source directory must include references/command-details.md');
 });

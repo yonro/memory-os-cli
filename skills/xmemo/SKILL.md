@@ -9,7 +9,7 @@ Give your agent durable memory that survives across sessions, projects, and tool
 
 ## First Successful Run
 
-After ClawHub installs this Skill, run these commands in order from the Skill root to verify connectivity and authenticate:
+After ClawHub installs this Skill, run these commands from the Skill root to verify connectivity and authenticate:
 
 1. Check public service reachability:
    ```text
@@ -30,7 +30,7 @@ If a command fails, follow its printed next action and read [references/troubles
 
 ## Runtime Selection
 
-XMemo supports two parallel integration paths:
+Two parallel integration paths:
 1. **Bundled Skill script** at `scripts/xmemo-skill.mjs` (direct REST API integration, Node.js >= 22.22.0).
 2. **XMemo MCP tools** (`create_restart_snapshot`, `restore_restart_snapshot`, etc., when running with an XMemo MCP server).
 
@@ -98,7 +98,7 @@ To soft-delete an obsolete memory or void a financial transaction, run `forget` 
 node scripts/xmemo-skill.mjs forget --id <id> --confirm [--reason "<explanation>"]
 ```
 
-**Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately prints the target ID and exits with code 1 with **zero network requests**. Requires an owner-scoped API key and a delete-capable scope (`memory:delete`, `memory:write`). Accepts memory UUIDs, logical memory paths, or transaction IDs from `ledger-list`.
+**Accidental Deletion Guard**: If `--confirm` is omitted, the command immediately prints the target ID and exits with code 1 with **zero network requests**. Requires an owner-scoped API key and a delete-capable scope such as `memory:delete` or `memory:write` (see [references/command-details.md](references/command-details.md) for the full list). Accepts memory UUIDs, logical memory paths, or transaction IDs from `ledger-list`.
 
 ### Task Continuity & Restart Snapshots
 
@@ -145,7 +145,7 @@ node scripts/xmemo-skill.mjs ledger-list [--month <YYYY-MM>] [--from <date>] [--
 node scripts/xmemo-skill.mjs ledger-summary [--months <n>] [--currency <code>]
 ```
 
-Inspect account diagnostics and statistics (strictly read-only, requiring `memory:read` scope):
+Inspect account diagnostics and statistics (strictly read-only): overview (requires `memory:read` scope) retrieves memory counts and storage totals; activity (requires `memory:read` scope) inspects recent events; stats computes breakdown metrics; doctor diagnoses connectivity and auth (works with `--anonymous` without credentials).
 
 ```text
 node scripts/xmemo-skill.mjs overview
@@ -156,39 +156,41 @@ node scripts/xmemo-skill.mjs doctor
 
 Empty results terminate cleanly with exit code 0 rather than error or `not_found`. Amounts preserve explicit currency units.
 
+- **Read provenance correctly.** `agent_id`, `agent_instance_id`, and `agent_boundary` are attribution signals, not authorization boundaries.
+
 ## Command Reference
 
 | Command & Syntax | Description |
 |:---|:---|
-| `remember (--content <text> \| --content - \| --file <path>) [--path <path>] [--metadata <json>]` | Save a durable memory |
+| `remember (--content <text> \| --content - \| --file <path>) [--path <path>] [--metadata <json>]` | Save durable memory |
 | `recall --query <text> [--limit <n>] [--compact]` | Recall memories by query |
 | `search --query <text> [--limit <n>] [--compact]` | Search memories by text query |
 | `read --id <id> [--offset <n>] [--limit <n>]` | Read memory by ID |
-| `update --id <id> [--content <text>] [--path <path>] [--metadata <json>]` | Update existing memory |
-| `forget --id <id> --confirm [--reason <text>]` | Soft-delete a memory or transaction |
-| `recall-context --query <text> [--include_knowledge <true\|false>] [--max_items <n>]` | Bounded memory prompt context |
-| `save-state --key <key> [--content <text>] [--ttl_seconds <n>]` | Save handoff state (alias: `state-save`) |
-| `restore-state --key <key>` | Restore handoff state (alias: `state-restore`) |
-| `restart-snapshot [--session_id <id>] [--state_key <key>]` | Save full restart continuity pack |
-| `restart-restore [--snapshot_id <id>] [--source_session_id <id>]` | Restore restart snapshot |
-| `todo-add --content <text>` | Create an action item (TODO) |
+| `update --id <id> [--content <text>] [--path <path>] [--metadata <json>]` | Update memory by ID |
+| `forget --id <id> --confirm [--reason <text>]` | Soft-delete record |
+| `recall-context --query <text> [--include_knowledge <true\|false>] [--max_items <n>]` | Bounded prompt context |
+| `save-state --key <key> [--content <text>] [--ttl_seconds <n>]` | Save task state (alias: `state-save`) |
+| `restore-state --key <key>` | Restore task state (alias: `state-restore`) |
+| `restart-snapshot [--session_id <id>] [--state_key <key>]` | Save restart snapshot |
+| `restart-restore [--snapshot_id <id>] [--source_session_id <id>]` | Restore snapshot |
+| `todo-add --content <text>` | Create action item (TODO) |
 | `todo-list` | List active action items |
-| `todo-done --id <todo_id>` | Mark an action item completed |
-| `expense-add --item <text> --amount <n> --currency <code>` | Record an expense in the ledger (WRITE operation) |
-| `ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]` | List financial transactions (read-only) |
-| `ledger-summary [--months <n>] [--currency <code>]` | Summarize monthly ledger totals (read-only) |
-| `overview` | Inspect account memory, agents, storage |
-| `activity [--limit <n>]` | Inspect recent account activity |
-| `stats [--scope <scope>] [--group-by <dims>] [--top-n <1..200>]` | Multidimensional memory statistics |
-| `doctor [--anonymous]` | Diagnose runtime health and connectivity |
-| `login --allow-plaintext` | Start device login with browser approval |
-| `register --reason <unattended\|declined> --allow-plaintext` | Start limited temporary sandbox |
-| `auth status [--verify]` | Inspect credential validity (alias: `auth-status`) |
-| `auth add --from-stdin --allow-plaintext` | Store token from stdin (capped at 64 KiB) |
-| `auth claim-status [--allow-plaintext]` | Check temporary sandbox claim status |
-| `auth claim-confirm [--allow-plaintext]` | Confirm claim and receive formal token |
-| `auth claim-deny [--allow-plaintext]` | Reject claim and retain sandbox |
-| `logout [--revoke-environment-token]` | Revoke and remove local credential |
+| `todo-done --id <todo_id>` | Mark action item done |
+| `expense-add --item <text> --amount <n> --currency <code>` | Record expense in ledger (WRITE) |
+| `ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]` | List ledger records (read-only) |
+| `ledger-summary [--months <n>] [--currency <code>]` | Monthly ledger totals (read-only) |
+| `overview` | Account memory and storage |
+| `activity [--limit <n>]` | Recent account activity |
+| `stats [--scope <scope>] [--group-by <dims>] [--top-n <1..200>]` | Multidimensional memory stats |
+| `doctor [--anonymous]` | Diagnose runtime health |
+| `login --allow-plaintext` | Start device login |
+| `register --reason <unattended\|declined> --allow-plaintext` | Temporary sandbox |
+| `auth status [--verify]` | Credential status (alias: `auth-status`) |
+| `auth add --from-stdin --allow-plaintext` | Store token from stdin (<= 64 KiB) |
+| `auth claim-status [--allow-plaintext]` | Check sandbox claim status |
+| `auth claim-confirm [--allow-plaintext]` | Confirm sandbox claim |
+| `auth claim-deny [--allow-plaintext]` | Deny sandbox claim |
+| `logout [--revoke-environment-token]` | Revoke / remove credential |
 
 For advanced flags, timeouts (`--timeout-ms <n>`), and JSON envelopes (`--json`), see [references/runtime-operations.md](references/runtime-operations.md).
 
@@ -207,44 +209,43 @@ Read [references/auth-setup.md](references/auth-setup.md) before running any aut
 
 ## Exit Codes
 
-All CLI operations conform to normalized, deterministic exit codes:
-
 | Exit Code | Classification | Conditions & Semantics | Next Action |
 |:---:|:---|:---|:---|
 | `0` | Success | Operation succeeded, valid empty state, `--help`, or `--version`. | Proceed with next task. |
-| `1` | User Error | Local argument validation failure, mutually exclusive flags, missing `--confirm`, unreadable file, or HTTP 4xx. | Check parameters or resource ID. |
+| `1` | User Error | Argument validation failure, conflicting flags, missing `--confirm`, unreadable file, or HTTP 4xx. | Check parameters or resource ID. |
 | `2` | Auth Error | Missing credentials, unauthenticated request, expired/invalid token, HTTP 401/403, or invalid auth. | Run `login --allow-plaintext` or configure `XMEMO_KEY`. |
-| `3` | Server / Network Error | HTTP 5xx server errors, connection refused (`ECONNREFUSED`), host unreachable, timeout, or response size > 8 MiB. | Retry with backoff or check `doctor --anonymous`. |
+| `3` | Server / Network Error | HTTP 5xx server error, connection refused (`ECONNREFUSED`), host unreachable, timeout, or payload > 8 MiB. | Retry with backoff or check `doctor --anonymous`. |
 
 When a command returns exit code 2 with "No XMemo credential found", follow First Successful Run above.
 
 ## Operational References
 
-- [auth-setup.md](references/auth-setup.md): Full authentication setup, secret stores, vault integration, and token lifecycle.
-- [memory-operations.md](references/memory-operations.md): Core memory, knowledge context, and continuity workflows.
-- [ledger-operations.md](references/ledger-operations.md): Ledger accounting, financial transactions, and account diagnostics.
-- [runtime-operations.md](references/runtime-operations.md): Command matrix, output safety, JSON envelopes, and exit codes.
+- [auth-setup.md](references/auth-setup.md): Auth setup, secret stores, vault integration, token lifecycle.
+- [command-details.md](references/command-details.md): Direct memory operations (read, update, forget), REST endpoints, scopes.
+- [memory-operations.md](references/memory-operations.md): Core memory, knowledge context, continuity workflows.
+- [ledger-operations.md](references/ledger-operations.md): Ledger accounting, financial transactions, diagnostics.
+- [runtime-operations.md](references/runtime-operations.md): Command matrix, output safety, JSON envelopes, exit codes.
 - [troubleshooting.md](references/troubleshooting.md): Auth, network, and service diagnosis and recovery.
 
 ## Good Memory Candidates
 
 - Repository conventions, build/test/deploy commands, and verified troubleshooting steps.
-- Architecture decisions, product decisions, release procedures, and their rationale.
+- Architecture decisions, product decisions, release procedures, and rationale.
 - User-approved preferences for code review, testing, documentation, or UX.
 - Project TODOs, blockers, risks, and handoff summaries for future sessions.
 - Bug fix context that might recur.
 
 ## Never Save
 
-- Secrets, tokens, API keys, OAuth codes, cookies, authentication session IDs, or private keys. Optional restart `session_id` values must be non-secret correlation labels, never login/session credentials.
-- Private customer data or sensitive personal data unless the user explicitly asks and the memory tool supports the required privacy policy.
+- Secrets, tokens, API keys, OAuth codes, cookies, auth session IDs, or private keys. Optional restart `session_id` values must be non-secret correlation labels, never credentials.
+- Private customer data or sensitive personal data unless explicitly requested under supported policy.
 - Temporary debugging output that will not help future work.
 - Large code blocks; link to files, commits, or concise summaries instead.
 
 ## Safety
 
-- Keep XMemo credentials private. Never paste tokens into public prompts, screenshots, repos, issue comments, or shared logs.
-- Prefer `XMEMO_KEY` or a managed secret store. Local plaintext storage (`~/.xmemo/skill-credentials.json`, 0600 on POSIX) requires explicit `--allow-plaintext`.
+- Keep XMemo credentials private. Never paste tokens into prompts, screenshots, repos, issue comments, or shared logs.
+- Prefer `XMEMO_KEY` or a managed secret store. Use `--allow-plaintext` only after accepting that processes running as the same operating-system user may read the local credential file.
 - Default service is `https://xmemo.dev`. Custom HTTPS origins receive credentials; use only trusted hosts. Plain HTTP is rejected except for localhost development.
-- Use synthetic data for marketplace demos. Do not claim uncertified marketplace integrations.
+- Use synthetic data for demos. Do not claim uncertified integrations.
 - Do not simulate a successful memory read or write when no runtime path is available. Report the exact failing check and the next repair command.
