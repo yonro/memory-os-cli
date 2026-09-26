@@ -2,7 +2,7 @@
   "name": "xmemo-vscode",
   "displayName": "XMemo — Cross-Agent Cloud Memory",
   "description": "User-owned, identity-aware cloud memory for your editor. Recall project context, save decisions, and share memory across Cursor, Claude, Codex, and your CLI.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "xmemo",
   "license": "MIT",
   "icon": "media/icon.png",

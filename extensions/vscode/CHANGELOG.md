@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 0.1.1
+
 - Updated Devin Desktop (formerly Windsurf) configuration detection and writing path to `~/.config/devin/mcp_config.json` (or `%APPDATA%\devin\mcp_config.json` on Windows) with automatic fallback to legacy `~/.codeium/windsurf/mcp_config.json`.
 - Updated agent integrations panel label to "Devin Desktop (formerly Windsurf)".
 
