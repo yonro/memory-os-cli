@@ -267,6 +267,7 @@ test('skill install --client: existing directory refuses without --force and bac
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-force-backup-'));
   const env = { USERPROFILE: tmpHome, HOME: tmpHome };
   const targetDir = path.join(tmpHome, '.codex', 'skills', 'xmemo-memory');
+  const expectedBackupDir = path.join(tmpHome, '.xmemo', 'backups', 'skills', 'codex', 'xmemo-memory');
 
   try {
     // Pre-create an existing skill directory
@@ -280,7 +281,7 @@ test('skill install --client: existing directory refuses without --force and bac
     assert.equal(resRefuse.code, 2);
     assert.match(resRefuse.stderr, /Skill destination already exists.*Use --force to replace/);
 
-    // 2. Replacement with --force creates .xmemo.bak backup
+    // 2. Replacement with --force creates backup outside the agent skills directory
     const calls = [];
     const resForce = await invoke(['skill', 'install', '--client', 'codex', '--force', '--yes', '--json'], {
       env,
@@ -289,12 +290,23 @@ test('skill install --client: existing directory refuses without --force and bac
     assert.equal(resForce.code, 0);
     const report = JSON.parse(resForce.stdout);
     assert.equal(report.installed, true);
-    assert.equal(report.backup, `${targetDir}.xmemo.bak`);
+    assert.equal(report.backup, expectedBackupDir);
 
-    // Verify backup exists and contains preserved file
-    const backupFile = path.join(`${targetDir}.xmemo.bak`, 'existing-custom.txt');
+    // Verify backup exists outside agent skills directory and contains preserved file
+    const backupFile = path.join(expectedBackupDir, 'existing-custom.txt');
     assert.equal(fsSync.existsSync(backupFile), true);
     assert.equal(await fs.readFile(backupFile, 'utf8'), 'preserve me in backup');
+
+    // Crucial check: verify that no folder other than xmemo-memory under the client's skills dir contains a SKILL.md
+    const codexSkillsDir = path.join(tmpHome, '.codex', 'skills');
+    const skillsDirEntries = await fs.readdir(codexSkillsDir);
+    assert.deepEqual(skillsDirEntries, ['xmemo-memory']);
+    for (const entry of skillsDirEntries) {
+      if (entry !== 'xmemo-memory') {
+        const subMd = path.join(codexSkillsDir, entry, 'SKILL.md');
+        assert.equal(fsSync.existsSync(subMd), false, `Unexpected SKILL.md in skills subfolder: ${entry}`);
+      }
+    }
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
   }
@@ -350,6 +362,7 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-remove-'));
   const env = { USERPROFILE: tmpHome, HOME: tmpHome };
   const targetDir = path.join(tmpHome, '.codex', 'skills', 'xmemo-memory');
+  const expectedBackupDir = path.join(tmpHome, '.xmemo', 'backups', 'skills', 'codex', 'xmemo-memory');
 
   try {
     // 1. Remove when not installed
@@ -364,12 +377,14 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
     await fs.writeFile(path.join(targetDir, 'foreign.txt'), 'some third-party data');
     const resForeign = await invoke(['skill', 'remove', '--client', 'codex', '--yes'], { env });
     assert.equal(resForeign.code, 2);
-    assert.match(resForeign.stderr, /Refusing to remove.*directory is not an XMemo skill/);
+    assert.match(resForeign.stderr, /Refusing to remove ".*": not an XMemo skill folder/);
 
-    // 3. Make it a legitimate XMemo skill folder
+    // 3. Make it a legitimate XMemo skill folder and create a pre-existing backup outside the skills dir
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
     await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill\nxmemo');
     await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.33';");
+    await fs.mkdir(expectedBackupDir, { recursive: true });
+    await fs.writeFile(path.join(expectedBackupDir, 'backup-proof.txt'), 'preserved');
 
     // 4. Prompt without --yes: 'n' cancels removal
     const resCancel = await invoke(['skill', 'remove', '--client', 'codex'], { env, stdin: 'n\n' });
@@ -382,7 +397,29 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
     assert.equal(resRemove.code, 0);
     const parsedRemove = JSON.parse(resRemove.stdout);
     assert.equal(parsedRemove.removed, true);
+    assert.equal(parsedRemove.backup, expectedBackupDir);
     assert.equal(fsSync.existsSync(targetDir), false);
+
+    // Check that skills dir is completely empty of xmemo folders
+    const codexSkillsDir = path.join(tmpHome, '.codex', 'skills');
+    const remainingEntries = await fs.readdir(codexSkillsDir);
+    assert.equal(remainingEntries.includes('xmemo-memory'), false);
+    assert.equal(remainingEntries.some((e) => e.includes('xmemo')), false);
+
+    // Backup survives removal and was not deleted silently!
+    assert.equal(fsSync.existsSync(expectedBackupDir), true);
+    assert.equal(await fs.readFile(path.join(expectedBackupDir, 'backup-proof.txt'), 'utf8'), 'preserved');
+
+    // 6. Test human output mentions backup preserved location
+    // Recreate skill and remove human mode
+    await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
+    await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill\nxmemo');
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.33';");
+
+    const resHumanRemove = await invoke(['skill', 'remove', '--client', 'codex', '--yes'], { env });
+    assert.equal(resHumanRemove.code, 0);
+    assert.match(resHumanRemove.stdout, /✓ Removed XMemo skill for Codex/);
+    assert.match(resHumanRemove.stdout, /Backup preserved at:/);
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
   }
@@ -392,6 +429,7 @@ test('skill update: aliases to skill install --force', async () => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-update-'));
   const env = { USERPROFILE: tmpHome, HOME: tmpHome };
   const targetDir = path.join(tmpHome, '.codex', 'skills', 'xmemo-memory');
+  const expectedBackupDir = path.join(tmpHome, '.xmemo', 'backups', 'skills', 'codex', 'xmemo-memory');
 
   try {
     // Pre-create existing skill
@@ -408,7 +446,7 @@ test('skill update: aliases to skill install --force', async () => {
     const report = JSON.parse(res.stdout);
     assert.equal(report.installed, true);
     assert.equal(report.force, true);
-    assert.equal(report.backup, `${targetDir}.xmemo.bak`);
+    assert.equal(report.backup, expectedBackupDir);
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
   }

@@ -118,9 +118,21 @@ export async function extractSkillVersionFromDirectory(targetDir) {
   return null;
 }
 
-export async function backupSkillDirectory(targetDir) {
-  const backupDir = `${targetDir}.xmemo.bak`;
+export function clientSkillBackupDir(clientId, env) {
+  const home = userHome(env);
+  return path.join(home, '.xmemo', 'backups', 'skills', clientId, 'xmemo-memory');
+}
+
+export async function backupSkillDirectory(targetDir, options = {}) {
+  let backupDir;
+  if (options.clientId) {
+    backupDir = clientSkillBackupDir(options.clientId, options.env);
+  } else {
+    const home = userHome(options.env);
+    backupDir = path.join(home, '.xmemo', 'backups', 'skills', 'custom', path.basename(targetDir));
+  }
   await fs.rm(backupDir, { recursive: true, force: true }).catch(() => {});
+  await fs.mkdir(path.dirname(backupDir), { recursive: true });
   await fs.cp(targetDir, backupDir, { recursive: true });
   return backupDir;
 }
@@ -506,7 +518,7 @@ async function clientSkillInstall(options, cwd, io) {
           target: t.target,
           exists: t.exists,
           existingVersion: t.existingVersion,
-          backup: t.exists ? `${t.target}.xmemo.bak` : null
+          backup: t.exists ? clientSkillBackupDir(t.client.id, io.env) : null
         }))
       }, null, 2));
       return 0;
@@ -514,7 +526,8 @@ async function clientSkillInstall(options, cwd, io) {
 
     for (const t of targets) {
       if (t.exists) {
-        writeLine(io.stdout, `Would backup ${t.target} to ${t.target}.xmemo.bak`);
+        const backupPath = clientSkillBackupDir(t.client.id, io.env);
+        writeLine(io.stdout, `Would backup ${t.target} to ${backupPath}`);
       }
       writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${t.target}`);
     }
@@ -626,10 +639,10 @@ async function clientSkillInstall(options, cwd, io) {
       baseCmdArgs = [...npmRunner.prefixArgs, 'exec', '--offline', '--package', tgzPath, '--', 'xmemo-skill', 'install'];
     }
 
-    // Backup existing directories
+    // Backup existing directories outside the agent skills directory
     for (const t of targets) {
       if (t.exists && options.force) {
-        t.backup = await backupSkillDirectory(t.target);
+        t.backup = await backupSkillDirectory(t.target, { clientId: t.client.id, env: io.env });
       }
     }
 
@@ -819,7 +832,7 @@ export async function skillRemove(args, io) {
   // Safety check: verify folder is an XMemo skill
   const isSkill = await isXMemoSkillDirectory(targetPath);
   if (!isSkill) {
-    throw new UsageError(`Refusing to remove "${targetPath}": directory is not an XMemo skill.`);
+    throw new UsageError(`Refusing to remove "${targetPath}": not an XMemo skill folder.`);
   }
 
   // Consent prompt
@@ -843,16 +856,23 @@ export async function skillRemove(args, io) {
     }
   }
 
+  const backupDir = clientSkillBackupDir(client.id, io.env);
+  const backupExists = await fs.stat(backupDir).then((s) => s.isDirectory()).catch(() => false);
+
   await fs.rm(targetPath, { recursive: true, force: true });
   if (isJson) {
     writeLine(io.stdout, JSON.stringify({
       ok: true,
       removed: true,
       client: client.id,
-      target: targetPath
+      target: targetPath,
+      backup: backupExists ? backupDir : null
     }, null, 2));
   } else {
     writeLine(io.stdout, `✓ Removed XMemo skill for ${client.label} from ${targetPath}`);
+    if (backupExists) {
+      writeLine(io.stdout, `  Backup preserved at: ${backupDir}`);
+    }
   }
   return 0;
 }

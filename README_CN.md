@@ -214,8 +214,8 @@ CLI 支持将经过官方完整性校验的 XMemo Skill 安装至各智能体专
 - 传入 `--dry-run` 预览安装计划而不写入任何文件。
 - **安全与授权保障**：
   - 交互模式下默认展示写入目标并提示 `[y/N]`（回车、EOF 或空输入默认取消），除非显式指定 `--yes`。
-  - 目标目录已存在时默认拒绝覆盖；指定 `--force` 覆盖前会自动保留 `<dir>.xmemo.bak` 备份目录。
-  - `skill remove` 仅允许删除经过校验的 XMemo Skill 目录，严禁误删其他外部目录。
+  - 目标目录已存在时默认拒绝覆盖；指定 `--force` 覆盖前会自动在 `~/.xmemo/backups/skills/<client>/` 保留备份（独立于智能体技能目录，避免重复加载）。
+  - `skill remove` 仅允许删除经过校验的 XMemo Skill 目录，严禁误删其他外部目录，并提示已保留的备份路径。
  
 ```bash
 # 安装至智能体技能目录 (Claude Code 全局、Codex 或 OpenClaw)
@@ -236,7 +236,7 @@ xmemo skill install --dir ./custom-skill-dir
 # 非交互式直接执行（跳过 [y/N] 确认提示）
 xmemo skill install --client codex --yes
 
-# 覆盖已有安装（自动创建 <dir>.xmemo.bak 备份）
+# 覆盖已有安装（自动在 ~/.xmemo/backups/skills/<client>/ 创建备份）
 xmemo skill install --client codex --force --yes
 
 # 快捷更新别名（等价于 skill install --force）

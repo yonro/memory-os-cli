@@ -236,8 +236,8 @@ The CLI installs the verified XMemo Skill locally into agent skill folders or a 
 - Preview actions without writing files using `--dry-run`.
 - **Safety & Consent**:
   - Interactive install prompts `[y/N]` before writing (Enter, EOF, or empty input cancels) unless `--yes` is specified.
-  - Existing installs refuse overwrite without `--force`; when `--force` is used, a backup directory `<target>.xmemo.bak` is created.
-  - `skill remove` only removes verified XMemo skill directories, refusing foreign folders.
+  - Existing installs refuse overwrite without `--force`; when `--force` is used, a backup is created in `~/.xmemo/backups/skills/<client>/` (outside the agent skills directory).
+  - `skill remove` only removes verified XMemo skill directories, refusing foreign folders, and reports the preserved backup location.
 
 ```bash
 # Install to agent skill folder (Claude Code global, Codex, or OpenClaw)
@@ -258,7 +258,7 @@ xmemo skill install --dir ./custom-skill-dir
 # Non-interactive install (skips [y/N] prompt)
 xmemo skill install --client codex --yes
 
-# Replace existing installation (creates <dir>.xmemo.bak backup)
+# Replace existing installation (creates backup in ~/.xmemo/backups/skills/<client>/)
 xmemo skill install --client codex --force --yes
 
 # Update alias (equivalent to skill install --force)
