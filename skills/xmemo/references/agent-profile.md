@@ -23,7 +23,7 @@ To have XMemo used automatically in every session, the project's agent instructi
 When the user chooses "later" or "don't ask again" during first-run sign-in or a subsequent offer:
 1. Record the response using `node scripts/xmemo-skill.mjs profile --status later` or `node scripts/xmemo-skill.mjs profile --status never`.
 2. State is persisted in a small local file in the XMemo folder of the user's home directory.
-3. After "later", each successful recall increments a local counter. When recall has been used at least 5 more times since the last offer and fewer than 3 offers have been made in total, recall prints a single guidance note on standard error suggesting an offer can be made once more if the project lacks the section.
+3. After "later", each successful recall increments a local counter that counts recalls on this computer across all projects. When recall has been used at least 5 more times since the last offer and fewer than 3 offers have been made in total, recall prints a single guidance note on standard error suggesting an offer can be made once more if the current project lacks the section, and the agent checks the current project's file before offering.
 4. The guidance note itself counts as an offer, ensuring no more than 3 offers are ever made in total.
 5. After "never" or when no status is recorded, recall never prints a guidance note.
 

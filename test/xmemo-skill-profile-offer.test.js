@@ -187,20 +187,20 @@ test('recall re-offer behavior: later triggers note at 5th recall on stderr, pre
     const initRes = await runSkill(['profile', '--status', 'later'], env);
     assert.equal(initRes.code, 0);
 
-    const expectedNotePattern = /Note: recall has been used \d+ times\. If this project's AGENTS\.md or CLAUDE\.md has no "## XMemo memory" section, you may offer once more to add it \(see references\/agent-profile\.md\) and record the answer with `profile --status later\|never`\./;
+    const expectedNotePattern = /Note: XMemo recall has been used \d+ times on this computer\. If the current project's AGENTS\.md or CLAUDE\.md has no "## XMemo memory" section, you may offer once more to add it \(see references\/agent-profile\.md\) and record the answer with `profile --status later\|never`\./;
 
     // 2. Recalls 1 to 4: no note on stderr
     for (let i = 1; i <= 4; i++) {
       const res = await runSkill(['recall', '--query', `test query ${i}`, '--base-url', mock.baseUrl], env);
       assert.equal(res.code, 0);
-      assert.equal(res.stderr.includes('Note: recall has been used'), false, `Recall ${i} should not emit a note`);
+      assert.equal(res.stderr.includes('Note: XMemo recall has been used'), false, `Recall ${i} should not emit a note`);
     }
 
     // 3. 5th recall with --json: note on stderr, stdout is 100% valid JSON without the note
     const recall5 = await runSkill(['recall', '--query', 'test query 5', '--json', '--base-url', mock.baseUrl], env);
     assert.equal(recall5.code, 0);
     assert.match(recall5.stderr, expectedNotePattern);
-    assert.match(recall5.stderr, /Note: recall has been used 5 times\./);
+    assert.match(recall5.stderr, /Note: XMemo recall has been used 5 times on this computer\./);
 
     // Stdout must parse as valid JSON
     let parsedJson = null;
@@ -208,26 +208,26 @@ test('recall re-offer behavior: later triggers note at 5th recall on stderr, pre
       parsedJson = JSON.parse(recall5.stdout.trim());
     }, 'Stdout in --json mode must remain strictly valid JSON');
     assert.equal(parsedJson.ok, true);
-    assert.equal(recall5.stdout.includes('Note: recall has been used'), false, 'Stdout must not contain the note');
+    assert.equal(recall5.stdout.includes('Note: XMemo recall has been used'), false, 'Stdout must not contain the note');
 
     // 4. Recalls 6 to 9: no note on stderr
     for (let i = 6; i <= 9; i++) {
       const res = await runSkill(['recall', '--query', `test query ${i}`, '--base-url', mock.baseUrl], env);
       assert.equal(res.code, 0);
-      assert.equal(res.stderr.includes('Note: recall has been used'), false, `Recall ${i} should not emit a note`);
+      assert.equal(res.stderr.includes('Note: XMemo recall has been used'), false, `Recall ${i} should not emit a note`);
     }
 
     // 5. 10th recall: second note on stderr
     const recall10 = await runSkill(['recall', '--query', 'test query 10', '--base-url', mock.baseUrl], env);
     assert.equal(recall10.code, 0);
-    assert.match(recall10.stderr, /Note: recall has been used 10 times\./);
+    assert.match(recall10.stderr, /Note: XMemo recall has been used 10 times on this computer\./);
 
     // 6. Recalls 11 to 25: maximum offers (3 total: initial + 2 notes) reached -> zero notes ever
     let noteCountAfter10 = 0;
     for (let i = 11; i <= 25; i++) {
       const res = await runSkill(['recall', '--query', `test query ${i}`, '--base-url', mock.baseUrl], env);
       assert.equal(res.code, 0);
-      if (res.stderr.includes('Note: recall has been used')) {
+      if (res.stderr.includes('Note: XMemo recall has been used')) {
         noteCountAfter10++;
       }
     }
@@ -261,7 +261,7 @@ test('never status and unset status never emit recall notes across multiple reca
     for (let i = 1; i <= 8; i++) {
       const res = await runSkill(['recall', '--query', `query ${i}`, '--base-url', mock.baseUrl], envUnset);
       assert.equal(res.code, 0);
-      assert.equal(res.stderr.includes('Note: recall has been used'), false);
+      assert.equal(res.stderr.includes('Note: XMemo recall has been used'), false);
     }
   } finally {
     await rm(tempHomeUnset, { recursive: true, force: true });
@@ -283,7 +283,7 @@ test('never status and unset status never emit recall notes across multiple reca
     for (let i = 1; i <= 8; i++) {
       const res = await runSkill(['recall', '--query', `query ${i}`, '--base-url', mock.baseUrl], envNever);
       assert.equal(res.code, 0);
-      assert.equal(res.stderr.includes('Note: recall has been used'), false);
+      assert.equal(res.stderr.includes('Note: XMemo recall has been used'), false);
     }
   } finally {
     await rm(tempHomeNever, { recursive: true, force: true });
@@ -339,7 +339,7 @@ test('failing recall prints no note and preserves exit code', async () => {
 
     const res = await runSkill(['recall', '--query', 'failing query', '--base-url', `http://127.0.0.1:${port}`], env);
     assert.notEqual(res.code, 0, 'Exit code must be non-zero when API request fails');
-    assert.equal(res.stderr.includes('Note: recall has been used'), false, 'Failing recall must not print offer note');
+    assert.equal(res.stderr.includes('Note: XMemo recall has been used'), false, 'Failing recall must not print offer note');
 
     const statePath = path.join(tempHome, '.xmemo', 'profile-offer.json');
     const stateContent = JSON.parse(await readFile(statePath, 'utf8'));

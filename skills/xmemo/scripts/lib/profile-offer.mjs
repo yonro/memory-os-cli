@@ -96,7 +96,7 @@ export function noteRecall() {
       state.offers = (state.offers || 0) + 1;
       state.lastOfferRecalls = state.recalls;
       writeOfferState(state);
-      return `Note: recall has been used ${state.recalls} times. If this project's AGENTS.md or CLAUDE.md has no "## XMemo memory" section, you may offer once more to add it (see references/agent-profile.md) and record the answer with \`profile --status later|never\`.`;
+      return `Note: XMemo recall has been used ${state.recalls} times on this computer. If the current project's AGENTS.md or CLAUDE.md has no "## XMemo memory" section, you may offer once more to add it (see references/agent-profile.md) and record the answer with \`profile --status later|never\`.`;
     }
 
     writeOfferState(state);
