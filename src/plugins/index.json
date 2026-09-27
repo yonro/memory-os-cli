@@ -105,6 +105,7 @@
       "args": ["extensions", "list"]
     },
     "docs": "https://github.com/yonro/xmemo-gemini-cli",
+    "note": "unpinned (host does not support refs)",
     "status": "preview",
     "clientId": "gemini-cli"
   },
@@ -146,6 +147,11 @@
     "commit": "5bc9da0fcf57a0c1847492bbff5bdbe347986cc5",
     "detect": null,
     "install": null,
+    "steps": [
+      "Open Cursor Settings > Features > Plugins (or Cursor Marketplace)",
+      "Search for 'XMemo' or install from Cursor Marketplace",
+      "Enable the XMemo MCP server and complete browser-based OAuth authorization"
+    ],
     "verify": null,
     "docs": "https://github.com/yonro/xmemo-cursor-plugin",
     "status": "preview",
@@ -162,6 +168,12 @@
     "commit": "2fcccbce60b855febb665b87bac56987a87e41de",
     "detect": null,
     "install": null,
+    "steps": [
+      "Open Kiro's Powers panel",
+      "Select 'Add Custom Power' > 'Import power from GitHub'",
+      "Enter repository URL: https://github.com/yonro/xmemo-kiro-power",
+      "Install the Power and authorize XMemo in a new conversation"
+    ],
     "verify": null,
     "docs": "https://github.com/yonro/xmemo-kiro-power",
     "status": "preview",
@@ -178,6 +190,11 @@
     "commit": "bf08e7c237bc46a84386b0aec15ee3b38dca5e98",
     "detect": null,
     "install": null,
+    "steps": [
+      "Run: code --install-extension xmemo.xmemo-vscode",
+      "Or search for 'XMemo' in VS Code Extensions view",
+      "Run 'XMemo: Sign In' from the Command Palette to connect via OAuth"
+    ],
     "verify": null,
     "docs": "https://github.com/yonro/xmemo-vscode",
     "status": "preview",
@@ -194,6 +211,11 @@
     "commit": "13ca5a2dabd05f03421a9e2f3c9c1dfdef986553",
     "detect": null,
     "install": null,
+    "steps": [
+      "Add repository as a plugin marketplace or install from OpenAI plugin directory",
+      "Install 'xmemo' from the XMemo marketplace",
+      "Complete XMemo OAuth authentication at install or first connection"
+    ],
     "verify": null,
     "docs": "https://github.com/yonro/xmemo-chatgpt-plugin",
     "status": "preview",
@@ -210,6 +232,11 @@
     "commit": "0cbbac5a535ad5c28a5be52b4d8aed67a189af1b",
     "detect": null,
     "install": null,
+    "steps": [
+      "Obtain or build the xmemo-memory package (or clone https://github.com/yonro/xmemo-cindy-plugin)",
+      "In Cindy, open Plugins and drag in or select the package",
+      "Enable XMemo Memory and configure Cloud OAuth or API key"
+    ],
     "verify": null,
     "docs": "https://github.com/yonro/xmemo-cindy-plugin",
     "status": "preview",

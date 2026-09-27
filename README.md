@@ -254,9 +254,9 @@ The CLI provides a curated, static index of verified agent plugins shipped direc
 | --- | --- | --- | --- | --- |
 | `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
 | `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
-| `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone verified against commit `5d0d280` |
+| `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone verified against commit `5d0d280` (defaults to `~/.xmemo/plugins/claude-code`) |
 | `cursor` | Cursor | `marketplace` | Preview | Cursor Marketplace plugin |
-| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` extension |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` extension (unpinned: host does not support refs) |
 | `kiro` | Kiro | `manual` | Preview | Steering rules & Power integration |
 | `vscode` | VS Code | `marketplace` | Preview | VS Code Marketplace extension |
 | `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
@@ -285,6 +285,9 @@ xmemo plugin install <id>
 # Non-interactive install
 xmemo plugin install <id> --yes
 
+# Specify custom target directory for git-dir plugins
+xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code
+
 # Open plugin documentation or marketplace in browser
 xmemo plugin install <id> --open
 
@@ -293,10 +296,11 @@ xmemo plugin status [<id>]
 ```
 
 **Security & Consent:**
-- Only verified plugin IDs from the static index are accepted; arbitrary URLs and unknown IDs are rejected.
+- Only verified plugin IDs from the static index are accepted; arbitrary URLs and unknown IDs are rejected with exit code 2.
 - Interactive install always displays the execution plan and requires explicit consent (`[y/N]`, defaulting to Cancel on empty input or EOF).
 - `--dry-run` guarantees zero disk writes and zero spawned processes.
-- Git directory clones verify that the checked-out `HEAD` commit SHA matches the index commit byte-for-byte; on mismatch, the directory is immediately removed.
+- Marketplace and manual plugins display exact step-by-step instructions from the plugin repository during `plugin install <id>` (pass `--open` to open docs in browser).
+- Git directory plugins (`claude-code`) clone into a stable per-user location (`~/.xmemo/plugins/<id>`), support `--dir <path>` override, verify the checked-out `HEAD` commit byte-for-byte, and output the exact load command (`claude --plugin-dir <dir>`). On commit mismatch, the directory is immediately removed.
 - Plugin child processes run in an isolated environment with authentication tokens (`XMEMO_KEY`, `MEMORY_OS_MCP_TOKEN`, `XMEMO_TOKEN`) scrubbed from argv and env.
 
 ## Authentication

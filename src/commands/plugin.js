@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -37,6 +38,14 @@ function validatePluginIdArg(rawId, context) {
     throw new UsageError(`Unknown plugin: "${rawId}". Supported plugins: ${supportedPluginIds().join(', ')}.`);
   }
   return plugin;
+}
+
+function userHome(env) {
+  return env?.USERPROFILE || env?.HOME || os.homedir();
+}
+
+function defaultGitDir(plugin, io) {
+  return path.join(userHome(io?.env), '.xmemo', 'plugins', plugin.id);
 }
 
 async function readLineFromStdin(stdin) {
@@ -99,6 +108,10 @@ async function execPluginProcess(command, args, io, options = {}) {
 }
 
 async function pluginList(args, io) {
+  const positional = args.slice(1).filter((a) => !a.startsWith('-'));
+  if (positional.length > 0) {
+    throw new UsageError('plugin list does not accept positional arguments.');
+  }
   const includeAll = hasFlag(args, '--all');
   const plugins = allPlugins({ includeLegacy: includeAll });
   if (hasFlag(args, '--json')) {
@@ -108,7 +121,8 @@ async function pluginList(args, io) {
   writeLine(io.stdout, 'Available XMemo plugins:');
   for (const p of plugins) {
     const vStr = p.version ? ` - v${p.version}` : '';
-    writeLine(io.stdout, `  ${p.id.padEnd(16)} ${p.label} (${p.kind}, ${p.status})${vStr}`);
+    const noteStr = p.note ? ` (${p.note})` : '';
+    writeLine(io.stdout, `  ${p.id.padEnd(16)} ${p.label} (${p.kind}, ${p.status})${vStr}${noteStr}`);
   }
   writeLine(io.stdout, '');
   writeLine(io.stdout, `Use "${COMMAND_NAME} plugin info <id>" for details or "${COMMAND_NAME} plugin install <id>" to install.`);
@@ -117,6 +131,12 @@ async function pluginList(args, io) {
 
 async function pluginInfo(args, io) {
   const positional = args.slice(1).filter((a) => !a.startsWith('-'));
+  if (positional.length === 0) {
+    throw new UsageError(`plugin info requires <id>. Supported plugins: ${supportedPluginIds().join(', ')}.`);
+  }
+  if (positional.length > 1) {
+    throw new UsageError('plugin info accepts only one <id>.');
+  }
   const rawId = positional[0];
   const plugin = validatePluginIdArg(rawId, 'info');
 
@@ -137,6 +157,9 @@ async function pluginInfo(args, io) {
   if (plugin.clientId) {
     writeLine(io.stdout, `  Client ID: ${plugin.clientId}`);
   }
+  if (plugin.note) {
+    writeLine(io.stdout, `  Note: ${plugin.note}`);
+  }
   if (plugin.install) {
     writeLine(io.stdout, `  Install command: ${plugin.install.join(' ')}`);
   } else if (plugin.kind === 'mcp') {
@@ -144,11 +167,42 @@ async function pluginInfo(args, io) {
   } else {
     writeLine(io.stdout, `  Install instructions: See ${plugin.docs} (run with --open to view)`);
   }
+  if (plugin.steps && plugin.steps.length > 0) {
+    writeLine(io.stdout, '  Installation steps:');
+    for (let i = 0; i < plugin.steps.length; i++) {
+      writeLine(io.stdout, `    ${i + 1}. ${plugin.steps[i]}`);
+    }
+  }
   return 0;
 }
 
+function extractPositionalArgs(args, optionsWithValues = []) {
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (optionsWithValues.includes(arg)) {
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        i++;
+      }
+      continue;
+    }
+    if (arg.startsWith('-')) {
+      continue;
+    }
+    positional.push(arg);
+  }
+  return positional;
+}
+
 async function pluginInstall(args, io) {
-  const positional = args.slice(1).filter((a) => !a.startsWith('-'));
+  const dir = optionValue(args, '--dir');
+  const positional = extractPositionalArgs(args.slice(1), ['--dir']);
+  if (positional.length === 0) {
+    throw new UsageError(`plugin install requires <id>. Supported plugins: ${supportedPluginIds().join(', ')}.`);
+  }
+  if (positional.length > 1) {
+    throw new UsageError('plugin install accepts only one <id>.');
+  }
   const rawId = positional[0];
   const plugin = validatePluginIdArg(rawId, 'install');
 
@@ -156,7 +210,6 @@ async function pluginInstall(args, io) {
   const yes = hasFlag(args, '--yes') || hasFlag(args, '-y');
   const open = hasFlag(args, '--open');
   const json = hasFlag(args, '--json');
-  const dir = optionValue(args, '--dir');
 
   if (plugin.kind === 'mcp') {
     const setupCmd = `${COMMAND_NAME} setup ${plugin.clientId}`;
@@ -196,6 +249,7 @@ async function pluginInstall(args, io) {
         id: plugin.id,
         kind: plugin.kind,
         status: 'manual-instruction',
+        steps: plugin.steps ?? [],
         docs: plugin.docs,
         opened
       }, null, 2));
@@ -203,6 +257,12 @@ async function pluginInstall(args, io) {
     }
     writeLine(io.stdout, `${plugin.label} (${plugin.id}): ${plugin.kind === 'marketplace' ? 'Marketplace' : 'Manual'} integration`);
     writeLine(io.stdout, `  Documentation: ${plugin.docs}`);
+    if (plugin.steps && plugin.steps.length > 0) {
+      writeLine(io.stdout, '  Installation steps:');
+      for (let i = 0; i < plugin.steps.length; i++) {
+        writeLine(io.stdout, `    ${i + 1}. ${plugin.steps[i]}`);
+      }
+    }
     if (!open) {
       writeLine(io.stdout, `  Run "${COMMAND_NAME} plugin install ${plugin.id} --open" to open the instructions in your browser.`);
     }
@@ -272,7 +332,9 @@ async function pluginInstall(args, io) {
   }
 
   if (plugin.kind === 'git-dir') {
-    const targetDir = path.resolve(io.cwd ?? process.cwd(), dir ?? `xmemo-${plugin.platform}-plugin`);
+    const targetDir = dir
+      ? path.resolve(io.cwd ?? process.cwd(), dir)
+      : defaultGitDir(plugin, io);
     const cloneCmd = ['git', 'clone', '--branch', plugin.tag, '--depth', '1', `https://github.com/${plugin.repo}.git`, targetDir];
     if (!json) {
       writeLine(io.stdout, `Install plan for ${plugin.label}:`);
@@ -324,6 +386,8 @@ async function pluginInstall(args, io) {
       throw new UsageError(`Target directory already exists: ${targetDir}. Use --dir <path> to specify a different path.`);
     }
 
+    await fs.mkdir(path.dirname(targetDir), { recursive: true });
+
     const cloneRes = await execPluginProcess('git', ['clone', '--branch', plugin.tag, '--depth', '1', `https://github.com/${plugin.repo}.git`, targetDir], io);
     if (cloneRes.code !== 0) {
       throw new UsageError(`Failed to clone plugin repository: ${cloneRes.stderr || cloneRes.stdout}`);
@@ -358,7 +422,7 @@ async function pluginInstall(args, io) {
       writeLine(io.stdout, `✓ ${plugin.label} cloned and commit verified at ${targetDir}`);
       writeLine(io.stdout, `  To load the plugin, run: ${loadInstructions}`);
       if (plugin.status === 'preview') {
-        writeLine(io.stdout, `  Note: Status is preview (plugin directory review pending).`);
+        writeLine(io.stdout, '  Note: Status is preview (plugin directory review pending).');
       }
     }
     return 0;
@@ -376,7 +440,7 @@ async function checkPluginStatus(plugin, io) {
       try {
         const res = await execPluginProcess('openclaw', ['--version'], io);
         if (res.code === 0) {
-          detail = `openclaw binary present`;
+          detail = 'openclaw binary present';
           const pRes = await execPluginProcess('openclaw', ['plugins', 'inspect', 'xmemo-memory', '--runtime', '--json'], io);
           if (pRes.code === 0) {
             installed = true;
@@ -409,18 +473,22 @@ async function checkPluginStatus(plugin, io) {
       }
     }
   } else if (plugin.kind === 'git-dir') {
-    const defaultDir = path.resolve(io.cwd ?? process.cwd(), `xmemo-${plugin.platform}-plugin`);
-    if (existsSync(defaultDir)) {
+    const candidateDirs = [
+      defaultGitDir(plugin, io),
+      path.resolve(io.cwd ?? process.cwd(), `xmemo-${plugin.platform}-plugin`)
+    ];
+    const foundDir = candidateDirs.find((d) => existsSync(d));
+    if (foundDir) {
       try {
-        const res = await execPluginProcess('git', ['rev-parse', 'HEAD'], io, { cwd: defaultDir });
+        const res = await execPluginProcess('git', ['rev-parse', 'HEAD'], io, { cwd: foundDir });
         if (res.stdout.trim().toLowerCase() === plugin.commit.toLowerCase()) {
           installed = true;
-          detail = `verified clone at ${defaultDir}`;
+          detail = `verified clone at ${foundDir}`;
         } else {
-          detail = `clone present at ${defaultDir}`;
+          detail = `clone present at ${foundDir}`;
         }
       } catch {
-        detail = `directory exists at ${defaultDir}`;
+        detail = `directory exists at ${foundDir}`;
       }
     } else {
       detail = 'not cloned';
@@ -446,6 +514,9 @@ async function checkPluginStatus(plugin, io) {
 
 async function pluginStatus(args, io) {
   const positional = args.slice(1).filter((a) => !a.startsWith('-'));
+  if (positional.length > 1) {
+    throw new UsageError('plugin status accepts at most one <id>.');
+  }
   const rawId = positional[0];
   const includeAll = hasFlag(args, '--all');
 

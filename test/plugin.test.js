@@ -149,6 +149,12 @@ test('Plugin Index: all 13 plugins exist with valid schema and pinned commits', 
       assert.ok(p.install.every((arg) => typeof arg === 'string'), `Install args for ${p.id} must be strings`);
     }
 
+    // Steps, if present, must be an array of non-empty strings
+    if (p.steps !== undefined) {
+      assert.ok(Array.isArray(p.steps), `steps for ${p.id} must be an array`);
+      assert.ok(p.steps.every((s) => typeof s === 'string' && s.length > 0), `all steps for ${p.id} must be non-empty strings`);
+    }
+
     // Docs must be a valid URL
     assert.ok(typeof p.docs === 'string' && p.docs.startsWith('https://'), `Docs for ${p.id} must be https URL`);
 
@@ -157,6 +163,16 @@ test('Plugin Index: all 13 plugins exist with valid schema and pinned commits', 
       assert.ok(knownClientIds.has(p.clientId), `Plugin ${p.id} clientId "${p.clientId}" not found in CLIENT_REGISTRY`);
     }
   }
+
+  // Marketplace and manual plugins must provide installation steps
+  const marketplaceAndManual = ['cursor', 'kiro', 'vscode', 'chatgpt-codex', 'cindy'];
+  for (const id of marketplaceAndManual) {
+    const p = getPlugin(id);
+    assert.ok(Array.isArray(p?.steps) && p.steps.length > 0, `Plugin ${id} must provide steps`);
+  }
+
+  // Gemini CLI host note
+  assert.equal(getPlugin('gemini-cli')?.note, 'unpinned (host does not support refs)');
 
   // Legacy plugins are marked legacy
   assert.equal(getPlugin('xmemo-hermes-plugin')?.status, 'legacy');
@@ -172,8 +188,15 @@ test('plugin list: lists active plugins by default, and legacy with --all', asyn
   assert.match(out, /openclaw/);
   assert.match(out, /hermes/);
   assert.match(out, /claude-code/);
+  assert.match(out, /gemini-cli.*\(unpinned \(host does not support refs\)\)/);
   assert.doesNotMatch(out, /xmemo-hermes-plugin/);
   assert.doesNotMatch(out, /xmemo-skills/);
+
+  // Reject unexpected positional arguments with exit 2
+  const { io: ioExtra, getStderr: getStderrExtra } = createMockIo();
+  const codeExtra = await run(['plugin', 'list', 'extra-arg'], ioExtra);
+  assert.equal(codeExtra, 2);
+  assert.match(getStderrExtra(), /plugin list does not accept positional arguments/);
 
   // With --all
   const { io: ioAll, getStdout: getStdoutAll } = createMockIo();
@@ -202,6 +225,20 @@ test('plugin info: displays details for valid plugin and rejects invalid IDs / U
   assert.match(out, /Kind:\s+git-dir/);
   assert.match(out, /Commit:\s+5d0d2802daaf431eb31b038511f34a00b625ec9f/);
 
+  // Unpinned note displayed for gemini-cli
+  const { io: ioGemini, getStdout: getStdoutGemini } = createMockIo();
+  const codeGemini = await run(['plugin', 'info', 'gemini-cli'], ioGemini);
+  assert.equal(codeGemini, 0);
+  assert.match(getStdoutGemini(), /Note:\s+unpinned \(host does not support refs\)/);
+
+  // Steps displayed for marketplace plugin
+  const { io: ioCursor, getStdout: getStdoutCursor } = createMockIo();
+  const codeCursor = await run(['plugin', 'info', 'cursor'], ioCursor);
+  assert.equal(codeCursor, 0);
+  const outCursor = getStdoutCursor();
+  assert.match(outCursor, /Installation steps:/);
+  assert.match(outCursor, /1\. Open Cursor Settings/);
+
   // JSON mode
   const { io: ioJson, getStdout: getStdoutJson } = createMockIo();
   const codeJson = await run(['plugin', 'info', 'claude-code', '--json'], ioJson);
@@ -216,6 +253,12 @@ test('plugin info: displays details for valid plugin and rejects invalid IDs / U
   assert.equal(codeMissing, 2);
   assert.match(getStderrMissing(), /plugin info requires <id>/);
 
+  // Multiple arguments
+  const { io: ioMultiple, getStderr: getStderrMultiple } = createMockIo();
+  const codeMultiple = await run(['plugin', 'info', 'claude-code', 'extra'], ioMultiple);
+  assert.equal(codeMultiple, 2);
+  assert.match(getStderrMultiple(), /plugin info accepts only one <id>/);
+
   // Unknown ID
   const { io: ioUnknown, getStderr: getStderrUnknown } = createMockIo();
   const codeUnknown = await run(['plugin', 'info', 'nonexistent-plugin'], ioUnknown);
@@ -227,6 +270,68 @@ test('plugin info: displays details for valid plugin and rejects invalid IDs / U
   const codeUrl = await run(['plugin', 'info', 'https://github.com/yonro/xmemo-claude-plugin'], ioUrl);
   assert.equal(codeUrl, 2);
   assert.match(getStderrUrl(), /Invalid plugin ID: URLs are not supported/);
+
+  // JSON failure envelope on unknown ID
+  const { io: ioJsonErr, getStdout: getStdoutJsonErr } = createMockIo();
+  const codeJsonErr = await run(['plugin', 'info', 'evil', '--json'], ioJsonErr);
+  assert.equal(codeJsonErr, 2);
+  const parsedErr = JSON.parse(getStdoutJsonErr());
+  assert.equal(parsedErr.ok, false);
+  assert.equal(parsedErr.error.code, 'INPUT_ERROR');
+  assert.match(parsedErr.error.message, /Unknown plugin: "evil"/);
+});
+
+test('plugin install: rejects missing ID, unknown IDs, URLs, and multiple args with exit 2', async () => {
+  // Missing ID
+  const { io: ioMissing, getStderr: getStderrMissing } = createMockIo();
+  const codeMissing = await run(['plugin', 'install'], ioMissing);
+  assert.equal(codeMissing, 2);
+  assert.match(getStderrMissing(), /plugin install requires <id>/);
+
+  // Unknown ID
+  const { io: ioUnknown, getStderr: getStderrUnknown } = createMockIo();
+  const codeUnknown = await run(['plugin', 'install', 'evil'], ioUnknown);
+  assert.equal(codeUnknown, 2);
+  assert.match(getStderrUnknown(), /Unknown plugin: "evil"/);
+
+  // URL rejection
+  const { io: ioUrl, getStderr: getStderrUrl } = createMockIo();
+  const codeUrl = await run(['plugin', 'install', 'https://github.com/x/y'], ioUrl);
+  assert.equal(codeUrl, 2);
+  assert.match(getStderrUrl(), /Invalid plugin ID: URLs are not supported/);
+
+  // Multiple arguments
+  const { io: ioMultiple, getStderr: getStderrMultiple } = createMockIo();
+  const codeMultiple = await run(['plugin', 'install', 'openclaw', 'extra'], ioMultiple);
+  assert.equal(codeMultiple, 2);
+  assert.match(getStderrMultiple(), /plugin install accepts only one <id>/);
+
+  // Missing ID with --json
+  const { io: ioJsonMissing, getStdout: getStdoutJsonMissing } = createMockIo();
+  const codeJsonMissing = await run(['plugin', 'install', '--json'], ioJsonMissing);
+  assert.equal(codeJsonMissing, 2);
+  const parsedMissing = JSON.parse(getStdoutJsonMissing());
+  assert.equal(parsedMissing.ok, false);
+  assert.equal(parsedMissing.error.code, 'INPUT_ERROR');
+  assert.match(parsedMissing.error.message, /plugin install requires <id>/);
+
+  // Unknown ID with --json
+  const { io: ioJsonUnknown, getStdout: getStdoutJsonUnknown } = createMockIo();
+  const codeJsonUnknown = await run(['plugin', 'install', 'evil', '--json'], ioJsonUnknown);
+  assert.equal(codeJsonUnknown, 2);
+  const parsedUnknown = JSON.parse(getStdoutJsonUnknown());
+  assert.equal(parsedUnknown.ok, false);
+  assert.equal(parsedUnknown.error.code, 'INPUT_ERROR');
+  assert.match(parsedUnknown.error.message, /Unknown plugin: "evil"/);
+
+  // URL rejection with --json
+  const { io: ioJsonUrl, getStdout: getStdoutJsonUrl } = createMockIo();
+  const codeJsonUrl = await run(['plugin', 'install', 'https://github.com/x/y', '--json'], ioJsonUrl);
+  assert.equal(codeJsonUrl, 2);
+  const parsedUrl = JSON.parse(getStdoutJsonUrl());
+  assert.equal(parsedUrl.ok, false);
+  assert.equal(parsedUrl.error.code, 'INPUT_ERROR');
+  assert.match(parsedUrl.error.message, /URLs are not supported/);
 });
 
 test('plugin install: MCP kind directs to setup command', async () => {
@@ -240,9 +345,21 @@ test('plugin install: marketplace/manual prints instructions and handles --open'
   const { io, getStdout, getOpenedUrls } = createMockIo();
   const code = await run(['plugin', 'install', 'cursor', '--open'], io);
   assert.equal(code, 0);
-  assert.match(getStdout(), /Marketplace integration/);
+  const out = getStdout();
+  assert.match(out, /Marketplace integration/);
+  assert.match(out, /Documentation: https:\/\/github\.com\/yonro\/xmemo-cursor-plugin/);
+  assert.match(out, /Installation steps:/);
+  assert.match(out, /1\. Open Cursor Settings/);
   assert.equal(getOpenedUrls().length, 1);
   assert.equal(getOpenedUrls()[0], 'https://github.com/yonro/xmemo-cursor-plugin');
+
+  // JSON mode returns steps
+  const { io: ioJson, getStdout: getStdoutJson } = createMockIo();
+  const codeJson = await run(['plugin', 'install', 'cursor', '--json'], ioJson);
+  assert.equal(codeJson, 0);
+  const parsed = JSON.parse(getStdoutJson());
+  assert.equal(parsed.id, 'cursor');
+  assert.ok(Array.isArray(parsed.steps) && parsed.steps.length === 3);
 });
 
 test('plugin install: native-cli dry-run and consent prompting', async () => {
@@ -282,13 +399,11 @@ test('plugin install: native-cli dry-run and consent prompting', async () => {
   assert.equal(childEnv.XMEMO_TOKEN, undefined);
 });
 
-test('plugin install: git-dir performs clone and verifies commit', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-gitdir-test-'));
-  const targetDir = path.join(tempDir, 'claude-plugin');
+test('plugin install: git-dir defaults to ~/.xmemo/plugins/<id> and verifies commit', async () => {
+  const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-gitdir-home-'));
+  const expectedDefaultDir = path.join(tempHome, '.xmemo', 'plugins', 'claude-code');
 
-  let gitCallCount = 0;
   const mockSpawn = (cmd, args, opts) => {
-    gitCallCount++;
     if (args[0] === 'clone') {
       return {
         stdout: Readable.from(['Cloning into directory...']),
@@ -297,7 +412,50 @@ test('plugin install: git-dir performs clone and verifies commit', async () => {
       };
     }
     if (args[0] === 'rev-parse') {
-      // Return matching commit
+      return {
+        stdout: Readable.from(['5d0d2802daaf431eb31b038511f34a00b625ec9f\n']),
+        stderr: Readable.from([]),
+        on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+      };
+    }
+    return {
+      stdout: Readable.from([]),
+      stderr: Readable.from([]),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+
+  const { io, getStdout, getSpawned } = createMockIo({
+    home: tempHome,
+    spawnHandler: mockSpawn
+  });
+
+  const code = await run(['plugin', 'install', 'claude-code', '--yes'], io);
+  assert.equal(code, 0);
+  const out = getStdout();
+  assert.match(out, /Claude Code XMemo Plugin cloned and commit verified/);
+  assert.match(out, /claude --plugin-dir/);
+  assert.equal(getSpawned().length, 2);
+  assert.equal(getSpawned()[0].args[0], 'clone');
+  assert.equal(getSpawned()[0].args[getSpawned()[0].args.length - 1], expectedDefaultDir);
+  assert.equal(getSpawned()[1].args[0], 'rev-parse');
+
+  await fs.rm(tempHome, { recursive: true, force: true });
+});
+
+test('plugin install: git-dir supports --dir override', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-gitdir-override-'));
+  const targetDir = path.join(tempDir, 'custom-claude');
+
+  const mockSpawn = (cmd, args, opts) => {
+    if (args[0] === 'clone') {
+      return {
+        stdout: Readable.from(['Cloning...']),
+        stderr: Readable.from([]),
+        on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+      };
+    }
+    if (args[0] === 'rev-parse') {
       return {
         stdout: Readable.from(['5d0d2802daaf431eb31b038511f34a00b625ec9f\n']),
         stderr: Readable.from([]),
@@ -318,9 +476,7 @@ test('plugin install: git-dir performs clone and verifies commit', async () => {
   const code = await run(['plugin', 'install', 'claude-code', '--yes', '--dir', targetDir], io);
   assert.equal(code, 0);
   assert.match(getStdout(), /Claude Code XMemo Plugin cloned and commit verified/);
-  assert.equal(getSpawned().length, 2);
-  assert.equal(getSpawned()[0].args[0], 'clone');
-  assert.equal(getSpawned()[1].args[0], 'rev-parse');
+  assert.equal(getSpawned()[0].args[getSpawned()[0].args.length - 1], targetDir);
 
   await fs.rm(tempDir, { recursive: true, force: true });
 });
@@ -369,20 +525,80 @@ test('plugin install: git-dir rolls back when commit does not match', async () =
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 
-test('plugin status: returns status for single and all plugins', async () => {
-  const { io, getStdout } = createMockIo();
-  const code = await run(['plugin', 'status', 'codex'], io);
-  assert.equal(code, 0);
-  assert.match(getStdout(), /Plugin status:/);
-  assert.match(getStdout(), /codex\s+Codex XMemo Plugin/);
+test('plugin status: returns status for single and all plugins, detects claude-code at home, and rejects unknown id', async () => {
+  const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-status-home-'));
+  const claudeHomeDir = path.join(tempHome, '.xmemo', 'plugins', 'claude-code');
+  await fs.mkdir(claudeHomeDir, { recursive: true });
 
-  // Status with --json
+  const mockSpawn = (cmd, args, opts) => {
+    if (cmd === 'git' && args[0] === 'rev-parse') {
+      return {
+        stdout: Readable.from(['5d0d2802daaf431eb31b038511f34a00b625ec9f\n']),
+        stderr: Readable.from([]),
+        on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+      };
+    }
+    return {
+      stdout: Readable.from([]),
+      stderr: Readable.from([]),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+
+  const { io, getStdout } = createMockIo({
+    home: tempHome,
+    spawnHandler: mockSpawn
+  });
+  const code = await run(['plugin', 'status', 'claude-code', '--json'], io);
+  assert.equal(code, 0);
+  const parsed = JSON.parse(getStdout());
+  assert.equal(parsed.id, 'claude-code');
+  assert.equal(parsed.installed, true);
+  assert.match(parsed.detail, /verified clone at/);
+
+  // Status for codex
+  const { io: ioCodex, getStdout: getStdoutCodex } = createMockIo();
+  const codeCodex = await run(['plugin', 'status', 'codex'], ioCodex);
+  assert.equal(codeCodex, 0);
+  assert.match(getStdoutCodex(), /Plugin status:/);
+  assert.match(getStdoutCodex(), /codex\s+Codex XMemo Plugin/);
+
+  // Unknown ID rejects with exit 2
+  const { io: ioUnknown, getStderr: getStderrUnknown } = createMockIo();
+  const codeUnknown = await run(['plugin', 'status', 'evil'], ioUnknown);
+  assert.equal(codeUnknown, 2);
+  assert.match(getStderrUnknown(), /Unknown plugin: "evil"/);
+
+  // Unknown ID with --json returns failure envelope with exit 2
+  const { io: ioJsonErr, getStdout: getStdoutJsonErr } = createMockIo();
+  const codeJsonErr = await run(['plugin', 'status', 'evil', '--json'], ioJsonErr);
+  assert.equal(codeJsonErr, 2);
+  const parsedErr = JSON.parse(getStdoutJsonErr());
+  assert.equal(parsedErr.ok, false);
+  assert.equal(parsedErr.error.code, 'INPUT_ERROR');
+
+  // Multiple arguments rejects with exit 2
+  const { io: ioMulti, getStderr: getStderrMulti } = createMockIo();
+  const codeMulti = await run(['plugin', 'status', 'codex', 'extra'], ioMulti);
+  assert.equal(codeMulti, 2);
+  assert.match(getStderrMulti(), /plugin status accepts at most one <id>/);
+
+  await fs.rm(tempHome, { recursive: true, force: true });
+});
+
+test('plugin subcommand: unknown subcommand exits with code 2', async () => {
+  const { io, getStderr } = createMockIo();
+  const code = await run(['plugin', 'nonexistent'], io);
+  assert.equal(code, 2);
+  assert.match(getStderr(), /Unknown plugin subcommand: "nonexistent"/);
+
+  // With --json
   const { io: ioJson, getStdout: getStdoutJson } = createMockIo();
-  const codeJson = await run(['plugin', 'status', 'codex', '--json'], ioJson);
-  assert.equal(codeJson, 0);
+  const codeJson = await run(['plugin', 'nonexistent', '--json'], ioJson);
+  assert.equal(codeJson, 2);
   const parsed = JSON.parse(getStdoutJson());
-  assert.equal(parsed.id, 'codex');
-  assert.equal(typeof parsed.installed, 'boolean');
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.error.code, 'INPUT_ERROR');
 });
 
 test('setup client integration: prints Plugin available when registry links pluginId', async () => {
@@ -407,3 +623,4 @@ test('setup client integration: prints Plugin available when registry links plug
   assert.match(outOpenClaw, /Plugin: clawhub:@xmemo\/openclaw-memory@1\.0\.18/);
   assert.doesNotMatch(outOpenClaw, /Plugin available: xmemo plugin install openclaw/);
 });
+

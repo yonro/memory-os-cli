@@ -143,7 +143,7 @@ export async function run(args, io = defaultIo()) {
 
     throw new UsageError(`Unknown command: ${command}`);
   } catch (error) {
-    if (hasFlag(args, '--json') && ['memory', 'context', 'state', 'restart', 'knowledge', 'dream', 'cloud-skill'].includes(args[0])) {
+    if (hasFlag(args, '--json') && ['memory', 'context', 'state', 'restart', 'knowledge', 'dream', 'cloud-skill', 'plugin'].includes(args[0])) {
       writeFailure(io, [args[0] ?? 'help', args[1]].filter(Boolean).join('.'), error);
       return errorToExitCode(error);
     }
