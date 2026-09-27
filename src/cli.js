@@ -104,6 +104,7 @@ export async function run(args, io = defaultIo()) {
     }
 
     if (command === 'discovery') {
+      emitDeprecationHint(io, "Note: 'xmemo discovery' is deprecated and will be removed in a future release. Use 'xmemo doctor --discovery' instead.", args);
       return await discoveryCommand(args.slice(1), io);
     }
 
@@ -167,6 +168,7 @@ export async function run(args, io = defaultIo()) {
     }
 
     if (command === 'smoke') {
+      emitDeprecationHint(io, "Note: 'xmemo smoke' is deprecated and will be removed in a future release. Use 'xmemo doctor --client codex --smoke' instead.", args);
       return await smokeCommand(args.slice(1), io);
     }
 

@@ -128,9 +128,9 @@ test('client registry: helper functions query registry correctly', () => {
     assert.ok(getClient(pid)?.profile !== null, `${pid} must have profile`);
   }
 
-  // Doctor clients: kiro supported
+  // Doctor clients: codex and kiro supported
   const doctorIds = supportedDoctorClientIds();
-  assert.deepEqual(doctorIds, ['kiro']);
+  assert.deepEqual(doctorIds, ['codex', 'kiro']);
 
   // Uninstall client list has zero duplicate entries
   const uninstallIds = supportedUninstallClientIds();

@@ -1,6 +1,5 @@
 export const PRODUCT_NAME = 'XMemo';
 export const PACKAGE_NAME = '@xmemo/client';
-export const FALLBACK_PACKAGE_NAME = '@yonro/xmemo-client';
 export const COMMAND_NAME = 'xmemo';
 export const LEGACY_COMMAND_NAME = 'memory-os';
 export { CLI_VERSION } from './version.js';

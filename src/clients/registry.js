@@ -56,23 +56,8 @@ import {
   removeCopilotMcpConfig
 } from '../mcp/proxy/copilot.js';
 import { kiroDoctor } from '../commands/kiro-doctor.js';
-
-function userHome(env) {
-  return env?.USERPROFILE || env?.HOME || os.homedir();
-}
-
-function isRepo(cwd, env = process.env, markerDir = null) {
-  if (!cwd) return false;
-  const resolvedCwd = path.resolve(cwd);
-  const resolvedHome = path.resolve(userHome(env));
-  if (resolvedCwd === resolvedHome) {
-    return existsSync(path.join(cwd, '.git'));
-  }
-  if (markerDir && existsSync(path.join(cwd, markerDir))) {
-    return true;
-  }
-  return existsSync(path.join(cwd, '.git')) || existsSync(path.join(cwd, 'package.json'));
-}
+import { codexDoctor } from '../commands/codex-doctor.js';
+import { isRepo, userHome } from '../core/runtime.js';
 
 export const CLIENT_REGISTRY = Object.freeze([
   // 1. Codex
@@ -105,7 +90,7 @@ export const CLIENT_REGISTRY = Object.freeze([
     },
     skillDir: (env) => path.join(userHome(env), '.codex', 'skills', 'xmemo-memory'),
     pluginId: 'codex',
-    doctor: null,
+    doctor: codexDoctor,
     detect: async (env, options = {}) => detectClientByCandidates('codex', env, options)
   },
   // 2. Grok

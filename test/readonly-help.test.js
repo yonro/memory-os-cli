@@ -66,6 +66,9 @@ const COMMAND_MATRIX = [
   ['setup', '--all'],
 
   ['doctor', '--client', 'kiro'],
+  ['doctor', '--client', 'codex'],
+  ['doctor', '--client', 'codex', '--smoke'],
+  ['doctor', '--discovery'],
   ['doctor', '--services'],
 
   ['uninstall', 'cursor'],

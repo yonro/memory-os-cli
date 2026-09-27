@@ -28,7 +28,7 @@ import {
   probe
 } from '../network/http.js';
 import { writeLine } from '../core/io.js';
-import { codexSmokeReport } from '../mcp/formats/toml.js';
+import { codexDoctor } from './codex-doctor.js';
 import { defaultCodexConfigPath } from '../config/paths.js';
 import { serviceContext } from '../api/service-context.js';
 import { assertKnownOptions } from '../api/input.js';
@@ -43,7 +43,8 @@ import {
 export function writeDoctorHelp(io) {
   writeLine(io.stdout, 'Doctor commands:');
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client <${supportedDoctorClientIds().join('|')}> [--config <path>] [--auth oauth|key] [--fix] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --discovery [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client <${supportedDoctorClientIds().join('|')}> [--config <path>] [--smoke] [--auth oauth|key] [--fix] [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Validate runtime environment, service reachability, and client configuration.');
   return 0;
@@ -55,6 +56,10 @@ export async function doctorCommand(args, io) {
     return 0;
   }
 
+  if (hasFlag(args, '--discovery')) {
+    return await doctorDiscovery(args, io);
+  }
+
   const client = optionValue(args, '--client');
   if (client) {
     const resolved = resolveClientId(client);
@@ -64,6 +69,9 @@ export async function doctorCommand(args, io) {
     }
     if (hasFlag(args, '--services')) throw new UsageError(`--client ${resolved} cannot be combined with --services.`);
     return await doctorClient.doctor(args, io);
+  }
+  if (hasFlag(args, '--smoke')) {
+    throw new UsageError('Smoke requires --client codex for this MCP-depth release.');
   }
   if (hasFlag(args, '--fix')) throw new UsageError(`Local config repair requires --client <${supportedDoctorClientIds().join('|')}>.`);
   if (hasFlag(args, '--services')) return await serviceDoctor(args, io);
@@ -178,21 +186,13 @@ function requestedServices(args) {
 }
 
 export function writeDiscoveryHelp(io) {
-  writeLine(io.stdout, 'Discovery commands:');
+  writeLine(io.stdout, 'Discovery commands (deprecated, use "xmemo doctor --discovery"):');
   writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
   return 0;
 }
 
-export async function discoveryCommand(args, io) {
-  const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
-    return writeDiscoveryHelp(io);
-  }
-  if (subcommand !== 'show') {
-    throw new UsageError(`Unknown discovery command: ${subcommand}`);
-  }
-
-  const baseUrl = normalizeBaseUrl(baseUrlOption(args.slice(1), io.env));
+export async function doctorDiscovery(args, io) {
+  const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');
   const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
   const discoveryUrl = endpointUrl(baseUrl, '/.well-known/agent-discovery.json');
@@ -212,6 +212,18 @@ export async function discoveryCommand(args, io) {
   writeLine(io.stdout, `Clients: ${agentDiscoveryClientIds(discovery).join(', ') || 'unknown'}`);
   writeLine(io.stdout, 'Security: read-only discovery; tokens are not returned; remote code execution is not advertised.');
   return 0;
+}
+
+export async function discoveryCommand(args, io) {
+  const subcommand = args[0] ?? 'help';
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    return writeDiscoveryHelp(io);
+  }
+  if (subcommand !== 'show') {
+    throw new UsageError(`Unknown discovery command: ${subcommand}`);
+  }
+
+  return await doctorDiscovery(args.slice(1), io);
 }
 
 export function writeStatusHelp(io) {
@@ -271,7 +283,7 @@ export async function statusCommand(args, io) {
 }
 
 export function writeSmokeHelp(io) {
-  writeLine(io.stdout, 'Smoke command:');
+  writeLine(io.stdout, 'Smoke command (deprecated, use "xmemo doctor --client codex --smoke"):');
   writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Run read-only smoke checks for client MCP configuration.');
@@ -284,7 +296,6 @@ export async function smokeCommand(args, io) {
   }
 
   const clientId = optionValue(args, '--client');
-  const outputJson = hasFlag(args, '--json');
   if (!clientId) {
     throw new UsageError('Smoke requires --client codex for this MCP-depth release.');
   }
@@ -292,20 +303,5 @@ export async function smokeCommand(args, io) {
     throw new UsageError('Only Codex smoke checks are available in this MCP-depth release.');
   }
 
-  const configPath = optionValue(args, '--config') ?? defaultCodexConfigPath(io.env);
-  const report = await codexSmokeReport(configPath, io.env);
-
-  if (outputJson) {
-    writeLine(io.stdout, JSON.stringify(report, null, 2));
-    return report.ok ? 0 : 1;
-  }
-
-  writeLine(io.stdout, `${PRODUCT_NAME} Codex MCP smoke: ${report.ok ? 'ok' : 'failed'}`);
-  writeLine(io.stdout, `Config: ${report.configPath}`);
-  writeLine(io.stdout, `Token env: ${report.tokenEnvVar}`);
-  for (const check of report.checks) {
-    const status = check.ok ? 'OK' : check.required ? 'FAIL' : 'WARN';
-    writeLine(io.stdout, `  ${status} ${check.name}: ${check.detail}`);
-  }
-  return report.ok ? 0 : 1;
+  return await codexDoctor(args, io);
 }

@@ -4,7 +4,6 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
-  CODEX_PROFILE_TARGET,
   COMMAND_NAME,
   LEGACY_CODEX_MARKER_END,
   LEGACY_CODEX_MARKER_START,
@@ -18,13 +17,14 @@ import {
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { readTextIfExists } from '../core/runtime.js';
+import { isRepo, readTextIfExists, userHome } from '../core/runtime.js';
 import {
   getClient,
   supportedProfileClientIds as registrySupportedProfileClientIds
 } from '../clients/registry.js';
 
 export {
+  isRepo,
   PROFILE_SECTION_HEADING,
   PROFILE_SECTION_END,
   LEGACY_XMEMO_MARKER_START,
@@ -73,21 +73,8 @@ function memoryBehaviorProfile(clientId) {
     objective: 'XMemo is available through its MCP tools:',
     instructions,
     setupCommand: `${COMMAND_NAME} setup ${config.setupAlias} --url "$XMEMO_URL"`,
-    smokeCommand: clientId === 'codex' ? `${COMMAND_NAME} smoke --client codex` : null
+    smokeCommand: clientId === 'codex' ? `${COMMAND_NAME} doctor --client codex --smoke` : null
   };
-}
-
-export function isRepo(cwd, env = process.env, markerDir = null) {
-  if (!cwd) return false;
-  const resolvedCwd = path.resolve(cwd);
-  const resolvedHome = path.resolve(userHome(env));
-  if (resolvedCwd === resolvedHome) {
-    return existsSync(path.join(cwd, '.git'));
-  }
-  if (markerDir && existsSync(path.join(cwd, markerDir))) {
-    return true;
-  }
-  return existsSync(path.join(cwd, '.git')) || existsSync(path.join(cwd, 'package.json'));
 }
 
 export function isHomeProfileTarget(targetPath, env = process.env, options = {}) {
@@ -532,10 +519,6 @@ export async function profileUninstallResult(clientId, targetPath, options = {})
     markerEnd: PROFILE_SECTION_END,
     writesTokenValue: false
   };
-}
-
-function userHome(env) {
-  return env.USERPROFILE || env.HOME || os.homedir();
 }
 
 export function writeProfileResult(action, result, io) {
