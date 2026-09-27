@@ -49,10 +49,16 @@ import {
   normalizeSetupClientId,
   positionalClientArg,
   supportedSetupClientIds,
+  writeSetupHelp,
   writeSetupSummary
 } from '../ui/setup.js';
 
 export async function setupCommand(args, io) {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
+    writeSetupHelp(io);
+    return 0;
+  }
+
   const positionalClientId = positionalClientArg(args, MCP_CLIENTS);
   const optionArgs = positionalClientId ? args.slice(1) : args;
   const baseUrl = normalizeBaseUrl(baseUrlOption(optionArgs, io.env));

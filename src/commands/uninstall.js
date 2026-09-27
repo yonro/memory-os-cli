@@ -1,5 +1,6 @@
 import { hasFlag, optionValue } from '../core/args.js';
 import {
+  COMMAND_NAME,
   MCP_SERVER_NAME
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
@@ -21,7 +22,20 @@ import {
 } from '../ui/setup.js';
 import { confirmUninstall, writeUninstallSummary } from '../ui/uninstall.js';
 
+export function writeUninstallHelp(io) {
+  writeLine(io.stdout, 'Uninstall commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} uninstall --all [--yes] [--profiles] [--dry-run]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} uninstall <client-id> [--yes] [--profiles] [--dry-run]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Remove XMemo configurations and behavior profiles from supported clients.');
+  return 0;
+}
+
 export async function uninstallCommand(args, io) {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
+    return writeUninstallHelp(io);
+  }
+
   const positionalClientId = positionalClientArg(args, MCP_CLIENTS);
   const optionArgs = positionalClientId ? args.slice(1) : args;
   const uninstallAll = hasFlag(optionArgs, '--all');

@@ -10,7 +10,19 @@ import {
   runProcess
 } from '../core/runtime.js';
 
+export function writeUpdateHelp(io) {
+  writeLine(io.stdout, 'Update command:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run] [--json]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `Check or apply the latest npm package update for ${PACKAGE_NAME}.`);
+  return 0;
+}
+
 export async function updateCommand(args, io) {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
+    return writeUpdateHelp(io);
+  }
+
   const outputJson = hasFlag(args, '--json');
   const dryRun = hasFlag(args, '--dry-run');
   const npmCommand = npmExecutable();

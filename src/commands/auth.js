@@ -110,15 +110,26 @@ export async function loginCommand(args, io) {
   return 0;
 }
 
+export function writeAuthHelp(io, subcommand) {
+  if (subcommand === 'status') {
+    writeLine(io.stdout, 'Auth status command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Check active authentication state.');
+    return 0;
+  }
+  writeLine(io.stdout, 'Auth commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `Use \`${COMMAND_NAME} login\` to sign in and \`${COMMAND_NAME} token add --from-stdin --allow-plaintext\` to store an existing token.`);
+  return 0;
+}
+
 export async function authCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
-    writeLine(io.stdout, 'Auth commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify] [--base-url <url>] [--json]`);
-    writeLine(io.stdout, '');
-    writeLine(io.stdout, `Use \`${COMMAND_NAME} login\` to sign in and \`${COMMAND_NAME} token add --from-stdin --allow-plaintext\` to store an existing token.`);
-    return 0;
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    return writeAuthHelp(io, subcommand);
   }
 
   if (subcommand === 'status') {
@@ -128,18 +139,43 @@ export async function authCommand(args, io) {
   throw new UsageError(`Unknown auth command: ${subcommand}`);
 }
 
+export function writeTokenHelp(io, subcommand) {
+  if (subcommand === 'status') {
+    writeLine(io.stdout, 'Token status command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Check local token configuration.');
+    return 0;
+  }
+  if (subcommand === 'add') {
+    writeLine(io.stdout, 'Token add command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext [--base-url <url>] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Store an existing token provided via stdin.');
+    return 0;
+  }
+  if (subcommand === 'set') {
+    writeLine(io.stdout, 'Token set command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext] [--base-url <url>]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Store an existing token provided via stdin.');
+    return 0;
+  }
+  writeLine(io.stdout, 'Token commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext [--base-url <url>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext] [--base-url <url>]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `${COMMAND_NAME} login is the recommended personal-user path.`);
+  writeLine(io.stdout, `${COMMAND_NAME} token add --from-stdin requires explicit consent to unencrypted user-file storage.`);
+  return 0;
+}
+
 export async function tokenCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
-    writeLine(io.stdout, 'Token commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext [--base-url <url>]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} token set --from-stdin [--allow-plaintext] [--base-url <url>]`);
-    writeLine(io.stdout, '');
-    writeLine(io.stdout, `${COMMAND_NAME} login is the recommended personal-user path.`);
-    writeLine(io.stdout, `${COMMAND_NAME} token add --from-stdin requires explicit consent to unencrypted user-file storage.`);
-    return 0;
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    return writeTokenHelp(io, subcommand);
   }
 
   if (subcommand === 'status') {

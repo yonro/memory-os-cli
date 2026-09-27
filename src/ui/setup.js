@@ -347,3 +347,15 @@ export function writeSetupSummary(plan, io) {
   writeLine(io.stdout, `  3. Run ${COMMAND_NAME} status to smoke-test the service without sending the token.`);
 }
 
+export function writeSetupHelp(io) {
+  writeLine(io.stdout, 'Setup commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup --all [--write] [--profile] [--force]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup <client-id> [--url <url>] [--no-profile] [--yes] [--json] [--force]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup openclaw [--with-mcp|--mcp-only] [--no-skill] [--dry-run] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup hermes [--with-mcp|--mcp-only] [--no-plugin] [--hermes-home <path>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup kiro [--auth oauth|key]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Configure XMemo MCP servers and agent behavior profiles.');
+  return 0;
+}
+

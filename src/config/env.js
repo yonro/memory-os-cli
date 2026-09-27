@@ -13,7 +13,7 @@ import { writeLine } from '../core/io.js';
 
 export function envCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     writeLine(io.stdout, 'Env commands:');
     writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--base-url <url>] [--json]`);
     return 0;
