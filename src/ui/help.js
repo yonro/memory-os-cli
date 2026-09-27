@@ -17,7 +17,7 @@ export function writeHelp(io) {
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Daily Memory');
   writeLine(io.stdout, `  ${COMMAND_NAME} start`);
-  writeLine(io.stdout, '      Show a local, no-network first-memory walkthrough.');
+  writeLine(io.stdout, '      Guided first-run onboarding and memory walkthrough (alias for init).');
   writeLine(io.stdout, `  ${COMMAND_NAME} memory add|search|read ... [--json]`);
   writeLine(io.stdout, '      Save or find memory through the XMemo service.');
   writeLine(io.stdout, `  ${COMMAND_NAME} context recall <query> [--json]`);
@@ -26,6 +26,8 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Work with knowledge, cleanup previews, and reviewed Cloud Skills.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Setup');
+  writeLine(io.stdout, `  ${COMMAND_NAME} init [--client <id>...] [--yes] [--dry-run] [--json]`);
+  writeLine(io.stdout, '      Guided first-run setup across account, clients, skills, and plugins.');
   writeLine(io.stdout, `  ${COMMAND_NAME} setup --all [--write] [--profile] [--force]`);
   writeLine(io.stdout, '      Detect clients and prepare XMemo configs. Dry-run unless --write/--yes is set.');
   writeLine(io.stdout, `  ${COMMAND_NAME} setup <client-id> [--url <url>] [--no-profile] [--json] [--force]`);
@@ -139,6 +141,7 @@ export function writeHelpJson(io, subArgs = []) {
       version: CLI_VERSION,
       description: 'Cloud memory setup, diagnostics, and agent integration utilities.',
       commands: [
+        'init',
         'start',
         'account',
         'memory',

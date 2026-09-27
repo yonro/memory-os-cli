@@ -28,6 +28,8 @@ async function snapshotDirectory(dir) {
 
 const COMMAND_MATRIX = [
   // Top-level commands
+  ['init'],
+  ['start'],
   ['account'],
   ['setup'],
   ['doctor'],

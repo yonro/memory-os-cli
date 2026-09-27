@@ -22,9 +22,10 @@ import { uninstallCommand } from './commands/uninstall.js';
 import { updateCommand } from './commands/update.js';
 import { skillCommand } from './commands/skill.js';
 import { pluginCommand } from './commands/plugin.js';
+import { initCommand } from './commands/init.js';
 import { envCommand, writePrivacy } from './config/env.js';
 import { UsageError } from './core/errors.js';
-import { writeHelp, writeHelpJson, writeStart } from './ui/help.js';
+import { writeHelp, writeHelpJson } from './ui/help.js';
 import { defaultIo, writeLine } from './core/io.js';
 import { contextCommand, memoryCommand, restartCommand, stateCommand } from './commands/service.js';
 import { knowledgeCommand } from './commands/knowledge.js';
@@ -182,13 +183,8 @@ export async function run(args, io = defaultIo()) {
       return 0;
     }
 
-    if (command === 'start') {
-      if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
-        writeHelp(io);
-        return 0;
-      }
-      writeStart(io, { json: hasFlag(args, '--json') });
-      return 0;
+    if (command === 'init' || command === 'start') {
+      return await initCommand(args.slice(1), io, { commandName: command });
     }
 
     if (command === 'memory') return await memoryCommand(args.slice(1), io);
