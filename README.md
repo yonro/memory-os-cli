@@ -334,44 +334,64 @@ xmemo plugin status [<id>]
 - Git directory plugins (`claude-code`) clone into a stable per-user location (`~/.xmemo/plugins/<id>`), support `--dir <path>` override, verify the checked-out `HEAD` commit byte-for-byte, and output the exact load command (`claude --plugin-dir <dir>`). On commit mismatch, the directory is immediately removed.
 - Plugin child processes run in an isolated environment with authentication tokens (`XMEMO_KEY`, `MEMORY_OS_MCP_TOKEN`, `XMEMO_TOKEN`) scrubbed from argv and env.
 
-## Authentication
+## Account and authentication
 
-### Browser login
+### Account commands
 
-Recommended for personal accounts:
-
-```bash
-xmemo login
-xmemo auth status
-```
-
-The CLI uses the hosted device-login flow, waits for browser approval, and
-asks once before storing the issued credential unencrypted in the current
-user's XMemo config directory. The exact path is shown before approval, file
-permissions are restricted where the operating system supports it, and the
-credential value is never printed. Prefer `XMEMO_KEY` or a managed secret store
-on shared systems.
-
-For non-interactive automation, record the same decision explicitly:
+Manage local authentication, stored credentials, and tokens through the `account` command family:
 
 ```bash
-xmemo login --allow-plaintext
+# Browser device login
+xmemo account login
+
+# Check active authentication state
+xmemo account status
+
+# Optional remote verification
+xmemo account status --verify
+
+# Check or store token credentials
+xmemo account token status
+printf '%s\n' 'your-token' | xmemo account token add --from-stdin --allow-plaintext
+
+# Logout: remove locally stored XMemo credentials owned by the CLI
+xmemo account logout
+
+# Non-interactive logout
+xmemo account logout --yes
 ```
 
-### Existing token
+#### Safe account logout (`xmemo account logout`)
+- **Target removal:** Removes only the user-scoped credential file owned by the CLI (`~/.config/xmemo/credentials.json` or OS config root).
+- **Explicit confirmation:** Displays the target credential path and prompts `Proceed with logout? [y/N]` (defaulting to No) unless `--yes` is specified.
+- **Client & Agent Isolation:** Preserves all client MCP configuration files (Cursor, Claude, VS Code, etc.) and agent-managed OAuth sessions.
+- **Privacy:** Never displays or leaks token values in stdout, stderr, or JSON envelopes.
+- **Scripting:** Requires `--yes` when `--json` is specified to prevent accidental headless logout.
+
+### Legacy authentication aliases
+
+The legacy commands remain fully supported as backward-compatible aliases:
+- `xmemo login` (alias for `xmemo account login`)
+- `xmemo auth status` (alias for `xmemo account status`)
+- `xmemo auth-status` (alias for `xmemo account status`)
+- `xmemo token <status|add|set>` (alias for `xmemo account token <status|add|set>`)
+
+In interactive human mode, legacy aliases emit a one-line deprecation hint to `stderr`. When run with `--json` or `--help`, the deprecation hint is suppressed.
+
+### Existing token import
 
 Pipe an existing token through stdin so it does not appear in command history:
 
 ```bash
-printf '%s\n' 'your-token' | xmemo token add --from-stdin --allow-plaintext
-xmemo token status --verify
+printf '%s\n' 'your-token' | xmemo account token add --from-stdin --allow-plaintext
+xmemo account token status --verify
 ```
 
 PowerShell:
 
 ```powershell
 $xmemoToken = Read-Host "XMemo token"
-$xmemoToken | xmemo token add --from-stdin --allow-plaintext
+$xmemoToken | xmemo account token add --from-stdin --allow-plaintext
 Remove-Variable xmemoToken
 ```
 
@@ -379,37 +399,50 @@ For CI and managed workstations, expose `XMEMO_KEY` through the platform's
 secret manager. Do not commit it to `.env`, MCP configuration, logs, issue
 reports, or chat transcripts.
 
+### Universal `--json` output
+
+Every command and subcommand supports `--json` for predictable scripting:
+- On success: Outputs valid JSON on `stdout` with exit code `0`.
+- On error: Outputs a structured JSON error envelope `{ schemaVersion, ok: false, command, data: null, error: { code, message, ... } }` on `stdout` with a non-zero exit code (e.g. exit code `2` for usage/input errors, `1` for internal/network errors).
+
 ## Command reference
 
 <details>
 <summary><strong>Lifecycle and diagnostics</strong></summary>
 
 ```bash
-xmemo --version
-xmemo update
-xmemo update --dry-run
-xmemo doctor
-xmemo discovery show
-xmemo status
-xmemo privacy
-xmemo skill install
-xmemo skill install --version <semver>
-xmemo skill install --from <dir|tgz>
-npx skills add yonro/memory-os-cli --skill xmemo-memory
+xmemo --version [--json]
+xmemo update [--dry-run] [--json]
+xmemo doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]
+xmemo discovery show [--json]
+xmemo status [--url <url>] [--json]
+xmemo privacy [--json]
+xmemo skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]
+xmemo skill status [--client <id>|--all] [--json]
+xmemo skill remove --client <id> [--project] [--yes] [--json]
+xmemo skill update [--client <id>|--all] [--yes] [--json]
 ```
 
 </details>
 
 <details>
-<summary><strong>Authentication</strong></summary>
+<summary><strong>Account</strong></summary>
 
 ```bash
+xmemo account login [--base-url <url>] [--allow-plaintext] [--json]
+xmemo account logout [--yes] [--json]
+xmemo account status [--verify] [--base-url <url>] [--json]
+xmemo account token status [--verify] [--json]
+xmemo account token add --from-stdin --allow-plaintext [--json]
+xmemo account token set --from-stdin [--allow-plaintext] [--json]
+xmemo env example [--shell bash|powershell|cmd] [--json]
+
+# Backward-compatible aliases (emit one-line deprecation note on stderr in human mode)
 xmemo login
 xmemo auth status
-xmemo auth-status --verify
-xmemo token status --verify
+xmemo auth-status
+xmemo token status
 xmemo token add --from-stdin --allow-plaintext
-xmemo env example --shell bash
 ```
 
 </details>

@@ -150,7 +150,20 @@ export function writeSkillHelp(io) {
 
 export async function skillCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'skill',
+        data: {
+          subcommands: ['install', 'status', 'remove', 'update'],
+          supportedClients: supportedSkillClientIds()
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     return writeSkillHelp(io);
   }
 

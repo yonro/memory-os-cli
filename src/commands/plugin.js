@@ -550,7 +550,20 @@ async function pluginStatus(args, io) {
 export async function pluginCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'plugin',
+        data: {
+          subcommands: ['list', 'info', 'install', 'status'],
+          plugins: supportedPluginIds()
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     return writePluginHelp(io);
   }
 

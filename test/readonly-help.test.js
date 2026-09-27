@@ -28,6 +28,7 @@ async function snapshotDirectory(dir) {
 
 const COMMAND_MATRIX = [
   // Top-level commands
+  ['account'],
   ['setup'],
   ['doctor'],
   ['uninstall'],
@@ -90,6 +91,14 @@ const COMMAND_MATRIX = [
   ['token', 'status'],
   ['token', 'add'],
   ['token', 'set'],
+
+  ['account', 'login'],
+  ['account', 'logout'],
+  ['account', 'status'],
+  ['account', 'token'],
+  ['account', 'token', 'status'],
+  ['account', 'token', 'add'],
+  ['account', 'token', 'set'],
 
   ['auth', 'status'],
   ['auth-status'],

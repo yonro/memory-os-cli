@@ -96,7 +96,20 @@ export function writeMcpHelp(io, subcommand) {
 export async function mcpCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'mcp',
+        data: {
+          subcommands: ['list', 'config', 'add', 'proxy', 'profile', 'serve'],
+          supportedClients: supportedMcpClientIds()
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     return writeMcpHelp(io, subcommand);
   }
 
@@ -205,8 +218,13 @@ export async function mcpCommand(args, io) {
   const configPath = optionValue(args, '--config') ?? client.defaultConfigPath(io.env);
   const mcpUrl = endpointUrl(baseUrl, '/mcp');
 
+  const willWrite = hasFlag(args, '--write');
+  const identity = willWrite ? await agentIdentity(target, io.env) : envReferenceIdentity(target);
+  if (willWrite) {
+    await client.writeConfig(configPath, mcpUrl, identity, { auth, force: hasFlag(args, '--force') });
+  }
+
   if (hasFlag(args, '--json')) {
-    const identity = envReferenceIdentity(target);
     const oauthClient = (usesClientOAuth(target) && auth !== 'key');
     writeLine(io.stdout, JSON.stringify({
       client: target,
@@ -221,14 +239,13 @@ export async function mcpCommand(args, io) {
       agentInstanceId: identity.agentInstanceId,
       agentInstanceIdPath: identity.path,
       agentInstanceGeneration: agentInstanceGenerationPolicy(target, { mcpClients: MCP_CLIENTS }),
-      writesTokenValue: false
+      writesTokenValue: false,
+      written: willWrite
     }, null, 2));
     return 0;
   }
 
-  const identity = hasFlag(args, '--write') ? await agentIdentity(target, io.env) : envReferenceIdentity(target);
-  if (hasFlag(args, '--write')) {
-    await client.writeConfig(configPath, mcpUrl, identity, { auth, force: hasFlag(args, '--force') });
+  if (willWrite) {
     writeLine(io.stdout, `Updated ${client.label} MCP config: ${configPath}`);
     if ((usesClientOAuth(target) && auth !== 'key')) {
       writeLine(io.stdout, `Token value was not written. ${client.label} will complete MCP OAuth on first use.`);

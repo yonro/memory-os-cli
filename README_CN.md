@@ -312,43 +312,74 @@ xmemo plugin status [<id>]
 - Git 目录插件（`claude-code`）默认安装至稳定用户目录（`~/.xmemo/plugins/<id>`），支持 `--dir <path>` 自定义目录覆盖；克隆后必须通过 `git rev-parse HEAD` 逐字节比对 Commit SHA，验证通过后打印确切的加载命令（`claude --plugin-dir <dir>`）；若哈希不匹配，立即安全删除克隆目录并报错中止。
 - 任何由 CLI 启动的外部插件子进程，均严格过滤并移除敏感凭据环境变量（`XMEMO_KEY`、`MEMORY_OS_MCP_TOKEN`、`XMEMO_TOKEN`），防止凭据外泄。
 
-## 身份认证
+## 账号与身份认证
 
-### 浏览器设备授权登录
+### 账号命令族（`account`）
 
-个人账户推荐使用：
-
-```bash
-xmemo login
-xmemo auth status
-```
-
-CLI 采用托管设备登录流（Device Code Flow），等待浏览器授权通过，并在首次写入前征得用户同意将发放的凭据保存在当前用户的 XMemo 配置目录中。在确认前会提示完整路径，在支持的操作系统上严格限制文件权限，且绝不打印凭据明文。在共享机器上建议使用 `XMEMO_KEY` 环境变量或托管密钥服务。
-
-在非交互式自动化脚本中，可通过参数显式确认：
+通过 `account` 统一管理本地认证状态、凭据文件与令牌：
 
 ```bash
-xmemo login --allow-plaintext
+# 浏览器设备授权登录
+xmemo account login
+
+# 检查当前登录与认证状态
+xmemo account status
+
+# 远程验证凭据可用性
+xmemo account status --verify
+
+# 检查或配置 Token 凭据
+xmemo account token status
+printf '%s\n' 'your-token' | xmemo account token add --from-stdin --allow-plaintext
+
+# 退出登录：移除 CLI 本地存储的 XMemo 凭据
+xmemo account logout
+
+# 非交互式安全退出
+xmemo account logout --yes
 ```
+
+#### 安全退出登录机制（`xmemo account logout`）
+- **精准清理：** 仅删除 CLI 所有的用户级凭据文件（`~/.config/xmemo/credentials.json` 或 OS 配置目录）。
+- **确认保护：** 优先打印将要删除的文件路径，交互模式下提示 `Proceed with logout? [y/N]`（默认取消），除非附带 `--yes`。
+- **环境隔离：** 绝不改动任何客户端 MCP 配置文件（Cursor、Claude、VS Code 等）及智能体托管的 OAuth 会话。
+- **隐私保护：** 任何模式下绝不输出 Token 明文。
+- **自动化支持：** 在 `--json` 模式下强制要求 `--yes`，防止无人值守脚本误触发。
+
+### 历史兼容别名
+
+原有的认证命令作为向后兼容别名继续保留：
+- `xmemo login`（等价于 `xmemo account login`）
+- `xmemo auth status`（等价于 `xmemo account status`）
+- `xmemo auth-status`（等价于 `xmemo account status`）
+- `xmemo token <status|add|set>`（等价于 `xmemo account token <status|add|set>`)
+
+在人类交互终端下，别名会在 `stderr` 打印一行弃用提示。使用 `--json` 或 `--help` 时会自动静默。
 
 ### 注入已有 Token
 
 通过标准输入（stdin）传入现有 Token，避免留下 Shell 历史命令记录：
 
 ```bash
-printf '%s\n' 'your-token' | xmemo token add --from-stdin --allow-plaintext
-xmemo token status --verify
+printf '%s\n' 'your-token' | xmemo account token add --from-stdin --allow-plaintext
+xmemo account token status --verify
 ```
 
 PowerShell 交互方式：
 
 ```powershell
 $xmemoToken = Read-Host "XMemo token"
-$xmemoToken | xmemo token add --from-stdin --allow-plaintext
+$xmemoToken | xmemo account token add --from-stdin --allow-plaintext
 Remove-Variable xmemoToken
 ```
 
 在 CI 自动化与受管工作站中，请通过系统的 Secret Manager 注入 `XMEMO_KEY`。切勿将其提交至 `.env`、MCP 配置文件、日志、Issue 或聊天上下文中。
+
+### 全局统一 `--json` 支持
+
+所有命令与子命令均原生支持 `--json` 输出：
+- 执行成功：在 `stdout` 输出符合标准的 JSON 数据，退出码为 `0`。
+- 执行失败：在 `stdout` 输出结构化错误信封 `{ schemaVersion, ok: false, command, data: null, error: { code, message, ... } }`，退出码为非 0（如参数或用法错误为 `2`，网络或内部错误为 `1`）。
 
 ## 命令参考
 
@@ -356,31 +387,38 @@ Remove-Variable xmemoToken
 <summary><strong>生命周期与系统诊断</strong></summary>
 
 ```bash
-xmemo --version
-xmemo update
-xmemo update --dry-run
-xmemo doctor
-xmemo discovery show
-xmemo status
-xmemo privacy
-xmemo skill install
-xmemo skill install --version <semver>
-xmemo skill install --from <dir|tgz>
-npx skills add yonro/memory-os-cli --skill xmemo-memory
+xmemo --version [--json]
+xmemo update [--dry-run] [--json]
+xmemo doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]
+xmemo discovery show [--json]
+xmemo status [--url <url>] [--json]
+xmemo privacy [--json]
+xmemo skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]
+xmemo skill status [--client <id>|--all] [--json]
+xmemo skill remove --client <id> [--project] [--yes] [--json]
+xmemo skill update [--client <id>|--all] [--yes] [--json]
 ```
 
 </details>
 
 <details>
-<summary><strong>身份认证管理</strong></summary>
+<summary><strong>账号与认证管理</strong></summary>
 
 ```bash
+xmemo account login [--base-url <url>] [--allow-plaintext] [--json]
+xmemo account logout [--yes] [--json]
+xmemo account status [--verify] [--base-url <url>] [--json]
+xmemo account token status [--verify] [--json]
+xmemo account token add --from-stdin --allow-plaintext [--json]
+xmemo account token set --from-stdin [--allow-plaintext] [--json]
+xmemo env example [--shell bash|powershell|cmd] [--json]
+
+# 兼容别名（交互模式下在 stderr 输出一行弃用提示）
 xmemo login
 xmemo auth status
-xmemo auth-status --verify
-xmemo token status --verify
+xmemo auth-status
+xmemo token status
 xmemo token add --from-stdin --allow-plaintext
-xmemo env example --shell bash
 ```
 
 </details>
