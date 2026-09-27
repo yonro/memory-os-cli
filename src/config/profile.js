@@ -91,6 +91,160 @@ function profileInstructionText(clientId) {
   return `${lines.join('\n')}\n`;
 }
 
+export function isRepo(cwd, env = process.env, markerDir = null) {
+  if (!cwd) return false;
+  const resolvedCwd = path.resolve(cwd);
+  const resolvedHome = path.resolve(userHome(env));
+  if (resolvedCwd === resolvedHome) {
+    return existsSync(path.join(cwd, '.git'));
+  }
+  if (markerDir && existsSync(path.join(cwd, markerDir))) {
+    return true;
+  }
+  return existsSync(path.join(cwd, '.git')) || existsSync(path.join(cwd, 'package.json'));
+}
+
+export function isHomeProfileTarget(targetPath, env = process.env, options = {}) {
+  const home = userHome(env);
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedHome = path.resolve(home);
+  const cwd = options.cwd ?? env.CWD ?? process.cwd();
+  const resolvedCwd = path.resolve(cwd);
+
+  const config = options.clientId ? profileClientConfig(options.clientId) : null;
+  const markerDir = config?.setupAlias ? `.${config.setupAlias}` : null;
+  if (isRepo(cwd, env, markerDir) && (resolvedTarget === resolvedCwd || resolvedTarget.startsWith(resolvedCwd + path.sep))) {
+    return false;
+  }
+  return resolvedTarget === resolvedHome || resolvedTarget.startsWith(resolvedHome + path.sep);
+}
+
+export function profileBlock(clientId) {
+  if (clientId === 'codex') {
+    return codexProfileMarkerBlock();
+  }
+  return genericProfileMarkerBlock(clientId);
+}
+
+function splitLines(text) {
+  if (!text) return [];
+  const lines = text.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  return lines;
+}
+
+export function generateUnifiedDiff(filePath, oldText, newText) {
+  if (!oldText || oldText.trim().length === 0) {
+    return '(new file)';
+  }
+  if (oldText === newText) {
+    return '';
+  }
+  const oldLines = splitLines(oldText);
+  const newLines = splitLines(newText);
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < n; j++) {
+      if (oldLines[i] === newLines[j]) {
+        dp[i + 1][j + 1] = dp[i][j] + 1;
+      } else {
+        dp[i + 1][j + 1] = Math.max(dp[i + 1][j], dp[i][j + 1]);
+      }
+    }
+  }
+  const edits = [];
+  let i = m;
+  let j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      edits.push({ type: 'equal', line: oldLines[i - 1], oldIndex: i - 1, newIndex: j - 1 });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      edits.push({ type: 'add', line: newLines[j - 1], newIndex: j - 1 });
+      j--;
+    } else {
+      edits.push({ type: 'remove', line: oldLines[i - 1], oldIndex: i - 1 });
+      i--;
+    }
+  }
+  edits.reverse();
+  if (!edits.some(e => e.type !== 'equal')) {
+    return '';
+  }
+  const normalizedPath = filePath.replace(/\\/g, '/');
+  const header = `--- a/${normalizedPath}\n+++ b/${normalizedPath}`;
+  const contextSize = 3;
+  const hunks = [];
+  let currentHunk = null;
+  for (let k = 0; k < edits.length; k++) {
+    const edit = edits[k];
+    if (edit.type !== 'equal') {
+      if (!currentHunk) {
+        const start = Math.max(0, k - contextSize);
+        currentHunk = { edits: edits.slice(start, k) };
+      }
+      currentHunk.edits.push(edit);
+    } else if (currentHunk) {
+      let nextChange = -1;
+      for (let look = k + 1; look < Math.min(edits.length, k + contextSize * 2 + 1); look++) {
+        if (edits[look].type !== 'equal') {
+          nextChange = look;
+          break;
+        }
+      }
+      if (nextChange !== -1) {
+        currentHunk.edits.push(edit);
+      } else {
+        const end = Math.min(edits.length, k + contextSize);
+        for (let look = k; look < end; look++) {
+          currentHunk.edits.push(edits[look]);
+        }
+        hunks.push(currentHunk);
+        currentHunk = null;
+        k = end - 1;
+      }
+    }
+  }
+  if (currentHunk) {
+    hunks.push(currentHunk);
+  }
+  const output = [header];
+  for (const hunk of hunks) {
+    let oldStart = null;
+    let oldCount = 0;
+    let newStart = null;
+    let newCount = 0;
+    const hunkBody = [];
+    for (const edit of hunk.edits) {
+      if (edit.type === 'equal') {
+        if (oldStart === null) oldStart = edit.oldIndex + 1;
+        if (newStart === null) newStart = edit.newIndex + 1;
+        oldCount++;
+        newCount++;
+        hunkBody.push(` ${edit.line}`);
+      } else if (edit.type === 'remove') {
+        if (oldStart === null) oldStart = edit.oldIndex + 1;
+        oldCount++;
+        hunkBody.push(`-${edit.line}`);
+      } else if (edit.type === 'add') {
+        if (newStart === null) newStart = edit.newIndex + 1;
+        newCount++;
+        hunkBody.push(`+${edit.line}`);
+      }
+    }
+    if (oldStart === null) oldStart = 1;
+    if (newStart === null) newStart = 1;
+    output.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+    output.push(...hunkBody);
+  }
+  return output.join('\n');
+}
+
 export function profileClientConfig(clientId) {
   const profileConfigs = {
     codex: {
@@ -100,7 +254,7 @@ export function profileClientConfig(clientId) {
       requiredTokenEnv: TOKEN_ENV_VAR,
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: () => defaultCodexProfileTarget()
+      defaultTarget: (env, options = {}) => defaultCodexProfileTarget(options.cwd ?? env?.CWD)
     },
     cursor: {
       label: 'Cursor',
@@ -109,10 +263,10 @@ export function profileClientConfig(clientId) {
       requiredTokenEnv: TOKEN_ENV_VAR,
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.cursor')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.cursor', 'rules', 'AGENTS.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env, '.cursor')) {
+          return path.join(cwd, '.cursor', 'rules', 'AGENTS.md');
         }
         return path.join(userHome(env), '.cursor', 'memory-profile.md');
       }
@@ -123,10 +277,10 @@ export function profileClientConfig(clientId) {
       profileVersion: 'kiro-mcp-depth-v1',
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.kiro')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.kiro', 'steering', 'AGENTS.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env, '.kiro')) {
+          return path.join(cwd, '.kiro', 'steering', 'AGENTS.md');
         }
         return path.join(userHome(env), '.kiro', 'steering', 'AGENTS.md');
       }
@@ -138,10 +292,10 @@ export function profileClientConfig(clientId) {
       requiredTokenEnv: TOKEN_ENV_VAR,
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.kimi-code')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.kimi-code', 'AGENTS.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env, '.kimi-code')) {
+          return path.join(cwd, '.kimi-code', 'AGENTS.md');
         }
         return path.join(userHome(env), '.kimi-code', 'AGENTS.md');
       }
@@ -152,10 +306,10 @@ export function profileClientConfig(clientId) {
       profileVersion: 'gemini-cli-mcp-depth-v1',
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'GEMINI.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env)) {
+          return path.join(cwd, 'GEMINI.md');
         }
         return path.join(userHome(env), '.gemini', 'GEMINI.md');
       }
@@ -166,10 +320,10 @@ export function profileClientConfig(clientId) {
       profileVersion: 'antigravity-mcp-depth-v1',
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'GEMINI.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env)) {
+          return path.join(cwd, 'GEMINI.md');
         }
         return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
       }
@@ -180,10 +334,10 @@ export function profileClientConfig(clientId) {
       profileVersion: 'qwen-mcp-depth-v1',
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'QWEN.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env)) {
+          return path.join(cwd, 'QWEN.md');
         }
         return path.join(userHome(env), '.qwen', 'QWEN.md');
       }
@@ -194,10 +348,10 @@ export function profileClientConfig(clientId) {
       profileVersion: 'opencode-mcp-depth-v1',
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), 'AGENTS.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env)) {
+          return path.join(cwd, 'AGENTS.md');
         }
         return path.join(userHome(env), '.config', 'opencode', 'AGENTS.md');
       }
@@ -209,10 +363,10 @@ export function profileClientConfig(clientId) {
       requiredTokenEnv: TOKEN_ENV_VAR,
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.trae', 'rules', 'AGENTS.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env, '.trae')) {
+          return path.join(cwd, '.trae', 'rules', 'AGENTS.md');
         }
         return path.join(userHome(env), '.trae', 'memory-profile.md');
       }
@@ -224,10 +378,10 @@ export function profileClientConfig(clientId) {
       requiredTokenEnv: TOKEN_ENV_VAR,
       markerStart: CLIENT_PROFILE_MARKER_START,
       markerEnd: CLIENT_PROFILE_MARKER_END,
-      defaultTarget: (env) => {
-        const isTest = env.HOME && (env.HOME.includes('memory-os-') || env.HOME.includes('test'));
-        if (!isTest && (existsSync(path.join(process.cwd(), '.trae')) || existsSync(path.join(process.cwd(), '.git')) || existsSync(path.join(process.cwd(), 'package.json')))) {
-          return path.join(process.cwd(), '.trae', 'rules', 'AGENTS.md');
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env, '.trae')) {
+          return path.join(cwd, '.trae', 'rules', 'AGENTS.md');
         }
         return path.join(userHome(env), '.trae', 'memory-profile.md');
       }
@@ -240,26 +394,34 @@ export function supportedProfileClientIds() {
   return ['codex', 'cursor', 'kiro', 'kimi-code', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
 }
 
-export function defaultProfileTarget(clientId, env) {
+export function defaultProfileTarget(clientId, env, options = {}) {
   const config = profileClientConfig(clientId);
   if (!config) {
     throw new UsageError(`Unsupported profile client: ${clientId}`);
   }
-  return config.defaultTarget(env);
+  return config.defaultTarget(env, options);
 }
 
-export async function confirmProfileInstall(clientId, targetPath, io) {
+export async function confirmProfileInstall(clientId, targetPath, io, options = {}) {
   const config = profileClientConfig(clientId);
+  const block = options.block ?? profileBlock(clientId);
+  const isHomeTarget = options.isHomeTarget ?? isHomeProfileTarget(targetPath, io.env, { cwd: io.cwd, clientId });
+
   writeLine(io.stdout, '');
-  writeLine(io.stdout, `Write XMemo memory behavior profile to ${targetPath}? [Y/n]`);
+  if (isHomeTarget) {
+    writeLine(io.stdout, `Target is in home directory (outside a repository): ${targetPath}`);
+  } else {
+    writeLine(io.stdout, `Target: ${targetPath}`);
+  }
+  writeLine(io.stdout, 'Agent instruction block to add:');
+  writeLine(io.stdout, block.trimEnd());
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, `Write XMemo memory behavior profile to ${targetPath}? [y/N]`);
   const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
-  if (answer === '' || answer === 'y' || answer === 'yes') {
+  if (answer === 'y' || answer === 'yes') {
     return true;
   }
-  if (answer === 'n' || answer === 'no') {
-    return false;
-  }
-  throw new UsageError(`Unsupported response for ${config.label} profile prompt: ${answer}`);
+  return false;
 }
 
 async function readLineFromStdin(stdin) {
@@ -298,12 +460,25 @@ export async function profileInstallResult(clientId, targetPath, options = {}) {
     nextText = `${existing}${separator}${block}`;
   }
 
+  const isNewFile = existing.trim().length === 0;
   const changed = nextText !== existing;
   const write = Boolean(options.write);
+  let backupPath = null;
+
   if (write && changed) {
+    if (!isNewFile) {
+      backupPath = `${resolvedTarget}.xmemo.bak`;
+      await fs.writeFile(backupPath, existing);
+      if (options.io && !options.json) {
+        writeLine(options.io.stdout, `Created backup at ${backupPath}`);
+      }
+    }
     await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
     await fs.writeFile(resolvedTarget, nextText);
   }
+
+  const diff = isNewFile ? '(new file)' : generateUnifiedDiff(resolvedTarget, existing, nextText);
+  const isHomeTarget = options.isHomeTarget ?? isHomeProfileTarget(resolvedTarget, options.env ?? process.env, { cwd: options.cwd, clientId });
 
   return {
     client: clientId,
@@ -315,7 +490,11 @@ export async function profileInstallResult(clientId, targetPath, options = {}) {
     written: write,
     changed,
     markerPresent: marker.present,
-    writesTokenValue: false
+    writesTokenValue: false,
+    backupPath,
+    isHomeTarget,
+    block,
+    diff
   };
 }
 
@@ -418,8 +597,8 @@ function codexProfileMarkerBlock() {
   return `${CODEX_PROFILE_MARKER_START}\n${codexProfileInstructionText()}${CODEX_PROFILE_MARKER_END}\n`;
 }
 
-function defaultCodexProfileTarget() {
-  return path.resolve(process.cwd(), CODEX_PROFILE_TARGET);
+function defaultCodexProfileTarget(cwd = process.cwd()) {
+  return path.resolve(cwd, CODEX_PROFILE_TARGET);
 }
 
 async function codexProfileInstallResult(targetPath, options = {}) {
@@ -438,12 +617,25 @@ async function codexProfileInstallResult(targetPath, options = {}) {
     nextText = `${existing}${separator}${block}`;
   }
 
+  const isNewFile = existing.trim().length === 0;
   const changed = nextText !== existing;
   const write = Boolean(options.write);
+  let backupPath = null;
+
   if (write && changed) {
+    if (!isNewFile) {
+      backupPath = `${resolvedTarget}.xmemo.bak`;
+      await fs.writeFile(backupPath, existing);
+      if (options.io && !options.json) {
+        writeLine(options.io.stdout, `Created backup at ${backupPath}`);
+      }
+    }
     await fs.mkdir(path.dirname(resolvedTarget), { recursive: true });
     await fs.writeFile(resolvedTarget, nextText);
   }
+
+  const diff = isNewFile ? '(new file)' : generateUnifiedDiff(resolvedTarget, existing, nextText);
+  const isHomeTarget = options.isHomeTarget ?? isHomeProfileTarget(resolvedTarget, options.env ?? process.env, { cwd: options.cwd, clientId: 'codex' });
 
   return {
     client: 'codex',
@@ -455,7 +647,11 @@ async function codexProfileInstallResult(targetPath, options = {}) {
     written: write,
     changed,
     markerPresent: marker.present,
-    writesTokenValue: false
+    writesTokenValue: false,
+    backupPath,
+    isHomeTarget,
+    block,
+    diff
   };
 }
 
@@ -544,13 +740,33 @@ function markerBounds(content) {
 
 export function writeProfileResult(action, result, io) {
   const config = profileClientConfig(result.client);
-  writeLine(io.stdout, `${PRODUCT_NAME} ${config?.label ?? result.client} profile ${action}`);
-  writeLine(io.stdout, `  Target: ${result.targetPath}`);
+  const dryRun = result.written === false && action === 'install';
+  writeLine(io.stdout, `${PRODUCT_NAME} ${config?.label ?? result.client} profile ${action}${dryRun ? ' (dry run)' : ''}`);
+  if (result.isHomeTarget) {
+    writeLine(io.stdout, `  Target: ${result.targetPath} (home directory, outside a repository)`);
+  } else {
+    writeLine(io.stdout, `  Target: ${result.targetPath}`);
+  }
   writeLine(io.stdout, `  Installed: ${result.installed}`);
   if ('written' in result) {
     writeLine(io.stdout, `  Written: ${result.written}`);
     writeLine(io.stdout, `  Changed: ${result.changed}`);
   }
+  if (result.backupPath) {
+    writeLine(io.stdout, `  Backup created: ${result.backupPath}`);
+  }
   writeLine(io.stdout, '  Token value embedded: false');
+  if (dryRun) {
+    if (result.block) {
+      writeLine(io.stdout, '');
+      writeLine(io.stdout, 'Profile block:');
+      writeLine(io.stdout, result.block.trimEnd());
+    }
+    if (result.diff) {
+      writeLine(io.stdout, '');
+      writeLine(io.stdout, 'Diff:');
+      writeLine(io.stdout, result.diff);
+    }
+  }
 }
 
