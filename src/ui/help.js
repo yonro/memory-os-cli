@@ -35,6 +35,16 @@ export function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} setup hermes [--with-mcp|--mcp-only] [--no-plugin] [--hermes-home <path>]`);
   writeLine(io.stdout, '      Install or update the native Hermes plugin and shared credential.');
   writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Plugins');
+  writeLine(io.stdout, `  ${COMMAND_NAME} plugin list [--all] [--json]`);
+  writeLine(io.stdout, '      List available agent plugins from the index.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} plugin info <id> [--json]`);
+  writeLine(io.stdout, '      Show details and install plan for an agent plugin.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} plugin install <id> [--dry-run] [--yes] [--open] [--dir <path>] [--json]`);
+  writeLine(io.stdout, '      Install an agent plugin from the static index.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} plugin status [<id>] [--all] [--json]`);
+  writeLine(io.stdout, '      Check installation status of agent plugins.');
+  writeLine(io.stdout, '');
   writeLine(io.stdout, 'Authentication');
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--base-url <url>] [--allow-plaintext]`);
   writeLine(io.stdout, '      Start browser login; interactive use asks before unencrypted storage.');

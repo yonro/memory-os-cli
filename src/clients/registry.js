@@ -104,7 +104,7 @@ export const CLIENT_REGISTRY = Object.freeze([
       }
     },
     skillDir: (env) => path.join(userHome(env), '.codex', 'skills', 'xmemo-memory'),
-    pluginId: null,
+    pluginId: 'codex',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('codex', env, options)
   },
@@ -168,7 +168,7 @@ export const CLIENT_REGISTRY = Object.freeze([
       }
     },
     skillDir: (env) => path.join(userHome(env), '.cursor', 'skills', 'xmemo-memory'),
-    pluginId: null,
+    pluginId: 'cursor',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('cursor', env, options)
   },
@@ -209,7 +209,7 @@ export const CLIENT_REGISTRY = Object.freeze([
       }
     },
     skillDir: (env) => path.join(userHome(env), '.gemini', 'skills', 'xmemo-memory'),
-    pluginId: null,
+    pluginId: 'gemini-cli',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('gemini-cli', env, options)
   },
@@ -535,7 +535,7 @@ export const CLIENT_REGISTRY = Object.freeze([
       }
     },
     skillDir: (env) => path.join(userHome(env), '.kiro', 'skills', 'xmemo-memory'),
-    pluginId: null,
+    pluginId: 'kiro',
     doctor: kiroDoctor,
     detect: async (env, options = {}) => detectClientByCandidates('kiro', env, options)
   },
@@ -851,7 +851,7 @@ export const CLIENT_REGISTRY = Object.freeze([
       }
     },
     skillDir: (env) => path.join(userHome(env), '.claude', 'skills', 'xmemo-memory'),
-    pluginId: null,
+    pluginId: 'claude-code',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('claude-code', env, options)
   },
@@ -1002,7 +1002,8 @@ export function createMcpClientsMap() {
         configKind: client.mcp.configKind,
         authentication: client.mcp.authentication,
         section: client.mcp.section,
-        serverKind: client.mcp.serverKind
+        serverKind: client.mcp.serverKind,
+        pluginId: client.pluginId
       });
     }
   }

@@ -38,6 +38,7 @@ const COMMAND_MATRIX = [
   ['token'],
   ['auth'],
   ['skill'],
+  ['plugin'],
   ['knowledge'],
   ['dream'],
   ['cloud-skill'],
@@ -94,6 +95,11 @@ const COMMAND_MATRIX = [
   ['auth-status'],
 
   ['skill', 'install'],
+
+  ['plugin', 'list'],
+  ['plugin', 'info'],
+  ['plugin', 'install'],
+  ['plugin', 'status'],
 
   ['knowledge', 'add'],
   ['knowledge', 'search'],

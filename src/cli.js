@@ -19,6 +19,7 @@ import { setupCommand } from './commands/setup.js';
 import { uninstallCommand } from './commands/uninstall.js';
 import { updateCommand } from './commands/update.js';
 import { skillCommand } from './commands/skill.js';
+import { pluginCommand } from './commands/plugin.js';
 import { envCommand, writePrivacy } from './config/env.js';
 import { UsageError } from './core/errors.js';
 import { writeHelp, writeStart } from './ui/help.js';
@@ -80,6 +81,10 @@ export async function run(args, io = defaultIo()) {
 
     if (command === 'skill') {
       return await skillCommand(args.slice(1), io);
+    }
+
+    if (command === 'plugin') {
+      return await pluginCommand(args.slice(1), io);
     }
 
     if (command === 'uninstall') {
