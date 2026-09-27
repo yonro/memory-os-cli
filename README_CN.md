@@ -199,29 +199,60 @@ xmemo setup hermes --with-mcp
 传入 `--mcp-only` 则跳过原生插件安装，仅配置托管 MCP。
 
 ### XMemo Skill 本地安装
-
-CLI 支持将 XMemo Skill 直接安装至智能体技能目录：
-
+ 
+CLI 支持将经过官方完整性校验的 XMemo Skill 安装至各智能体专属技能目录或指定目录：
+ 
+- 支持安装至客户端技能目录：
+  - **Claude Code**: `~/.claude/skills/xmemo-memory` (全局) 或 `.claude/skills/xmemo-memory` (传入 `--project` 时基于项目目录)
+  - **Codex**: `~/.codex/skills/xmemo-memory`
+  - **OpenClaw**: `~/.openclaw/skills/xmemo-memory`
+  - 其余 21 款客户端在官方文档明确前均设为 `null`
 - 默认安装 npm 上锁定的 `@xmemo/skill@1.1.33` 版本，并在解压前严格校验 tarball 完整性哈希（sha512 SRI）。
 - 可通过 `--version <semver>` 指定特定版本，或显式传入 `--version latest` 获取最新版本。
 - 在离线或内网隔离环境中，可通过 `--from <dir|tgz>` 从本地目录或打好的 tarball 进行离线安装（支持 `--integrity <sha512>`）。
+- 支持通过 `skill status` 查看安装状态，通过 `skill update` 快捷更新，通过 `skill remove` 干净移除。
 - 传入 `--dry-run` 预览安装计划而不写入任何文件。
-
+- **安全与授权保障**：
+  - 交互模式下默认展示写入目标并提示 `[y/N]`（回车、EOF 或空输入默认取消），除非显式指定 `--yes`。
+  - 目标目录已存在时默认拒绝覆盖；指定 `--force` 覆盖前会自动在 `~/.xmemo/backups/skills/<client>/` 保留备份（独立于智能体技能目录，避免重复加载）。
+  - `skill remove` 仅允许删除经过校验的 XMemo Skill 目录，严禁误删其他外部目录，并提示已保留的备份路径。
+ 
 ```bash
-# 默认安装锁定版本 (@xmemo/skill@1.1.33)
+# 安装至智能体技能目录 (Claude Code 全局、Codex 或 OpenClaw)
+xmemo skill install --client claude-code
+xmemo skill install --client codex
+xmemo skill install --client openclaw
+
+# 安装至项目级技能目录 (Claude Code: .claude/skills/xmemo-memory)
+xmemo skill install --client claude-code --project
+
+# 一键为所有已检测到的受支持智能体安装
+xmemo skill install --all
+
+# 默认安装至当前目录 (./xmemo-skill)
 xmemo skill install
+xmemo skill install --dir ./custom-skill-dir
 
-# 显式选择安装最新发布版本
-xmemo skill install --version latest
+# 非交互式直接执行（跳过 [y/N] 确认提示）
+xmemo skill install --client codex --yes
 
-# 安装指定版本
-xmemo skill install --version 1.1.33
+# 覆盖已有安装（自动在 ~/.xmemo/backups/skills/<client>/ 创建备份）
+xmemo skill install --client codex --force --yes
 
-# 从本地归档文件离线安装
-xmemo skill install --from ./xmemo-skill-1.1.33.tgz
+# 快捷更新别名（等价于 skill install --force）
+xmemo skill update --client codex --yes
+
+# 查看各客户端技能安装状态与版本
+xmemo skill status
+xmemo skill status --client codex
+xmemo skill status --all --json
+
+# 安全卸载移除技能（拒绝删除非 XMemo 目录）
+xmemo skill remove --client codex --yes
+xmemo skill remove --client claude-code --project --yes
 
 # Dry run 预览
-xmemo skill install --dry-run
+xmemo skill install --client codex --dry-run
 ```
 
 ### 智能体插件

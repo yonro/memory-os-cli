@@ -64,8 +64,14 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Probe hosted service endpoints and readiness.');
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run]`);
   writeLine(io.stdout, '      Check or apply the latest npm package update.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--version <semver>] [--from <dir|tgz>] [--target <directory>] [--dry-run] [--force] [--json]`);
-  writeLine(io.stdout, '      Install the XMemo Skill locally via @xmemo/skill (or --from offline source).');
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Skills');
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]`);
+  writeLine(io.stdout, '      Install the verified pinned XMemo Skill into agent skill folders or a target directory.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill status [--client <id>|--all] [--json]`);
+  writeLine(io.stdout, '      Check installed skill path and version per client.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill remove --client <id> [--project] [--yes] [--json]`);
+  writeLine(io.stdout, '      Remove installed XMemo skill from an agent skill folder.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'MCP And Profiles');
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
