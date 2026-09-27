@@ -60,4 +60,27 @@ test('Skill release documentation explicitly specifies --latest for GitHub Relea
   assert.match(doc, /gh release create skill-v/);
   assert.match(doc, /--latest/);
   assert.match(doc, /--title "XMemo Skill v/);
+});
+
+test('skillhub.cn publish workflow structure and safety invariants', async () => {
+  const skillhubWorkflowPath = path.join(repoRoot, '.github/workflows/publish-skillhub.yml');
+  const workflow = await readFile(skillhubWorkflowPath, 'utf8');
+
+  // Triggered by workflow_run of "Package XMemo Skill release assets" and workflow_dispatch
+  assert.match(workflow, /Package XMemo Skill release assets/);
+  assert.match(workflow, /workflow_dispatch/);
+  assert.match(workflow, /release_tag/);
+
+  // Environment and secret gating
+  assert.match(workflow, /environment: skillhub/);
+  assert.match(workflow, /SKILLHUB_KEY/);
+  assert.match(workflow, /vars\.XMEMO_SKILL_SKILLHUB_PUBLISH/);
+
+  // Safe installer and frontmatter injection
+  assert.match(workflow, /curl -fsSL https:\/\/skillhub\.cn\/install\/install\.sh/);
+  assert.match(workflow, /sha256sum/);
+  assert.match(workflow, /--cli-only/);
+  assert.match(workflow, /slug: xmemo/);
+  assert.match(workflow, /displayName: XMemo Memory/);
+  assert.match(workflow, /license: MIT/);
 });
