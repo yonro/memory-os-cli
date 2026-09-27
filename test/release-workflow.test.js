@@ -71,8 +71,8 @@ test('skillhub.cn publish workflow structure and safety invariants', async () =>
   assert.match(workflow, /workflow_dispatch/);
   assert.match(workflow, /release_tag/);
 
-  // Environment and secret gating
-  assert.match(workflow, /environment: skillhub/);
+  // Secret and publish gating (repository secret, no environment required)
+  assert.doesNotMatch(workflow, /environment:\s*skillhub/);
   assert.match(workflow, /SKILLHUB_KEY/);
   assert.match(workflow, /vars\.XMEMO_SKILL_SKILLHUB_PUBLISH/);
 

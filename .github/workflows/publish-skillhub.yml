@@ -31,7 +31,6 @@ jobs:
         contains(github.event.workflow_run.display_title, 'Skill v'))) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: skillhub
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.workflow_run.head_branch }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
@@ -184,7 +183,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
 
           if [[ -z "${SKILLHUB_KEY:-}" ]]; then
-            echo "::warning::SKILLHUB_KEY secret is not set in environment 'skillhub'."
+            echo "::warning::SKILLHUB_KEY repository secret is not set."
             if [[ "$DRY_RUN" != "true" && "${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}" == "true" ]]; then
               echo "ERROR: SKILLHUB_KEY is required for publishing." >&2
               exit 1

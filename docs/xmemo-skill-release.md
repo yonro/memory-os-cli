@@ -184,11 +184,10 @@ The skill is published to [skillhub.cn](https://skillhub.cn) via the dedicated G
 - **Repository Cleanliness**: The repository's canonical `skills/xmemo/SKILL.md` is never modified; frontmatter additions are applied exclusively to the extracted copy uploaded to skillhub.cn.
 - **Safety Assertions**: The workflow verifies 0 CR bytes across the payload and asserts that only `SKILL.md` differs from the GitHub Release archive.
 
-### One-Time Environment Setup
+### One-Time Repository Setup
 To enable real publishing to skillhub.cn:
-1. **GitHub Environment**: Create an environment named `skillhub` in repository settings.
-2. **Secret `SKILLHUB_KEY`**: Store the skillhub API key as an environment secret named `SKILLHUB_KEY` in the `skillhub` environment.
-3. **Variable `XMEMO_SKILL_SKILLHUB_PUBLISH`**: Set the repository variable `XMEMO_SKILL_SKILLHUB_PUBLISH=true` to enable live publication. When unset or not `'true'`, the workflow executes in dry-run mode and logs a notice.
+1. **Secret `SKILLHUB_KEY`**: Store the skillhub API key directly as a GitHub repository secret named `SKILLHUB_KEY` (no environment required).
+2. **Variable `XMEMO_SKILL_SKILLHUB_PUBLISH`**: Set the repository variable `XMEMO_SKILL_SKILLHUB_PUBLISH=true` to enable live publication. When unset or not `'true'`, the workflow executes in dry-run mode and logs a notice.
 
 ---
 
