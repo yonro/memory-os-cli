@@ -35,7 +35,21 @@ import { assertKnownOptions } from '../api/input.js';
 import { ServiceClientError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 
+export function writeDoctorHelp(io) {
+  writeLine(io.stdout, 'Doctor commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client kiro [--config <path>] [--auth oauth|key] [--fix] [--json]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Validate runtime environment, service reachability, and client configuration.');
+  return 0;
+}
+
 export async function doctorCommand(args, io) {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
+    writeDoctorHelp(io);
+    return 0;
+  }
+
   const client = optionValue(args, '--client');
   if (client === 'kiro') {
     if (hasFlag(args, '--services')) throw new UsageError('--client kiro cannot be combined with --services.');
@@ -153,12 +167,16 @@ function requestedServices(args) {
   return supported;
 }
 
+export function writeDiscoveryHelp(io) {
+  writeLine(io.stdout, 'Discovery commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
+  return 0;
+}
+
 export async function discoveryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
-    writeLine(io.stdout, 'Discovery commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} discovery show [--base-url <https://api.example.com>] [--json]`);
-    return 0;
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    return writeDiscoveryHelp(io);
   }
   if (subcommand !== 'show') {
     throw new UsageError(`Unknown discovery command: ${subcommand}`);
@@ -186,7 +204,19 @@ export async function discoveryCommand(args, io) {
   return 0;
 }
 
+export function writeStatusHelp(io) {
+  writeLine(io.stdout, 'Status command:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <url>] [--json]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Probe hosted service endpoints and readiness.');
+  return 0;
+}
+
 export async function statusCommand(args, io) {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
+    return writeStatusHelp(io);
+  }
+
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');
   const timeoutMs = parsePositiveInteger(optionValue(args, '--timeout-ms') ?? '5000', '--timeout-ms');
@@ -230,7 +260,19 @@ export async function statusCommand(args, io) {
   return result.ok ? 0 : 1;
 }
 
+export function writeSmokeHelp(io) {
+  writeLine(io.stdout, 'Smoke command:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Run read-only smoke checks for client MCP configuration.');
+  return 0;
+}
+
 export async function smokeCommand(args, io) {
+  if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
+    return writeSmokeHelp(io);
+  }
+
   const clientId = optionValue(args, '--client');
   const outputJson = hasFlag(args, '--json');
   if (!clientId) {

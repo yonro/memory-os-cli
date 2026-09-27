@@ -15,16 +15,41 @@ import {
 } from '../config/profile.js';
 import { normalizeSetupClientId } from '../ui/setup.js';
 
-export async function profileCommand(args, io) {
-  const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
-    writeLine(io.stdout, 'Profile commands:');
+export function writeProfileHelp(io, subcommand) {
+  if (subcommand === 'install') {
+    writeLine(io.stdout, 'Profile install command:');
     writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--dry-run|--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Install behavior profile instructions for an agent workspace.');
+    return 0;
+  }
+  if (subcommand === 'status') {
+    writeLine(io.stdout, 'Profile status command:');
     writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Check behavior profile installation status.');
+    return 0;
+  }
+  if (subcommand === 'uninstall') {
+    writeLine(io.stdout, 'Profile uninstall command:');
     writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
-    writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
+    writeLine(io.stdout, 'Remove behavior profile instructions.');
     return 0;
+  }
+  writeLine(io.stdout, 'Profile commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--dry-run|--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+  writeLine(io.stdout, '');
+  writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
+  return 0;
+}
+
+export async function profileCommand(args, io) {
+  const subcommand = args[0] ?? 'help';
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    return writeProfileHelp(io, subcommand);
   }
 
   const clientId = normalizeSetupClientId(args[1], MCP_CLIENTS);

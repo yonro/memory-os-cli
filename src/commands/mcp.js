@@ -37,21 +37,67 @@ import { startStdioServer } from '../mcp/stdio-server.js';
 
 export const resolveMcpClientTarget = resolveClientAlias;
 
+export function writeMcpHelp(io, subcommand) {
+  if (subcommand === 'list') {
+    writeLine(io.stdout, 'MCP list command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp list [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'List supported MCP clients.');
+    return 0;
+  }
+  if (subcommand === 'config') {
+    writeLine(io.stdout, 'MCP config command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <client-id> [--base-url <url>] [--port <port>] [--auth oauth|key] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Print an MCP client configuration snippet without writing files.');
+    return 0;
+  }
+  if (subcommand === 'add') {
+    writeLine(io.stdout, 'MCP add command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <client-id> [--url <url>] [--write] [--config <path>] [--auth oauth|key] [--force]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Add XMemo to a client configuration file.');
+    return 0;
+  }
+  if (subcommand === 'proxy') {
+    writeLine(io.stdout, 'MCP proxy command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Run a local MCP proxy server.');
+    return 0;
+  }
+  if (subcommand === 'profile') {
+    writeLine(io.stdout, 'MCP profile command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Display or check Codex behavior profile.');
+    return 0;
+  }
+  if (subcommand === 'serve' || subcommand === 'stdio') {
+    writeLine(io.stdout, 'MCP serve command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp serve`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Start the stdio MCP server for agent integration.');
+    return 0;
+  }
+  writeLine(io.stdout, 'MCP commands:');
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp serve`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client kiro [--auth oauth|key] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add kiro [--auth oauth|key] [--write] [--force] [--config <path>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] --write [--config <path>]`);
+  return 0;
+}
+
 export async function mcpCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
-    writeLine(io.stdout, 'MCP commands:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp serve`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client kiro [--auth oauth|key] [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add kiro [--auth oauth|key] [--write] [--force] [--config <path>]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>]`);
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] --write [--config <path>]`);
-    return 0;
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    return writeMcpHelp(io, subcommand);
   }
 
   if (subcommand === 'serve' || subcommand === 'stdio') {

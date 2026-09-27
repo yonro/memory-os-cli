@@ -42,7 +42,7 @@ export async function run(args, io = defaultIo()) {
     }
 
     if (command === 'help') {
-      if (args.length === 1) {
+      if (args.length === 1 || args[1] === 'help' || args[1] === '--help' || args[1] === '-h') {
         writeHelp(io);
         return 0;
       }
@@ -50,6 +50,10 @@ export async function run(args, io = defaultIo()) {
     }
 
     if (command === '--version' || command === '-v' || command === 'version') {
+      if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
+        writeHelp(io);
+        return 0;
+      }
       writeLine(io.stdout, CLI_VERSION);
       return 0;
     }
