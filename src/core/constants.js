@@ -14,18 +14,12 @@ export const AGENT_INSTANCE_HEADER = 'X-Memory-OS-Agent-Instance-ID';
 export const MCP_SERVER_NAME = 'XMemo';
 export const LEGACY_MCP_SERVER_NAMES = ['memory_os', 'memory-os'];
 export const CODEX_PROFILE_TARGET = 'AGENTS.md';
-export const CODEX_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
-export const CODEX_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
-export const CLIENT_PROFILE_TARGETS = {
-  cursor: '.cursor/rules/AGENTS.md',
-  'gemini-cli': 'GEMINI.md',
-  antigravity: 'GEMINI.md',
-  trae: '.trae/rules/AGENTS.md',
-  'trae-solo': '.trae/rules/AGENTS.md'
-};
-export const CLIENT_PROFILE_MARKER_START = '<!-- xmemo:profile:start -->';
-export const CLIENT_PROFILE_MARKER_END = '<!-- xmemo:profile:end -->';
-export const PROFILE_MARKER_PREFIX = 'memory-os:memory-profile';
+export const PROFILE_SECTION_HEADING = '## XMemo memory';
+export const PROFILE_SECTION_END = '_End of the XMemo memory section._';
+export const LEGACY_XMEMO_MARKER_START = '<!-- xmemo:profile:start -->';
+export const LEGACY_XMEMO_MARKER_END = '<!-- xmemo:profile:end -->';
+export const LEGACY_CODEX_MARKER_START = '<!-- memory-os:codex-profile:start -->';
+export const LEGACY_CODEX_MARKER_END = '<!-- memory-os:codex-profile:end -->';
 export const DEVICE_LOGIN_START_PATH = '/api/v1/auth/device/start';
 export const DEVICE_LOGIN_TOKEN_PATH = '/api/v1/auth/device/token';
 export const DEFAULT_PROXY_HOST = '127.0.0.1';

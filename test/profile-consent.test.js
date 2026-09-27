@@ -165,8 +165,8 @@ test('profile prompt: explicit yes installs profile', async () => {
 
   const profilePath = path.join(tempDir, '.cursor', 'memory-profile.md');
   const content = await fs.readFile(profilePath, 'utf8');
-  assert.match(content, /<!-- xmemo:profile:start -->/);
-  assert.match(content, /XMemo Agent profile/);
+  assert.match(content, /## XMemo memory/);
+  assert.match(content, /_End of the XMemo memory section\._/);
 });
 
 test('--json alone is NEVER consent and does not write profile', async () => {
@@ -208,10 +208,10 @@ test('--yes writes profile and creates backup of existing file', async () => {
 
   const updatedContent = await fs.readFile(profilePath, 'utf8');
   assert.match(updatedContent, /User Prior Instructions/);
-  assert.match(updatedContent, /<!-- xmemo:profile:start -->/);
+  assert.match(updatedContent, /## XMemo memory/);
 
   // Overwriting previous backup on subsequent modification
-  const secondState = updatedContent.replace('MCP server: `XMemo`', 'MCP server: `OldMemo`') + '\nSecond modification.\n';
+  const secondState = updatedContent.replace('XMemo is available through its MCP tools:', 'Modified profile text:') + '\nSecond modification.\n';
   await fs.writeFile(profilePath, secondState);
 
   const secondResult = await invoke(['profile', 'install', 'cursor', '--target', profilePath], {
@@ -222,7 +222,7 @@ test('--yes writes profile and creates backup of existing file', async () => {
   assert.equal(secondResult.code, 0);
   const secondBackupContent = await fs.readFile(backupPath, 'utf8');
   assert.match(secondBackupContent, /Second modification\./);
-  assert.match(secondBackupContent, /MCP server: `OldMemo`/);
+  assert.match(secondBackupContent, /Modified profile text:/);
 });
 
 test('profile install --dry-run prints block and diff without writing', async () => {
@@ -237,9 +237,9 @@ test('profile install --dry-run prints block and diff without writing', async ()
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Profile block:/);
-  assert.match(result.stdout, /XMemo Agent profile/);
+  assert.match(result.stdout, /## XMemo memory/);
   assert.match(result.stdout, /Diff:/);
-  assert.match(result.stdout, /\+<!-- xmemo:profile:start -->/);
+  assert.match(result.stdout, /\+## XMemo memory/);
 
   const content = await fs.readFile(profilePath, 'utf8');
   assert.equal(content, '# Existing Project Guidelines\n');

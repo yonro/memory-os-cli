@@ -1145,8 +1145,8 @@ test('setup cursor shorthand writes config and profile with --yes', async () => 
   assert.equal(config.mcpServers.XMemo.headers.Authorization, 'Bearer ${env:XMEMO_KEY}');
 
   const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /recall\/search/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /recall/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -1326,12 +1326,12 @@ test('setup --all --profile writes behavior profiles for detected clients', asyn
   assert.equal(traePlan.behaviorProfile.installed, true);
 
   const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /recall\/search/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /recall/);
 
   const traeProfile = await fs.readFile(path.join(tempDir, '.trae', 'memory-profile.md'), 'utf8');
-  assert.match(traeProfile, /XMemo Agent profile/);
-  assert.match(traeProfile, /recall\/search/);
+  assert.match(traeProfile, /## XMemo memory/);
+  assert.match(traeProfile, /recall/);
 });
 
 test('uninstall cursor --yes removes XMemo but preserves other servers', async () => {
@@ -1927,8 +1927,8 @@ test('setup gemini shorthand writes oauth httpUrl config and profile with --yes'
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.gemini', 'GEMINI.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /Keep XMemo authentication secure/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /Keep secrets/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -2014,8 +2014,8 @@ test('setup antigravity shorthand writes oauth serverUrl config and profile with
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.gemini', 'antigravity', 'MEMORY.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /Keep XMemo authentication secure/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /Keep secrets/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -2211,8 +2211,8 @@ test('setup kiro shorthand writes config and profile with --yes', async () => {
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /recall\/search/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /recall/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -2248,8 +2248,8 @@ test('setup kiro Key mode writes native headers and reports Key authentication w
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(path.join(tempDir, '.kiro', 'steering', 'AGENTS.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /recall\/search/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /recall/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -2282,8 +2282,8 @@ test('setup kimi-code shorthand writes config and profile with --yes', async () 
   assert.match(config.mcpServers.XMemo.headers['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
 
   const profile = await fs.readFile(path.join(tempDir, '.kimi-code', 'AGENTS.md'), 'utf8');
-  assert.match(profile, /XMemo Agent profile/);
-  assert.match(profile, /recall\/search/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /recall/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -2439,9 +2439,9 @@ test('setup codex writes mcp config and marker-scoped project profile with --yes
   assert.doesNotMatch(config, /secret-token-that-must-not-leak/);
 
   const profile = await fs.readFile(profilePath, 'utf8');
-  assert.match(profile, /<!-- xmemo:profile:start -->/);
-  assert.match(profile, /<!-- xmemo:profile:end -->/);
-  assert.match(profile, /Use XMemo deliberately through MCP/);
+  assert.match(profile, /## XMemo memory/);
+  assert.match(profile, /_End of the XMemo memory section\._/);
+  assert.match(profile, /XMemo is available through its MCP tools/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
@@ -2459,12 +2459,12 @@ test('profile install, status, and uninstall preserve user AGENTS content', asyn
   const installed = await fs.readFile(profilePath, 'utf8');
   assert.match(installed, /# Project instructions/);
   assert.match(installed, /Keep this line\./);
-  assert.equal((installed.match(/xmemo:profile:start/g) ?? []).length, 1);
+  assert.equal((installed.match(/## XMemo memory/g) ?? []).length, 1);
 
   const reinstall = await invoke(['profile', 'install', 'codex', '--target', profilePath, '--json']);
   assert.equal(reinstall.code, 0);
   const afterReinstall = await fs.readFile(profilePath, 'utf8');
-  assert.equal((afterReinstall.match(/xmemo:profile:start/g) ?? []).length, 1);
+  assert.equal((afterReinstall.match(/## XMemo memory/g) ?? []).length, 1);
 
   const status = await invoke(['profile', 'status', 'codex', '--target', profilePath, '--json']);
   assert.equal(status.code, 0);
@@ -2474,7 +2474,7 @@ test('profile install, status, and uninstall preserve user AGENTS content', asyn
   assert.equal(uninstall.code, 0);
   const uninstalled = await fs.readFile(profilePath, 'utf8');
   assert.match(uninstalled, /Keep this line\./);
-  assert.doesNotMatch(uninstalled, /xmemo:profile:start/);
+  assert.doesNotMatch(uninstalled, /## XMemo memory/);
 });
 
 test('profile install supports Gemini behavior profile targets', async () => {
@@ -2488,9 +2488,9 @@ test('profile install supports Gemini behavior profile targets', async () => {
   assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
 
   const installed = await fs.readFile(profilePath, 'utf8');
-  assert.match(installed, /xmemo:profile:start/);
-  assert.match(installed, /XMemo Agent profile/);
-  assert.match(installed, /Keep XMemo authentication secure/);
+  assert.match(installed, /## XMemo memory/);
+  assert.match(installed, /_End of the XMemo memory section\._/);
+  assert.match(installed, /Keep secrets/);
   assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
 
   const status = await invoke(['profile', 'status', 'gemini', '--target', profilePath, '--json']);
@@ -2509,9 +2509,9 @@ test('profile install supports Qwen behavior profile targets', async () => {
   assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
 
   const installed = await fs.readFile(profilePath, 'utf8');
-  assert.match(installed, /xmemo:profile:start/);
-  assert.match(installed, /XMemo Agent profile/);
-  assert.match(installed, /Keep XMemo authentication secure/);
+  assert.match(installed, /## XMemo memory/);
+  assert.match(installed, /_End of the XMemo memory section\._/);
+  assert.match(installed, /Keep secrets/);
   assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
 
   const status = await invoke(['profile', 'status', 'qwen', '--target', profilePath, '--json']);
@@ -2530,9 +2530,9 @@ test('profile install supports OpenCode behavior profile targets', async () => {
   assert.doesNotMatch(install.stdout, /secret-token-that-must-not-leak/);
 
   const installed = await fs.readFile(profilePath, 'utf8');
-  assert.match(installed, /xmemo:profile:start/);
-  assert.match(installed, /XMemo Agent profile/);
-  assert.match(installed, /Keep XMemo authentication secure/);
+  assert.match(installed, /## XMemo memory/);
+  assert.match(installed, /_End of the XMemo memory section\._/);
+  assert.match(installed, /Keep secrets/);
   assert.doesNotMatch(installed, /secret-token-that-must-not-leak/);
 
   const status = await invoke(['profile', 'status', 'opencode', '--target', profilePath, '--json']);
@@ -2561,8 +2561,8 @@ test('codex memory behavior profile documents recall and write-back', async () =
   const profile = JSON.parse(result.stdout);
   assert.equal(profile.client, 'codex');
   assert.equal(profile.mcpServerName, 'XMemo');
-  assert.match(profile.instructions.join('\n'), /recall\/search/);
-  assert.match(profile.instructions.join('\n'), /write a concise XMemo memory/);
+  assert.match(profile.instructions.join('\n'), /recall/);
+  assert.match(profile.instructions.join('\n'), /save a short summary/);
 });
 
 async function invoke(args, options = {}) {
