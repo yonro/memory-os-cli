@@ -177,12 +177,12 @@ CLI 全局安装后，`xmemo mcp serve` 效果与上述相同。
 
 OpenClaw 和 Hermes 拥有定制的原生记忆提供者插件。默认配置会自动避开创建重复的 MCP 工具外挂层：
 
-- **OpenClaw**: 默认安装版本锁定的插件 `clawhub:@xmemo/openclaw-memory@1.0.16`，不携带 `--force` 参数。如需重新安装或覆盖，请显式传入 `--force`。
+- **OpenClaw**: 默认安装版本锁定的插件 `clawhub:@xmemo/openclaw-memory@1.0.18`，不携带 `--force` 参数。重复执行时会自动检测已安装状态；如需重新安装或覆盖，请显式传入 `--force`。
 - **Hermes**: 默认通过 `pip install` 安装版本锁定的提供者包 `hermes-xmemo==1.1.3`，不携带 `-U` 参数。
 - 所有安装命令在执行前都会打印出确切运行的命令与包规约；使用 `--dry-run` 预览将要执行的操作而不实际运行。
 
 ```bash
-# 原生 OpenClaw 插件 (clawhub:@xmemo/openclaw-memory@1.0.16) + XMemo Skill
+# 原生 OpenClaw 插件 (clawhub:@xmemo/openclaw-memory@1.0.18) + XMemo Skill
 xmemo setup openclaw
 
 # 原生 Hermes 记忆提供者 (hermes-xmemo==1.1.3)

@@ -31,9 +31,14 @@ function extractLastJsonObject(text) {
   return null;
 }
 
-async function runOpenClaw(openclawBin, args, io) {
+async function runOpenClaw(openclawBin, args, io, { allowAlreadyInstalled = false } = {}) {
   const result = await runProcess(openclawBin, args, io, { stream: false });
   if (result.code !== 0) {
+    const combinedOutput = `${result.stderr || ''}\n${result.stdout || ''}`;
+    const isAlreadyInstalled = /already installed|already exists|destination already exists/i.test(combinedOutput);
+    if (allowAlreadyInstalled && isAlreadyInstalled) {
+      return { ...result, code: 0, alreadyInstalled: true };
+    }
     throw new UsageError(
       `OpenClaw command failed (${result.code}): ${commandText(openclawBin, args)}\n${result.stderr || result.stdout}`,
     );
@@ -93,12 +98,14 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
       package: OPENCLAW_PLUGIN_SPEC,
       command: commandText(openclawBin, pluginArgs),
       installed: false,
+      alreadyInstalled: false,
       skipped: mcpOnly,
     },
     skill: {
       ref: OPENCLAW_SKILL_REF,
       command: commandText(openclawBin, skillArgs),
       installed: false,
+      alreadyInstalled: false,
       skipped: noSkill || mcpOnly,
     },
     mcp: {
@@ -126,15 +133,29 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
     if (!isJson) {
       writeLine(io.stdout, `Running: ${commandText(openclawBin, pluginArgs)}`);
     }
-    await runOpenClaw(openclawBin, pluginArgs, io);
-    selectedClient.nativePlugin.installed = true;
+    const pluginResult = await runOpenClaw(openclawBin, pluginArgs, io, { allowAlreadyInstalled: true });
+    if (pluginResult.alreadyInstalled) {
+      selectedClient.nativePlugin.alreadyInstalled = true;
+      if (!isJson) {
+        writeLine(io.stdout, 'OpenClaw plugin is already installed. Use --force to reinstall.');
+      }
+    } else {
+      selectedClient.nativePlugin.installed = true;
+    }
 
     if (!noSkill) {
       if (!isJson) {
         writeLine(io.stdout, `Running: ${commandText(openclawBin, skillArgs)}`);
       }
-      await runOpenClaw(openclawBin, skillArgs, io);
-      selectedClient.skill.installed = true;
+      const skillResult = await runOpenClaw(openclawBin, skillArgs, io, { allowAlreadyInstalled: true });
+      if (skillResult.alreadyInstalled) {
+        selectedClient.skill.alreadyInstalled = true;
+        if (!isJson) {
+          writeLine(io.stdout, 'OpenClaw skill is already installed. Use --force to reinstall.');
+        }
+      } else {
+        selectedClient.skill.installed = true;
+      }
     }
   }
 

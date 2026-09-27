@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -21,6 +22,7 @@ import {
 } from '../src/commands/skill.js';
 import { buildSkillNpmPackage } from '../scripts/build-skill-npm-package.mjs';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STRICT_SEMVER_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 
 async function invoke(args, options = {}) {
@@ -47,7 +49,7 @@ async function invoke(args, options = {}) {
   return { code, stdout, stderr };
 }
 
-function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } = {}) {
+function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, tarballContent = null } = {}) {
   return (command, args, options) => {
     calls.push({ command, args, options });
     if (error) {
@@ -57,13 +59,35 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     queueMicrotask(() => {
-      if (stdout) {
-        child.stdout.emit('data', stdout);
+      let callStdout = stdout;
+      let callCode = code;
+      if (code === 0) {
+        if (args.includes('view')) {
+          callStdout = JSON.stringify('sha512-1+nfcHczdEM8YNyASWMu5ntJ2RQ5q+CvoJHwq6vObvHGkRSXe4tBFdYpooRW45NYp7xMjZIwrnRAiMZ/V+cgaw==');
+        } else if (args.includes('pack')) {
+          const destIdx = args.indexOf('--pack-destination');
+          if (destIdx !== -1 && args[destIdx + 1]) {
+            const destDir = args[destIdx + 1];
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+            try {
+              if (tarballContent !== null) {
+                fsSync.writeFileSync(tgzPath, tarballContent);
+              } else {
+                fsSync.copyFileSync(fixturePath, tgzPath);
+              }
+            } catch {}
+          }
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+        }
+      }
+      if (callStdout) {
+        child.stdout.emit('data', callStdout);
       }
       if (stderr) {
         child.stderr.emit('data', stderr);
       }
-      child.emit('close', code);
+      child.emit('close', callCode);
     });
     return child;
   };
@@ -297,8 +321,10 @@ test('skill install: defaults to pinned version, allows explicit --version lates
   assert.equal(res1.code, 0);
   assert.match(res1.stdout, new RegExp(`Would run: .*@xmemo/skill@${PINNED_SKILL_VERSION}`));
   assert.match(res1.stdout, new RegExp(`Source: npm \\(@xmemo/skill@${PINNED_SKILL_VERSION}\\)`));
-  const pkgArg = calls[0].args.find((_, idx) => calls[0].args[idx - 1] === '--package');
-  assert.equal(pkgArg, `@xmemo/skill@${PINNED_SKILL_VERSION}`);
+  assert.equal(calls.length, 2);
+  assert.ok(calls[0].args.includes(`@xmemo/skill@${PINNED_SKILL_VERSION}`));
+  assert.ok(calls[1].args.includes('--offline'));
+  assert.ok(calls[1].args.includes('--package'));
 
   // 2. Explicit --version latest is accepted and passes latest
   const latestCalls = [];
@@ -315,8 +341,13 @@ test('skill install: defaults to pinned version, allows explicit --version lates
   assert.equal(resLatest.code, 0);
   const latestReport = JSON.parse(resLatest.stdout);
   assert.equal(latestReport.spec, 'latest');
-  const latestPkgArg = latestCalls[0].args.find((_, idx) => latestCalls[0].args[idx - 1] === '--package');
-  assert.equal(latestPkgArg, '@xmemo/skill@latest');
+  assert.equal(latestCalls.length, 3);
+  assert.ok(latestCalls[0].args.includes('view'));
+  assert.ok(latestCalls[0].args.includes('@xmemo/skill@latest'));
+  assert.ok(latestCalls[1].args.includes('pack'));
+  assert.ok(latestCalls[1].args.includes('@xmemo/skill@latest'));
+  assert.ok(latestCalls[2].args.includes('exec'));
+  assert.ok(latestCalls[2].args.includes('--offline'));
 });
 
 test('skill integrity verification: compute and verify integrity with fail-closed behavior', async () => {
@@ -376,3 +407,198 @@ test('skill integrity verification: compute and verify integrity with fail-close
     await fs.rm(tmpBase, { recursive: true, force: true });
   }
 });
+
+test('setup openclaw: handles already installed plugin/skill gracefully and respects --force', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-openclaw-already-'));
+  try {
+    // 1. Re-run when openclaw reports plugin/skill already installed: exits 0 with clear message
+    const alreadyInstalledCalls = [];
+    const resAlready = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test'], {
+      env: { HOME: tempDir, XMEMO_CONFIG_HOME: tempDir, XMEMO_KEY: 'test-token' },
+      fetch: discoveryFetch(),
+      spawn: (command, args, options) => {
+        alreadyInstalledCalls.push({ command, args, options });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          if (args[0] === 'plugins' && args[1] === 'install') {
+            child.stderr.emit('data', 'Error: plugin already installed: @xmemo/openclaw-memory\n');
+            child.emit('close', 1);
+          } else if (args[0] === 'skills' && args[1] === 'install') {
+            child.stderr.emit('data', 'Error: skill already exists: xmemo\n');
+            child.emit('close', 1);
+          } else if (args[0] === 'xmemo' && args[1] === 'status') {
+            child.stdout.emit('data', JSON.stringify({ configured: true, connected: true }));
+            child.emit('close', 0);
+          } else {
+            child.emit('close', 0);
+          }
+        });
+        return child;
+      }
+    });
+
+    assert.equal(resAlready.code, 0, `Expected exit code 0, got ${resAlready.code}`);
+    assert.match(resAlready.stdout, /OpenClaw plugin is already installed\. Use --force to reinstall\./);
+    assert.match(resAlready.stdout, /OpenClaw skill is already installed\. Use --force to reinstall\./);
+
+    // 2. In --json mode: returns alreadyInstalled: true
+    const jsonCalls = [];
+    const resJson = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test', '--json'], {
+      env: { HOME: tempDir, XMEMO_CONFIG_HOME: tempDir, XMEMO_KEY: 'test-token' },
+      fetch: discoveryFetch(),
+      spawn: (command, args, options) => {
+        jsonCalls.push({ command, args, options });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          if (args[0] === 'plugins' && args[1] === 'install') {
+            child.stderr.emit('data', 'Error: plugin already installed\n');
+            child.emit('close', 1);
+          } else if (args[0] === 'skills' && args[1] === 'install') {
+            child.stderr.emit('data', 'Error: skill already exists\n');
+            child.emit('close', 1);
+          } else if (args[0] === 'xmemo' && args[1] === 'status') {
+            child.stdout.emit('data', JSON.stringify({ configured: true, connected: true }));
+            child.emit('close', 0);
+          } else {
+            child.emit('close', 0);
+          }
+        });
+        return child;
+      }
+    });
+    assert.equal(resJson.code, 0);
+    const plan = JSON.parse(resJson.stdout);
+    assert.equal(plan.selectedClient.nativePlugin.alreadyInstalled, true);
+    assert.equal(plan.selectedClient.nativePlugin.installed, false);
+    assert.equal(plan.selectedClient.skill.alreadyInstalled, true);
+    assert.equal(plan.selectedClient.skill.installed, false);
+
+    // 3. With --force: passes --force flag to reinstall
+    const forceCalls = [];
+    const resForce = await invoke(['setup', 'openclaw', '--url', 'https://api.example.test', '--force'], {
+      env: { HOME: tempDir, XMEMO_CONFIG_HOME: tempDir, XMEMO_KEY: 'test-token' },
+      fetch: discoveryFetch(),
+      spawn: (command, args, options) => {
+        forceCalls.push({ command, args, options });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          if (args[0] === 'xmemo' && args[1] === 'status') {
+            child.stdout.emit('data', JSON.stringify({ configured: true, connected: true }));
+          }
+          child.emit('close', 0);
+        });
+        return child;
+      }
+    });
+    assert.equal(resForce.code, 0);
+    assert.ok(forceCalls[0].args.includes('--force'));
+    assert.ok(forceCalls[1].args.includes('--force'));
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('skill install default path verifies tarball against PINNED_SKILL_INTEGRITY and fails closed on tampered tarball', async () => {
+  const calls = [];
+  const tamperedContent = Buffer.from('this is a tampered malicious tarball');
+  const res = await invoke(['skill', 'install'], {
+    spawn: spawnStub(calls, { code: 0, tarballContent: tamperedContent })
+  });
+  assert.equal(res.code, 2, 'Must exit with non-zero code on integrity mismatch');
+  assert.match(res.stderr, /Tarball integrity mismatch/);
+  assert.match(res.stderr, /Refusing to extract/);
+  // Verify npm pack was run, but installer was NOT run
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].args.includes('pack'));
+  assert.equal(calls.some((c) => c.args.includes('xmemo-skill')), false, 'Installer must not be executed when tarball is tampered');
+});
+
+test('skill install explicit --version queries registry dist.integrity and verifies downloaded tarball', async () => {
+  const customVersion = '1.2.0';
+  const customTarball = Buffer.from('content for custom version 1.2.0');
+  const customIntegrity = computeTarballIntegrity(customTarball);
+
+  // 1. Matched registry integrity succeeds
+  const successCalls = [];
+  const mockReport = {
+    package: '@xmemo/skill',
+    skillVersion: customVersion,
+    target: path.resolve('xmemo-skill'),
+    dryRun: false,
+    installed: true
+  };
+
+  const resSuccess = await invoke(['skill', 'install', '--version', customVersion, '--json'], {
+    spawn: (command, args, options) => {
+      successCalls.push({ command, args, options });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        if (args.includes('view')) {
+          child.stdout.emit('data', JSON.stringify(customIntegrity));
+          child.emit('close', 0);
+        } else if (args.includes('pack')) {
+          const destIdx = args.indexOf('--pack-destination');
+          const destDir = args[destIdx + 1];
+          const tgzPath = path.join(destDir, `xmemo-skill-${customVersion}.tgz`);
+          fsSync.writeFileSync(tgzPath, customTarball);
+          child.stdout.emit('data', JSON.stringify([{ filename: `xmemo-skill-${customVersion}.tgz` }]));
+          child.emit('close', 0);
+        } else {
+          child.stdout.emit('data', JSON.stringify(mockReport));
+          child.emit('close', 0);
+        }
+      });
+      return child;
+    }
+  });
+
+  assert.equal(resSuccess.code, 0);
+  assert.equal(successCalls.length, 3);
+  assert.ok(successCalls[0].args.includes('view'), 'First call must query registry dist.integrity');
+  assert.ok(successCalls[0].args.includes(`@xmemo/skill@${customVersion}`));
+  assert.ok(successCalls[1].args.includes('pack'), 'Second call must pack tarball');
+  assert.ok(successCalls[2].args.includes('exec'), 'Third call must execute installer');
+  assert.ok(successCalls[2].args.includes('--offline'));
+
+  // 2. Tampered tarball mismatching registry integrity fails closed
+  const failCalls = [];
+  const tamperedTarball = Buffer.from('corrupted custom tarball');
+  const resFail = await invoke(['skill', 'install', '--version', customVersion, '--json'], {
+    spawn: (command, args, options) => {
+      failCalls.push({ command, args, options });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        if (args.includes('view')) {
+          child.stdout.emit('data', JSON.stringify(customIntegrity));
+          child.emit('close', 0);
+        } else if (args.includes('pack')) {
+          const destIdx = args.indexOf('--pack-destination');
+          const destDir = args[destIdx + 1];
+          const tgzPath = path.join(destDir, `xmemo-skill-${customVersion}.tgz`);
+          fsSync.writeFileSync(tgzPath, tamperedTarball);
+          child.stdout.emit('data', JSON.stringify([{ filename: `xmemo-skill-${customVersion}.tgz` }]));
+          child.emit('close', 0);
+        } else {
+          child.stdout.emit('data', JSON.stringify(mockReport));
+          child.emit('close', 0);
+        }
+      });
+      return child;
+    }
+  });
+
+  assert.equal(resFail.code, 2);
+  assert.match(resFail.stderr, /Tarball integrity mismatch/);
+  assert.equal(failCalls.length, 2, 'Installer must not be executed when integrity mismatches');
+});
+

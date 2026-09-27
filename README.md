@@ -198,12 +198,12 @@ Install-free MCP configuration:
 OpenClaw and Hermes have dedicated memory providers. Their default setup avoids
 installing a second, duplicate XMemo tool surface:
 
-- **OpenClaw**: installs the pinned plugin `clawhub:@xmemo/openclaw-memory@1.0.16` without `--force` by default. Use `--force` to reinstall or overwrite.
+- **OpenClaw**: installs the pinned plugin `clawhub:@xmemo/openclaw-memory@1.0.18` without `--force` by default. Re-running setup gracefully detects existing installations; use `--force` to reinstall or overwrite.
 - **Hermes**: installs the pinned provider package `hermes-xmemo==1.1.3` via `pip install` without `-U`.
 - Every install command prints the exact command before executing. Use `--dry-run` to preview actions without installing.
 
 ```bash
-# Native OpenClaw plugin (clawhub:@xmemo/openclaw-memory@1.0.16) + XMemo Skill
+# Native OpenClaw plugin (clawhub:@xmemo/openclaw-memory@1.0.18) + XMemo Skill
 xmemo setup openclaw
 
 # Native Hermes memory provider (hermes-xmemo==1.1.3)

@@ -63,117 +63,215 @@ export async function skillCommand(args, io) {
   }
   installerArgs.push('--json');
 
-  let command;
-  let cmdArgs;
-  let sourceType;
-  let spec;
-  let networkUsed;
+  let tempPackDir = null;
+  const cleanEnv = sanitizeEnv(io.env);
 
-  if (fromInfo) {
-    sourceType = 'local';
-    spec = options.from;
-    networkUsed = false;
-    if (fromInfo.type === 'dir') {
-      command = process.execPath;
-      cmdArgs = [fromInfo.binPath, ...installerArgs];
+  try {
+    let command;
+    let cmdArgs;
+    let sourceType;
+    let spec;
+    let networkUsed;
+
+    if (fromInfo) {
+      sourceType = 'local';
+      spec = options.from;
+      networkUsed = false;
+      if (fromInfo.type === 'dir') {
+        command = process.execPath;
+        cmdArgs = [fromInfo.binPath, ...installerArgs];
+      } else {
+        const npmRunner = resolveNpmRunner();
+        if (!npmRunner) {
+          throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+        }
+        command = npmRunner.command;
+        cmdArgs = [...npmRunner.prefixArgs, 'exec', '--offline', '--package', fromInfo.resolved, '--', 'xmemo-skill', ...installerArgs];
+      }
     } else {
+      sourceType = 'npm';
+      spec = options.version ?? PINNED_SKILL_VERSION;
+      networkUsed = true;
       const npmRunner = resolveNpmRunner();
       if (!npmRunner) {
         throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
       }
+
+      let expectedIntegrity = options.integrity;
+      if (!expectedIntegrity) {
+        if (!options.version || options.version === PINNED_SKILL_VERSION) {
+          expectedIntegrity = PINNED_SKILL_INTEGRITY;
+        } else {
+          // Explicit --version <semver|latest> requires querying registry dist.integrity
+          const viewArgs = [...npmRunner.prefixArgs, 'view', `@xmemo/skill@${spec}`, 'dist.integrity', '--json'];
+          const viewCmdText = [npmRunner.command, ...viewArgs].join(' ');
+          if (!options.json) {
+            writeLine(io.stdout, `${options.dryRun ? 'Would run' : 'Running'}: ${viewCmdText}`);
+          }
+          let viewResult;
+          try {
+            viewResult = await executeSubprocess(npmRunner.command, viewArgs, io, cleanEnv, cwd);
+          } catch (error) {
+            if (error?.code === 'ENOENT') {
+              throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+            }
+            throw new UsageError(`Failed to execute ${npmRunner.command}: ${error.message}`);
+          }
+          if (viewResult.code !== 0) {
+            const rawError = (viewResult.stderr || viewResult.stdout || '').trim();
+            const isNetworkError = /ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN|fetch failed|network|request to .* failed|404 Not Found|E404|ERR_SOCKET_TIMEOUT/i.test(rawError);
+            if (isNetworkError) {
+              throw new UsageError(`Failed to reach npm registry for @xmemo/skill@${spec}.\nError: ${rawError}\nUse --from <dir|tgz> to install offline without network access.`);
+            }
+            throw new UsageError(`Failed to query integrity from npm registry for @xmemo/skill@${spec}: ${rawError}`);
+          }
+          try {
+            const parsed = JSON.parse(viewResult.stdout.trim());
+            expectedIntegrity = typeof parsed === 'string' ? parsed.trim() : (parsed?.integrity || parsed?.['dist.integrity'] || '');
+          } catch {
+            expectedIntegrity = viewResult.stdout.trim().replace(/^"|"$/g, '');
+          }
+          if (!expectedIntegrity || !/^sha512-[A-Za-z0-9+/=]+$/.test(expectedIntegrity)) {
+            throw new UsageError(`Invalid or missing integrity for @xmemo/skill@${spec} from npm registry.`);
+          }
+        }
+      }
+
+      tempPackDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-pack-'));
+      const packArgs = [...npmRunner.prefixArgs, 'pack', `@xmemo/skill@${spec}`, '--pack-destination', tempPackDir, '--json'];
+      const packCmdText = [npmRunner.command, ...packArgs].join(' ');
+      if (!options.json) {
+        writeLine(io.stdout, `${options.dryRun ? 'Would run' : 'Running'}: ${packCmdText}`);
+      }
+
+      let packResult;
+      try {
+        packResult = await executeSubprocess(npmRunner.command, packArgs, io, cleanEnv, cwd);
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+        }
+        throw new UsageError(`Failed to execute ${npmRunner.command}: ${error.message}`);
+      }
+
+      if (packResult.code !== 0) {
+        const rawError = (packResult.stderr || packResult.stdout || '').trim();
+        const isNetworkError = /ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN|fetch failed|network|request to .* failed|404 Not Found|E404|ERR_SOCKET_TIMEOUT/i.test(rawError);
+        if (isNetworkError) {
+          throw new UsageError(`Failed to reach npm registry for @xmemo/skill@${spec}.\nError: ${rawError}\nUse --from <dir|tgz> to install offline without network access.`);
+        }
+        throw new UsageError(`npm pack failed for @xmemo/skill@${spec}: ${rawError}`);
+      }
+
+      let tgzPath = null;
+      try {
+        const packInfoList = JSON.parse(packResult.stdout.trim());
+        if (Array.isArray(packInfoList) && packInfoList[0]?.filename) {
+          tgzPath = path.join(tempPackDir, packInfoList[0].filename);
+        }
+      } catch {
+        // Fallback to directory scan
+      }
+
+      if (!tgzPath || !fsSync.existsSync(tgzPath)) {
+        const files = await fs.readdir(tempPackDir);
+        const tgzFile = files.find((f) => f.endsWith('.tgz') || f.endsWith('.tar.gz'));
+        if (tgzFile) {
+          tgzPath = path.join(tempPackDir, tgzFile);
+        }
+      }
+
+      if (!tgzPath || !fsSync.existsSync(tgzPath)) {
+        throw new UsageError(`Downloaded tarball not found in ${tempPackDir}. Refusing to install.`);
+      }
+
+      verifyTarballIntegrity(tgzPath, expectedIntegrity);
+
       command = npmRunner.command;
-      cmdArgs = [...npmRunner.prefixArgs, 'exec', '--offline', '--package', fromInfo.resolved, '--', 'xmemo-skill', ...installerArgs];
+      cmdArgs = [...npmRunner.prefixArgs, 'exec', '--offline', '--package', tgzPath, '--', 'xmemo-skill', ...installerArgs];
     }
-  } else {
-    sourceType = 'npm';
-    spec = options.version ?? PINNED_SKILL_VERSION;
-    networkUsed = true;
-    const npmRunner = resolveNpmRunner();
-    if (!npmRunner) {
-      throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+
+    const execCommandText = [command, ...cmdArgs].join(' ');
+    if (!options.json) {
+      writeLine(io.stdout, `${options.dryRun ? 'Would run' : 'Running'}: ${execCommandText}`);
     }
-    command = npmRunner.command;
-    cmdArgs = [...npmRunner.prefixArgs, 'exec', '--yes', '--package', `@xmemo/skill@${spec}`, '--', 'xmemo-skill', ...installerArgs];
-  }
 
-  const execCommandText = [command, ...cmdArgs].join(' ');
-  if (!options.json) {
-    writeLine(io.stdout, `${options.dryRun ? 'Would run' : 'Running'}: ${execCommandText}`);
-  }
-
-  const cleanEnv = sanitizeEnv(io.env);
-
-  let result;
-  try {
-    result = await executeSubprocess(command, cmdArgs, io, cleanEnv, cwd);
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+    let result;
+    try {
+      result = await executeSubprocess(command, cmdArgs, io, cleanEnv, cwd);
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
+      }
+      throw new UsageError(`Failed to execute ${command}: ${error.message}`);
     }
-    throw new UsageError(`Failed to execute ${command}: ${error.message}`);
-  }
 
-  if (result.code !== 0) {
-    const rawError = (result.stderr || result.stdout || '').trim();
-    const isNetworkError = networkUsed && (
-      /ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN|fetch failed|network|request to .* failed|404 Not Found|E404|ERR_SOCKET_TIMEOUT/i.test(rawError)
+    if (result.code !== 0) {
+      const rawError = (result.stderr || result.stdout || '').trim();
+      const isNetworkError = networkUsed && (
+        /ENOTFOUND|ETIMEDOUT|ECONNREFUSED|ECONNRESET|EAI_AGAIN|fetch failed|network|request to .* failed|404 Not Found|E404|ERR_SOCKET_TIMEOUT/i.test(rawError)
+      );
+      if (isNetworkError) {
+        throw new UsageError(`Failed to reach npm registry for @xmemo/skill@${spec}.\nError: ${rawError}\nUse --from <dir|tgz> to install offline without network access.`);
+      }
+
+      const lines = rawError.split('\n').map((l) => l.trim()).filter(Boolean);
+      const matchLine = lines.find((l) => l.startsWith('Error:') || l.includes('Skill destination already exists') || l.includes('Refusing to install'))
+        ?? lines[lines.length - 1]
+        ?? `exit code ${result.code}`;
+      const cleanMessage = matchLine.replace(/^Error:\s*/, '');
+      throw new UsageError(cleanMessage);
+    }
+
+    const childReport = extractJsonReport(result.stdout);
+    const isValidReport = Boolean(
+      childReport &&
+      childReport.package === '@xmemo/skill' &&
+      typeof childReport.skillVersion === 'string' &&
+      STRICT_SEMVER_REGEX.test(childReport.skillVersion) &&
+      typeof childReport.target === 'string' &&
+      path.resolve(childReport.target) === path.resolve(target) &&
+      childReport.installed === !options.dryRun
     );
-    if (isNetworkError) {
-      throw new UsageError(`Failed to reach npm registry for @xmemo/skill@${spec}.\nError: ${rawError}\nUse --from <dir|tgz> to install offline without network access.`);
+
+    if (!isValidReport) {
+      const rawOutput = (result.stderr || result.stdout || '').trim();
+      const detail = rawOutput ? `\nInstaller output: ${rawOutput}` : '';
+      throw new UsageError(`Skill installation failed: installer did not return a valid installation report.${detail}`);
     }
 
-    const lines = rawError.split('\n').map((l) => l.trim()).filter(Boolean);
-    const matchLine = lines.find((l) => l.startsWith('Error:') || l.includes('Skill destination already exists') || l.includes('Refusing to install'))
-      ?? lines[lines.length - 1]
-      ?? `exit code ${result.code}`;
-    const cleanMessage = matchLine.replace(/^Error:\s*/, '');
-    throw new UsageError(cleanMessage);
-  }
+    const report = {
+      package: childReport.package,
+      cliVersion: CLI_VERSION,
+      skillVersion: childReport.skillVersion,
+      source: sourceType,
+      spec,
+      target,
+      command: execCommandText,
+      dryRun: options.dryRun,
+      force: options.force,
+      replaced: Boolean(childReport.replaced),
+      installed: childReport.installed,
+      networkUsed,
+      tokenSent: false
+    };
 
-  const childReport = extractJsonReport(result.stdout);
-  const isValidReport = Boolean(
-    childReport &&
-    childReport.package === '@xmemo/skill' &&
-    typeof childReport.skillVersion === 'string' &&
-    STRICT_SEMVER_REGEX.test(childReport.skillVersion) &&
-    typeof childReport.target === 'string' &&
-    path.resolve(childReport.target) === path.resolve(target) &&
-    childReport.installed === !options.dryRun
-  );
-
-  if (!isValidReport) {
-    const rawOutput = (result.stderr || result.stdout || '').trim();
-    const detail = rawOutput ? `\nInstaller output: ${rawOutput}` : '';
-    throw new UsageError(`Skill installation failed: installer did not return a valid installation report.${detail}`);
-  }
-
-  const report = {
-    package: childReport.package,
-    cliVersion: CLI_VERSION,
-    skillVersion: childReport.skillVersion,
-    source: sourceType,
-    spec,
-    target,
-    command: execCommandText,
-    dryRun: options.dryRun,
-    force: options.force,
-    replaced: Boolean(childReport.replaced),
-    installed: childReport.installed,
-    networkUsed,
-    tokenSent: false
-  };
-
-  if (options.json) {
-    writeLine(io.stdout, JSON.stringify(report, null, 2));
-  } else {
-    writeLine(io.stdout, `${report.dryRun ? 'Would install' : 'Installed'} XMemo Skill ${report.skillVersion} to ${report.target}`);
-    if (report.source === 'local') {
-      writeLine(io.stdout, `Source: local (${report.spec}) (offline; no credential used)`);
+    if (options.json) {
+      writeLine(io.stdout, JSON.stringify(report, null, 2));
     } else {
-      writeLine(io.stdout, `Source: npm (@xmemo/skill@${report.spec}) (no credential used)`);
+      writeLine(io.stdout, `${report.dryRun ? 'Would install' : 'Installed'} XMemo Skill ${report.skillVersion} to ${report.target}`);
+      if (report.source === 'local') {
+        writeLine(io.stdout, `Source: local (${report.spec}) (offline; no credential used)`);
+      } else {
+        writeLine(io.stdout, `Source: npm (@xmemo/skill@${report.spec}) (no credential used)`);
+      }
+    }
+    return 0;
+  } finally {
+    if (tempPackDir) {
+      await fs.rm(tempPackDir, { recursive: true, force: true }).catch(() => {});
     }
   }
-  return 0;
 }
 
 function writeHelp(io) {

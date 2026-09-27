@@ -20,7 +20,7 @@
  *    npm test
  */
 
-export const PINNED_OPENCLAW_PLUGIN_VERSION = '1.0.16';
+export const PINNED_OPENCLAW_PLUGIN_VERSION = '1.0.18';
 export const PINNED_OPENCLAW_PLUGIN_SPEC = `clawhub:@xmemo/openclaw-memory@${PINNED_OPENCLAW_PLUGIN_VERSION}`;
 
 export const PINNED_HERMES_PLUGIN_VERSION = '1.1.3';
