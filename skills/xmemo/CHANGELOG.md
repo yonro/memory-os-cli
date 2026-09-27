@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.32
+
+### Added
+
+- Add evidence-based re-offer for the every-session AGENTS.md instruction setup: first-run sign-in offers (yes / later / don't ask again), recorded via `profile --status later|never`, and successful recalls emit a note on stderr after at least 5 recalls since the previous offer, capped at 3 total offers.
+
 ## 1.1.31
 
 ### Added
