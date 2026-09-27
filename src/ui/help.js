@@ -30,8 +30,8 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Detect clients and prepare XMemo configs. Dry-run unless --write/--yes is set.');
   writeLine(io.stdout, `  ${COMMAND_NAME} setup <client-id> [--url <url>] [--no-profile] [--json] [--force]`);
   writeLine(io.stdout, '      Configure one client, such as cursor, gemini, antigravity, qwen, or opencode.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup openclaw [--with-mcp|--mcp-only] [--no-skill] [--dry-run] [--json]`);
-  writeLine(io.stdout, '      Install or update the native OpenClaw memory plugin and XMemo Skill.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup openclaw [--with-mcp|--mcp-only] [--no-skill] [--dry-run] [--force] [--json]`);
+  writeLine(io.stdout, '      Install or update the native OpenClaw memory plugin and XMemo Skill. Use --force to reinstall.');
   writeLine(io.stdout, `  ${COMMAND_NAME} setup hermes [--with-mcp|--mcp-only] [--no-plugin] [--hermes-home <path>]`);
   writeLine(io.stdout, '      Install or update the native Hermes plugin and shared credential.');
   writeLine(io.stdout, '');

@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { run } from '../src/cli.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defaultWindsurfConfigPath } from '../src/mcp/identity/paths.js';
 
@@ -46,13 +46,33 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
   });
 
   assert.equal(result.code, 0);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].options.shell, false);
-  const expectedArgs = [
+  assert.equal(calls[1].options.shell, false);
+
+  const packDest = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
+  const expectedPackArgs = [
+    'pack',
+    '@xmemo/skill@1.1.33',
+    '--pack-destination',
+    packDest,
+    '--json'
+  ];
+  if (process.platform === 'win32') {
+    assert.equal(calls[0].command, process.execPath);
+    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[0].args.slice(1), expectedPackArgs);
+  } else {
+    assert.equal(calls[0].command, 'npm');
+    assert.deepEqual(calls[0].args, expectedPackArgs);
+  }
+
+  const tgzPackage = calls[1].args[calls[1].args.indexOf('--package') + 1];
+  const expectedExecArgs = [
     'exec',
-    '--yes',
+    '--offline',
     '--package',
-    '@xmemo/skill@latest',
+    tgzPackage,
     '--',
     'xmemo-skill',
     'install',
@@ -62,18 +82,18 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
     '--json'
   ];
   if (process.platform === 'win32') {
-    assert.equal(calls[0].command, process.execPath);
-    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
-    assert.deepEqual(calls[0].args.slice(1), expectedArgs);
+    assert.equal(calls[1].command, process.execPath);
+    assert.match(calls[1].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[1].args.slice(1), expectedExecArgs);
   } else {
-    assert.equal(calls[0].command, 'npm');
-    assert.deepEqual(calls[0].args, expectedArgs);
+    assert.equal(calls[1].command, 'npm');
+    assert.deepEqual(calls[1].args, expectedExecArgs);
   }
   const report = JSON.parse(result.stdout);
   assert.equal(report.installed, false);
   assert.equal(report.networkUsed, true);
   assert.equal(report.source, 'npm');
-  assert.equal(report.spec, 'latest');
+  assert.equal(report.spec, '1.1.33');
   assert.equal(report.tokenSent, false);
 });
 
@@ -945,7 +965,7 @@ test('setup hermes installs native plugin and syncs shared credential without MC
   assert.equal(plan.selectedClient.mcp.enabled, false);
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.deepEqual(calls.map((call) => call.args), [
-    ['-m', 'pip', 'install', '-U', 'hermes-xmemo'],
+    ['-m', 'pip', 'install', 'hermes-xmemo==1.1.3'],
     ['install', '--hermes-home', hermesHome]
   ]);
 
@@ -1792,8 +1812,8 @@ test('setup openclaw installs native plugin and skill without hosted MCP by defa
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.equal(plan.selectedClient.status.connected, true);
   assert.deepEqual(calls.map((call) => call.args), [
-    ['plugins', 'install', '@xmemo/openclaw-memory', '--force'],
-    ['skills', 'install', 'xmemo', '--force'],
+    ['plugins', 'install', 'clawhub:@xmemo/openclaw-memory@1.0.18'],
+    ['skills', 'install', 'xmemo'],
     ['xmemo', 'status', '--json']
   ]);
 });
@@ -2606,8 +2626,22 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '' } = {}) {
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     queueMicrotask(() => {
-      if (stdout) {
-        child.stdout.emit('data', stdout);
+      let callStdout = stdout;
+      if (code === 0 && args.includes('pack')) {
+        const destIdx = args.indexOf('--pack-destination');
+        if (destIdx !== -1 && args[destIdx + 1]) {
+          const destDir = args[destIdx + 1];
+          const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
+          const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+          try {
+            const bytes = readFileSync(fixturePath);
+            writeFileSync(tgzPath, bytes);
+          } catch {}
+        }
+        callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+      }
+      if (callStdout) {
+        child.stdout.emit('data', callStdout);
       }
       if (stderr) {
         child.stderr.emit('data', stderr);

@@ -1,11 +1,13 @@
 import { hasFlag, optionValue } from '../core/args.js';
 import { TOKEN_ENV_VAR } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
+import { writeLine } from '../core/io.js';
+import { PINNED_OPENCLAW_PLUGIN_SPEC } from '../core/pins.js';
 import { runProcess } from '../core/runtime.js';
 import { resolveCredentialToken } from '../network/auth.js';
 
 const DEFAULT_OPENCLAW_BIN = 'openclaw';
-const OPENCLAW_PLUGIN_SPEC = '@xmemo/openclaw-memory';
+const OPENCLAW_PLUGIN_SPEC = PINNED_OPENCLAW_PLUGIN_SPEC;
 const OPENCLAW_SKILL_REF = 'xmemo';
 const OPENCLAW_MCP_NAME = 'xmemo';
 
@@ -29,9 +31,14 @@ function extractLastJsonObject(text) {
   return null;
 }
 
-async function runOpenClaw(openclawBin, args, io) {
+async function runOpenClaw(openclawBin, args, io, { allowAlreadyInstalled = false } = {}) {
   const result = await runProcess(openclawBin, args, io, { stream: false });
   if (result.code !== 0) {
+    const combinedOutput = `${result.stderr || ''}\n${result.stdout || ''}`;
+    const isAlreadyInstalled = /already installed|already exists|destination already exists/i.test(combinedOutput);
+    if (allowAlreadyInstalled && isAlreadyInstalled) {
+      return { ...result, code: 0, alreadyInstalled: true };
+    }
     throw new UsageError(
       `OpenClaw command failed (${result.code}): ${commandText(openclawBin, args)}\n${result.stderr || result.stdout}`,
     );
@@ -54,12 +61,29 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
   const mcpOnly = hasFlag(optionArgs, '--mcp-only');
   const withMcp = mcpOnly || hasFlag(optionArgs, '--with-mcp');
   const noSkill = hasFlag(optionArgs, '--no-skill');
+  const force = hasFlag(optionArgs, '--force');
+  const isJson = hasFlag(optionArgs, '--json');
   const credential = credentialPlan(io.env);
   const sharedToken = await resolveCredentialToken(io.env);
   if (sharedToken && !credential.ready) {
     credential.ready = true;
     credential.source = 'shared-credential';
   }
+
+  const pluginArgs = ['plugins', 'install', OPENCLAW_PLUGIN_SPEC, ...(force ? ['--force'] : [])];
+  const skillArgs = ['skills', 'install', OPENCLAW_SKILL_REF, ...(force ? ['--force'] : [])];
+  const mcpArgs = [
+    'mcp',
+    'add',
+    OPENCLAW_MCP_NAME,
+    '--url',
+    setupPlan.mcpUrl,
+    '--transport',
+    'streamable-http',
+    '--header',
+    `Authorization=Bearer \${${TOKEN_ENV_VAR}}`,
+    '--no-probe',
+  ];
 
   const selectedClient = {
     id: 'openclaw',
@@ -72,32 +96,23 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
     credential,
     nativePlugin: {
       package: OPENCLAW_PLUGIN_SPEC,
-      command: commandText(openclawBin, ['plugins', 'install', OPENCLAW_PLUGIN_SPEC, '--force']),
+      command: commandText(openclawBin, pluginArgs),
       installed: false,
+      alreadyInstalled: false,
       skipped: mcpOnly,
     },
     skill: {
       ref: OPENCLAW_SKILL_REF,
-      command: commandText(openclawBin, ['skills', 'install', OPENCLAW_SKILL_REF, '--force']),
+      command: commandText(openclawBin, skillArgs),
       installed: false,
+      alreadyInstalled: false,
       skipped: noSkill || mcpOnly,
     },
     mcp: {
       enabled: withMcp,
       serverName: OPENCLAW_MCP_NAME,
       mcpUrl: setupPlan.mcpUrl,
-      command: commandText(openclawBin, [
-        'mcp',
-        'add',
-        OPENCLAW_MCP_NAME,
-        '--url',
-        setupPlan.mcpUrl,
-        '--transport',
-        'streamable-http',
-        '--header',
-        `Authorization=Bearer \${${TOKEN_ENV_VAR}}`,
-        '--no-probe',
-      ]),
+      command: commandText(openclawBin, mcpArgs),
       written: false,
       only: mcpOnly,
       note: withMcp
@@ -115,32 +130,40 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
   }
 
   if (!mcpOnly) {
-    await runOpenClaw(openclawBin, ['plugins', 'install', OPENCLAW_PLUGIN_SPEC, '--force'], io);
-    selectedClient.nativePlugin.installed = true;
+    if (!isJson) {
+      writeLine(io.stdout, `Running: ${commandText(openclawBin, pluginArgs)}`);
+    }
+    const pluginResult = await runOpenClaw(openclawBin, pluginArgs, io, { allowAlreadyInstalled: true });
+    if (pluginResult.alreadyInstalled) {
+      selectedClient.nativePlugin.alreadyInstalled = true;
+      if (!isJson) {
+        writeLine(io.stdout, 'OpenClaw plugin is already installed. Use --force to reinstall.');
+      }
+    } else {
+      selectedClient.nativePlugin.installed = true;
+    }
 
     if (!noSkill) {
-      await runOpenClaw(openclawBin, ['skills', 'install', OPENCLAW_SKILL_REF, '--force'], io);
-      selectedClient.skill.installed = true;
+      if (!isJson) {
+        writeLine(io.stdout, `Running: ${commandText(openclawBin, skillArgs)}`);
+      }
+      const skillResult = await runOpenClaw(openclawBin, skillArgs, io, { allowAlreadyInstalled: true });
+      if (skillResult.alreadyInstalled) {
+        selectedClient.skill.alreadyInstalled = true;
+        if (!isJson) {
+          writeLine(io.stdout, 'OpenClaw skill is already installed. Use --force to reinstall.');
+        }
+      } else {
+        selectedClient.skill.installed = true;
+      }
     }
   }
 
   if (withMcp) {
-    await runOpenClaw(
-      openclawBin,
-      [
-        'mcp',
-        'add',
-        OPENCLAW_MCP_NAME,
-        '--url',
-        setupPlan.mcpUrl,
-        '--transport',
-        'streamable-http',
-        '--header',
-        `Authorization=Bearer \${${TOKEN_ENV_VAR}}`,
-        '--no-probe',
-      ],
-      io,
-    );
+    if (!isJson) {
+      writeLine(io.stdout, `Running: ${commandText(openclawBin, mcpArgs)}`);
+    }
+    await runOpenClaw(openclawBin, mcpArgs, io);
     selectedClient.mcp.written = true;
   }
 

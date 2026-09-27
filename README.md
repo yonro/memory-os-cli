@@ -196,13 +196,17 @@ Install-free MCP configuration:
 ### Native integrations
 
 OpenClaw and Hermes have dedicated memory providers. Their default setup avoids
-installing a second, duplicate XMemo tool surface.
+installing a second, duplicate XMemo tool surface:
+
+- **OpenClaw**: installs the pinned plugin `clawhub:@xmemo/openclaw-memory@1.0.18` without `--force` by default. Re-running setup gracefully detects existing installations; use `--force` to reinstall or overwrite.
+- **Hermes**: installs the pinned provider package `hermes-xmemo==1.1.3` via `pip install` without `-U`.
+- Every install command prints the exact command before executing. Use `--dry-run` to preview actions without installing.
 
 ```bash
-# Native OpenClaw plugin + XMemo Skill
+# Native OpenClaw plugin (clawhub:@xmemo/openclaw-memory@1.0.18) + XMemo Skill
 xmemo setup openclaw
 
-# Native Hermes memory provider
+# Native Hermes memory provider (hermes-xmemo==1.1.3)
 xmemo setup hermes
 ```
 
@@ -215,6 +219,32 @@ xmemo setup hermes --with-mcp
 
 Use `--mcp-only` to skip the native integration and install only the hosted MCP
 fallback.
+
+### XMemo Skill install
+
+The CLI installs the XMemo Skill locally into the agent directory:
+
+- Defaults to the pinned `@xmemo/skill@1.1.33` release from npm and verifies tarball integrity (sha512 SRI) before extraction.
+- Override version with `--version <semver>` or explicitly opt into the latest release via `--version latest`.
+- For air-gapped or offline installations, install from a local directory or packed tarball with `--from <dir|tgz>` (optional `--integrity <sha512>`).
+- Preview the installation command without writing files using `--dry-run`.
+
+```bash
+# Default install using pinned release (@xmemo/skill@1.1.33)
+xmemo skill install
+
+# Explicit opt-in to latest release
+xmemo skill install --version latest
+
+# Specific semver version
+xmemo skill install --version 1.1.33
+
+# Offline install from local archive
+xmemo skill install --from ./xmemo-skill-1.1.33.tgz
+
+# Dry run preview
+xmemo skill install --dry-run
+```
 
 ## Authentication
 

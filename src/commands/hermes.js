@@ -4,6 +4,8 @@ import path from 'node:path';
 import { hasFlag, optionValue } from '../core/args.js';
 import { TOKEN_ENV_VAR, LEGACY_TOKEN_ENV_VAR } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
+import { writeLine } from '../core/io.js';
+import { PINNED_HERMES_PLUGIN_VERSION } from '../core/pins.js';
 import {
   bestEffortChmod,
   readTextIfExists,
@@ -130,6 +132,7 @@ export async function hermesSetupPlan({ setupPlan, optionArgs, io, dryRun, ident
   const noEnvSync = hasFlag(optionArgs, '--no-env-sync');
   const pythonBin = optionValue(optionArgs, '--python') ?? DEFAULT_PYTHON_BIN;
   const hermesXmemoBin = optionValue(optionArgs, '--hermes-xmemo-bin') ?? 'hermes-xmemo';
+  const isJson = hasFlag(optionArgs, '--json');
 
   const credential = await resolveHermesCredential(io, hermesEnvPath);
   const storedCredential = await readStoredCredential(io.env);
@@ -137,6 +140,9 @@ export async function hermesSetupPlan({ setupPlan, optionArgs, io, dryRun, ident
     && credential.source === 'hermes-env'
     && !storedCredential.token;
   const shouldWriteHermesEnv = Boolean(credential.token) && !noEnvSync;
+
+  const pipArgs = ['-m', 'pip', 'install', `${HERMES_PLUGIN_PACKAGE}==${PINNED_HERMES_PLUGIN_VERSION}`];
+  const activateArgs = ['install', '--hermes-home', hermesHome];
 
   const selectedClient = {
     id: 'hermes',
@@ -156,16 +162,16 @@ export async function hermesSetupPlan({ setupPlan, optionArgs, io, dryRun, ident
       hermesEnvSynced: false,
     },
     nativePlugin: {
-      package: HERMES_PLUGIN_PACKAGE,
-      installCommand: commandText(pythonBin, ['-m', 'pip', 'install', '-U', HERMES_PLUGIN_PACKAGE]),
-      activateCommand: commandText(hermesXmemoBin, ['install', '--hermes-home', hermesHome]),
+      package: `${HERMES_PLUGIN_PACKAGE}==${PINNED_HERMES_PLUGIN_VERSION}`,
+      installCommand: commandText(pythonBin, pipArgs),
+      activateCommand: commandText(hermesXmemoBin, activateArgs),
       installed: false,
       skipped: noPlugin || mcpOnly,
       note: noPlugin || mcpOnly
         ? mcpOnly
           ? 'Native Hermes plugin install skipped by --mcp-only.'
           : 'Native Hermes plugin install skipped by --no-plugin.'
-        : 'Installs/updates the native Hermes XMemo plugin before syncing credentials.',
+        : 'Installs the native Hermes XMemo plugin before syncing credentials.',
     },
     mcp: {
       enabled: withMcp,
@@ -187,8 +193,14 @@ export async function hermesSetupPlan({ setupPlan, optionArgs, io, dryRun, ident
   }
 
   if (!noPlugin && !mcpOnly) {
-    await runHermesCommand(pythonBin, ['-m', 'pip', 'install', '-U', HERMES_PLUGIN_PACKAGE], io);
-    await runHermesCommand(hermesXmemoBin, ['install', '--hermes-home', hermesHome], io);
+    if (!isJson) {
+      writeLine(io.stdout, `Running: ${commandText(pythonBin, pipArgs)}`);
+    }
+    await runHermesCommand(pythonBin, pipArgs, io);
+    if (!isJson) {
+      writeLine(io.stdout, `Running: ${commandText(hermesXmemoBin, activateArgs)}`);
+    }
+    await runHermesCommand(hermesXmemoBin, activateArgs, io);
     selectedClient.nativePlugin.installed = true;
   }
 

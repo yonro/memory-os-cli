@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -37,7 +38,7 @@ async function invoke(args, options = {}) {
   return { code, stdout, stderr };
 }
 
-function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } = {}) {
+function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, tarballContent = null } = {}) {
   return (command, args, options) => {
     calls.push({ command, args, options });
     if (error) {
@@ -47,19 +48,41 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     queueMicrotask(() => {
-      if (stdout) {
-        child.stdout.emit('data', stdout);
+      let callStdout = stdout;
+      let callCode = code;
+      if (code === 0) {
+        if (args.includes('view')) {
+          callStdout = JSON.stringify('sha512-1+nfcHczdEM8YNyASWMu5ntJ2RQ5q+CvoJHwq6vObvHGkRSXe4tBFdYpooRW45NYp7xMjZIwrnRAiMZ/V+cgaw==');
+        } else if (args.includes('pack')) {
+          const destIdx = args.indexOf('--pack-destination');
+          if (destIdx !== -1 && args[destIdx + 1]) {
+            const destDir = args[destIdx + 1];
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+            try {
+              if (tarballContent !== null) {
+                fsSync.writeFileSync(tgzPath, tarballContent);
+              } else {
+                fsSync.copyFileSync(fixturePath, tgzPath);
+              }
+            } catch {}
+          }
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+        }
+      }
+      if (callStdout) {
+        child.stdout.emit('data', callStdout);
       }
       if (stderr) {
         child.stderr.emit('data', stderr);
       }
-      child.emit('close', code);
+      child.emit('close', callCode);
     });
     return child;
   };
 }
 
-test('CLI skill install: default delegates to @xmemo/skill@latest without shell', async () => {
+test('CLI skill install: default delegates to @xmemo/skill@pinned without shell', async () => {
   const calls = [];
   const mockReport = {
     package: '@xmemo/skill',
@@ -79,13 +102,33 @@ test('CLI skill install: default delegates to @xmemo/skill@latest without shell'
   });
 
   assert.equal(result.code, 0);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].options.shell, false);
+  assert.equal(calls[1].options.shell, false);
+
+  const packDest1 = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
+  const expectedPackArgs1 = [
+    'pack',
+    '@xmemo/skill@1.1.33',
+    '--pack-destination',
+    packDest1,
+    '--json'
+  ];
+  if (process.platform === 'win32') {
+    assert.equal(calls[0].command, process.execPath);
+    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[0].args.slice(1), expectedPackArgs1);
+  } else {
+    assert.equal(calls[0].command, 'npm');
+    assert.deepEqual(calls[0].args, expectedPackArgs1);
+  }
+
+  const tgzPackage1 = calls[1].args[calls[1].args.indexOf('--package') + 1];
   const expectedArgs1 = [
     'exec',
-    '--yes',
+    '--offline',
     '--package',
-    '@xmemo/skill@latest',
+    tgzPackage1,
     '--',
     'xmemo-skill',
     'install',
@@ -95,21 +138,23 @@ test('CLI skill install: default delegates to @xmemo/skill@latest without shell'
     '--json'
   ];
   if (process.platform === 'win32') {
-    assert.equal(calls[0].command, process.execPath);
-    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
-    assert.deepEqual(calls[0].args.slice(1), expectedArgs1);
+    assert.equal(calls[1].command, process.execPath);
+    assert.match(calls[1].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[1].args.slice(1), expectedArgs1);
   } else {
-    assert.equal(calls[0].command, 'npm');
-    assert.deepEqual(calls[0].args, expectedArgs1);
+    assert.equal(calls[1].command, 'npm');
+    assert.deepEqual(calls[1].args, expectedArgs1);
   }
 
   // Assert secret env is scrubbed
   assert.equal(calls[0].options.env.XMEMO_KEY, undefined);
   assert.equal(calls[0].options.env.OTHER_ENV, 'allowed');
+  assert.equal(calls[1].options.env.XMEMO_KEY, undefined);
+  assert.equal(calls[1].options.env.OTHER_ENV, 'allowed');
 
   const report = JSON.parse(result.stdout);
   assert.equal(report.source, 'npm');
-  assert.equal(report.spec, 'latest');
+  assert.equal(report.spec, '1.1.33');
   assert.equal(report.networkUsed, true);
   assert.equal(report.tokenSent, false);
   assert.equal(report.package, '@xmemo/skill');
@@ -134,13 +179,49 @@ test('CLI skill install: --version validates strict semver and passes to npm pac
   });
 
   assert.equal(result.code, 0);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].options.shell, false);
+  assert.equal(calls[1].options.shell, false);
+  assert.equal(calls[2].options.shell, false);
+
+  const expectedViewArgs = [
+    'view',
+    '@xmemo/skill@1.1.25',
+    'dist.integrity',
+    '--json'
+  ];
+  if (process.platform === 'win32') {
+    assert.equal(calls[0].command, process.execPath);
+    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[0].args.slice(1), expectedViewArgs);
+  } else {
+    assert.equal(calls[0].command, 'npm');
+    assert.deepEqual(calls[0].args, expectedViewArgs);
+  }
+
+  const packDest2 = calls[1].args[calls[1].args.indexOf('--pack-destination') + 1];
+  const expectedPackArgs2 = [
+    'pack',
+    '@xmemo/skill@1.1.25',
+    '--pack-destination',
+    packDest2,
+    '--json'
+  ];
+  if (process.platform === 'win32') {
+    assert.equal(calls[1].command, process.execPath);
+    assert.match(calls[1].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[1].args.slice(1), expectedPackArgs2);
+  } else {
+    assert.equal(calls[1].command, 'npm');
+    assert.deepEqual(calls[1].args, expectedPackArgs2);
+  }
+
+  const tgzPackage2 = calls[2].args[calls[2].args.indexOf('--package') + 1];
   const expectedArgs2 = [
     'exec',
-    '--yes',
+    '--offline',
     '--package',
-    '@xmemo/skill@1.1.25',
+    tgzPackage2,
     '--',
     'xmemo-skill',
     'install',
@@ -150,12 +231,12 @@ test('CLI skill install: --version validates strict semver and passes to npm pac
     '--json'
   ];
   if (process.platform === 'win32') {
-    assert.equal(calls[0].command, process.execPath);
-    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
-    assert.deepEqual(calls[0].args.slice(1), expectedArgs2);
+    assert.equal(calls[2].command, process.execPath);
+    assert.match(calls[2].args[0], /npm-cli\.(m)?js$/);
+    assert.deepEqual(calls[2].args.slice(1), expectedArgs2);
   } else {
-    assert.equal(calls[0].command, 'npm');
-    assert.deepEqual(calls[0].args, expectedArgs2);
+    assert.equal(calls[2].command, 'npm');
+    assert.deepEqual(calls[2].args, expectedArgs2);
   }
 
   const report = JSON.parse(result.stdout);
@@ -168,7 +249,7 @@ test('CLI skill install: --version validates strict semver and passes to npm pac
 });
 
 test('CLI skill install: rejects invalid --version formats', async () => {
-  for (const badVersion of ['^1.0.0', '~1.1.0', '>=1.0.0', 'latest', 'v1.1.25', '1.x', 'alpha', 'http://example.com/pkg.tgz']) {
+  for (const badVersion of ['^1.0.0', '~1.1.0', '>=1.0.0', 'v1.1.25', '1.x', 'alpha', 'http://example.com/pkg.tgz']) {
     const result = await invoke(['skill', 'install', '--version', badVersion]);
     assert.equal(result.code, 2, `Expected code 2 for bad version: ${badVersion}`);
     assert.match(result.stderr, /Invalid --version/);
@@ -228,7 +309,7 @@ test('CLI skill install: non-JSON human readable output', async () => {
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Installed XMemo Skill 1\.1\.25 to/);
-  assert.match(result.stdout, /Source: npm \(@xmemo\/skill@latest\) \(no credential used\)/);
+  assert.match(result.stdout, /Source: npm \(@xmemo\/skill@1\.1\.33\) \(no credential used\)/);
 });
 
 test('CLI skill install: end-to-end with --from <dir> installs byte-identical skill', async () => {
@@ -441,11 +522,11 @@ test('CLI skill install: resolves target against io.cwd and passes explicit --ta
   });
 
   assert.equal(res.code, 0);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].options.cwd, customCwd);
-  assert.ok(calls[0].args.includes('--target'));
-  const targetIdx = calls[0].args.indexOf('--target');
-  assert.equal(calls[0].args[targetIdx + 1], expectedTarget);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].options.cwd, customCwd);
+  assert.ok(calls[1].args.includes('--target'));
+  const targetIdx = calls[1].args.indexOf('--target');
+  assert.equal(calls[1].args[targetIdx + 1], expectedTarget);
 });
 
 test('CLI skill install: injection immunity with shell: false on target containing metacharacters', async () => {

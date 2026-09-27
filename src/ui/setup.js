@@ -313,7 +313,7 @@ export function writeSetupHelp(io) {
   writeLine(io.stdout, 'Setup commands:');
   writeLine(io.stdout, `  ${COMMAND_NAME} setup --all [--write] [--profile] [--force]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} setup <client-id> [--url <url>] [--no-profile] [--yes] [--json] [--force]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} setup openclaw [--with-mcp|--mcp-only] [--no-skill] [--dry-run] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} setup openclaw [--with-mcp|--mcp-only] [--no-skill] [--dry-run] [--force] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} setup hermes [--with-mcp|--mcp-only] [--no-plugin] [--hermes-home <path>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} setup kiro [--auth oauth|key]`);
   writeLine(io.stdout, '');
