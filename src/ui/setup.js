@@ -21,14 +21,6 @@ export function supportedSetupClientIds(_mcpClients) {
   return registrySupportedSetupClientIds();
 }
 
-export function requiredOption(args, name) {
-  const value = optionValue(args, name);
-  if (!value) {
-    throw new UsageError(`Missing required option ${name}.`);
-  }
-  return value;
-}
-
 export function positionalClientArg(args, mcpClients) {
   const candidate = args[0];
   if (!candidate || candidate.startsWith('--')) {

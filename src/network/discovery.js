@@ -86,7 +86,7 @@ export function agentDiscoveryClientIds(discovery) {
   return supported ?? [];
 }
 
-export function discoveryMcpClients(discovery) {
+function discoveryMcpClients(discovery) {
   const clients = discovery?.clients?.mcp;
   if (!Array.isArray(clients)) {
     return [];

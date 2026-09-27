@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 import { UsageError } from './errors.js';
@@ -141,4 +143,21 @@ export function escapeRegExp(value) {
 
 export async function sleep(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function userHome(env = process.env) {
+  return env?.USERPROFILE || env?.HOME || os.homedir();
+}
+
+export function isRepo(cwd, env = process.env, markerDir = null) {
+  if (!cwd) return false;
+  const resolvedCwd = path.resolve(cwd);
+  const resolvedHome = path.resolve(userHome(env));
+  if (resolvedCwd === resolvedHome) {
+    return existsSync(path.join(cwd, '.git'));
+  }
+  if (markerDir && existsSync(path.join(cwd, markerDir))) {
+    return true;
+  }
+  return existsSync(path.join(cwd, '.git')) || existsSync(path.join(cwd, 'package.json'));
 }

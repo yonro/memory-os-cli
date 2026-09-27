@@ -66,44 +66,12 @@ npm distribution.
 
 ## Quick start
 
-### Global install
-
-```bash
-npm install -g @xmemo/client
-xmemo login
-xmemo doctor
-xmemo setup codex
-xmemo status
-```
-
-Global installation exposes `xmemo` as the primary command, and also provides `client` and `memory-os` as aliases.
-
-### Running with npx
-
-You can also run any CLI command directly without a global install via `npx @xmemo/client <command>`:
-
-```bash
-# Check version or health
-npx @xmemo/client --version
-npx @xmemo/client doctor
-
-# Install skill or run MCP stdio server
-npx @xmemo/client skill install
-npx skills add yonro/memory-os-cli --skill xmemo-memory
-npx @xmemo/client mcp serve
-```
-
-Replace `codex` with your client. Preview a configuration before writing it:
-
-```bash
-xmemo setup cursor --dry-run
-```
-
 ### Guided onboarding (`xmemo init`)
 
 For an interactive first-run experience across account authentication, detected clients, agent behavior instructions, MCP server setup, skills, and plugins, run:
 
 ```bash
+npm install -g @xmemo/client
 xmemo init
 ```
 
@@ -114,10 +82,44 @@ Flags and options:
 - `xmemo init --client <id>...`: Restrict onboarding to specific clients (e.g., `cursor`, `codex`, `claude-code`).
 - `xmemo start`: Alias for `xmemo init` with quick-start walkthrough steps.
 
+Global installation exposes `xmemo` as the primary command, and also provides `client` and `memory-os` as aliases.
+
+### Manual step-by-step setup
+
+```bash
+xmemo account login
+xmemo doctor
+xmemo setup codex
+xmemo status
+```
+
+Replace `codex` with your client. Preview a configuration before writing it:
+
+```bash
+xmemo setup cursor --dry-run
+```
+
+### Running with npx
+
+You can also run any CLI command directly without a global install via `npx @xmemo/client <command>`:
+
+```bash
+# Check version or health
+npx @xmemo/client --version
+npx @xmemo/client doctor
+
+# Guided onboarding without global install
+npx @xmemo/client init
+
+# Install skill or run MCP stdio server
+npx @xmemo/client skill install
+npx @xmemo/client mcp serve
+```
+
 ![XMemo CLI setup workflow](./docs/assets/xmemo-cli-workflow.svg)
 
 > [!TIP]
-> Start with `xmemo login`, `xmemo doctor`, and `xmemo setup <client>`.
+> Start with `xmemo init` (or `xmemo account login`, `xmemo doctor`, and `xmemo setup <client>`).
 > Hand-edit MCP configuration only when a client has no verified setup path.
 
 ## Supported integrations
@@ -423,60 +425,63 @@ Every command and subcommand supports `--json` for predictable scripting:
 ## Command reference
 
 <details>
-<summary><strong>Lifecycle and diagnostics</strong></summary>
+<summary><strong>1. Get started</strong></summary>
 
 ```bash
-xmemo --version [--json]
-xmemo update [--dry-run] [--json]
-xmemo doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]
-xmemo discovery show [--json]
-xmemo status [--url <url>] [--json]
-xmemo privacy [--json]
+xmemo init [--client <id>...] [--yes] [--dry-run] [--json]
+
+# Backward-compatible alias
+xmemo start [--json]
+```
+
+</details>
+
+<details>
+<summary><strong>2. Connect agents</strong></summary>
+
+```bash
+# High-level client configuration
+xmemo setup <client> [--url <url>] [--no-profile] [--json] [--force]
+xmemo setup <client> --dry-run
+xmemo setup --all [--write] [--profile] [--force]
+
+# Direct MCP server configuration
+xmemo mcp serve
+xmemo mcp list
+xmemo mcp config --client <client-id> [--base-url <url>] [--json]
+xmemo mcp add <client-id> [--write] [--config <path>]
+xmemo mcp proxy [--port 8765] [--base-url <url>]
+
+# Workspace behavior profiles
+xmemo profile install <client-id> [--target <path>] [--dry-run]
+xmemo profile show <client-id> [--target <path>] [--json]
+xmemo profile status <client-id> [--target <path>] [--json]
+xmemo profile uninstall <client-id> [--target <path>] [--yes]
+```
+
+</details>
+
+<details>
+<summary><strong>3. Skill</strong></summary>
+
+```bash
+# Install verified pinned skill into agent skill folders
 xmemo skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]
+
+# Inspect installation status across clients
 xmemo skill status [--client <id>|--all] [--json]
+
+# Remove installed skill from an agent folder (refuses non-XMemo folders)
 xmemo skill remove --client <id> [--project] [--yes] [--json]
+
+# Update skill installation (creates backup in ~/.xmemo/backups/skills/<client>/)
 xmemo skill update [--client <id>|--all] [--yes] [--json]
 ```
 
 </details>
 
 <details>
-<summary><strong>Account</strong></summary>
-
-```bash
-xmemo account login [--base-url <url>] [--allow-plaintext] [--json]
-xmemo account logout [--yes] [--json]
-xmemo account status [--verify] [--base-url <url>] [--json]
-xmemo account token status [--verify] [--json]
-xmemo account token add --from-stdin --allow-plaintext [--json]
-xmemo account token set --from-stdin [--allow-plaintext] [--json]
-xmemo env example [--shell bash|powershell|cmd] [--json]
-
-# Backward-compatible aliases (emit one-line deprecation note on stderr in human mode)
-xmemo login
-xmemo auth status
-xmemo auth-status
-xmemo token status
-xmemo token add --from-stdin --allow-plaintext
-```
-
-</details>
-
-<details>
-<summary><strong>Client setup</strong></summary>
-
-```bash
-xmemo setup <client>
-xmemo setup <client> --dry-run
-xmemo setup --all
-xmemo setup openclaw [--with-mcp|--mcp-only]
-xmemo setup hermes [--with-mcp|--mcp-only]
-```
-
-</details>
-
-<details>
-<summary><strong>Agent plugins</strong></summary>
+<summary><strong>4. Plugins</strong></summary>
 
 ```bash
 xmemo plugin list [--all] [--json]
@@ -488,11 +493,13 @@ xmemo plugin status [<id>] [--all] [--json]
 </details>
 
 <details>
-<summary><strong>Direct XMemo service client</strong></summary>
+<summary><strong>5. Memory</strong></summary>
 
 ```bash
 xmemo memory add --content "Remember this" --path notes/example --json
 xmemo memory search "example" --json
+xmemo memory read <id> --json
+xmemo memory list [--path <path>] --json
 xmemo context recall "resume this task" --include-knowledge --json
 xmemo state save --current-task "ship the client" --next-action "run tests" --json
 xmemo state restore --json
@@ -540,34 +547,52 @@ xmemo login --scopes memory:read,memory:write,memory:restore,knowledge:read,know
 </details>
 
 <details>
-<summary><strong>MCP and behavior profiles</strong></summary>
+<summary><strong>6. Account</strong></summary>
 
 ```bash
-xmemo mcp serve
-xmemo mcp list
-xmemo mcp config --client generic
-xmemo mcp add <client> --write
-xmemo mcp proxy
-xmemo profile install <client>
-xmemo profile status <client>
-xmemo profile uninstall <client>
-xmemo smoke --client codex
+xmemo account login [--base-url <url>] [--allow-plaintext] [--json]
+xmemo account logout [--yes] [--json]
+xmemo account status [--verify] [--base-url <url>] [--json]
+xmemo account token status [--verify] [--json]
+xmemo account token add --from-stdin --allow-plaintext [--json]
+xmemo account token set --from-stdin [--allow-plaintext] [--json]
+
+# Backward-compatible aliases (emit one-line deprecation note on stderr in human mode)
+xmemo login
+xmemo auth status
+xmemo auth-status
+xmemo token status
+xmemo token add --from-stdin --allow-plaintext
 ```
 
 </details>
 
 <details>
-<summary><strong>Safe removal</strong></summary>
+<summary><strong>7. Maintenance</strong></summary>
 
 ```bash
+# Diagnostics and environment validation
+xmemo doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]
+xmemo doctor --discovery [--base-url <url>] [--json]
+xmemo doctor --client <client-id> [--config <path>] [--smoke] [--auth oauth|key] [--fix] [--json]
+
+# Probes, updates, and environment
+xmemo status [--url <url>] [--json]
+xmemo update [--dry-run] [--json]
+xmemo env [--example] [--shell bash|powershell|cmd] [--json]
+xmemo privacy [--json]
+xmemo --version [--json]
+
+# Safe removal (only XMemo-owned entries and profiles are removed)
 xmemo uninstall <client> --dry-run
 xmemo uninstall <client> --yes
 xmemo uninstall --all --dry-run
 xmemo uninstall --all --yes --profiles
-```
 
-Only XMemo-owned entries and marker-scoped behavior profiles are removed.
-Unrelated MCP servers, credentials, and device identity remain intact.
+# Backward-compatible aliases (emit one-line deprecation note on stderr in human mode)
+xmemo smoke --client codex
+xmemo discovery show
+```
 
 </details>
 
@@ -581,7 +606,7 @@ options.
 
 ```bash
 xmemo setup codex
-xmemo smoke --client codex
+xmemo doctor --client codex --smoke
 
 xmemo setup cursor
 ```

@@ -53,44 +53,12 @@
 
 ## 快速开始
 
-### 全局安装
+### 引导式初次运行 (`xmemo init`)
+
+首次使用时，推荐直接运行交互式向导，统一完成账号登录、客户端检测、智能体行为指令配置、MCP 服务器配置、Skill 安装以及各平台插件安装：
 
 ```bash
 npm install -g @xmemo/client
-xmemo login
-xmemo doctor
-xmemo setup codex
-xmemo status
-```
-
-全局安装后主要使用 `xmemo` 命令，同时也提供 `client` 与 `memory-os` 作为等价别名。
-
-### 使用 npx 即时执行
-
-无需全局安装，亦可直接使用 `npx @xmemo/client <command>` 执行任意 CLI 命令：
-
-```bash
-# 查看版本或执行健康检查
-npx @xmemo/client --version
-npx @xmemo/client doctor
-
-# 安装 Skill 或启动 MCP stdio 服务
-npx @xmemo/client skill install
-npx skills add yonro/memory-os-cli --skill xmemo-memory
-npx @xmemo/client mcp serve
-```
-
-将 `codex` 替换为你正在使用的客户端。在实际写入配置前可先通过预览检查变更：
-
-```bash
-xmemo setup cursor --dry-run
-```
-
-### 引导式初次运行 (`xmemo init`)
-
-首次使用时，可运行交互式向导，统一完成账号登录、客户端检测、智能体行为指令配置、MCP 服务器配置、Skill 安装以及各平台插件安装：
-
-```bash
 xmemo init
 ```
 
@@ -101,10 +69,44 @@ xmemo init
 - `xmemo init --client <id>...`: 仅对指定的客户端进行检测与配置（如 `cursor`、`codex`、`claude-code`）。
 - `xmemo start`: `xmemo init` 的等价别名，结尾包含快速上手指导。
 
+全局安装后主要使用 `xmemo` 命令，同时也提供 `client` 与 `memory-os` 作为等价别名。
+
+### 分步手动配置
+
+```bash
+xmemo account login
+xmemo doctor
+xmemo setup codex
+xmemo status
+```
+
+将 `codex` 替换为你正在使用的客户端。在实际写入配置前可先通过预览检查变更：
+
+```bash
+xmemo setup cursor --dry-run
+```
+
+### 使用 npx 即时执行
+
+无需全局安装，亦可直接使用 `npx @xmemo/client <command>` 执行任意 CLI 命令：
+
+```bash
+# 查看版本或执行健康检查
+npx @xmemo/client --version
+npx @xmemo/client doctor
+
+# 即时启动引导向导
+npx @xmemo/client init
+
+# 安装 Skill 或启动 MCP stdio 服务
+npx @xmemo/client skill install
+npx @xmemo/client mcp serve
+```
+
 ![XMemo CLI 配置工作流](./docs/assets/xmemo-cli-workflow.svg)
 
 > [!TIP]
-> 推荐的标准接入顺序：`xmemo login` → `xmemo doctor` → `xmemo setup <client>`。
+> 推荐的标准接入方式为运行 `xmemo init`（或按 `xmemo account login` → `xmemo doctor` → `xmemo setup <client>` 分步执行）。
 > 仅在客户端暂无官方自动化适配方案时，才建议手动修改 MCP 配置文件。
 
 ## 支持的客户端集成
@@ -399,60 +401,63 @@ Remove-Variable xmemoToken
 ## 命令参考
 
 <details>
-<summary><strong>生命周期与系统诊断</strong></summary>
+<summary><strong>1. 快速上手</strong></summary>
 
 ```bash
-xmemo --version [--json]
-xmemo update [--dry-run] [--json]
-xmemo doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]
-xmemo discovery show [--json]
-xmemo status [--url <url>] [--json]
-xmemo privacy [--json]
+xmemo init [--client <id>...] [--yes] [--dry-run] [--json]
+
+# 兼容别名
+xmemo start [--json]
+```
+
+</details>
+
+<details>
+<summary><strong>2. 连接智能体</strong></summary>
+
+```bash
+# 高层智能体配置
+xmemo setup <client> [--url <url>] [--no-profile] [--json] [--force]
+xmemo setup <client> --dry-run
+xmemo setup --all [--write] [--profile] [--force]
+
+# 底层 MCP 协议配置
+xmemo mcp serve
+xmemo mcp list
+xmemo mcp config --client <client-id> [--base-url <url>] [--json]
+xmemo mcp add <client-id> [--write] [--config <path>]
+xmemo mcp proxy [--port 8765] [--base-url <url>]
+
+# 工作区行为规范 Profiles
+xmemo profile install <client-id> [--target <path>] [--dry-run]
+xmemo profile show <client-id> [--target <path>] [--json]
+xmemo profile status <client-id> [--target <path>] [--json]
+xmemo profile uninstall <client-id> [--target <path>] [--yes]
+```
+
+</details>
+
+<details>
+<summary><strong>3. Skill 管理</strong></summary>
+
+```bash
+# 将经过校验与哈希锁定的 Skill 安装至智能体目录
 xmemo skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]
+
+# 检查各客户端 Skill 安装状态与版本
 xmemo skill status [--client <id>|--all] [--json]
+
+# 安全移除已安装的 Skill 目录（拒绝移除无关外部目录）
 xmemo skill remove --client <id> [--project] [--yes] [--json]
+
+# 覆盖更新 Skill（自动在 ~/.xmemo/backups/skills/<client>/ 创建备份）
 xmemo skill update [--client <id>|--all] [--yes] [--json]
 ```
 
 </details>
 
 <details>
-<summary><strong>账号与认证管理</strong></summary>
-
-```bash
-xmemo account login [--base-url <url>] [--allow-plaintext] [--json]
-xmemo account logout [--yes] [--json]
-xmemo account status [--verify] [--base-url <url>] [--json]
-xmemo account token status [--verify] [--json]
-xmemo account token add --from-stdin --allow-plaintext [--json]
-xmemo account token set --from-stdin [--allow-plaintext] [--json]
-xmemo env example [--shell bash|powershell|cmd] [--json]
-
-# 兼容别名（交互模式下在 stderr 输出一行弃用提示）
-xmemo login
-xmemo auth status
-xmemo auth-status
-xmemo token status
-xmemo token add --from-stdin --allow-plaintext
-```
-
-</details>
-
-<details>
-<summary><strong>客户端配置向导</strong></summary>
-
-```bash
-xmemo setup <client>
-xmemo setup <client> --dry-run
-xmemo setup --all
-xmemo setup openclaw [--with-mcp|--mcp-only]
-xmemo setup hermes [--with-mcp|--mcp-only]
-```
-
-</details>
-
-<details>
-<summary><strong>智能体插件</strong></summary>
+<summary><strong>4. 插件中心</strong></summary>
 
 ```bash
 xmemo plugin list [--all] [--json]
@@ -464,11 +469,13 @@ xmemo plugin status [<id>] [--all] [--json]
 </details>
 
 <details>
-<summary><strong>直接与 XMemo 云服务交互</strong></summary>
+<summary><strong>5. 记忆与云服务</strong></summary>
 
 ```bash
 xmemo memory add --content "Remember this" --path notes/example --json
 xmemo memory search "example" --json
+xmemo memory read <id> --json
+xmemo memory list [--path <path>] --json
 xmemo context recall "resume this task" --include-knowledge --json
 xmemo state save --current-task "ship the client" --next-action "run tests" --json
 xmemo state restore --json
@@ -502,33 +509,52 @@ xmemo login --scopes memory:read,memory:write,memory:restore,knowledge:read,know
 </details>
 
 <details>
-<summary><strong>MCP 与行为规范 Profiles</strong></summary>
+<summary><strong>6. 账号与认证</strong></summary>
 
 ```bash
-xmemo mcp serve
-xmemo mcp list
-xmemo mcp config --client generic
-xmemo mcp add <client> --write
-xmemo mcp proxy
-xmemo profile install <client>
-xmemo profile status <client>
-xmemo profile uninstall <client>
-xmemo smoke --client codex
+xmemo account login [--base-url <url>] [--allow-plaintext] [--json]
+xmemo account logout [--yes] [--json]
+xmemo account status [--verify] [--base-url <url>] [--json]
+xmemo account token status [--verify] [--json]
+xmemo account token add --from-stdin --allow-plaintext [--json]
+xmemo account token set --from-stdin [--allow-plaintext] [--json]
+
+# 兼容别名（交互模式下在 stderr 输出一行弃用提示）
+xmemo login
+xmemo auth status
+xmemo auth-status
+xmemo token status
+xmemo token add --from-stdin --allow-plaintext
 ```
 
 </details>
 
 <details>
-<summary><strong>安全卸载</strong></summary>
+<summary><strong>7. 系统维护与诊断</strong></summary>
 
 ```bash
+# 运行环境检查与 MCP 深度校验
+xmemo doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]
+xmemo doctor --discovery [--base-url <url>] [--json]
+xmemo doctor --client <client-id> [--config <path>] [--smoke] [--auth oauth|key] [--fix] [--json]
+
+# 服务端探针、CLI 更新与环境变量
+xmemo status [--url <url>] [--json]
+xmemo update [--dry-run] [--json]
+xmemo env [--example] [--shell bash|powershell|cmd] [--json]
+xmemo privacy [--json]
+xmemo --version [--json]
+
+# 安全卸载（仅清理 XMemo 自有配置项与 Profile）
 xmemo uninstall <client> --dry-run
 xmemo uninstall <client> --yes
 xmemo uninstall --all --dry-run
 xmemo uninstall --all --yes --profiles
-```
 
-卸载仅会清理 XMemo 自有的配置项与打上标记的作用域 Profile。无关的第三方 MCP 服务、认证凭据和设备标识均会完整保留。
+# 兼容别名（交互模式下在 stderr 输出一行弃用提示）
+xmemo smoke --client codex
+xmemo discovery show
+```
 
 </details>
 
@@ -541,7 +567,7 @@ xmemo uninstall --all --yes --profiles
 
 ```bash
 xmemo setup codex
-xmemo smoke --client codex
+xmemo doctor --client codex --smoke
 
 xmemo setup cursor
 ```
