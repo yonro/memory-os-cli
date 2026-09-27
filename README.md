@@ -124,6 +124,8 @@ The client registry also covers Devin Desktop (formerly Windsurf), Cline, Contin
 Claude Code, Kimi Code, Zed, JetBrains, OpenCode, Qwen, Trae, and compatible
 MCP hosts. Run `xmemo mcp list` for the current machine-readable catalog.
 
+For VS Code users looking for the dedicated editor extension, see the [yonro/xmemo-vscode](https://github.com/yonro/xmemo-vscode) repository.
+
 ## Connection modes
 
 ### Hosted MCP

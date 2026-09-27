@@ -109,6 +109,8 @@ xmemo setup cursor --dry-run
 
 客户端注册表同时还支持 Devin Desktop (formerly Windsurf)、Cline、Continue、Claude Desktop、Claude Code、Kimi Code、Zed、JetBrains、OpenCode、Qwen、Trae 等众多兼容 MCP 宿主。运行 `xmemo mcp list` 可获取当前完整的机器可读目录。
 
+VS Code 用户如需专用编辑器扩展插件，请参阅 [yonro/xmemo-vscode](https://github.com/yonro/xmemo-vscode) 仓库。
+
 ## 连接模式
 
 ### 托管版 MCP

@@ -10,8 +10,7 @@ const root = path.join(__dirname, '..');
 
 test('official XMemo logo is consistent across published integrations', async () => {
   const logoPaths = [
-    'plugins/xmemo/assets/logo.png',
-    'extensions/vscode/media/icon.png'
+    'plugins/xmemo/assets/logo.png'
   ];
   const hashes = await Promise.all(
     logoPaths.map(async (relativePath) => {
