@@ -52,7 +52,7 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
     'exec',
     '--yes',
     '--package',
-    '@xmemo/skill@latest',
+    '@xmemo/skill@1.1.33',
     '--',
     'xmemo-skill',
     'install',
@@ -73,7 +73,7 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
   assert.equal(report.installed, false);
   assert.equal(report.networkUsed, true);
   assert.equal(report.source, 'npm');
-  assert.equal(report.spec, 'latest');
+  assert.equal(report.spec, '1.1.33');
   assert.equal(report.tokenSent, false);
 });
 
@@ -945,7 +945,7 @@ test('setup hermes installs native plugin and syncs shared credential without MC
   assert.equal(plan.selectedClient.mcp.enabled, false);
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.deepEqual(calls.map((call) => call.args), [
-    ['-m', 'pip', 'install', '-U', 'hermes-xmemo'],
+    ['-m', 'pip', 'install', 'hermes-xmemo==1.1.3'],
     ['install', '--hermes-home', hermesHome]
   ]);
 
@@ -1792,8 +1792,8 @@ test('setup openclaw installs native plugin and skill without hosted MCP by defa
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.equal(plan.selectedClient.status.connected, true);
   assert.deepEqual(calls.map((call) => call.args), [
-    ['plugins', 'install', '@xmemo/openclaw-memory', '--force'],
-    ['skills', 'install', 'xmemo', '--force'],
+    ['plugins', 'install', 'clawhub:@xmemo/openclaw-memory@1.0.16'],
+    ['skills', 'install', 'xmemo'],
     ['xmemo', 'status', '--json']
   ]);
 });

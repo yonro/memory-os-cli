@@ -59,7 +59,7 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
   };
 }
 
-test('CLI skill install: default delegates to @xmemo/skill@latest without shell', async () => {
+test('CLI skill install: default delegates to @xmemo/skill@pinned without shell', async () => {
   const calls = [];
   const mockReport = {
     package: '@xmemo/skill',
@@ -85,7 +85,7 @@ test('CLI skill install: default delegates to @xmemo/skill@latest without shell'
     'exec',
     '--yes',
     '--package',
-    '@xmemo/skill@latest',
+    '@xmemo/skill@1.1.33',
     '--',
     'xmemo-skill',
     'install',
@@ -109,7 +109,7 @@ test('CLI skill install: default delegates to @xmemo/skill@latest without shell'
 
   const report = JSON.parse(result.stdout);
   assert.equal(report.source, 'npm');
-  assert.equal(report.spec, 'latest');
+  assert.equal(report.spec, '1.1.33');
   assert.equal(report.networkUsed, true);
   assert.equal(report.tokenSent, false);
   assert.equal(report.package, '@xmemo/skill');
@@ -168,7 +168,7 @@ test('CLI skill install: --version validates strict semver and passes to npm pac
 });
 
 test('CLI skill install: rejects invalid --version formats', async () => {
-  for (const badVersion of ['^1.0.0', '~1.1.0', '>=1.0.0', 'latest', 'v1.1.25', '1.x', 'alpha', 'http://example.com/pkg.tgz']) {
+  for (const badVersion of ['^1.0.0', '~1.1.0', '>=1.0.0', 'v1.1.25', '1.x', 'alpha', 'http://example.com/pkg.tgz']) {
     const result = await invoke(['skill', 'install', '--version', badVersion]);
     assert.equal(result.code, 2, `Expected code 2 for bad version: ${badVersion}`);
     assert.match(result.stderr, /Invalid --version/);
@@ -228,7 +228,7 @@ test('CLI skill install: non-JSON human readable output', async () => {
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Installed XMemo Skill 1\.1\.25 to/);
-  assert.match(result.stdout, /Source: npm \(@xmemo\/skill@latest\) \(no credential used\)/);
+  assert.match(result.stdout, /Source: npm \(@xmemo\/skill@1\.1\.33\) \(no credential used\)/);
 });
 
 test('CLI skill install: end-to-end with --from <dir> installs byte-identical skill', async () => {

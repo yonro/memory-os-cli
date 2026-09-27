@@ -4,14 +4,35 @@ import path from 'node:path';
 import process from 'node:process';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 import { hasFlag, optionValue } from '../core/args.js';
 import { CLI_VERSION, COMMAND_NAME } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
+import { PINNED_SKILL_VERSION, PINNED_SKILL_INTEGRITY } from '../core/pins.js';
 
 const DEFAULT_INSTALL_DIR = 'xmemo-skill';
 const STRICT_SEMVER_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+
+export function computeTarballIntegrity(buffer) {
+  const hash = createHash('sha512').update(buffer).digest('base64');
+  return `sha512-${hash}`;
+}
+
+export function verifyTarballIntegrity(tarballBufferOrPath, expectedIntegrity = PINNED_SKILL_INTEGRITY) {
+  let buffer;
+  if (typeof tarballBufferOrPath === 'string') {
+    buffer = fsSync.readFileSync(tarballBufferOrPath);
+  } else {
+    buffer = tarballBufferOrPath;
+  }
+  const actual = computeTarballIntegrity(buffer);
+  if (actual !== expectedIntegrity) {
+    throw new UsageError(`Tarball integrity mismatch: expected "${expectedIntegrity}", got "${actual}". Refusing to extract.`);
+  }
+  return true;
+}
 
 export async function skillCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -28,6 +49,9 @@ export async function skillCommand(args, io) {
   let fromInfo = null;
   if (options.from) {
     fromInfo = await validateFromSource(cwd, options.from);
+    if (fromInfo.type === 'tgz' && options.integrity) {
+      verifyTarballIntegrity(fromInfo.resolved, options.integrity);
+    }
   }
 
   const installerArgs = ['install', '--target', target];
@@ -62,7 +86,7 @@ export async function skillCommand(args, io) {
     }
   } else {
     sourceType = 'npm';
-    spec = options.version ?? 'latest';
+    spec = options.version ?? PINNED_SKILL_VERSION;
     networkUsed = true;
     const npmRunner = resolveNpmRunner();
     if (!npmRunner) {
@@ -70,6 +94,11 @@ export async function skillCommand(args, io) {
     }
     command = npmRunner.command;
     cmdArgs = [...npmRunner.prefixArgs, 'exec', '--yes', '--package', `@xmemo/skill@${spec}`, '--', 'xmemo-skill', ...installerArgs];
+  }
+
+  const execCommandText = [command, ...cmdArgs].join(' ');
+  if (!options.json) {
+    writeLine(io.stdout, `${options.dryRun ? 'Would run' : 'Running'}: ${execCommandText}`);
   }
 
   const cleanEnv = sanitizeEnv(io.env);
@@ -125,6 +154,7 @@ export async function skillCommand(args, io) {
     source: sourceType,
     spec,
     target,
+    command: execCommandText,
     dryRun: options.dryRun,
     force: options.force,
     replaced: Boolean(childReport.replaced),
@@ -148,8 +178,8 @@ export async function skillCommand(args, io) {
 
 function writeHelp(io) {
   writeLine(io.stdout, 'Skill commands:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--version <semver>] [--from <dir|tgz>] [--target <directory>] [--dry-run] [--force] [--json]`);
-  writeLine(io.stdout, 'Installs the XMemo Skill locally via @xmemo/skill (or --from offline source). It never sends credentials.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--version <semver|latest>] [--from <dir|tgz>] [--integrity <sha512>] [--target <directory>] [--dry-run] [--force] [--json]`);
+  writeLine(io.stdout, 'Installs the XMemo Skill locally via @xmemo/skill (or --from offline source). Defaults to pinned version.');
   return 0;
 }
 
@@ -159,15 +189,17 @@ function parseInstallOptions(args) {
   let target = null;
   let version = null;
   let from = null;
+  let integrity = null;
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
-    if (token === '--target' || token === '--version' || token === '--from') {
+    if (token === '--target' || token === '--version' || token === '--from' || token === '--integrity') {
       if (seen.has(token)) throw new UsageError(`Duplicate option: ${token}.`);
       const val = optionValue(args, token);
       if (token === '--target') target = val;
       if (token === '--version') version = val;
       if (token === '--from') from = val;
+      if (token === '--integrity') integrity = val;
       seen.add(token);
       index += 1;
       continue;
@@ -181,14 +213,15 @@ function parseInstallOptions(args) {
     throw new UsageError('Cannot specify both --version and --from.');
   }
 
-  if (version && !STRICT_SEMVER_REGEX.test(version)) {
-    throw new UsageError(`Invalid --version: "${version}". Must be a valid semver (e.g. 1.1.25).`);
+  if (version && version !== 'latest' && !STRICT_SEMVER_REGEX.test(version)) {
+    throw new UsageError(`Invalid --version: "${version}". Must be a valid semver (e.g. 1.1.25) or "latest".`);
   }
 
   return {
     target,
     version,
     from,
+    integrity,
     dryRun: hasFlag(args, '--dry-run'),
     force: hasFlag(args, '--force'),
     json: hasFlag(args, '--json')

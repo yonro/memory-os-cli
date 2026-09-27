@@ -177,11 +177,15 @@ CLI 全局安装后，`xmemo mcp serve` 效果与上述相同。
 
 OpenClaw 和 Hermes 拥有定制的原生记忆提供者插件。默认配置会自动避开创建重复的 MCP 工具外挂层：
 
+- **OpenClaw**: 默认安装版本锁定的插件 `clawhub:@xmemo/openclaw-memory@1.0.16`，不携带 `--force` 参数。如需重新安装或覆盖，请显式传入 `--force`。
+- **Hermes**: 默认通过 `pip install` 安装版本锁定的提供者包 `hermes-xmemo==1.1.3`，不携带 `-U` 参数。
+- 所有安装命令在执行前都会打印出确切运行的命令与包规约；使用 `--dry-run` 预览将要执行的操作而不实际运行。
+
 ```bash
-# 原生 OpenClaw 插件 + XMemo Skill
+# 原生 OpenClaw 插件 (clawhub:@xmemo/openclaw-memory@1.0.16) + XMemo Skill
 xmemo setup openclaw
 
-# 原生 Hermes 记忆提供者
+# 原生 Hermes 记忆提供者 (hermes-xmemo==1.1.3)
 xmemo setup hermes
 ```
 
@@ -193,6 +197,32 @@ xmemo setup hermes --with-mcp
 ```
 
 传入 `--mcp-only` 则跳过原生插件安装，仅配置托管 MCP。
+
+### XMemo Skill 本地安装
+
+CLI 支持将 XMemo Skill 直接安装至智能体技能目录：
+
+- 默认安装 npm 上锁定的 `@xmemo/skill@1.1.33` 版本，并在解压前严格校验 tarball 完整性哈希（sha512 SRI）。
+- 可通过 `--version <semver>` 指定特定版本，或显式传入 `--version latest` 获取最新版本。
+- 在离线或内网隔离环境中，可通过 `--from <dir|tgz>` 从本地目录或打好的 tarball 进行离线安装（支持 `--integrity <sha512>`）。
+- 传入 `--dry-run` 预览安装计划而不写入任何文件。
+
+```bash
+# 默认安装锁定版本 (@xmemo/skill@1.1.33)
+xmemo skill install
+
+# 显式选择安装最新发布版本
+xmemo skill install --version latest
+
+# 安装指定版本
+xmemo skill install --version 1.1.33
+
+# 从本地归档文件离线安装
+xmemo skill install --from ./xmemo-skill-1.1.33.tgz
+
+# Dry run 预览
+xmemo skill install --dry-run
+```
 
 ## 身份认证
 
