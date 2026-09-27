@@ -79,6 +79,7 @@ test('skillhub.cn publish workflow structure and safety invariants', async () =>
   assert.doesNotMatch(jobEnv, /SKILLHUB_KEY/);
   assert.doesNotMatch(jobEnv, /GH_TOKEN/);
   assert.match(workflow, /- name: Download and extract Release archive[\s\S]*?GH_TOKEN:\s*\${{\s*github\.token\s*}}/);
+  assert.match(workflow, /gh release download "\$RELEASE_TAG" --repo "\$GITHUB_REPOSITORY"/);
   assert.match(workflow, /- name: Authenticate to skillhub\.cn[\s\S]*?SKILLHUB_KEY:\s*\${{\s*secrets\.SKILLHUB_KEY\s*}}/);
 
   // Script injection hardening: display_title fallback eliminated, inputs passed via env
