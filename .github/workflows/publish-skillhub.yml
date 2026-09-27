@@ -27,28 +27,19 @@ jobs:
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
-       (startsWith(github.event.workflow_run.head_branch, 'skill-v') ||
-        contains(github.event.workflow_run.display_title, 'Skill v'))) ||
+       github.event.workflow_run.event == 'release' &&
+       startsWith(github.event.workflow_run.head_branch, 'skill-v')) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.workflow_run.head_branch }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
-      GH_TOKEN: ${{ github.token }}
-      SKILLHUB_KEY: ${{ secrets.SKILLHUB_KEY }}
     steps:
       - name: Validate Release tag
         shell: bash
         run: |
           set -euo pipefail
           resolved_tag="$RELEASE_TAG"
-          if [[ ! "$resolved_tag" =~ ^skill-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            display_title="${{ github.event.workflow_run.display_title || '' }}"
-            if [[ "$display_title" =~ v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-              resolved_tag="skill-v${BASH_REMATCH[1]}"
-            fi
-          fi
-
           if [[ ! "$resolved_tag" =~ ^skill-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "ERROR: Invalid release tag '$resolved_tag'. Expected format: skill-v<major>.<minor>.<patch>" >&2
             exit 1
@@ -80,6 +71,8 @@ jobs:
 
       - name: Download and extract Release archive
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           archive_dir="$(mktemp -d)"
@@ -107,7 +100,7 @@ jobs:
           payload_dir="$GITHUB_WORKSPACE/skillhub-payload"
           skill_path="$payload_dir/SKILL.md"
 
-          node - <<'NODE'
+          node --input-type=module - <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
 
           const skillPath = process.env.GITHUB_WORKSPACE + '/skillhub-payload/SKILL.md';
@@ -119,25 +112,28 @@ jobs:
             throw new Error('Frontmatter delimiter not found in extracted SKILL.md');
           }
 
-          const frontmatter = fmMatch[1];
+          const originalFrontmatter = fmMatch[1];
           const body = content.slice(fmMatch[0].length);
 
-          const nameMatch = frontmatter.match(/^name:\s*(.+)$/m);
-          const descMatch = frontmatter.match(/^description:\s*([\s\S]+?)(?=\r?\n[a-zA-Z0-9_-]+:|$)/m);
+          const descMatch = originalFrontmatter.match(/^description:\s*([\s\S]+?)$/m);
+          let summary = descMatch ? descMatch[1].trim() : '';
+          if ((summary.startsWith('"') && summary.endsWith('"')) || (summary.startsWith("'") && summary.endsWith("'"))) {
+            summary = summary.slice(1, -1);
+          }
 
-          const name = nameMatch ? nameMatch[1].trim() : 'xmemo-memory';
-          const description = descMatch ? descMatch[1].trim() : '';
+          const appendedLines = [
+            `displayName: ${JSON.stringify('XMemo Memory')}`,
+            `slug: ${JSON.stringify('xmemo')}`,
+            `version: ${JSON.stringify(semver)}`,
+            `summary: ${JSON.stringify(summary)}`,
+            `license: ${JSON.stringify('MIT')}`,
+          ];
 
           const newFrontmatter = [
             '---',
-            'name: ' + name,
-            'displayName: XMemo Memory',
-            'slug: xmemo',
-            'version: ' + semver,
-            'summary: ' + description,
-            'description: ' + description,
-            'license: MIT',
-            '---'
+            originalFrontmatter.trimEnd(),
+            ...appendedLines,
+            '---',
           ].join('\n');
 
           writeFileSync(skillPath, newFrontmatter + body, 'utf8');
@@ -178,13 +174,16 @@ jobs:
 
       - name: Authenticate to skillhub.cn
         shell: bash
+        env:
+          SKILLHUB_KEY: ${{ secrets.SKILLHUB_KEY }}
+          XMEMO_SKILL_SKILLHUB_PUBLISH: ${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}
         run: |
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
 
           if [[ -z "${SKILLHUB_KEY:-}" ]]; then
             echo "::warning::SKILLHUB_KEY repository secret is not set."
-            if [[ "$DRY_RUN" != "true" && "${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}" == "true" ]]; then
+            if [[ "$DRY_RUN" != "true" && "${XMEMO_SKILL_SKILLHUB_PUBLISH:-}" == "true" ]]; then
               echo "ERROR: SKILLHUB_KEY is required for publishing." >&2
               exit 1
             fi
@@ -249,6 +248,8 @@ jobs:
       - name: Publish notice (dry-run or gated off)
         if: vars.XMEMO_SKILL_SKILLHUB_PUBLISH != 'true' || env.DRY_RUN == 'true' || env.auth_skipped == 'true'
         shell: bash
+        env:
+          XMEMO_SKILL_SKILLHUB_PUBLISH: ${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}
         run: |
           echo "Notice: Real publish to skillhub.cn was skipped."
-          echo "Reason: vars.XMEMO_SKILL_SKILLHUB_PUBLISH='${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}', dry_run='${{ env.DRY_RUN }}', auth_skipped='${{ env.auth_skipped }}'."
+          echo "Reason: vars.XMEMO_SKILL_SKILLHUB_PUBLISH='${XMEMO_SKILL_SKILLHUB_PUBLISH:-}', dry_run='${DRY_RUN:-}', auth_skipped='${auth_skipped:-}'."

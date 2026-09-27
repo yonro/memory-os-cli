@@ -71,16 +71,87 @@ test('skillhub.cn publish workflow structure and safety invariants', async () =>
   assert.match(workflow, /workflow_dispatch/);
   assert.match(workflow, /release_tag/);
 
-  // Secret and publish gating (repository secret, no environment required)
+  // Secret isolation: secrets are scoped to specific steps, not in job-level env
   assert.doesNotMatch(workflow, /environment:\s*skillhub/);
-  assert.match(workflow, /SKILLHUB_KEY/);
-  assert.match(workflow, /vars\.XMEMO_SKILL_SKILLHUB_PUBLISH/);
+  const jobEnvMatch = workflow.match(/runs-on:\s*ubuntu-latest\s*\r?\n\s*env:\s*\r?\n([\s\S]*?)\r?\n\s*steps:/);
+  assert.ok(jobEnvMatch, 'job-level env block should exist');
+  const jobEnv = jobEnvMatch[1];
+  assert.doesNotMatch(jobEnv, /SKILLHUB_KEY/);
+  assert.doesNotMatch(jobEnv, /GH_TOKEN/);
+  assert.match(workflow, /- name: Download and extract Release archive[\s\S]*?GH_TOKEN:\s*\${{\s*github\.token\s*}}/);
+  assert.match(workflow, /- name: Authenticate to skillhub\.cn[\s\S]*?SKILLHUB_KEY:\s*\${{\s*secrets\.SKILLHUB_KEY\s*}}/);
+
+  // Script injection hardening: display_title fallback eliminated, inputs passed via env
+  assert.doesNotMatch(workflow, /display_title/);
+  const steps = workflow.split(/^\s*-\s*name:/m).slice(1);
+  for (const step of steps) {
+    const runMatch = step.match(/^\s*run:\s*\|?\s*\r?\n([\s\S]*?)(?=^\s*[a-z_-]+:|$)/m);
+    if (runMatch) {
+      assert.doesNotMatch(runMatch[1], /\${{\s*vars\.XMEMO_SKILL_SKILLHUB_PUBLISH\s*}}/);
+      assert.doesNotMatch(runMatch[1], /\${{\s*github\.event\.workflow_run/);
+    }
+  }
 
   // Safe installer and frontmatter injection
   assert.match(workflow, /curl -fsSL https:\/\/skillhub\.cn\/install\/install\.sh/);
   assert.match(workflow, /sha256sum/);
   assert.match(workflow, /--cli-only/);
-  assert.match(workflow, /slug: xmemo/);
-  assert.match(workflow, /displayName: XMemo Memory/);
-  assert.match(workflow, /license: MIT/);
+  assert.match(workflow, /node --input-type=module -/);
+  assert.match(workflow, /slug/);
+  assert.match(workflow, /displayName/);
+  assert.match(workflow, /license/);
+});
+
+test('skillhub frontmatter injection logic preserves original SKILL.md and adds required keys', async () => {
+  const skillPath = path.join(repoRoot, 'skills/xmemo/SKILL.md');
+  const content = await readFile(skillPath, 'utf8');
+
+  const semver = '1.1.33';
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  assert.ok(fmMatch, 'Frontmatter delimiter not found in real SKILL.md');
+
+  const originalFrontmatter = fmMatch[1];
+  const originalBody = content.slice(fmMatch[0].length);
+
+  const descMatch = originalFrontmatter.match(/^description:\s*([\s\S]+?)$/m);
+  let summary = descMatch ? descMatch[1].trim() : '';
+  if ((summary.startsWith('"') && summary.endsWith('"')) || (summary.startsWith("'") && summary.endsWith("'"))) {
+    summary = summary.slice(1, -1);
+  }
+
+  const appendedLines = [
+    `displayName: ${JSON.stringify('XMemo Memory')}`,
+    `slug: ${JSON.stringify('xmemo')}`,
+    `version: ${JSON.stringify(semver)}`,
+    `summary: ${JSON.stringify(summary)}`,
+    `license: ${JSON.stringify('MIT')}`,
+  ];
+
+  const newFrontmatter = [
+    '---',
+    originalFrontmatter.trimEnd(),
+    ...appendedLines,
+    '---',
+  ].join('\n');
+
+  const updatedContent = newFrontmatter + originalBody;
+
+  // Verify original name and description lines are unchanged
+  assert.match(originalFrontmatter, /^name:\s*xmemo-memory$/m);
+  assert.match(newFrontmatter, /^name:\s*xmemo-memory$/m);
+  const origDescLine = originalFrontmatter.match(/^description:\s*.+$/m)?.[0];
+  assert.ok(origDescLine);
+  assert.ok(newFrontmatter.includes(origDescLine));
+
+  // Verify the five required platform keys are present
+  assert.match(newFrontmatter, /^displayName:\s*"XMemo Memory"$/m);
+  assert.match(newFrontmatter, /^slug:\s*"xmemo"$/m);
+  assert.match(newFrontmatter, /^version:\s*"1\.1\.33"$/m);
+  assert.match(newFrontmatter, /^summary:\s*"/m);
+  assert.match(newFrontmatter, /^license:\s*"MIT"$/m);
+
+  // Verify body is byte-identical
+  const updatedFmMatch = updatedContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const updatedBody = updatedContent.slice(updatedFmMatch[0].length);
+  assert.strictEqual(updatedBody, originalBody);
 });
