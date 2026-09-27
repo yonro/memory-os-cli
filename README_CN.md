@@ -86,6 +86,21 @@ npx @xmemo/client mcp serve
 xmemo setup cursor --dry-run
 ```
 
+### 引导式初次运行 (`xmemo init`)
+
+首次使用时，可运行交互式向导，统一完成账号登录、客户端检测、智能体行为指令配置、MCP 服务器配置、Skill 安装以及各平台插件安装：
+
+```bash
+xmemo init
+```
+
+常用选项：
+- `xmemo init --dry-run`: 仅生成并展示完整的初始化计划，不发出外部网络请求也不写入任何磁盘文件。
+- `xmemo init --yes`: 自动确认并执行所有建议步骤（无需每次单独交互确认）。
+- `xmemo init --json`: 输出机器可读的结构化 JSON 格式计划或执行结果信封。
+- `xmemo init --client <id>...`: 仅对指定的客户端进行检测与配置（如 `cursor`、`codex`、`claude-code`）。
+- `xmemo start`: `xmemo init` 的等价别名，结尾包含快速上手指导。
+
 ![XMemo CLI 配置工作流](./docs/assets/xmemo-cli-workflow.svg)
 
 > [!TIP]

@@ -298,6 +298,7 @@ test('every registered command and subcommand produces valid JSON with --json', 
     // Top-level commands
     ['help'],
     ['version'],
+    ['init'],
     ['start'],
     ['privacy'],
     ['env'],

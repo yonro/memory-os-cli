@@ -99,6 +99,21 @@ Replace `codex` with your client. Preview a configuration before writing it:
 xmemo setup cursor --dry-run
 ```
 
+### Guided onboarding (`xmemo init`)
+
+For an interactive first-run experience across account authentication, detected clients, agent behavior instructions, MCP server setup, skills, and plugins, run:
+
+```bash
+xmemo init
+```
+
+Flags and options:
+- `xmemo init --dry-run`: View the full onboarding plan without performing network calls or disk writes.
+- `xmemo init --yes`: Automatically accept and apply all onboarding steps without interactive prompts.
+- `xmemo init --json`: Emit structured JSON for the plan or result envelope.
+- `xmemo init --client <id>...`: Restrict onboarding to specific clients (e.g., `cursor`, `codex`, `claude-code`).
+- `xmemo start`: Alias for `xmemo init` with quick-start walkthrough steps.
+
 ![XMemo CLI setup workflow](./docs/assets/xmemo-cli-workflow.svg)
 
 > [!TIP]
