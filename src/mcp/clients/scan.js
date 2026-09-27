@@ -1,54 +1,21 @@
-import os from 'node:os';
 import path from 'node:path';
 
 import { fileExists } from '../../core/runtime.js';
-import { defaultCopilotConfigPath } from '../identity/paths.js';
-import { supportedMcpClientIds } from './registry.js';
+import {
+  getClient,
+  supportedMcpClientIds
+} from '../../clients/registry.js';
 
-export function autoScanClientIds(mcpClients) {
-  return [...supportedMcpClientIds(mcpClients), 'copilot-cli'];
+export function autoScanClientIds(_mcpClients) {
+  return supportedMcpClientIds();
 }
 
-export function clientConfigPathCandidates(clientId, env, mcpClients) {
-  const candidates = [];
-
-  if (clientId === 'copilot-cli' || clientId === 'copilot') {
-    if (process.platform === 'win32' && env.APPDATA) {
-      candidates.push(path.join(env.APPDATA, 'Code', 'User', 'mcp.json'));
-    } else {
-      const home = env.HOME || os.homedir();
-      if (process.platform === 'darwin') {
-        candidates.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'mcp.json'));
-      }
-      candidates.push(path.join(home, '.config', 'Code', 'User', 'mcp.json'));
-    }
-    candidates.push(defaultCopilotConfigPath(env));
-    return candidates;
+export function clientConfigPathCandidates(clientId, env, _mcpClients) {
+  const client = getClient(clientId);
+  if (client?.mcp?.configPathCandidates) {
+    return client.mcp.configPathCandidates(env);
   }
-
-  if (clientId === 'cline') {
-    if (process.platform === 'win32' && env.APPDATA) {
-      candidates.push(path.join(env.APPDATA, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
-    } else {
-      const home = env.HOME || os.homedir();
-      if (process.platform === 'darwin') {
-        candidates.push(path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
-      }
-      candidates.push(path.join(home, '.config', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
-    }
-  }
-
-  if (clientId === 'windsurf') {
-    const home = env.USERPROFILE || env.HOME || os.homedir();
-    candidates.push(path.join(home, '.codeium', 'windsurf', 'mcp_config.json'));
-  }
-
-  const client = mcpClients.get(clientId);
-  if (client) {
-    candidates.push(client.defaultConfigPath(env));
-  }
-
-  return candidates;
+  return [];
 }
 
 export async function detectedSetupTargets(clientIds, env, mcpClients) {
@@ -94,21 +61,12 @@ export async function existingUninstallTargets(clientIds, env, mcpClients) {
   return targets;
 }
 
-function buildTarget(clientId, configPath, mcpClients) {
-  if (clientId === 'copilot-cli') {
-    return {
-      clientId,
-      label: 'Copilot CLI',
-      configPath,
-      configKind: 'local-proxy'
-    };
-  }
-
-  const client = mcpClients.get(clientId);
+function buildTarget(clientId, configPath, _mcpClients) {
+  const client = getClient(clientId);
   return {
     clientId,
     label: client?.label ?? clientId,
     configPath,
-    configKind: client?.configKind ?? 'json'
+    configKind: client?.mcp?.configKind ?? 'json'
   };
 }

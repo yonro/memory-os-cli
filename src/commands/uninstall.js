@@ -5,6 +5,11 @@ import {
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
+import {
+  getClient,
+  resolveClientId,
+  supportedUninstallClientIds
+} from '../clients/registry.js';
 import { MCP_CLIENTS } from '../mcp/clients.js';
 import {
   autoScanClientIds,
@@ -15,11 +20,6 @@ import {
   profileClientConfig,
   profileUninstallResult
 } from '../config/profile.js';
-import {
-  normalizeSetupClientId,
-  positionalClientArg,
-  supportedSetupClientIds
-} from '../ui/setup.js';
 import { confirmUninstall, writeUninstallSummary } from '../ui/uninstall.js';
 
 export function writeUninstallHelp(io) {
@@ -36,17 +36,17 @@ export async function uninstallCommand(args, io) {
     return writeUninstallHelp(io);
   }
 
-  const positionalClientId = positionalClientArg(args, MCP_CLIENTS);
-  const optionArgs = positionalClientId ? args.slice(1) : args;
+  const positionalCandidate = args[0] && !args[0].startsWith('--') && args[0] !== 'help' ? args[0] : null;
+  const optionArgs = positionalCandidate ? args.slice(1) : args;
   const uninstallAll = hasFlag(optionArgs, '--all');
   const outputJson = hasFlag(optionArgs, '--json');
 
+  const rawClientId = positionalCandidate ?? optionValue(optionArgs, '--client');
   let clientId = null;
-  try {
-    clientId = normalizeSetupClientId(positionalClientId ?? optionValue(optionArgs, '--client'), MCP_CLIENTS);
-  } catch (error) {
-    if (!uninstallAll) {
-      throw error;
+  if (rawClientId) {
+    clientId = resolveClientId(rawClientId);
+    if (!clientId && !uninstallAll) {
+      throw new UsageError(`Unsupported uninstall client: ${rawClientId}. Supported clients: ${supportedUninstallClientIds().join(', ')}.`);
     }
   }
 
@@ -55,7 +55,7 @@ export async function uninstallCommand(args, io) {
   }
 
   if (!uninstallAll && !clientId) {
-    throw new UsageError(`Uninstall requires --all, --client <${supportedSetupClientIds(MCP_CLIENTS).join('|')}>, or a positional client id.`);
+    throw new UsageError(`Uninstall requires --all, --client <${supportedUninstallClientIds().join('|')}>, or a positional client id.`);
   }
 
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');

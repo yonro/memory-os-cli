@@ -34,11 +34,16 @@ import { serviceContext } from '../api/service-context.js';
 import { assertKnownOptions } from '../api/input.js';
 import { ServiceClientError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
+import {
+  getClient,
+  resolveClientId,
+  supportedDoctorClientIds
+} from '../clients/registry.js';
 
 export function writeDoctorHelp(io) {
   writeLine(io.stdout, 'Doctor commands:');
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--services [memory,dream,knowledge,cloud-skill]] [--base-url <url>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client kiro [--config <path>] [--auth oauth|key] [--fix] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client <${supportedDoctorClientIds().join('|')}> [--config <path>] [--auth oauth|key] [--fix] [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Validate runtime environment, service reachability, and client configuration.');
   return 0;
@@ -51,11 +56,16 @@ export async function doctorCommand(args, io) {
   }
 
   const client = optionValue(args, '--client');
-  if (client === 'kiro') {
-    if (hasFlag(args, '--services')) throw new UsageError('--client kiro cannot be combined with --services.');
-    return await kiroDoctor(args, io);
+  if (client) {
+    const resolved = resolveClientId(client);
+    const doctorClient = getClient(resolved);
+    if (!doctorClient || !doctorClient.doctor) {
+      throw new UsageError(`Unsupported doctor client: ${client}. Supported clients: ${supportedDoctorClientIds().join(', ')}.`);
+    }
+    if (hasFlag(args, '--services')) throw new UsageError(`--client ${resolved} cannot be combined with --services.`);
+    return await doctorClient.doctor(args, io);
   }
-  if (client || hasFlag(args, '--fix')) throw new UsageError('Local config repair requires --client kiro.');
+  if (hasFlag(args, '--fix')) throw new UsageError(`Local config repair requires --client <${supportedDoctorClientIds().join('|')}>.`);
   if (hasFlag(args, '--services')) return await serviceDoctor(args, io);
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');
@@ -109,7 +119,7 @@ export async function doctorCommand(args, io) {
   if (rootVersion.version) {
     writeLine(io.stdout, `Service version: ${rootVersion.version}`);
   }
-  writeLine(io.stdout, `Supported clients: ${report.discovery.supportedClients.join(', ') || 'unknown'}`);
+  writeLine(io.stdout, `Supported clients (server): ${report.discovery.supportedClients.join(', ') || 'unknown'}`);
   for (const check of checks) {
     writeLine(io.stdout, `${check.ok ? 'OK' : 'FAIL'} ${check.name}: ${check.detail}`);
   }
