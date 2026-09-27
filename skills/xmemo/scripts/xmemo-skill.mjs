@@ -58,7 +58,7 @@ import { handleMemory } from './commands/memory.mjs';
 import { handleLedger } from './commands/ledger.mjs';
 import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
-import { handleProfile } from './commands/profile.mjs';
+import { handleProfile, armRecallNote } from './commands/profile.mjs';
 
 const SKILL_VERSION = '1.1.31';
 
@@ -132,6 +132,8 @@ async function main() {
     console.error(`Error: No XMemo credential found. Preferred: set XMEMO_KEY. For formal account login with explicit local storage consent, run "${SCRIPT_COMMAND} login --allow-plaintext". For a limited temporary sandbox only when permitted, run "${SCRIPT_COMMAND} register --reason unattended|declined --allow-plaintext".`);
     process.exit(EXIT_CODE.AUTH_ERROR);
   }
+
+  if (command === 'recall') armRecallNote();
 
   // 4. Temporary token isolation
   if (credential?.credential_type === 'temporary') {

@@ -13,10 +13,19 @@ For other operations and guides, see:
 ## Integration Rules
 
 To have XMemo used automatically in every session, the project's agent instruction file (for example `AGENTS.md` or `CLAUDE.md`) can include an XMemo profile block:
-- **When to offer**: Offer once at the end of first-run sign-in (in the connection confirmation message), or whenever the user explicitly asks for every-session use. Never repeat the offer unprompted if the user says no or in subsequent sessions.
+- **When to offer**: Offer once at the end of first-run sign-in (in the connection confirmation message), or whenever the user explicitly asks for every-session use. Never repeat the offer unprompted if the user declines. After "later", offer again only when a recall note specifically suggests it. After "don't ask again", never offer again.
 - **If already configured**: If the project's instruction file already contains the `## XMemo memory` section, do not offer or write it again; replace it only when the user explicitly asks to update it.
 - **Consent before write**: Run `node scripts/xmemo-skill.mjs profile`, display the block to the user, and write or modify the file only after the user gives explicit confirmation in the same conversation.
 - **Single section**: Keep it as one section under its `## XMemo memory` heading so any future update replaces that section instead of duplicating it.
+
+## Later and Don't Ask Again
+
+When the user chooses "later" or "don't ask again" during first-run sign-in or a subsequent offer:
+1. Record the response using `node scripts/xmemo-skill.mjs profile --status later` or `node scripts/xmemo-skill.mjs profile --status never`.
+2. State is persisted in a small local file in the XMemo folder of the user's home directory.
+3. After "later", each successful recall increments a local counter. When recall has been used at least 5 more times since the last offer and fewer than 3 offers have been made in total, recall prints a single guidance note on standard error suggesting an offer can be made once more if the project lacks the section.
+4. The guidance note itself counts as an offer, ensuring no more than 3 offers are ever made in total.
+5. After "never" or when no status is recorded, recall never prints a guidance note.
 
 ## Generating the Profile Block (`profile`)
 

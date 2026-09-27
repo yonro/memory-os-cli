@@ -3,6 +3,13 @@ import {
   EXIT_CODE,
 } from '../lib/core.mjs';
 
+import {
+  STATUSES,
+  recordOfferAnswer,
+} from '../lib/profile-offer.mjs';
+
+export { armRecallNote } from '../lib/profile-offer.mjs';
+
 export function getProfileInstructions(command = SCRIPT_COMMAND) {
   return [
     '## XMemo memory',
@@ -18,7 +25,19 @@ export function getProfileInstructions(command = SCRIPT_COMMAND) {
   ].join('\n');
 }
 
-export async function handleProfile(_ctx) {
+export async function handleProfile(ctx) {
+  const { flags } = ctx || {};
+  if (flags?.status !== undefined) {
+    const rawStatus = String(flags.status).trim();
+    if (!STATUSES.includes(rawStatus)) {
+      console.error(`Invalid status: '${flags.status}'. Allowed values: ${STATUSES.join(', ')}.`);
+      process.exit(EXIT_CODE.USER_ERROR);
+    }
+    recordOfferAnswer(rawStatus);
+    console.log(`Recorded: ${rawStatus}`);
+    process.exit(EXIT_CODE.SUCCESS);
+  }
+
   console.log(getProfileInstructions());
   process.exit(EXIT_CODE.SUCCESS);
 }
