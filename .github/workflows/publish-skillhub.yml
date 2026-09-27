@@ -128,6 +128,7 @@ jobs:
             `version: ${JSON.stringify(semver)}`,
             `summary: ${JSON.stringify(summary)}`,
             `license: ${JSON.stringify('MIT')}`,
+            `iconUrl: ${JSON.stringify('https://xmemo.dev/xmemo-claude-connector-icon.png')}`,
           ];
 
           const newFrontmatter = [
