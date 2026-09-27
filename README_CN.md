@@ -1,6 +1,6 @@
 # XMemo CLI
 
-[![XMemo logo](./plugins/xmemo/assets/logo.png)](https://xmemo.dev)
+[![XMemo logo](./docs/assets/logo.png)](https://xmemo.dev)
 
 **为每一个 AI 智能体打造的私有统一记忆层。**
 
@@ -110,6 +110,8 @@ xmemo setup cursor --dry-run
 客户端注册表同时还支持 Devin Desktop (formerly Windsurf)、Cline、Continue、Claude Desktop、Claude Code、Kimi Code、Zed、JetBrains、OpenCode、Qwen、Trae 等众多兼容 MCP 宿主。运行 `xmemo mcp list` 可获取当前完整的机器可读目录。
 
 VS Code 用户如需专用编辑器扩展插件，请参阅 [yonro/xmemo-vscode](https://github.com/yonro/xmemo-vscode) 仓库。
+Cursor 用户如需专用编辑器插件，请参阅 [yonro/xmemo-cursor-plugin](https://github.com/yonro/xmemo-cursor-plugin) 仓库。
+Claude 用户如需专用插件，请参阅 [yonro/xmemo-claude-plugin](https://github.com/yonro/xmemo-claude-plugin) 仓库。
 
 ## 连接模式
 
@@ -445,7 +447,6 @@ xmemo privacy
 bin/
 docs/assets/
 src/
-plugins/xmemo/
 README.md
 README_CN.md
 LICENSE

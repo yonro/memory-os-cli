@@ -243,7 +243,7 @@ xmemo-mcp
 - 📖 **MCP 产品页**：https://xmemo.dev/product/mcp
 - 🔧 **GitHub 仓库**：https://github.com/yonro/memory-os-cli
 - 📝 **行为配置（Skill）**：[`skills/xmemo/SKILL.md`](skills/xmemo/SKILL.md)
-- 🖼️ **Logo**：[`plugins/xmemo/assets/logo.png`](plugins/xmemo/assets/logo.png)
+- 🖼️ **Logo**：[`docs/assets/logo.png`](docs/assets/logo.png)
 
 ---
 

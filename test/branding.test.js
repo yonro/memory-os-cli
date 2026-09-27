@@ -10,7 +10,7 @@ const root = path.join(__dirname, '..');
 
 test('official XMemo logo is consistent across published integrations', async () => {
   const logoPaths = [
-    'plugins/xmemo/assets/logo.png'
+    'docs/assets/logo.png'
   ];
   const hashes = await Promise.all(
     logoPaths.map(async (relativePath) => {
@@ -22,17 +22,15 @@ test('official XMemo logo is consistent across published integrations', async ()
 
   assert.equal(new Set(hashes).size, 1);
 
-  const [cursorManifest, lobeManifest, readme] = await Promise.all([
-    readJson('plugins/xmemo/.cursor-plugin/plugin.json'),
+  const [lobeManifest, readme] = await Promise.all([
     readJson('lhm.plugin.json'),
     readFile(path.join(root, 'README.md'), 'utf8')
   ]);
 
-  assert.equal(cursorManifest.logo, 'assets/logo.png');
-  assert.match(lobeManifest.icon, /plugins\/xmemo\/assets\/logo\.png$/);
-  assert.match(readme, /plugins\/xmemo\/assets\/logo\.png/);
+  assert.equal(lobeManifest.icon, 'https://xmemo.dev/xmemo-claude-connector-icon.png');
+  assert.match(readme, /docs\/assets\/logo\.png/);
 
-  await assert.rejects(access(path.join(root, 'plugins/xmemo/assets/logo.svg')));
+  await assert.rejects(access(path.join(root, 'docs/assets/logo.svg')));
 });
 
 async function readJson(relativePath) {
