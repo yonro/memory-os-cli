@@ -16,7 +16,6 @@
     "scripts",
     "!scripts/build-skill-npm-package.mjs",
     "src",
-    "plugins/xmemo",
     "README.md",
     "README_CN.md",
     "LICENSE"

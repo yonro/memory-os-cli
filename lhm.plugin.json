@@ -5,7 +5,7 @@
   "author": "yonro",
   "authorUrl": "https://github.com/yonro",
   "homepage": "https://xmemo.dev/product/mcp",
-  "icon": "https://raw.githubusercontent.com/yonro/memory-os-cli/main/plugins/xmemo/assets/logo.png",
+  "icon": "https://xmemo.dev/xmemo-claude-connector-icon.png",
   "version": "0.4.346",
   "category": "productivity",
   "connectionType": "hybrid",

@@ -1,6 +1,6 @@
 # XMemo CLI
 
-[![XMemo logo](./plugins/xmemo/assets/logo.png)](https://xmemo.dev)
+[![XMemo logo](./docs/assets/logo.png)](https://xmemo.dev)
 
 **One private memory layer for every AI agent.**
 
@@ -125,6 +125,8 @@ Claude Code, Kimi Code, Zed, JetBrains, OpenCode, Qwen, Trae, and compatible
 MCP hosts. Run `xmemo mcp list` for the current machine-readable catalog.
 
 For VS Code users looking for the dedicated editor extension, see the [yonro/xmemo-vscode](https://github.com/yonro/xmemo-vscode) repository.
+For Cursor users looking for the dedicated plugin, see the [yonro/xmemo-cursor-plugin](https://github.com/yonro/xmemo-cursor-plugin) repository.
+For Claude users looking for the dedicated plugin, see the [yonro/xmemo-claude-plugin](https://github.com/yonro/xmemo-claude-plugin) repository.
 
 ## Connection modes
 
@@ -499,7 +501,6 @@ Published to npm:
 bin/
 docs/assets/
 src/
-plugins/xmemo/
 README.md
 LICENSE
 ```

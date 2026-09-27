@@ -95,7 +95,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
 
 test('npm package excludes bundled skills and excludes build-skill-npm-package script', async () => {
   assert.equal(packageJson.files.includes('skills'), false);
-  assert.ok(packageJson.files.includes('plugins/xmemo'));
+  assert.equal(packageJson.files.includes('plugins/xmemo'), false);
   assert.ok(packageJson.files.includes('!scripts/build-skill-npm-package.mjs'));
 });
 
