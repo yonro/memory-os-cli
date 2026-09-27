@@ -180,7 +180,7 @@ The skill is published to [skillhub.cn](https://skillhub.cn) via the dedicated G
 ### Workflow Mechanics
 - **Automated Trigger**: Runs automatically upon successful completion of the "Package XMemo Skill release assets" workflow for `skill-v*` release tags.
 - **Manual Trigger**: Supports manual triggering via `workflow_dispatch` with an explicit `release_tag` (e.g., `skill-v1.1.33`) and an optional `dry_run` flag (defaults to `true`).
-- **Archive Ingestion & Metadata Injection**: Downloads the verified `xmemo-skill.tar.gz` from the GitHub Release, extracts the files, and dynamically injects platform-specific frontmatter fields into `SKILL.md` (`slug: xmemo`, `displayName: XMemo Memory`, `version: <semver>`, `summary: <description>`, `license: MIT`).
+- **Archive Ingestion & Metadata Injection**: Downloads the verified `xmemo-skill.tar.gz` from the GitHub Release, extracts the files, and dynamically injects platform-specific frontmatter fields into `SKILL.md` (`slug: xmemo`, `displayName: XMemo Memory`, `version: <semver>`, `summary: <description>`, `license: MIT`, `iconUrl: https://xmemo.dev/xmemo-claude-connector-icon.png`).
 - **Repository Cleanliness**: The repository's canonical `skills/xmemo/SKILL.md` is never modified; frontmatter additions are applied exclusively to the extracted copy uploaded to skillhub.cn.
 - **Safety Assertions**: The workflow verifies 0 CR bytes across the payload and asserts that only `SKILL.md` differs from the GitHub Release archive.
 

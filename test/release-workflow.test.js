@@ -136,6 +136,7 @@ test('skillhub.cn publish workflow structure and safety invariants', async () =>
   assert.match(workflow, /slug/);
   assert.match(workflow, /displayName/);
   assert.match(workflow, /license/);
+  assert.match(workflow, /iconUrl/);
   assert.match(workflow, /console\.log\(newFrontmatter\)/);
 
   // Payload integrity check hardening: does not abort on diff non-zero exit under pipefail
@@ -166,6 +167,7 @@ test('skillhub frontmatter injection logic preserves original SKILL.md and adds 
     `version: ${JSON.stringify(semver)}`,
     `summary: ${JSON.stringify(summary)}`,
     `license: ${JSON.stringify('MIT')}`,
+    `iconUrl: ${JSON.stringify('https://xmemo.dev/xmemo-claude-connector-icon.png')}`,
   ];
 
   const newFrontmatter = [
@@ -184,12 +186,13 @@ test('skillhub frontmatter injection logic preserves original SKILL.md and adds 
   assert.ok(origDescLine);
   assert.ok(newFrontmatter.includes(origDescLine));
 
-  // Verify the five required platform keys are present
+  // Verify the required platform keys are present
   assert.match(newFrontmatter, /^displayName:\s*"XMemo Memory"$/m);
   assert.match(newFrontmatter, /^slug:\s*"xmemo"$/m);
   assert.match(newFrontmatter, /^version:\s*"1\.1\.33"$/m);
   assert.match(newFrontmatter, /^summary:\s*"/m);
   assert.match(newFrontmatter, /^license:\s*"MIT"$/m);
+  assert.match(newFrontmatter, /^iconUrl:\s*"https:\/\/xmemo\.dev\/xmemo-claude-connector-icon\.png"$/m);
 
   // Verify body is byte-identical
   const updatedFmMatch = updatedContent.match(/^---\r?\n([\s\S]*?)\r?\n---/);
