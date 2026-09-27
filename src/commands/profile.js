@@ -2,7 +2,10 @@ import { hasFlag, optionValue } from '../core/args.js';
 import { COMMAND_NAME } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { MCP_CLIENTS } from '../mcp/clients.js';
+import {
+  resolveClientId,
+  supportedProfileClientIds
+} from '../clients/registry.js';
 import {
   defaultProfileTarget,
   isHomeProfileTarget,
@@ -11,10 +14,8 @@ import {
   profileInstallResult,
   profileStatusResult,
   profileUninstallResult,
-  supportedProfileClientIds,
   writeProfileResult
 } from '../config/profile.js';
-import { normalizeSetupClientId } from '../ui/setup.js';
 
 export function writeProfileHelp(io, subcommand) {
   const clients = supportedProfileClientIds().join('|');
@@ -62,8 +63,9 @@ export async function profileCommand(args, io) {
     return writeProfileHelp(io, subcommand);
   }
 
-  const clientId = normalizeSetupClientId(args[1], MCP_CLIENTS);
-  if (!profileClientConfig(clientId)) {
+  const rawClient = args[1] ?? '';
+  const clientId = resolveClientId(rawClient);
+  if (!clientId || !profileClientConfig(clientId)) {
     throw new UsageError(`Unsupported profile client: ${args[1] ?? 'missing'}. Supported clients: ${supportedProfileClientIds().join(', ')}.`);
   }
 

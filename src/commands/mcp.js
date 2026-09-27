@@ -85,7 +85,7 @@ export function writeMcpHelp(io, subcommand) {
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client kiro [--auth oauth|key] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp add kiro [--auth oauth|key] [--write] [--force] [--config <path>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <codex|cursor|copilot-cli|antigravity|generic> [--base-url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <${supportedMcpClientIds().join('|')}> [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>]`);
@@ -122,6 +122,9 @@ export async function mcpCommand(args, io) {
   if (subcommand === 'config') {
     const rawClientId = optionValue(args, '--client') ?? args[1] ?? 'generic';
     const clientId = resolveClientAlias(rawClientId);
+    if (clientId !== 'generic' && !MCP_CLIENTS.has(clientId)) {
+      throw new UsageError(`Unsupported MCP client: ${rawClientId}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
+    }
     const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
     const mcpUrl = endpointUrl(baseUrl, '/mcp');
     const useLocalProxy = clientId === 'copilot-cli' && !hasFlag(args, '--remote-env');

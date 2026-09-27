@@ -8,54 +8,17 @@ import {
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { supportedMcpClientIds, usesClientOAuth } from '../mcp/clients/registry.js';
-import { resolveClientAlias } from '../mcp/clients.js';
+import {
+  resolveClientId,
+  supportedSetupClientIds as registrySupportedSetupClientIds,
+  usesClientOAuth
+} from '../clients/registry.js';
 import { mcpLocalProxyTemplate } from '../mcp/core/templates.js';
 import { defaultCopilotConfigPath } from '../mcp/identity/paths.js';
 import { profileClientConfig } from '../config/profile.js';
 
-const SETUP_CLIENT_ALIASES = new Map([
-  ['codex', 'codex'],
-  ['grok', 'grok'],
-  ['grok-cli', 'grok'],
-  ['grok-build', 'grok'],
-  ['cursor', 'cursor'],
-  ['copilot', 'copilot-cli'],
-  ['copilot-cli', 'copilot-cli'],
-  ['gemini', 'gemini-cli'],
-  ['gemini-cli', 'gemini-cli'],
-  ['antigravity', 'antigravity'],
-  ['antigravity-ide', 'antigravity-ide'],
-  ['antigravity2', 'antigravity2'],
-  ['antigravity-cli', 'antigravity-cli'],
-  ['windsurf', 'windsurf'],
-  ['cline', 'cline'],
-  ['continue', 'continue'],
-  ['claude', 'claude-desktop'],
-  ['claude-desktop', 'claude-desktop'],
-  ['openclaw', 'openclaw'],
-  ['kiro', 'kiro'],
-  ['kimi', 'kimi-code'],
-  ['kimi-code', 'kimi-code'],
-  ['kimi-cli', 'kimi-code'],
-  ['zed', 'zed'],
-  ['jetbrains', 'jetbrains'],
-  ['opencode', 'opencode'],
-  ['hermes', 'hermes'],
-  ['qwen', 'qwen'],
-  ['qwencli', 'qwen'],
-  ['qwen-cli', 'qwen'],
-  ['trae', 'trae'],
-  ['traesolo', 'trae-solo'],
-  ['trae-solo', 'trae-solo'],
-  ['claude-code', 'claude-code'],
-  ['claudecode', 'claude-code'],
-  ['claude-cli', 'claude-code'],
-  ['claudecode-cli', 'claude-code']
-]);
-
-export function supportedSetupClientIds(mcpClients) {
-  return [...supportedMcpClientIds(mcpClients), 'copilot-cli', 'openclaw'];
+export function supportedSetupClientIds(_mcpClients) {
+  return registrySupportedSetupClientIds();
 }
 
 export function requiredOption(args, name) {
@@ -75,15 +38,14 @@ export function positionalClientArg(args, mcpClients) {
   return normalizeSetupClientId(candidate, mcpClients);
 }
 
-export function normalizeSetupClientId(candidate, mcpClients) {
+export function normalizeSetupClientId(candidate, _mcpClients) {
   if (!candidate) {
     return null;
   }
 
-  const resolved = resolveClientAlias(candidate);
-  const normalized = SETUP_CLIENT_ALIASES.get(resolved);
+  const normalized = resolveClientId(candidate);
   if (!normalized) {
-    throw new UsageError(`Unsupported setup client: ${candidate}. Supported clients: ${supportedSetupClientIds(mcpClients).join(', ')}.`);
+    throw new UsageError(`Unsupported setup client: ${candidate}. Supported clients: ${supportedSetupClientIds().join(', ')}.`);
   }
 
   return normalized;

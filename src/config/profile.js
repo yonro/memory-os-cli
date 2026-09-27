@@ -19,6 +19,10 @@ import {
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
 import { readTextIfExists } from '../core/runtime.js';
+import {
+  getClient,
+  supportedProfileClientIds as registrySupportedProfileClientIds
+} from '../clients/registry.js';
 
 export {
   PROFILE_SECTION_HEADING,
@@ -236,148 +240,12 @@ export function generateUnifiedDiff(filePath, oldText, newText) {
 }
 
 export function profileClientConfig(clientId) {
-  const profileConfigs = {
-    codex: {
-      label: 'Codex',
-      setupAlias: 'codex',
-      profileVersion: 'codex-mcp-depth-v1',
-      requiredTokenEnv: TOKEN_ENV_VAR,
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        return path.resolve(cwd, CODEX_PROFILE_TARGET);
-      }
-    },
-    'claude-code': {
-      label: 'Claude Code',
-      setupAlias: 'claude-code',
-      markerDir: '.claude',
-      profileVersion: 'claude-code-mcp-depth-v1',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.claude')) {
-          return path.join(cwd, 'CLAUDE.md');
-        }
-        return path.join(userHome(env), '.claude', 'CLAUDE.md');
-      }
-    },
-    cursor: {
-      label: 'Cursor',
-      setupAlias: 'cursor',
-      profileVersion: 'cursor-mcp-depth-v1',
-      requiredTokenEnv: TOKEN_ENV_VAR,
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.cursor')) {
-          return path.join(cwd, '.cursor', 'rules', 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.cursor', 'memory-profile.md');
-      }
-    },
-    kiro: {
-      label: 'Kiro',
-      setupAlias: 'kiro',
-      profileVersion: 'kiro-mcp-depth-v1',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.kiro')) {
-          return path.join(cwd, '.kiro', 'steering', 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.kiro', 'steering', 'AGENTS.md');
-      }
-    },
-    'kimi-code': {
-      label: 'Kimi Code',
-      setupAlias: 'kimi',
-      profileVersion: 'kimi-code-mcp-depth-v1',
-      requiredTokenEnv: TOKEN_ENV_VAR,
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.kimi-code')) {
-          return path.join(cwd, '.kimi-code', 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.kimi-code', 'AGENTS.md');
-      }
-    },
-    'gemini-cli': {
-      label: 'Gemini CLI',
-      setupAlias: 'gemini',
-      profileVersion: 'gemini-cli-mcp-depth-v1',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env)) {
-          return path.join(cwd, 'GEMINI.md');
-        }
-        return path.join(userHome(env), '.gemini', 'GEMINI.md');
-      }
-    },
-    antigravity: {
-      label: 'Antigravity',
-      setupAlias: 'antigravity',
-      profileVersion: 'antigravity-mcp-depth-v1',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env)) {
-          return path.join(cwd, 'GEMINI.md');
-        }
-        return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
-      }
-    },
-    qwen: {
-      label: 'Qwen',
-      setupAlias: 'qwen',
-      profileVersion: 'qwen-mcp-depth-v1',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env)) {
-          return path.join(cwd, 'QWEN.md');
-        }
-        return path.join(userHome(env), '.qwen', 'QWEN.md');
-      }
-    },
-    opencode: {
-      label: 'OpenCode',
-      setupAlias: 'opencode',
-      profileVersion: 'opencode-mcp-depth-v1',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env)) {
-          return path.join(cwd, 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.config', 'opencode', 'AGENTS.md');
-      }
-    },
-    trae: {
-      label: 'Trae',
-      setupAlias: 'trae',
-      profileVersion: 'trae-mcp-depth-v1',
-      requiredTokenEnv: TOKEN_ENV_VAR,
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.trae')) {
-          return path.join(cwd, '.trae', 'rules', 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.trae', 'memory-profile.md');
-      }
-    },
-    'trae-solo': {
-      label: 'Trae Solo',
-      setupAlias: 'trae-solo',
-      profileVersion: 'trae-solo-mcp-depth-v1',
-      requiredTokenEnv: TOKEN_ENV_VAR,
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.trae')) {
-          return path.join(cwd, '.trae', 'rules', 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.trae', 'memory-profile.md');
-      }
-    }
-  };
-  return profileConfigs[clientId] ?? null;
+  const client = getClient(clientId);
+  return client?.profile ?? null;
 }
 
 export function supportedProfileClientIds() {
-  return ['codex', 'cursor', 'claude-code', 'kiro', 'kimi-code', 'gemini', 'antigravity', 'qwen', 'opencode', 'trae', 'trae-solo'];
+  return registrySupportedProfileClientIds();
 }
 
 export function defaultProfileTarget(clientId, env, options = {}) {
