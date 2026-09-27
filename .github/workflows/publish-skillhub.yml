@@ -73,6 +73,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           archive_dir="$(mktemp -d)"
@@ -80,7 +81,7 @@ jobs:
           mkdir -p "$payload_dir"
 
           echo "Downloading xmemo-skill.tar.gz for $RELEASE_TAG..."
-          gh release download "$RELEASE_TAG" -p xmemo-skill.tar.gz --dir "$archive_dir"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" -p xmemo-skill.tar.gz --dir "$archive_dir"
 
           echo "Extracting release archive to payload directory..."
           tar -xzf "$archive_dir/xmemo-skill.tar.gz" -C "$payload_dir"
