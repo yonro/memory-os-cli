@@ -134,7 +134,46 @@ When publishing updates for `skills/xmemo` to ClawHub:
 
 ---
 
-## 4. How to Add a Command
+## 4. skills.sh
+
+The skill is listed on [skills.sh](https://skills.sh/yonro/memory-os-cli/xmemo-memory) under the identifier `yonro/memory-os-cli --skill xmemo-memory`.
+
+### Listing & Ingestion Mechanics
+- **No Upload Step**: `skills.sh` has no upload or publish step. It lists the skill automatically from install telemetry of the `skills` CLI.
+- **Direct `main` Branch Ingestion**: The `skills` CLI always installs `skills/xmemo` directly from the `main` branch, so it already serves the new version once the release PR is merged into `main`.
+- **Branch Hygiene Requirement**: `main` must strictly only receive reviewed and approved `skills/xmemo` changes. Anything merged to `main` is visible to `skills.sh` users immediately before the next release.
+
+### Per-Release Verification Procedure
+After creating the GitHub Release, verify the `skills.sh` install:
+
+1. **Test Installation (Telemetry Disabled)**:
+   In an empty temporary directory with `DISABLE_TELEMETRY=1` (to avoid adding test executions to the install count), run:
+   ```bash
+   # POSIX:
+   TMPDIR="$(mktemp -d)" && cd "$TMPDIR"
+   DISABLE_TELEMETRY=1 npx -y skills add yonro/memory-os-cli --skill xmemo-memory -a claude-code -y
+
+   # Windows (PowerShell):
+   # $TMPDIR = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString())
+   # New-Item -ItemType Directory -Force -Path $TMPDIR | Out-Null; Push-Location $TMPDIR
+   # $env:DISABLE_TELEMETRY = "1"
+   # npx -y skills add yonro/memory-os-cli --skill xmemo-memory -a claude-code -y
+   ```
+
+2. **Verify Installed Content**:
+   In the installed directory (e.g., `.claude/skills/xmemo-memory`):
+   - Check `node scripts/xmemo-skill.mjs --version` equals the release version.
+   - Check no CR (`\r`) bytes exist in any installed file (clean LF line endings).
+   - Check every file SHA256 checksum equals the corresponding file in the GitHub Release `xmemo-skill.tar.gz`.
+
+3. **Record Security Audits**:
+   Inspect the security pages on `skills.sh`:
+   `https://skills.sh/yonro/memory-os-cli/xmemo-memory`
+   Record the Gen Agent Trust Hub, Socket, and Snyk audit results in the release closeout report.
+
+---
+
+## 5. How to Add a Command
 
 The XMemo skill uses a modular architecture separating command-line dispatch from domain implementations. To introduce a new CLI command or subcommand, update the three canonical integration points:
 
@@ -179,7 +218,7 @@ node scripts/verify-release-packaging.mjs
 
 ---
 
-## 5. Standalone `@xmemo/skill` npm Package
+## 6. Standalone `@xmemo/skill` npm Package
 
 The `@xmemo/skill` package provides a standalone, zero-dependency npm distribution of the XMemo agent skill. It decouples skill distribution from the CLI (`@xmemo/client`) releases and provides independent npm registry verification with Sigstore provenance.
 
