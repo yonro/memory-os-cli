@@ -45,15 +45,16 @@ export function writeHelp(io) {
   writeLine(io.stdout, `  ${COMMAND_NAME} plugin status [<id>] [--all] [--json]`);
   writeLine(io.stdout, '      Check installation status of agent plugins.');
   writeLine(io.stdout, '');
-  writeLine(io.stdout, 'Authentication');
-  writeLine(io.stdout, `  ${COMMAND_NAME} login [--base-url <url>] [--allow-plaintext]`);
-  writeLine(io.stdout, '      Start browser login; interactive use asks before unencrypted storage.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} auth status [--verify]`);
-  writeLine(io.stdout, '      Check login state and optionally verify the active credential.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} token status [--verify]`);
-  writeLine(io.stdout, '      Check the local credential without printing secrets.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} token add --from-stdin --allow-plaintext`);
-  writeLine(io.stdout, '      Store an existing token after explicit consent to unencrypted storage.');
+  writeLine(io.stdout, 'Account');
+  writeLine(io.stdout, `  ${COMMAND_NAME} account login [--base-url <url>] [--allow-plaintext] [--json]`);
+  writeLine(io.stdout, '      Start browser login or import token from stdin.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} account logout [--yes] [--json]`);
+  writeLine(io.stdout, '      Remove locally stored XMemo credentials owned by the CLI.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} account status [--verify] [--base-url <url>] [--json]`);
+  writeLine(io.stdout, '      Check active authentication state and optionally verify credential.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} account token <status|add|set> [--json]`);
+  writeLine(io.stdout, '      Check or store token credentials.');
+  writeLine(io.stdout, `      (Legacy aliases: ${COMMAND_NAME} login, auth status, auth-status, token status)`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Operations');
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor --client kiro [--config <path>] [--auth oauth|key] [--fix] [--json]`);
@@ -99,14 +100,67 @@ export function writeHelp(io) {
   writeLine(io.stdout, `Run "${COMMAND_NAME} <command> --help" for command-specific options.`);
 }
 
-export function writeStart(io) {
+export function writeStart(io, options = {}) {
+  const isJson = options.json ?? false;
+  if (isJson) {
+    writeLine(io.stdout, JSON.stringify({
+      schemaVersion: '1',
+      ok: true,
+      command: 'start',
+      data: {
+        steps: [
+          'account login',
+          'memory add --content "A useful fact" --path projects/example',
+          'memory search "useful fact"',
+          'context recall "continue the project" --max-tokens 2000 --max-items 8'
+        ]
+      },
+      error: null
+    }, null, 2));
+    return;
+  }
   writeLine(io.stdout, `${PRODUCT_NAME} quick start`);
   writeLine(io.stdout, '');
-  writeLine(io.stdout, `1. ${COMMAND_NAME} login`);
+  writeLine(io.stdout, `1. ${COMMAND_NAME} account login`);
   writeLine(io.stdout, `2. ${COMMAND_NAME} memory add --content "A useful fact" --path projects/example`);
   writeLine(io.stdout, `3. ${COMMAND_NAME} memory search "useful fact"`);
   writeLine(io.stdout, `4. ${COMMAND_NAME} context recall "continue the project" --max-tokens 2000 --max-items 8`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'This guide is local only; it does not sign in, scan clients, or create test memory.');
+}
+
+export function writeHelpJson(io, subArgs = []) {
+  const envelope = {
+    schemaVersion: '1',
+    ok: true,
+    command: subArgs.length > 0 ? `help.${subArgs.join('.')}` : 'help',
+    data: {
+      package: PACKAGE_NAME,
+      version: CLI_VERSION,
+      description: 'Cloud memory setup, diagnostics, and agent integration utilities.',
+      commands: [
+        'start',
+        'account',
+        'memory',
+        'context',
+        'knowledge',
+        'dream',
+        'cloud-skill',
+        'setup',
+        'plugin',
+        'skill',
+        'doctor',
+        'status',
+        'update',
+        'mcp',
+        'profile',
+        'uninstall',
+        'env',
+        'privacy'
+      ]
+    },
+    error: null
+  };
+  writeLine(io.stdout, JSON.stringify(envelope, null, 2));
 }
 

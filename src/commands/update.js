@@ -57,6 +57,7 @@ export async function updateCommand(args, io) {
 
   if (outputJson) {
     writeLine(io.stdout, JSON.stringify(report, null, 2));
+    return result.code === 0 ? 0 : 1;
   }
   if (result.code !== 0) {
     const detail = result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`;

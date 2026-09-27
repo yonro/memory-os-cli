@@ -13,7 +13,19 @@ import { writeLine } from '../core/io.js';
 
 export function envCommand(args, io) {
   const subcommand = args[0] ?? 'help';
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'env',
+        data: {
+          subcommands: ['example']
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     writeLine(io.stdout, 'Env commands:');
     writeLine(io.stdout, `  ${COMMAND_NAME} env example [--shell bash|powershell|cmd] [--base-url <url>] [--json]`);
     return 0;
@@ -69,7 +81,25 @@ export function envCommand(args, io) {
   return 0;
 }
 
-export function writePrivacy(io) {
+export function writePrivacy(io, options = {}) {
+  const isJson = options.json ?? false;
+  if (isJson) {
+    writeLine(io.stdout, JSON.stringify({
+      schemaVersion: '1',
+      ok: true,
+      command: 'privacy',
+      data: {
+        telemetry: false,
+        tokenInStatus: false,
+        mcpTokensEmbedded: false,
+        agentInstanceIdSecret: false,
+        credentialStorage: 'user-config-directory',
+        plaintextStorageRequiresConsent: true
+      },
+      error: null
+    }, null, 2));
+    return;
+  }
   writeLine(io.stdout, `${PRODUCT_NAME} CLI privacy and security defaults:`);
   writeLine(io.stdout, '- No telemetry or analytics.');
   writeLine(io.stdout, '- `status` does not send tokens.');

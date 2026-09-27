@@ -28,6 +28,18 @@ import { createInterface } from 'node:readline/promises';
 
 export async function loginCommand(args, io) {
   if (hasHelpFlag(args)) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'login',
+        data: {
+          options: ['--base-url', '--allow-plaintext', '--from-stdin', '--scopes', '--timeout-ms']
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     writeLoginHelp(io);
     return 0;
   }
@@ -128,7 +140,19 @@ export function writeAuthHelp(io, subcommand) {
 export async function authCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'auth',
+        data: {
+          subcommands: ['status']
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     return writeAuthHelp(io, subcommand);
   }
 
@@ -174,7 +198,19 @@ export function writeTokenHelp(io, subcommand) {
 export async function tokenCommand(args, io) {
   const subcommand = args[0] ?? 'help';
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify({
+        schemaVersion: '1',
+        ok: true,
+        command: 'token',
+        data: {
+          subcommands: ['status', 'add', 'set']
+        },
+        error: null
+      }, null, 2));
+      return 0;
+    }
     return writeTokenHelp(io, subcommand);
   }
 
@@ -223,7 +259,7 @@ export async function tokenCommand(args, io) {
   throw new UsageError(`Unknown token command: ${subcommand}`);
 }
 
-async function credentialStatusCommand(args, io, { mode }) {
+export async function credentialStatusCommand(args, io, { mode }) {
   const outputJson = hasFlag(args, '--json');
   const verify = hasFlag(args, '--verify');
   const credential = await readStoredCredential(io.env);
@@ -342,7 +378,7 @@ function hasHelpFlag(args) {
   return hasFlag(args, '--help') || hasFlag(args, '-h');
 }
 
-function writeLoginHelp(io) {
+export function writeLoginHelp(io) {
   writeLine(io.stdout, 'Login command:');
   writeLine(io.stdout, `  ${COMMAND_NAME} login [--base-url <url>] [--scopes <scope,...>] [--allow-plaintext]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} login --from-stdin --allow-plaintext [--json]`);
