@@ -58,8 +58,7 @@ import { handleMemory } from './commands/memory.mjs';
 import { handleLedger } from './commands/ledger.mjs';
 import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
-import { handleProfile } from './commands/profile.mjs';
-import { wrapRecall } from './lib/profile-offer.mjs';
+import { handleProfile, armRecallNote } from './commands/profile.mjs';
 
 const SKILL_VERSION = '1.1.31';
 
@@ -134,15 +133,13 @@ async function main() {
     process.exit(EXIT_CODE.AUTH_ERROR);
   }
 
+  if (command === 'recall') armRecallNote();
+
   // 4. Temporary token isolation
   if (credential?.credential_type === 'temporary') {
     if (['remember', 'recall', 'search'].includes(command)) {
       try {
-        if (command === 'recall') {
-          await wrapRecall(() => requestTemporaryMemoryOperation(command, options, flags, credential));
-        } else {
-          await requestTemporaryMemoryOperation(command, options, flags, credential);
-        }
+        await requestTemporaryMemoryOperation(command, options, flags, credential);
       } catch (e) {
         console.error('Temporary memory request failed:', describeError(e));
         process.exit(exitCodeForError(e));
@@ -156,11 +153,7 @@ async function main() {
   // 5. Formal credential commands
   const authCtx = { ...ctx, credential, token };
   if (['restart-snapshot', 'restart-restore', 'recall-context', 'read', 'update', 'forget', 'remember', 'recall', 'search'].includes(command)) {
-    if (command === 'recall') {
-      await wrapRecall(() => handleMemory(authCtx));
-    } else {
-      await handleMemory(authCtx);
-    }
+    await handleMemory(authCtx);
     return;
   }
 

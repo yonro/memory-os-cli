@@ -17,7 +17,10 @@ import {
   writeOfferState,
   recordOfferAnswer,
   noteRecall,
+  armRecallNote,
 } from '../skills/xmemo/scripts/lib/profile-offer.mjs';
+
+import { armRecallNote as armRecallNoteFromProfile } from '../skills/xmemo/scripts/commands/profile.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
@@ -81,6 +84,8 @@ test('profile-offer.mjs exports expected constants and validation behavior', () 
   assert.equal(MAX_OFFERS, 3);
   assert.equal(RECALLS_BETWEEN_OFFERS, 5);
   assert.deepEqual([...STATUSES], ['later', 'never']);
+  assert.equal(typeof armRecallNote, 'function');
+  assert.equal(armRecallNoteFromProfile, armRecallNote);
 
   assert.throws(() => recordOfferAnswer('done'), /Invalid status/);
   assert.throws(() => recordOfferAnswer('yes'), /Invalid status/);
@@ -307,6 +312,40 @@ test('unwritable state directory does not change recall exit code or output', as
     assert.match(res.stdout, /Architecture decision/);
   } finally {
     await mock.close();
+    await rm(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('failing recall prints no note and preserves exit code', async () => {
+  const tempHome = path.join(os.tmpdir(), `xmemo-test-profile-fail-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(tempHome, { recursive: true });
+
+  const failingServer = http.createServer((req, res) => {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: { code: 'server_error', message: 'Internal server error' } }));
+  });
+
+  const port = await new Promise((resolve) => failingServer.listen(0, '127.0.0.1', () => resolve(failingServer.address().port)));
+
+  try {
+    const env = {
+      HOME: tempHome,
+      USERPROFILE: tempHome,
+      XMEMO_KEY: 'test-secret-token',
+    };
+
+    const initRes = await runSkill(['profile', '--status', 'later'], env);
+    assert.equal(initRes.code, 0);
+
+    const res = await runSkill(['recall', '--query', 'failing query', '--base-url', `http://127.0.0.1:${port}`], env);
+    assert.notEqual(res.code, 0, 'Exit code must be non-zero when API request fails');
+    assert.equal(res.stderr.includes('Note: recall has been used'), false, 'Failing recall must not print offer note');
+
+    const statePath = path.join(tempHome, '.xmemo', 'profile-offer.json');
+    const stateContent = JSON.parse(await readFile(statePath, 'utf8'));
+    assert.equal(stateContent.recalls, 0, 'Recalls counter must not increment on failed recall');
+  } finally {
+    await new Promise((resolve) => failingServer.close(resolve));
     await rm(tempHome, { recursive: true, force: true });
   }
 });

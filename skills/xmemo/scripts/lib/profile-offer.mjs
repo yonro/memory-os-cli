@@ -106,40 +106,16 @@ export function noteRecall() {
   }
 }
 
-export async function wrapRecall(action) {
-  const origExit = process.exit;
-  let exitHandled = false;
-
-  process.exit = (code = 0) => {
-    exitHandled = true;
-    const exitCode = typeof code === 'number' ? code : 0;
-    if (exitCode === 0) {
+export function armRecallNote() {
+  process.once('exit', (code) => {
+    if (code !== 0) return;
+    const note = noteRecall();
+    if (note) {
       try {
-        const note = noteRecall();
-        if (note) {
-          process.stderr.write(`${note}\n`);
-        }
+        fs.writeSync(2, `${note}\n`);
       } catch {
-        // Silent on any failure
+        // The note is optional.
       }
     }
-    origExit.call(process, exitCode);
-  };
-
-  try {
-    await action();
-    if (!exitHandled) {
-      try {
-        const note = noteRecall();
-        if (note) {
-          process.stderr.write(`${note}\n`);
-        }
-      } catch {
-        // Silent
-      }
-      origExit.call(process, 0);
-    }
-  } finally {
-    process.exit = origExit;
-  }
+  });
 }

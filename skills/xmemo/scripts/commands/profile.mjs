@@ -8,6 +8,8 @@ import {
   recordOfferAnswer,
 } from '../lib/profile-offer.mjs';
 
+export { armRecallNote } from '../lib/profile-offer.mjs';
+
 export function getProfileInstructions(command = SCRIPT_COMMAND) {
   return [
     '## XMemo memory',
