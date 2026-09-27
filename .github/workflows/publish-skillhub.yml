@@ -138,7 +138,8 @@ jobs:
           ].join('\n');
 
           writeFileSync(skillPath, newFrontmatter + body, 'utf8');
-          console.log('Injected skillhub metadata for version ' + semver);
+          console.log('Injected skillhub metadata for version ' + semver + ':');
+          console.log(newFrontmatter);
           NODE
 
       - name: Verify payload integrity and line endings
@@ -155,22 +156,37 @@ jobs:
           fi
           echo "Verified: 0 CR bytes in payload."
 
-          # Verify only SKILL.md differs from release archive
+          # Compute updated sha256 sums of payload
           (cd "$payload_dir" && find . -type f | sort | xargs sha256sum) > "$GITHUB_WORKSPACE/updated.sha256"
 
-          diff_count="$(diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" | grep -c '^[+-][a-f0-9]' || true)"
-          # diff_count should be exactly 2 lines: 1 removed old sha256 for ./SKILL.md, 1 added new sha256 for ./SKILL.md
-          if [[ "$diff_count" -ne 2 ]]; then
-            echo "ERROR: Unexpected diff count between baseline and updated payload ($diff_count). Only ./SKILL.md should differ." >&2
-            diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" >&2 || true
+          # (a) Verify identical file lists between baseline and updated payload
+          awk '{print $2}' "$GITHUB_WORKSPACE/baseline.sha256" > "$GITHUB_WORKSPACE/baseline.files"
+          awk '{print $2}' "$GITHUB_WORKSPACE/updated.sha256" > "$GITHUB_WORKSPACE/updated.files"
+
+          if ! cmp -s "$GITHUB_WORKSPACE/baseline.files" "$GITHUB_WORKSPACE/updated.files"; then
+            echo "ERROR: File list changed between baseline and updated payload:" >&2
+            diff -u "$GITHUB_WORKSPACE/baseline.files" "$GITHUB_WORKSPACE/updated.files" >&2 || true
+            exit 1
+          fi
+          echo "Verified: identical file list (no added or removed files)."
+
+          # (b) Verify that the set of modified paths is exactly ./SKILL.md
+          diff_out="$(diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" || true)"
+          changed_files="$(echo "$diff_out" | grep '^[+-][a-f0-9]' | awk '{print $2}' | sort -u || true)"
+
+          if [[ "$changed_files" != "./SKILL.md" ]]; then
+            echo "ERROR: Modified file(s) must be exactly ./SKILL.md. Observed: $changed_files" >&2
+            echo "$diff_out" >&2
             exit 1
           fi
 
-          diff_files="$(diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" | grep '^[+-][a-f0-9]' | awk '{print $2}' | sort -u)"
-          if [[ "$diff_files" != "./SKILL.md" ]]; then
-            echo "ERROR: Modified file is not ./SKILL.md: $diff_files" >&2
+          diff_count="$(echo "$diff_out" | grep -c '^[+-][a-f0-9]' || true)"
+          if [[ "$diff_count" -ne 2 ]]; then
+            echo "ERROR: Expected exactly 2 diff lines (1 remove, 1 add for ./SKILL.md). Observed: $diff_count" >&2
+            echo "$diff_out" >&2
             exit 1
           fi
+
           echo "Verified: exactly ./SKILL.md was modified (frontmatter metadata injection); all other files match release archive 100%."
 
       - name: Authenticate to skillhub.cn
