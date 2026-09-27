@@ -89,6 +89,7 @@ npx @xmemo/client doctor
 
 # Install skill or run MCP stdio server
 npx @xmemo/client skill install
+npx skills add yonro/memory-os-cli --skill xmemo-memory
 npx @xmemo/client mcp serve
 ```
 
@@ -272,6 +273,7 @@ xmemo privacy
 xmemo skill install
 xmemo skill install --version <semver>
 xmemo skill install --from <dir|tgz>
+npx skills add yonro/memory-os-cli --skill xmemo-memory
 ```
 
 </details>
