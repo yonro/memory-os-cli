@@ -6,6 +6,7 @@ import { MCP_CLIENTS } from '../mcp/clients.js';
 import {
   defaultProfileTarget,
   isHomeProfileTarget,
+  profileBlock,
   profileClientConfig,
   profileInstallResult,
   profileStatusResult,
@@ -16,33 +17,42 @@ import {
 import { normalizeSetupClientId } from '../ui/setup.js';
 
 export function writeProfileHelp(io, subcommand) {
+  const clients = supportedProfileClientIds().join('|');
   if (subcommand === 'install') {
     writeLine(io.stdout, 'Profile install command:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--dry-run|--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile install <${clients}> [--target <path>] [--dry-run|--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Install behavior profile instructions for an agent workspace.');
     return 0;
   }
+  if (subcommand === 'show') {
+    writeLine(io.stdout, 'Profile show command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile show <${clients}> [--target <path>] [--json]`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, 'Show behavior profile instructions and target path without writing.');
+    return 0;
+  }
   if (subcommand === 'status') {
     writeLine(io.stdout, 'Profile status command:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile status <${clients}> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Check behavior profile installation status.');
     return 0;
   }
   if (subcommand === 'uninstall') {
     writeLine(io.stdout, 'Profile uninstall command:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <${clients}> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Remove behavior profile instructions.');
     return 0;
   }
   writeLine(io.stdout, 'Profile commands:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} profile install <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--dry-run|--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} profile status <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <codex|cursor|gemini|antigravity|qwen|opencode> [--target <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile install <${clients}> [--target <path>] [--dry-run|--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile show <${clients}> [--target <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile status <${clients}> [--target <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <${clients}> [--target <path>] [--json]`);
   writeLine(io.stdout, '');
-  writeLine(io.stdout, 'Profile installs are marker-scoped and never write token values.');
+  writeLine(io.stdout, 'Profile installs are section-scoped and never write token values.');
   return 0;
 }
 
@@ -72,6 +82,14 @@ export async function profileCommand(args, io) {
       json: outputJson,
       isHomeTarget
     });
+  } else if (subcommand === 'show') {
+    result = {
+      client: clientId,
+      action: 'show',
+      targetPath,
+      isHomeTarget,
+      block: profileBlock(clientId)
+    };
   } else if (subcommand === 'status') {
     result = await profileStatusResult(clientId, targetPath);
   } else if (subcommand === 'uninstall') {
@@ -90,4 +108,3 @@ export async function profileCommand(args, io) {
   writeProfileResult(subcommand, result, io);
   return 0;
 }
-

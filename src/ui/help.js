@@ -66,6 +66,8 @@ export function writeHelp(io) {
   writeLine(io.stdout, '      Add XMemo to a client config file.');
   writeLine(io.stdout, `  ${COMMAND_NAME} profile install <client-id> [--target <path>] [--dry-run]`);
   writeLine(io.stdout, '      Install behavior profile instructions for a workspace.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile show <client-id> [--target <path>] [--json]`);
+  writeLine(io.stdout, '      Show behavior profile instructions and target path without writing.');
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Removal');
   writeLine(io.stdout, `  ${COMMAND_NAME} uninstall --all [--yes] [--profiles] [--dry-run]`);
