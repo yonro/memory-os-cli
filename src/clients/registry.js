@@ -167,7 +167,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.cursor', 'memory-profile.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.cursor', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: 'cursor',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('cursor', env, options)
@@ -208,7 +208,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.gemini', 'GEMINI.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.gemini', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: 'gemini-cli',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('gemini-cli', env, options)
@@ -249,7 +249,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.gemini', 'antigravity', 'MEMORY.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.gemini', 'antigravity', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: null,
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('antigravity', env, options)
@@ -534,7 +534,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.kiro', 'steering', 'AGENTS.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.kiro', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: 'kiro',
     doctor: kiroDoctor,
     detect: async (env, options = {}) => detectClientByCandidates('kiro', env, options)
@@ -576,7 +576,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.kimi-code', 'AGENTS.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.kimi-code', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: null,
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('kimi-code', env, options)
@@ -669,7 +669,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.config', 'opencode', 'AGENTS.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.config', 'opencode', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: null,
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('opencode', env, options)
@@ -733,7 +733,7 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.qwen', 'QWEN.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.qwen', 'skills', 'xmemo-memory'),
+    skillDir: null,
     pluginId: null,
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('qwen', env, options)
@@ -850,7 +850,11 @@ export const CLIENT_REGISTRY = Object.freeze([
         return path.join(userHome(env), '.claude', 'CLAUDE.md');
       }
     },
-    skillDir: (env) => path.join(userHome(env), '.claude', 'skills', 'xmemo-memory'),
+    skillDir: (env, options = {}) =>
+      options?.project
+        ? path.join(options.cwd ?? process.cwd(), '.claude', 'skills', 'xmemo-memory')
+        : path.join(userHome(env), '.claude', 'skills', 'xmemo-memory'),
+    supportsProjectSkill: true,
     pluginId: 'claude-code',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('claude-code', env, options)
@@ -981,6 +985,18 @@ export function supportedUninstallClientIds() {
 
 export function supportedDoctorClientIds() {
   return CLIENT_REGISTRY.filter((c) => c.doctor !== null).map((c) => c.id);
+}
+
+export function supportedSkillClientIds() {
+  return CLIENT_REGISTRY.filter((c) => c.skillDir !== null).map((c) => c.id);
+}
+
+export function supportedSkillClients() {
+  return CLIENT_REGISTRY.filter((c) => c.skillDir !== null).map((c) => ({
+    id: c.id,
+    label: c.label,
+    supportsProjectSkill: Boolean(c.supportsProjectSkill)
+  }));
 }
 
 export function usesClientOAuth(idOrAlias) {

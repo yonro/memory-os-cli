@@ -222,28 +222,59 @@ fallback.
 
 ### XMemo Skill install
 
-The CLI installs the XMemo Skill locally into the agent directory:
+The CLI installs the verified XMemo Skill locally into agent skill folders or a target directory:
 
+- Installs into client skill directories:
+  - **Claude Code**: `~/.claude/skills/xmemo-memory` (global) or `.claude/skills/xmemo-memory` (project with `--project`)
+  - **Codex**: `~/.codex/skills/xmemo-memory`
+  - **OpenClaw**: `~/.openclaw/skills/xmemo-memory`
+  - All other 21 clients remain `null` until officially documented.
 - Defaults to the pinned `@xmemo/skill@1.1.33` release from npm and verifies tarball integrity (sha512 SRI) before extraction.
 - Override version with `--version <semver>` or explicitly opt into the latest release via `--version latest`.
 - For air-gapped or offline installations, install from a local directory or packed tarball with `--from <dir|tgz>` (optional `--integrity <sha512>`).
-- Preview the installation command without writing files using `--dry-run`.
+- Manage client skills with `skill status`, `skill update`, and `skill remove`.
+- Preview actions without writing files using `--dry-run`.
+- **Safety & Consent**:
+  - Interactive install prompts `[y/N]` before writing (Enter, EOF, or empty input cancels) unless `--yes` is specified.
+  - Existing installs refuse overwrite without `--force`; when `--force` is used, a backup directory `<target>.xmemo.bak` is created.
+  - `skill remove` only removes verified XMemo skill directories, refusing foreign folders.
 
 ```bash
-# Default install using pinned release (@xmemo/skill@1.1.33)
+# Install to agent skill folder (Claude Code global, Codex, or OpenClaw)
+xmemo skill install --client claude-code
+xmemo skill install --client codex
+xmemo skill install --client openclaw
+
+# Install to project-level skill folder (Claude Code project: .claude/skills/xmemo-memory)
+xmemo skill install --client claude-code --project
+
+# Install for all detected supported clients
+xmemo skill install --all
+
+# Default install into current directory (./xmemo-skill)
 xmemo skill install
+xmemo skill install --dir ./custom-skill-dir
 
-# Explicit opt-in to latest release
-xmemo skill install --version latest
+# Non-interactive install (skips [y/N] prompt)
+xmemo skill install --client codex --yes
 
-# Specific semver version
-xmemo skill install --version 1.1.33
+# Replace existing installation (creates <dir>.xmemo.bak backup)
+xmemo skill install --client codex --force --yes
 
-# Offline install from local archive
-xmemo skill install --from ./xmemo-skill-1.1.33.tgz
+# Update alias (equivalent to skill install --force)
+xmemo skill update --client codex --yes
+
+# Inspect installation status across clients
+xmemo skill status
+xmemo skill status --client codex
+xmemo skill status --all --json
+
+# Remove installed skill from an agent folder (refuses non-XMemo folders)
+xmemo skill remove --client codex --yes
+xmemo skill remove --client claude-code --project --yes
 
 # Dry run preview
-xmemo skill install --dry-run
+xmemo skill install --client codex --dry-run
 ```
 
 ### Agent plugins

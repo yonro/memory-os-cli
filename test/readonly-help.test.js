@@ -95,6 +95,9 @@ const COMMAND_MATRIX = [
   ['auth-status'],
 
   ['skill', 'install'],
+  ['skill', 'status'],
+  ['skill', 'remove'],
+  ['skill', 'update'],
 
   ['plugin', 'list'],
   ['plugin', 'info'],
