@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.33
+
+### Fixed
+
+- Clarify that the recall counter in the re-offer note tracks recall usage across all projects on this computer rather than per project.
+
 ## 1.1.32
 
 ### Added
