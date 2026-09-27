@@ -512,7 +512,7 @@ CLI 工具包与托管 MCP 服务保持独立的版本管理轨道：
 - CLI/npm 版本：由 `package.json`、`package-lock.json` 与 `server.json` 中的 npm 条目定义。
 - 托管 MCP/Registry 版本：由顶级 `server.json.version` 与 `lhm.plugin.json` 维护，随已部署的 XMemo 云服务演进。
 
-`node scripts/check-release-version.mjs` 负责同时校验两套版本契约。打上 `cli-vX.Y.Z` 标签仅发布 npm 包；MCP Registry 则由独立的 `Publish MCP Registry metadata` 工作流通过 `mcp-vX.Y.Z` 触发发布。
+`node scripts/check-release-version.mjs` 负责同时校验两套版本契约。打上 `cli-vX.Y.Z` 标签仅发布 npm 包；MCP Registry 则由独立的 `Publish MCP Registry metadata` 工作流通过 `mcp-vX.Y.Z` 触发发布。CLI npm 发布使用 OIDC 可信发布（`environment: npm`，`id-token: write`），不再使用静态 `NPM_TOKEN`。手动恢复工作流（`.github/workflows/publish.yml`）需在 npmjs.com 配置独立的可信发布条目。
 
 ## 文档与技术支持
 

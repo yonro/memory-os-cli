@@ -23,8 +23,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: npm
+
+      - name: Install pinned npm for Trusted Publishing (OIDC)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.6.4
+          npm --version
       
       - name: Install dependencies
         run: npm ci
@@ -40,8 +46,6 @@ jobs:
       
       - name: Publish to npm
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       
       - name: Create GitHub Release
         run: |

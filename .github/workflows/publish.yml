@@ -1,3 +1,8 @@
+# Note: Manual recovery publishing via this workflow requires its own Trusted Publisher
+# entry configured on npmjs.com (@xmemo/client: workflow publish.yml, environment npm).
+# Until that trusted publisher entry is configured, manual runs of this workflow will
+# fail with an npm authentication error by design.
+
 name: Publish npm package
 
 on:
@@ -24,13 +29,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: npm
+      - name: Install pinned npm for Trusted Publishing (OIDC)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.6.4
+          npm --version
       - run: npm ci
       - run: node scripts/check-release-version.mjs --channel cli --tag "${{ inputs.ref }}"
       - run: npm run lint
       - run: npm test
       - run: npm run pack:dry-run
       - run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
