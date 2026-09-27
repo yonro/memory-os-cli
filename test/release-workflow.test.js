@@ -136,6 +136,11 @@ test('skillhub.cn publish workflow structure and safety invariants', async () =>
   assert.match(workflow, /slug/);
   assert.match(workflow, /displayName/);
   assert.match(workflow, /license/);
+  assert.match(workflow, /console\.log\(newFrontmatter\)/);
+
+  // Payload integrity check hardening: does not abort on diff non-zero exit under pipefail
+  assert.match(workflow, /cmp -s "\$GITHUB_WORKSPACE\/baseline\.files" "\$GITHUB_WORKSPACE\/updated\.files"/);
+  assert.match(workflow, /diff_out="\$\(diff -u "\$GITHUB_WORKSPACE\/baseline\.sha256" "\$GITHUB_WORKSPACE\/updated\.sha256" \|\| true\)"/);
 });
 
 test('skillhub frontmatter injection logic preserves original SKILL.md and adds required keys', async () => {
