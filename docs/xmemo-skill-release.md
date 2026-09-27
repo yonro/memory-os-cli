@@ -284,9 +284,16 @@ The `@xmemo/skill` package uses **npm Trusted Publishing** (OIDC) instead of sta
    - Workflow: `.github/workflows/release-xmemo-skill.yml`
    - Environment: `npm`
    - Permissions: `npm publish` and `npm stage publish`
-3. **No `NPM_TOKEN` Secret**: Skill publishing uses short-lived GitHub Actions OIDC identity tokens exchanged directly with npm (`permissions: id-token: write`). Static `NPM_TOKEN` is not used by the skill release job (it remains used only for CLI releases).
+3. **No `NPM_TOKEN` Secret**: Publishing uses short-lived GitHub Actions OIDC identity tokens exchanged directly with npm (`permissions: id-token: write`). Static `NPM_TOKEN` is no longer used across this repository (both `@xmemo/skill` and `@xmemo/client` CLI releases use OIDC trusted publishing).
 4. **Publish Gating**: Repository variable `XMEMO_SKILL_NPM_PUBLISH=true` is set, enabling automated publishing on GitHub Release tags matching `skill-v*`.
 5. **CLI Requirement**: Trusted publishing requires npm CLI `>= 11.5.1`. The workflow explicitly installs a pinned `npm@11.6.4` before publishing.
+
+### CLI (`@xmemo/client`) Trusted Publishing
+
+The CLI package `@xmemo/client` also publishes to npm via GitHub Actions OIDC trusted publishing (`.github/workflows/release.yml`):
+- **Automated Publishing**: Triggered on `cli-v*.*.*` tags. Runs in environment `npm` with `permissions: id-token: write` and installs pinned `npm@11.6.4`. Zero static tokens or secrets are used.
+- **Manual Recovery Workflow (`.github/workflows/publish.yml`)**: Converted to OIDC trusted publishing without `NPM_TOKEN`. Note that manual recovery publishing requires its own dedicated Trusted Publisher entry configured on `npmjs.com` (`@xmemo/client`: workflow `publish.yml`, environment `npm`) before it can publish; until configured, manual recovery runs fail with an npm authentication error by design.
+- **Secret Decommission**: The legacy `NPM_TOKEN` repository secret is deprecated and is no longer referenced by any workflow in this repository.
 
 ### Verifying Published Provenance
 

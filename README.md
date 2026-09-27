@@ -574,7 +574,10 @@ streams:
 MCP Registry is published separately with the `Publish MCP Registry metadata`
 workflow using `mcp-vX.Y.Z`, which must equal the hosted MCP/Registry version.
 The separate npm publish workflow is manual recovery only, so creating a
-GitHub Release cannot publish twice.
+GitHub Release cannot publish twice. CLI npm publishing uses OIDC trusted
+publishing (`environment: npm`, `id-token: write`); static `NPM_TOKEN` is no
+longer used. Manual recovery via `.github/workflows/publish.yml` requires its
+own trusted publisher entry on npmjs.com.
 
 ## Documentation and support
 

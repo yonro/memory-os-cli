@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +51,41 @@ test('CLI release workflow creates releases with --latest=false and explicit CLI
 
   assert.match(cliWorkflow, /--latest=false/);
   assert.match(cliWorkflow, /--title "XMemo CLI v\$\{VERSION\}"/);
+});
+
+test('CLI release and recovery workflows use OIDC trusted publishing with zero NPM_TOKEN secrets', async () => {
+  const workflowsDir = path.join(repoRoot, '.github/workflows');
+  const files = await readdir(workflowsDir);
+  const ymlFiles = files.filter(f => f.endsWith('.yml') || f.endsWith('.yaml'));
+
+  assert.ok(ymlFiles.length > 0, 'workflow files should exist');
+
+  for (const file of ymlFiles) {
+    const content = await readFile(path.join(workflowsDir, file), 'utf8');
+    assert.doesNotMatch(
+      content,
+      /secrets\.NPM_TOKEN/,
+      `workflow ${file} must not reference secrets.NPM_TOKEN`,
+    );
+  }
+
+  // CLI release workflow (release.yml)
+  const releaseWorkflow = await readFile(path.join(workflowsDir, 'release.yml'), 'utf8');
+  assert.match(releaseWorkflow, /environment:\s*npm/);
+  assert.match(releaseWorkflow, /id-token:\s*write/);
+  assert.match(releaseWorkflow, /npm install -g npm@11\.6\.4/);
+  assert.match(releaseWorkflow, /npm --version/);
+  assert.doesNotMatch(releaseWorkflow, /registry-url/);
+  assert.match(releaseWorkflow, /npm publish --access public --provenance/);
+
+  // CLI recovery publish workflow (publish.yml)
+  const publishWorkflow = await readFile(path.join(workflowsDir, 'publish.yml'), 'utf8');
+  assert.match(publishWorkflow, /environment:\s*npm/);
+  assert.match(publishWorkflow, /id-token:\s*write/);
+  assert.match(publishWorkflow, /npm install -g npm@11\.6\.4/);
+  assert.match(publishWorkflow, /npm --version/);
+  assert.doesNotMatch(publishWorkflow, /registry-url/);
+  assert.match(publishWorkflow, /npm publish --access public --provenance/);
 });
 
 test('Skill release documentation explicitly specifies --latest for GitHub Release creation', async () => {
