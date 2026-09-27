@@ -130,8 +130,8 @@ export const COMMAND_USAGE_REGISTRY = {
     desc: 'Inspect runtime health, credentials, and connectivity',
   },
   profile: {
-    usage: 'profile',
-    desc: 'Print recommended instructions for project agent configuration',
+    usage: 'profile [--status <later|never>]',
+    desc: 'Print recommended instructions for project agent configuration, or record offer answer',
   },
 };
 

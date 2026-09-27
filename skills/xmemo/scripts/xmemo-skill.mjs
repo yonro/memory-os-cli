@@ -59,6 +59,7 @@ import { handleLedger } from './commands/ledger.mjs';
 import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
 import { handleProfile } from './commands/profile.mjs';
+import { wrapRecall } from './lib/profile-offer.mjs';
 
 const SKILL_VERSION = '1.1.31';
 
@@ -137,7 +138,11 @@ async function main() {
   if (credential?.credential_type === 'temporary') {
     if (['remember', 'recall', 'search'].includes(command)) {
       try {
-        await requestTemporaryMemoryOperation(command, options, flags, credential);
+        if (command === 'recall') {
+          await wrapRecall(() => requestTemporaryMemoryOperation(command, options, flags, credential));
+        } else {
+          await requestTemporaryMemoryOperation(command, options, flags, credential);
+        }
       } catch (e) {
         console.error('Temporary memory request failed:', describeError(e));
         process.exit(exitCodeForError(e));
@@ -151,7 +156,11 @@ async function main() {
   // 5. Formal credential commands
   const authCtx = { ...ctx, credential, token };
   if (['restart-snapshot', 'restart-restore', 'recall-context', 'read', 'update', 'forget', 'remember', 'recall', 'search'].includes(command)) {
-    await handleMemory(authCtx);
+    if (command === 'recall') {
+      await wrapRecall(() => handleMemory(authCtx));
+    } else {
+      await handleMemory(authCtx);
+    }
     return;
   }
 
