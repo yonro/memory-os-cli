@@ -21,7 +21,7 @@
 
 [English](README.md) · [简体中文](README_CN.md)
 
-[快速开始](#快速开始) · [集成列表](#支持的客户端集成) · [连接模式](#连接模式) · [命令大全](#命令参考) · [版本说明](#版本说明) · [安全与隐私](#默认安全隐私原则)
+[快速开始](#快速开始) · [集成列表](#支持的客户端集成) · [连接模式](#连接模式) · [插件系统](#智能体插件) · [命令大全](#命令参考) · [版本说明](#版本说明) · [安全与隐私](#默认安全隐私原则)
 
 ---
 
@@ -224,6 +224,63 @@ xmemo skill install --from ./xmemo-skill-1.1.33.tgz
 xmemo skill install --dry-run
 ```
 
+### 智能体插件
+
+CLI 随 `@xmemo/client` 内置了经过官方验证的静态插件索引，每个插件条目均明确固定了发布版本、Release Tag 以及发布时刻解析的准确 Git Commit SHA。
+
+| 插件 ID | 平台 / 智能体 | 类型 (Kind) | 状态 | 安装方式 |
+| --- | --- | --- | --- | --- |
+| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
+| `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
+| `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone 校验 commit `5d0d280` (默认安装至 `~/.xmemo/plugins/claude-code`) |
+| `cursor` | Cursor | `marketplace` | Preview | Cursor 插件市场安装 |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` 扩展安装 (unpinned: 宿主暂不支持指定版本/ref) |
+| `kiro` | Kiro | `manual` | Preview | Steering 规则与 Power 配置 |
+| `vscode` | VS Code | `marketplace` | Preview | VS Code 插件市场扩展 |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
+| `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex 扩展 |
+| `cindy` | Cindy | `manual` | Preview | 原生智能体记忆接入 |
+| `codex` | Codex | `mcp` | Preview | 专属 MCP 配置 (`xmemo setup codex`) |
+
+插件命令：
+
+```bash
+# 列出可用插件（默认隐藏 legacy 归档插件）
+xmemo plugin list
+
+# 包含已归档的历史插件
+xmemo plugin list --all
+
+# 查看插件详情与验证元数据
+xmemo plugin info <id>
+
+# 预览安装计划（不执行任何操作）
+xmemo plugin install <id> --dry-run
+
+# 交互式确认安装（默认提示 [y/N]，回车或中断默认取消）
+xmemo plugin install <id>
+
+# 免交互确认直接安装
+xmemo plugin install <id> --yes
+
+# 指定自定义目录安装 git-dir 插件
+xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code
+
+# 在浏览器中打开插件主页或文档
+xmemo plugin install <id> --open
+
+# 检查各插件安装状态
+xmemo plugin status [<id>]
+```
+
+**安全与授权原则：**
+- 仅接受静态索引中登记的插件 ID；坚决拒绝任意外部 URL 或未经验证的插件名称（返回非零退出码 2）。
+- 交互式安装默认打印执行计划并要求用户显式确认（`[y/N]`，空输入、回车或 EOF 均默认为取消）。
+- `--dry-run` 承诺不产生任何文件写入或子进程调用。
+- 市场与手动插件在执行 `plugin install <id>` 时展示来自上游仓库的精确分步操作指南（支持 `--open` 浏览器直达）。
+- Git 目录插件（`claude-code`）默认安装至稳定用户目录（`~/.xmemo/plugins/<id>`），支持 `--dir <path>` 自定义目录覆盖；克隆后必须通过 `git rev-parse HEAD` 逐字节比对 Commit SHA，验证通过后打印确切的加载命令（`claude --plugin-dir <dir>`）；若哈希不匹配，立即安全删除克隆目录并报错中止。
+- 任何由 CLI 启动的外部插件子进程，均严格过滤并移除敏感凭据环境变量（`XMEMO_KEY`、`MEMORY_OS_MCP_TOKEN`、`XMEMO_TOKEN`），防止凭据外泄。
+
 ## 身份认证
 
 ### 浏览器设备授权登录
@@ -306,6 +363,18 @@ xmemo setup <client> --dry-run
 xmemo setup --all
 xmemo setup openclaw [--with-mcp|--mcp-only]
 xmemo setup hermes [--with-mcp|--mcp-only]
+```
+
+</details>
+
+<details>
+<summary><strong>智能体插件</strong></summary>
+
+```bash
+xmemo plugin list [--all] [--json]
+xmemo plugin info <id> [--json]
+xmemo plugin install <id> [--dry-run] [--yes] [--open] [--dir <path>] [--json]
+xmemo plugin status [<id>] [--all] [--json]
 ```
 
 </details>

@@ -1,0 +1,293 @@
+[
+  {
+    "id": "openclaw",
+    "platform": "openclaw",
+    "label": "OpenClaw Memory Plugin",
+    "repo": "yonro/xmemo-openclaw-memory",
+    "kind": "native-cli",
+    "version": "1.0.18",
+    "tag": "v1.0.18",
+    "commit": "e22df8a1981c522469b1b620d64097d995beb432",
+    "detect": {
+      "command": "openclaw",
+      "args": ["--version"]
+    },
+    "install": [
+      "openclaw",
+      "plugins",
+      "install",
+      "clawhub:@xmemo/openclaw-memory@1.0.18"
+    ],
+    "verify": {
+      "command": "openclaw",
+      "args": ["plugins", "inspect", "xmemo-memory", "--runtime", "--json"]
+    },
+    "docs": "https://github.com/yonro/xmemo-openclaw-memory",
+    "status": "stable",
+    "clientId": "openclaw"
+  },
+  {
+    "id": "hermes",
+    "platform": "hermes",
+    "label": "Hermes XMemo Memory Provider",
+    "repo": "yonro/hermes-xmemo-plugin",
+    "kind": "native-cli",
+    "version": "1.1.3",
+    "tag": "v1.1.3",
+    "commit": "30fe1bc20a4c9ac7e24195f4946750f4f7e41eaa",
+    "detect": {
+      "command": "hermes",
+      "args": ["--version"]
+    },
+    "install": [
+      "python",
+      "-m",
+      "pip",
+      "install",
+      "hermes-xmemo==1.1.3"
+    ],
+    "verify": {
+      "command": "python",
+      "args": ["-m", "pip", "show", "hermes-xmemo"]
+    },
+    "docs": "https://github.com/yonro/hermes-xmemo-plugin",
+    "status": "stable",
+    "clientId": "hermes"
+  },
+  {
+    "id": "deepseek-dsh",
+    "platform": "deepseek",
+    "label": "DeepSeek DSH XMemo Plugin",
+    "repo": "yonro/xmemo-deepseek-plugin",
+    "kind": "native-cli",
+    "version": "0.1.0",
+    "tag": "v0.1.0",
+    "commit": "eabf1fb53edc4c143e70e58e288dfb1748695538",
+    "detect": {
+      "command": "dsh",
+      "args": ["--version"]
+    },
+    "install": [
+      "dsh",
+      "plugin",
+      "add",
+      "dsh-xmemo"
+    ],
+    "verify": {
+      "command": "dsh",
+      "args": ["--dump-config"]
+    },
+    "docs": "https://github.com/yonro/xmemo-deepseek-plugin",
+    "status": "preview",
+    "clientId": null
+  },
+  {
+    "id": "gemini-cli",
+    "platform": "gemini-cli",
+    "label": "Gemini CLI XMemo Extension",
+    "repo": "yonro/xmemo-gemini-cli",
+    "kind": "native-cli",
+    "version": "0.1.0",
+    "tag": null,
+    "commit": "39e25b185b5157490d1683e4ca8c5c5fb1312a88",
+    "detect": {
+      "command": "gemini",
+      "args": ["--version"]
+    },
+    "install": [
+      "gemini",
+      "extensions",
+      "install",
+      "https://github.com/yonro/xmemo-gemini-cli"
+    ],
+    "verify": {
+      "command": "gemini",
+      "args": ["extensions", "list"]
+    },
+    "docs": "https://github.com/yonro/xmemo-gemini-cli",
+    "note": "unpinned (host does not support refs)",
+    "status": "preview",
+    "clientId": "gemini-cli"
+  },
+  {
+    "id": "claude-code",
+    "platform": "claude-code",
+    "label": "Claude Code XMemo Plugin",
+    "repo": "yonro/xmemo-claude-plugin",
+    "kind": "git-dir",
+    "version": "1.0.0",
+    "tag": "v1.0.0",
+    "commit": "5d0d2802daaf431eb31b038511f34a00b625ec9f",
+    "detect": {
+      "command": "claude",
+      "args": ["--version"]
+    },
+    "install": [
+      "git",
+      "clone",
+      "--branch",
+      "v1.0.0",
+      "--depth",
+      "1",
+      "https://github.com/yonro/xmemo-claude-plugin.git"
+    ],
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-claude-plugin",
+    "status": "preview",
+    "clientId": "claude-code"
+  },
+  {
+    "id": "cursor",
+    "platform": "cursor",
+    "label": "Cursor XMemo Plugin",
+    "repo": "yonro/xmemo-cursor-plugin",
+    "kind": "marketplace",
+    "version": "1.0.1",
+    "tag": "v1.0.1",
+    "commit": "5bc9da0fcf57a0c1847492bbff5bdbe347986cc5",
+    "detect": null,
+    "install": null,
+    "steps": [
+      "Open Cursor Settings > Features > Plugins (or Cursor Marketplace)",
+      "Search for 'XMemo' or install from Cursor Marketplace",
+      "Enable the XMemo MCP server and complete browser-based OAuth authorization"
+    ],
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-cursor-plugin",
+    "status": "preview",
+    "clientId": "cursor"
+  },
+  {
+    "id": "kiro",
+    "platform": "kiro",
+    "label": "Kiro XMemo Power",
+    "repo": "yonro/xmemo-kiro-power",
+    "kind": "manual",
+    "version": "0.1.0",
+    "tag": null,
+    "commit": "2fcccbce60b855febb665b87bac56987a87e41de",
+    "detect": null,
+    "install": null,
+    "steps": [
+      "Open Kiro's Powers panel",
+      "Select 'Add Custom Power' > 'Import power from GitHub'",
+      "Enter repository URL: https://github.com/yonro/xmemo-kiro-power",
+      "Install the Power and authorize XMemo in a new conversation"
+    ],
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-kiro-power",
+    "status": "preview",
+    "clientId": "kiro"
+  },
+  {
+    "id": "vscode",
+    "platform": "vscode",
+    "label": "VS Code XMemo Extension",
+    "repo": "yonro/xmemo-vscode",
+    "kind": "marketplace",
+    "version": "0.1.1",
+    "tag": null,
+    "commit": "bf08e7c237bc46a84386b0aec15ee3b38dca5e98",
+    "detect": null,
+    "install": null,
+    "steps": [
+      "Run: code --install-extension xmemo.xmemo-vscode",
+      "Or search for 'XMemo' in VS Code Extensions view",
+      "Run 'XMemo: Sign In' from the Command Palette to connect via OAuth"
+    ],
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-vscode",
+    "status": "preview",
+    "clientId": null
+  },
+  {
+    "id": "chatgpt-codex",
+    "platform": "chatgpt",
+    "label": "ChatGPT & Codex XMemo Plugin",
+    "repo": "yonro/xmemo-chatgpt-plugin",
+    "kind": "marketplace",
+    "version": "1.0.0",
+    "tag": null,
+    "commit": "13ca5a2dabd05f03421a9e2f3c9c1dfdef986553",
+    "detect": null,
+    "install": null,
+    "steps": [
+      "Add repository as a plugin marketplace or install from OpenAI plugin directory",
+      "Install 'xmemo' from the XMemo marketplace",
+      "Complete XMemo OAuth authentication at install or first connection"
+    ],
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-chatgpt-plugin",
+    "status": "preview",
+    "clientId": null
+  },
+  {
+    "id": "cindy",
+    "platform": "cindy",
+    "label": "Cindy XMemo Memory Plugin",
+    "repo": "yonro/xmemo-cindy-plugin",
+    "kind": "manual",
+    "version": "1.0.0",
+    "tag": null,
+    "commit": "0cbbac5a535ad5c28a5be52b4d8aed67a189af1b",
+    "detect": null,
+    "install": null,
+    "steps": [
+      "Obtain or build the xmemo-memory package (or clone https://github.com/yonro/xmemo-cindy-plugin)",
+      "In Cindy, open Plugins and drag in or select the package",
+      "Enable XMemo Memory and configure Cloud OAuth or API key"
+    ],
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-cindy-plugin",
+    "status": "preview",
+    "clientId": null
+  },
+  {
+    "id": "codex",
+    "platform": "codex",
+    "label": "Codex XMemo Plugin",
+    "repo": "yonro/xmemo-codex-plugin",
+    "kind": "mcp",
+    "version": "0.1.0",
+    "tag": null,
+    "commit": "402209f2669e4a98aa9cfd21e0064e0b349939bf",
+    "detect": null,
+    "install": null,
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-codex-plugin",
+    "status": "preview",
+    "clientId": "codex"
+  },
+  {
+    "id": "xmemo-hermes-plugin",
+    "platform": "hermes",
+    "label": "Legacy Hermes XMemo Plugin",
+    "repo": "yonro/xmemo-hermes-plugin",
+    "kind": "manual",
+    "version": null,
+    "tag": null,
+    "commit": "24391c1a491912cfdfb620a5a8c1ea8b31f470f3",
+    "detect": null,
+    "install": null,
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-hermes-plugin",
+    "status": "legacy",
+    "clientId": null
+  },
+  {
+    "id": "xmemo-skills",
+    "platform": "skills",
+    "label": "Legacy XMemo Skills Library",
+    "repo": "yonro/xmemo-skills",
+    "kind": "manual",
+    "version": "1.2.0",
+    "tag": "v1.2.0",
+    "commit": "c679b1ad72c31d01429e341bce60e38c96079ec7",
+    "detect": null,
+    "install": null,
+    "verify": null,
+    "docs": "https://github.com/yonro/xmemo-skills",
+    "status": "legacy",
+    "clientId": null
+  }
+]

@@ -19,6 +19,7 @@ import { setupCommand } from './commands/setup.js';
 import { uninstallCommand } from './commands/uninstall.js';
 import { updateCommand } from './commands/update.js';
 import { skillCommand } from './commands/skill.js';
+import { pluginCommand } from './commands/plugin.js';
 import { envCommand, writePrivacy } from './config/env.js';
 import { UsageError } from './core/errors.js';
 import { writeHelp, writeStart } from './ui/help.js';
@@ -82,6 +83,10 @@ export async function run(args, io = defaultIo()) {
       return await skillCommand(args.slice(1), io);
     }
 
+    if (command === 'plugin') {
+      return await pluginCommand(args.slice(1), io);
+    }
+
     if (command === 'uninstall') {
       return await uninstallCommand(args.slice(1), io);
     }
@@ -138,7 +143,7 @@ export async function run(args, io = defaultIo()) {
 
     throw new UsageError(`Unknown command: ${command}`);
   } catch (error) {
-    if (hasFlag(args, '--json') && ['memory', 'context', 'state', 'restart', 'knowledge', 'dream', 'cloud-skill'].includes(args[0])) {
+    if (hasFlag(args, '--json') && ['memory', 'context', 'state', 'restart', 'knowledge', 'dream', 'cloud-skill', 'plugin'].includes(args[0])) {
       writeFailure(io, [args[0] ?? 'help', args[1]].filter(Boolean).join('.'), error);
       return errorToExitCode(error);
     }

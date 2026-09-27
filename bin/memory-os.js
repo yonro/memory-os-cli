@@ -17,3 +17,4 @@ const exitCode = await run(process.argv.slice(2), {
 
 process.exitCode = exitCode;
 if (serviceCommand) process.removeListener('SIGINT', interrupt);
+if (exitCode !== 0) process.exit(exitCode);

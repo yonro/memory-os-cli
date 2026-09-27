@@ -65,7 +65,8 @@ export function clientSetupPlan(clientId, client, mcpUrl, env, identity, options
     agentInstanceId: identity.agentInstanceId,
     agentInstanceIdPath: identity.path,
     writesTokenValue: false,
-    written: false
+    written: false,
+    pluginId: client?.pluginId ?? null
   };
 }
 
@@ -207,6 +208,9 @@ export function writeSetupSummary(plan, io) {
     writeLine(io.stdout, `  Agent ID: ${plan.selectedClient.agentId}`);
     if (plan.selectedClient.agentInstanceIdPath) {
       writeLine(io.stdout, `  Agent instance ID stored: ${plan.selectedClient.agentInstanceIdPath}`);
+    }
+    if (plan.selectedClient.pluginId) {
+      writeLine(io.stdout, `  Plugin available: ${COMMAND_NAME} plugin install ${plan.selectedClient.pluginId}`);
     }
     if (plan.selectedClient.configKind === 'local-proxy') {
       writeLine(io.stdout, `  Local proxy: ${plan.selectedClient.requiresLocalCommand}`);

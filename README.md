@@ -22,7 +22,7 @@ CLIs, and autonomous agents from one production-ready command line.
 
 [English](README.md) · [简体中文](README_CN.md)
 
-[Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Commands](#command-reference) · [Versioning](#versioning) · [Security](#security-by-default)
+[Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Plugins](#agent-plugins) · [Commands](#command-reference) · [Versioning](#versioning) · [Security](#security-by-default)
 
 ---
 
@@ -246,6 +246,63 @@ xmemo skill install --from ./xmemo-skill-1.1.33.tgz
 xmemo skill install --dry-run
 ```
 
+### Agent plugins
+
+The CLI provides a curated, static index of verified agent plugins shipped directly in `@xmemo/client`. Each entry contains a pinned version, release tag, and exact Git commit SHA resolved at release time.
+
+| Plugin ID | Platform / Agent | Kind | Status | Integration |
+| --- | --- | --- | --- | --- |
+| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
+| `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
+| `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone verified against commit `5d0d280` (defaults to `~/.xmemo/plugins/claude-code`) |
+| `cursor` | Cursor | `marketplace` | Preview | Cursor Marketplace plugin |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` extension (unpinned: host does not support refs) |
+| `kiro` | Kiro | `manual` | Preview | Steering rules & Power integration |
+| `vscode` | VS Code | `marketplace` | Preview | VS Code Marketplace extension |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
+| `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex extension |
+| `cindy` | Cindy | `manual` | Preview | Native agent memory integration |
+| `codex` | Codex | `mcp` | Preview | Dedicated MCP configuration (`xmemo setup codex`) |
+
+Commands:
+
+```bash
+# List available plugins (excluding legacy entries)
+xmemo plugin list
+
+# Include legacy plugins
+xmemo plugin list --all
+
+# View plugin details and verification metadata
+xmemo plugin info <id>
+
+# Preview install plan without executing
+xmemo plugin install <id> --dry-run
+
+# Install with explicit confirmation (prompts [y/N] by default)
+xmemo plugin install <id>
+
+# Non-interactive install
+xmemo plugin install <id> --yes
+
+# Specify custom target directory for git-dir plugins
+xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code
+
+# Open plugin documentation or marketplace in browser
+xmemo plugin install <id> --open
+
+# Check installation status
+xmemo plugin status [<id>]
+```
+
+**Security & Consent:**
+- Only verified plugin IDs from the static index are accepted; arbitrary URLs and unknown IDs are rejected with exit code 2.
+- Interactive install always displays the execution plan and requires explicit consent (`[y/N]`, defaulting to Cancel on empty input or EOF).
+- `--dry-run` guarantees zero disk writes and zero spawned processes.
+- Marketplace and manual plugins display exact step-by-step instructions from the plugin repository during `plugin install <id>` (pass `--open` to open docs in browser).
+- Git directory plugins (`claude-code`) clone into a stable per-user location (`~/.xmemo/plugins/<id>`), support `--dir <path>` override, verify the checked-out `HEAD` commit byte-for-byte, and output the exact load command (`claude --plugin-dir <dir>`). On commit mismatch, the directory is immediately removed.
+- Plugin child processes run in an isolated environment with authentication tokens (`XMEMO_KEY`, `MEMORY_OS_MCP_TOKEN`, `XMEMO_TOKEN`) scrubbed from argv and env.
+
 ## Authentication
 
 ### Browser login
@@ -335,6 +392,18 @@ xmemo setup <client> --dry-run
 xmemo setup --all
 xmemo setup openclaw [--with-mcp|--mcp-only]
 xmemo setup hermes [--with-mcp|--mcp-only]
+```
+
+</details>
+
+<details>
+<summary><strong>Agent plugins</strong></summary>
+
+```bash
+xmemo plugin list [--all] [--json]
+xmemo plugin info <id> [--json]
+xmemo plugin install <id> [--dry-run] [--yes] [--open] [--dir <path>] [--json]
+xmemo plugin status [<id>] [--all] [--json]
 ```
 
 </details>
