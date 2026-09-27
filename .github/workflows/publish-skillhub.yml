@@ -1,0 +1,255 @@
+name: Publish XMemo Skill to skillhub.cn
+
+on:
+  workflow_run:
+    workflows: ["Package XMemo Skill release assets"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to package and publish (e.g. skill-v1.1.33)"
+        required: true
+        type: string
+      dry_run:
+        description: "Run dry-run validation without publishing"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Trigger only on successful Package XMemo Skill release assets for skill-v tags,
+    # or on manual workflow_dispatch.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'release' &&
+       startsWith(github.event.workflow_run.head_branch, 'skill-v')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.event.workflow_run.head_branch }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+    steps:
+      - name: Validate Release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          resolved_tag="$RELEASE_TAG"
+          if [[ ! "$resolved_tag" =~ ^skill-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid release tag '$resolved_tag'. Expected format: skill-v<major>.<minor>.<patch>" >&2
+            exit 1
+          fi
+          echo "Validated release tag: $resolved_tag"
+          echo "RELEASE_TAG=$resolved_tag" >> "$GITHUB_ENV"
+          semver="${resolved_tag#skill-v}"
+          echo "semver=$semver" >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install skillhub CLI safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          installer_dir="$(mktemp -d)"
+          curl -fsSL https://skillhub.cn/install/install.sh -o "$installer_dir/install.sh"
+          echo "Installer SHA256:"
+          sha256sum "$installer_dir/install.sh"
+          bash "$installer_dir/install.sh" --cli-only
+          rm -rf "$installer_dir"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          skillhub --version
+
+      - name: Download and extract Release archive
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive_dir="$(mktemp -d)"
+          payload_dir="$GITHUB_WORKSPACE/skillhub-payload"
+          mkdir -p "$payload_dir"
+
+          echo "Downloading xmemo-skill.tar.gz for $RELEASE_TAG..."
+          gh release download "$RELEASE_TAG" -p xmemo-skill.tar.gz --dir "$archive_dir"
+
+          echo "Extracting release archive to payload directory..."
+          tar -xzf "$archive_dir/xmemo-skill.tar.gz" -C "$payload_dir"
+          rm -rf "$archive_dir"
+
+          test -f "$payload_dir/SKILL.md"
+          test -f "$payload_dir/scripts/xmemo-skill.mjs"
+
+          # Record baseline sha256 sums of extracted files
+          (cd "$payload_dir" && find . -type f | sort | xargs sha256sum) > "$GITHUB_WORKSPACE/baseline.sha256"
+          echo "Extracted payload verified."
+
+      - name: Inject platform metadata into extracted SKILL.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload_dir="$GITHUB_WORKSPACE/skillhub-payload"
+          skill_path="$payload_dir/SKILL.md"
+
+          node --input-type=module - <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const skillPath = process.env.GITHUB_WORKSPACE + '/skillhub-payload/SKILL.md';
+          const semver = process.env.semver;
+          const content = readFileSync(skillPath, 'utf8');
+
+          const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+          if (!fmMatch) {
+            throw new Error('Frontmatter delimiter not found in extracted SKILL.md');
+          }
+
+          const originalFrontmatter = fmMatch[1];
+          const body = content.slice(fmMatch[0].length);
+
+          const descMatch = originalFrontmatter.match(/^description:\s*([\s\S]+?)$/m);
+          let summary = descMatch ? descMatch[1].trim() : '';
+          if ((summary.startsWith('"') && summary.endsWith('"')) || (summary.startsWith("'") && summary.endsWith("'"))) {
+            summary = summary.slice(1, -1);
+          }
+
+          const appendedLines = [
+            `displayName: ${JSON.stringify('XMemo Memory')}`,
+            `slug: ${JSON.stringify('xmemo')}`,
+            `version: ${JSON.stringify(semver)}`,
+            `summary: ${JSON.stringify(summary)}`,
+            `license: ${JSON.stringify('MIT')}`,
+          ];
+
+          const newFrontmatter = [
+            '---',
+            originalFrontmatter.trimEnd(),
+            ...appendedLines,
+            '---',
+          ].join('\n');
+
+          writeFileSync(skillPath, newFrontmatter + body, 'utf8');
+          console.log('Injected skillhub metadata for version ' + semver);
+          NODE
+
+      - name: Verify payload integrity and line endings
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload_dir="$GITHUB_WORKSPACE/skillhub-payload"
+
+          # Verify no CR bytes exist in any file
+          if grep -r -q -l $'\r' "$payload_dir"; then
+            echo "ERROR: CR bytes detected in payload files:" >&2
+            grep -r -l $'\r' "$payload_dir" >&2
+            exit 1
+          fi
+          echo "Verified: 0 CR bytes in payload."
+
+          # Verify only SKILL.md differs from release archive
+          (cd "$payload_dir" && find . -type f | sort | xargs sha256sum) > "$GITHUB_WORKSPACE/updated.sha256"
+
+          diff_count="$(diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" | grep -c '^[+-][a-f0-9]' || true)"
+          # diff_count should be exactly 2 lines: 1 removed old sha256 for ./SKILL.md, 1 added new sha256 for ./SKILL.md
+          if [[ "$diff_count" -ne 2 ]]; then
+            echo "ERROR: Unexpected diff count between baseline and updated payload ($diff_count). Only ./SKILL.md should differ." >&2
+            diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" >&2 || true
+            exit 1
+          fi
+
+          diff_files="$(diff -u "$GITHUB_WORKSPACE/baseline.sha256" "$GITHUB_WORKSPACE/updated.sha256" | grep '^[+-][a-f0-9]' | awk '{print $2}' | sort -u)"
+          if [[ "$diff_files" != "./SKILL.md" ]]; then
+            echo "ERROR: Modified file is not ./SKILL.md: $diff_files" >&2
+            exit 1
+          fi
+          echo "Verified: exactly ./SKILL.md was modified (frontmatter metadata injection); all other files match release archive 100%."
+
+      - name: Authenticate to skillhub.cn
+        shell: bash
+        env:
+          SKILLHUB_KEY: ${{ secrets.SKILLHUB_KEY }}
+          XMEMO_SKILL_SKILLHUB_PUBLISH: ${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          if [[ -z "${SKILLHUB_KEY:-}" ]]; then
+            echo "::warning::SKILLHUB_KEY repository secret is not set."
+            if [[ "$DRY_RUN" != "true" && "${XMEMO_SKILL_SKILLHUB_PUBLISH:-}" == "true" ]]; then
+              echo "ERROR: SKILLHUB_KEY is required for publishing." >&2
+              exit 1
+            fi
+            echo "auth_skipped=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "::add-mask::$SKILLHUB_KEY"
+          set +x
+          skillhub login --key "$SKILLHUB_KEY" --host https://api.skillhub.cn
+          skillhub auth whoami
+          echo "auth_skipped=false" >> "$GITHUB_ENV"
+
+      - name: Validate skillhub publish (dry-run)
+        if: env.auth_skipped != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          payload_dir="$GITHUB_WORKSPACE/skillhub-payload"
+          changelog="XMemo Skill $semver: see https://github.com/yonro/memory-os-cli/releases/tag/$RELEASE_TAG"
+
+          echo "Running skillhub publish --dry-run..."
+          dry_run_out="$(skillhub publish "$payload_dir" --host https://api.skillhub.cn --changelog "$changelog" --dry-run 2>&1)" || dry_run_code=$?
+          echo "$dry_run_out"
+
+          if [[ "${dry_run_code:-0}" -ne 0 ]]; then
+            if echo "$dry_run_out" | grep -iq -E "already exists|version exists|already published"; then
+              echo "Notice: Version $semver is already registered on skillhub.cn."
+              echo "already_published=true" >> "$GITHUB_ENV"
+            else
+              echo "ERROR: skillhub publish --dry-run failed with code ${dry_run_code:-0}." >&2
+              exit "${dry_run_code:-1}"
+            fi
+          else
+            echo "already_published=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Publish to skillhub.cn (gated)
+        if: env.auth_skipped != 'true' && env.already_published != 'true' && vars.XMEMO_SKILL_SKILLHUB_PUBLISH == 'true' && env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          payload_dir="$GITHUB_WORKSPACE/skillhub-payload"
+          changelog="XMemo Skill $semver: see https://github.com/yonro/memory-os-cli/releases/tag/$RELEASE_TAG"
+
+          echo "Publishing XMemo Skill $semver to skillhub.cn..."
+          pub_out="$(skillhub publish "$payload_dir" --host https://api.skillhub.cn --changelog "$changelog" 2>&1)" || pub_code=$?
+          echo "$pub_out"
+
+          if [[ "${pub_code:-0}" -ne 0 ]]; then
+            if echo "$pub_out" | grep -iq -E "already exists|version exists|already published"; then
+              echo "Notice: Version $semver is already published on skillhub.cn; treating as idempotent success."
+            else
+              echo "ERROR: skillhub publish failed with code ${pub_code:-0}." >&2
+              exit "${pub_code:-1}"
+            fi
+          fi
+          echo "Successfully published XMemo Skill $semver to skillhub.cn."
+
+      - name: Publish notice (dry-run or gated off)
+        if: vars.XMEMO_SKILL_SKILLHUB_PUBLISH != 'true' || env.DRY_RUN == 'true' || env.auth_skipped == 'true'
+        shell: bash
+        env:
+          XMEMO_SKILL_SKILLHUB_PUBLISH: ${{ vars.XMEMO_SKILL_SKILLHUB_PUBLISH }}
+        run: |
+          echo "Notice: Real publish to skillhub.cn was skipped."
+          echo "Reason: vars.XMEMO_SKILL_SKILLHUB_PUBLISH='${XMEMO_SKILL_SKILLHUB_PUBLISH:-}', dry_run='${DRY_RUN:-}', auth_skipped='${auth_skipped:-}'."

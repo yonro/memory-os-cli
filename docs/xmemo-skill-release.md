@@ -173,7 +173,25 @@ After creating the GitHub Release, verify the `skills.sh` install:
 
 ---
 
-## 5. How to Add a Command
+## 5. Publishing to skillhub.cn
+
+The skill is published to [skillhub.cn](https://skillhub.cn) via the dedicated GitHub Actions workflow `.github/workflows/publish-skillhub.yml`.
+
+### Workflow Mechanics
+- **Automated Trigger**: Runs automatically upon successful completion of the "Package XMemo Skill release assets" workflow for `skill-v*` release tags.
+- **Manual Trigger**: Supports manual triggering via `workflow_dispatch` with an explicit `release_tag` (e.g., `skill-v1.1.33`) and an optional `dry_run` flag (defaults to `true`).
+- **Archive Ingestion & Metadata Injection**: Downloads the verified `xmemo-skill.tar.gz` from the GitHub Release, extracts the files, and dynamically injects platform-specific frontmatter fields into `SKILL.md` (`slug: xmemo`, `displayName: XMemo Memory`, `version: <semver>`, `summary: <description>`, `license: MIT`).
+- **Repository Cleanliness**: The repository's canonical `skills/xmemo/SKILL.md` is never modified; frontmatter additions are applied exclusively to the extracted copy uploaded to skillhub.cn.
+- **Safety Assertions**: The workflow verifies 0 CR bytes across the payload and asserts that only `SKILL.md` differs from the GitHub Release archive.
+
+### One-Time Repository Setup
+To enable real publishing to skillhub.cn:
+1. **Secret `SKILLHUB_KEY`**: Store the skillhub API key directly as a GitHub repository secret named `SKILLHUB_KEY` (no environment required).
+2. **Variable `XMEMO_SKILL_SKILLHUB_PUBLISH`**: Set the repository variable `XMEMO_SKILL_SKILLHUB_PUBLISH=true` to enable live publication. When unset or not `'true'`, the workflow executes in dry-run mode and logs a notice.
+
+---
+
+## 6. How to Add a Command
 
 The XMemo skill uses a modular architecture separating command-line dispatch from domain implementations. To introduce a new CLI command or subcommand, update the three canonical integration points:
 
@@ -218,7 +236,7 @@ node scripts/verify-release-packaging.mjs
 
 ---
 
-## 6. Standalone `@xmemo/skill` npm Package
+## 7. Standalone `@xmemo/skill` npm Package
 
 The `@xmemo/skill` package provides a standalone, zero-dependency npm distribution of the XMemo agent skill. It decouples skill distribution from the CLI (`@xmemo/client`) releases and provides independent npm registry verification with Sigstore provenance.
 
