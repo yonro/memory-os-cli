@@ -5,6 +5,7 @@ import { writeLine } from '../core/io.js';
 import { MCP_CLIENTS } from '../mcp/clients.js';
 import {
   defaultProfileTarget,
+  isHomeProfileTarget,
   profileClientConfig,
   profileInstallResult,
   profileStatusResult,
@@ -33,11 +34,19 @@ export async function profileCommand(args, io) {
 
   const optionArgs = args.slice(2);
   const outputJson = hasFlag(optionArgs, '--json');
-  const targetPath = optionValue(optionArgs, '--target') ?? defaultProfileTarget(clientId, io.env);
+  const targetPath = optionValue(optionArgs, '--target') ?? defaultProfileTarget(clientId, io.env, { cwd: io.cwd });
+  const isHomeTarget = isHomeProfileTarget(targetPath, io.env, { cwd: io.cwd, clientId });
   let result;
 
   if (subcommand === 'install') {
-    result = await profileInstallResult(clientId, targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
+    result = await profileInstallResult(clientId, targetPath, {
+      write: !hasFlag(optionArgs, '--dry-run'),
+      io,
+      cwd: io.cwd,
+      env: io.env,
+      json: outputJson,
+      isHomeTarget
+    });
   } else if (subcommand === 'status') {
     result = await profileStatusResult(clientId, targetPath);
   } else if (subcommand === 'uninstall') {
@@ -45,6 +54,8 @@ export async function profileCommand(args, io) {
   } else {
     throw new UsageError(`Unknown profile command: ${subcommand}`);
   }
+
+  result.isHomeTarget = isHomeTarget;
 
   if (outputJson) {
     writeLine(io.stdout, JSON.stringify(result, null, 2));

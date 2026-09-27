@@ -38,6 +38,8 @@ import {
 import {
   confirmProfileInstall,
   defaultProfileTarget,
+  isHomeProfileTarget,
+  profileBlock,
   profileClientConfig,
   profileInstallResult
 } from '../config/profile.js';
@@ -125,8 +127,14 @@ export async function setupCommand(args, io) {
           if (profileClientConfig(scanId)) {
             const installProfile = hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
             if (installProfile) {
-              const profileTarget = defaultProfileTarget(scanId, io.env);
-              const profileResult = await profileInstallResult(scanId, profileTarget, { write: true });
+              const profileTarget = defaultProfileTarget(scanId, io.env, { cwd: io.cwd });
+              const profileResult = await profileInstallResult(scanId, profileTarget, {
+                write: true,
+                io,
+                cwd: io.cwd,
+                env: io.env,
+                json: outputJson
+              });
               clientPlan.behaviorProfile = profileResult;
               if (scanId === 'codex') {
                 clientPlan.codexProfile = profileResult;
@@ -177,10 +185,12 @@ export async function setupCommand(args, io) {
         setupPlan.selectedClient.written = true;
       }
 
-      if (shortClientSetup && profileClientConfig(clientId)) {
+      if ((shortClientSetup || optionValue(optionArgs, '--client')) && profileClientConfig(clientId)) {
         const profileTarget = optionValue(optionArgs, '--profile-target')
           ?? optionValue(optionArgs, '--target')
-          ?? defaultProfileTarget(clientId, io.env);
+          ?? defaultProfileTarget(clientId, io.env, { cwd: io.cwd });
+        const isHomeTarget = isHomeProfileTarget(profileTarget, io.env, { cwd: io.cwd, clientId });
+        const block = profileBlock(clientId);
         let installProfile = false;
         let prompted = false;
         let skipped = false;
@@ -189,16 +199,31 @@ export async function setupCommand(args, io) {
         } else if (dryRun) {
           installProfile = false;
         } else if (writeConfig) {
-          installProfile = outputJson || hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
-          if (!installProfile && !outputJson) {
+          const autoConsent = hasFlag(optionArgs, '--yes') || hasFlag(optionArgs, '--profile');
+          if (autoConsent) {
+            installProfile = true;
+          } else if (!outputJson) {
             prompted = true;
-            installProfile = await confirmProfileInstall(clientId, profileTarget, io);
+            installProfile = await confirmProfileInstall(clientId, profileTarget, io, {
+              isHomeTarget,
+              block
+            });
+          } else {
+            installProfile = false;
           }
         }
-        const profileResult = await profileInstallResult(clientId, profileTarget, { write: installProfile });
+        const profileResult = await profileInstallResult(clientId, profileTarget, {
+          write: installProfile,
+          io,
+          cwd: io.cwd,
+          env: io.env,
+          json: outputJson,
+          isHomeTarget
+        });
         profileResult.prompted = prompted;
         profileResult.accepted = installProfile;
         profileResult.skipped = skipped;
+        profileResult.isHomeTarget = isHomeTarget;
         setupPlan.selectedClient.behaviorProfile = profileResult;
         if (clientId === 'codex') {
           setupPlan.selectedClient.codexProfile = profileResult;

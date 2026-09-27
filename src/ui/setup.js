@@ -261,11 +261,33 @@ export function writeSetupSummary(plan, io) {
     if (plan.selectedClient.behaviorProfile) {
       const profile = plan.selectedClient.behaviorProfile;
       const profileClient = profileClientConfig(profile.client);
-      writeLine(io.stdout, `  Behavior profile target: ${profile.targetPath}`);
+      if (profile.isHomeTarget) {
+        writeLine(io.stdout, `  Behavior profile target: ${profile.targetPath} (home directory, outside a repository)`);
+      } else {
+        writeLine(io.stdout, `  Behavior profile target: ${profile.targetPath}`);
+      }
       writeLine(io.stdout, `  Behavior profile client: ${profileClient?.label ?? profile.client}`);
       writeLine(io.stdout, `  Behavior profile installed: ${profile.written}`);
       writeLine(io.stdout, `  Behavior profile changed: ${profile.changed}`);
+      if (profile.backupPath) {
+        writeLine(io.stdout, `  Behavior profile backup: ${profile.backupPath}`);
+      }
       if (!profile.written) {
+        if (profile.block) {
+          writeLine(io.stdout, '');
+          writeLine(io.stdout, '  Behavior profile block:');
+          for (const line of profile.block.trimEnd().split('\n')) {
+            writeLine(io.stdout, `    ${line}`);
+          }
+        }
+        if (profile.diff) {
+          writeLine(io.stdout, '');
+          writeLine(io.stdout, '  Behavior profile diff:');
+          for (const line of profile.diff.trimEnd().split('\n')) {
+            writeLine(io.stdout, `    ${line}`);
+          }
+        }
+        writeLine(io.stdout, '');
         writeLine(io.stdout, `  Profile preview: ${COMMAND_NAME} profile install ${profile.client} --target ${profile.targetPath}`);
       }
     }

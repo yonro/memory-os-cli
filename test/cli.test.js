@@ -1120,9 +1120,10 @@ test('setup writes cursor config from discovered mcp url without token value', a
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
-test('setup cursor shorthand writes config by default', async () => {
+test('setup cursor shorthand writes config and profile with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-'));
-  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--yes', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       XMEMO_KEY: 'secret-token-that-must-not-leak'
@@ -1147,6 +1148,25 @@ test('setup cursor shorthand writes config by default', async () => {
   assert.match(profile, /XMemo Agent profile/);
   assert.match(profile, /recall\/search/);
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
+});
+
+test('setup cursor shorthand with --json alone does not write behavior profile', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-json-'));
+  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--json'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  const plan = JSON.parse(result.stdout);
+  assert.equal(plan.selectedClient.written, true);
+  assert.equal(plan.selectedClient.behaviorProfile.written, false);
+  assert.equal(plan.selectedClient.behaviorProfile.accepted, false);
+  await assert.rejects(fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8'), /ENOENT/);
 });
 
 test('setup --all auto-detects and configures all local clients', async () => {
@@ -1280,6 +1300,7 @@ test('setup --all --profile writes behavior profiles for detected clients', asyn
   await fs.mkdir(traeConfigDir, { recursive: true });
 
   const result = await invoke(['setup', '--all', '--write', '--profile', '--url', 'https://api.example.test', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -1397,6 +1418,7 @@ test('uninstall --all --yes --profiles removes behavior profiles too', async () 
   await fs.writeFile(path.join(tempDir, '.cursor', 'memory-profile.md'), '## User content\n\n<!-- xmemo:profile:start -->\nXMemo profile\n<!-- xmemo:profile:end -->\n');
 
   const result = await invoke(['uninstall', '--all', '--yes', '--profiles'], {
+    cwd: tempDir,
     env: { HOME: tempDir, USERPROFILE: tempDir }
   });
 
@@ -1506,6 +1528,7 @@ test('uninstall cursor --profiles --yes removes profile even when config entry i
   await fs.writeFile(path.join(tempDir, '.cursor', 'memory-profile.md'), '## User content\n\n<!-- xmemo:profile:start -->\nXMemo profile\n<!-- xmemo:profile:end -->\n');
 
   const result = await invoke(['uninstall', 'cursor', '--profiles', '--yes'], {
+    cwd: tempDir,
     env: { HOME: tempDir, USERPROFILE: tempDir }
   });
 
@@ -1875,9 +1898,10 @@ test('setup openclaw dry-run emits commands without spawning openclaw', async ()
   assert.equal(calls.length, 0);
 });
 
-test('setup gemini shorthand writes oauth httpUrl config without token', async () => {
+test('setup gemini shorthand writes oauth httpUrl config and profile with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-gemini-'));
-  const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--yes', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       XMEMO_KEY: 'secret-token-that-must-not-leak'
@@ -1961,9 +1985,10 @@ test('setup gemini in project context targets GEMINI.md', async () => {
   await fs.rm(mockHome, { recursive: true, force: true });
 });
 
-test('setup antigravity shorthand writes oauth serverUrl config without token', async () => {
+test('setup antigravity shorthand writes oauth serverUrl config and profile with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-antigravity-'));
-  const result = await invoke(['setup', 'antigravity', '--url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['setup', 'antigravity', '--url', 'https://api.example.test', '--yes', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       XMEMO_KEY: 'secret-token-that-must-not-leak'
@@ -2156,9 +2181,10 @@ test('setup trae-solo shorthand writes config by default', async () => {
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
-test('setup kiro shorthand writes config by default', async () => {
+test('setup kiro shorthand writes config and profile with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kiro-'));
-  const result = await invoke(['setup', 'kiro', '--url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['setup', 'kiro', '--url', 'https://api.example.test', '--yes', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -2190,9 +2216,10 @@ test('setup kiro shorthand writes config by default', async () => {
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
-test('setup kiro Key mode writes native headers and reports Key authentication', async () => {
+test('setup kiro Key mode writes native headers and reports Key authentication with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kiro-'));
-  const result = await invoke(['setup', 'kiro', '--auth', 'key', '--url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['setup', 'kiro', '--auth', 'key', '--url', 'https://api.example.test', '--yes', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -2226,9 +2253,10 @@ test('setup kiro Key mode writes native headers and reports Key authentication',
   assert.doesNotMatch(profile, /secret-token-that-must-not-leak/);
 });
 
-test('setup kimi-code shorthand writes config by default', async () => {
+test('setup kimi-code shorthand writes config and profile with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kimi-code-'));
-  const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--json'], {
+  const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--yes', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -2385,7 +2413,7 @@ test('setup codex shorthand previews project profile with dry-run', async () => 
   await assert.rejects(fs.readFile(profilePath, 'utf8'), /ENOENT/);
 });
 
-test('setup codex writes mcp config and marker-scoped project profile by default', async () => {
+test('setup codex writes mcp config and marker-scoped project profile with --yes', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-yes-'));
   const profilePath = path.join(tempDir, 'AGENTS.md');
   const env = {
@@ -2393,7 +2421,7 @@ test('setup codex writes mcp config and marker-scoped project profile by default
     MEMORY_OS_CONFIG_HOME: tempDir,
     XMEMO_KEY: 'secret-token-that-must-not-leak'
   };
-  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--profile-target', profilePath, '--json'], {
+  const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--profile-target', profilePath, '--yes', '--json'], {
     env,
     fetch: discoveryFetch()
   });
@@ -2546,6 +2574,7 @@ async function invoke(args, options = {}) {
   }
 
   const code = await run(args, {
+    cwd: options.cwd,
     env: options.env ?? {},
     stdin,
     stdout: { write: (chunk) => { stdout += chunk; } },

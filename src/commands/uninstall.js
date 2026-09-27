@@ -69,7 +69,8 @@ export async function uninstallCommand(args, io) {
   const previewOptions = {
     removeProfiles,
     profileTargetOverride,
-    preview: true
+    preview: true,
+    cwd: io.cwd
   };
   const plan = await buildUninstallPlan(targets, io, previewOptions);
 
@@ -109,7 +110,8 @@ export async function uninstallCommand(args, io) {
   const result = await buildUninstallPlan(targets, io, {
     removeProfiles,
     profileTargetOverride,
-    preview: false
+    preview: false,
+    cwd: io.cwd
   });
   if (outputJson) {
     writeLine(io.stdout, JSON.stringify(result, null, 2));
@@ -224,7 +226,7 @@ async function removeProfileForTarget(target, env, options) {
 
   const targetPath = options.profileTargetOverride
     ? options.profileTargetOverride
-    : profileConfig.defaultTarget(env);
+    : profileConfig.defaultTarget(env, { cwd: options.cwd });
 
   try {
     const result = await profileUninstallResult(target.clientId, targetPath, { write: !options.preview });
