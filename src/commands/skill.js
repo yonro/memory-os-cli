@@ -994,8 +994,33 @@ export async function skillRemove(args, io) {
       return 0;
     }
 
-    const removeCmd = ['openclaw', 'skills', 'remove', PINNED_OPENCLAW_SKILL_NAME];
+    const removeCmd = ['clawhub', 'uninstall', PINNED_OPENCLAW_SKILL_NAME];
     const removeCmdStr = removeCmd.join(' ');
+
+    let clawhubAvailable = false;
+    try {
+      const probeRes = await executeSubprocess('clawhub', ['--version'], io, sanitizeEnv(io.env), cwd);
+      if (probeRes.code === 0) {
+        clawhubAvailable = true;
+      }
+    } catch {}
+
+    if (!clawhubAvailable) {
+      if (isJson) {
+        writeLine(io.stdout, JSON.stringify({
+          ok: false,
+          removed: false,
+          client: client.id,
+          command: removeCmd,
+          error: 'clawhub_not_found',
+          message: `clawhub is not installed or not available on PATH. Run "${removeCmdStr}" to remove the skill.`
+        }, null, 2));
+        return 1;
+      }
+      writeLine(io.stderr, 'clawhub is not installed or not available on PATH.');
+      writeLine(io.stderr, `To remove this skill, install clawhub and run: ${removeCmdStr}`);
+      return 1;
+    }
 
     if (!yes) {
       if (isJson) {
@@ -1018,16 +1043,18 @@ export async function skillRemove(args, io) {
 
     let result;
     try {
-      result = await executeSubprocess('openclaw', ['skills', 'remove', PINNED_OPENCLAW_SKILL_NAME], io, sanitizeEnv(io.env), cwd);
+      result = await executeSubprocess('clawhub', ['uninstall', PINNED_OPENCLAW_SKILL_NAME], io, sanitizeEnv(io.env), cwd);
     } catch (err) {
       if (err?.code === 'ENOENT') {
-        throw new UsageError('openclaw is not installed or not available on PATH.');
+        writeLine(io.stderr, 'clawhub is not installed or not available on PATH.');
+        writeLine(io.stderr, `To remove this skill, install clawhub and run: ${removeCmdStr}`);
+        return 1;
       }
-      throw new UsageError(`Failed to execute openclaw: ${err.message}`);
+      throw new UsageError(`Failed to execute clawhub: ${err.message}`);
     }
 
     if (result.code !== 0) {
-      throw new UsageError(`openclaw skills remove failed (${result.code}):\n${result.stderr || result.stdout}`);
+      throw new UsageError(`clawhub uninstall failed (${result.code}):\n${result.stderr || result.stdout}`);
     }
 
     if (isJson) {

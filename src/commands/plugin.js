@@ -18,7 +18,7 @@ export function writePluginHelp(io) {
   writeLine(io.stdout, 'Plugin commands:');
   writeLine(io.stdout, `  ${COMMAND_NAME} plugin list [--all] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} plugin info <id> [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} plugin install <id> [--dry-run] [--yes] [--open] [--dir <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} plugin install <id> [--dry-run] [--yes] [--open] [--dir <path>] [--profile <name>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} plugin status [<id>] [--all] [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Inspect, install, and manage XMemo agent plugins from the static index.');
@@ -208,7 +208,8 @@ function extractPositionalArgs(args, optionsWithValues = []) {
 
 async function pluginInstall(args, io) {
   const dir = optionValue(args, '--dir');
-  const positional = extractPositionalArgs(args.slice(1), ['--dir']);
+  const profile = optionValue(args, '--profile');
+  const positional = extractPositionalArgs(args.slice(1), ['--dir', '--profile']);
   if (positional.length === 0) {
     throw new UsageError(`plugin install requires <id>. Supported plugins: ${supportedPluginIds().join(', ')}.`);
   }
@@ -287,7 +288,12 @@ async function pluginInstall(args, io) {
     let route = null;
     let pathDescription = null;
 
-    if (plugin.id === 'hermes') {
+    if (plugin.id === 'deepseek-dsh') {
+      if (!profile) {
+        throw new UsageError('deepseek-dsh requires --profile <name> (e.g. xmemo plugin install deepseek-dsh --profile <name>).');
+      }
+      installCmd = ['dsh', 'plugin', '--profile', profile, 'add', 'dsh-xmemo', ...(force ? ['--force'] : [])];
+    } else if (plugin.id === 'hermes') {
       let hermesAvailable = false;
       try {
         const hRes = await execPluginProcess('hermes', ['--version'], io);

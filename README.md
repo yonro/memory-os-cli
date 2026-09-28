@@ -345,7 +345,7 @@ The CLI provides a curated, static index of verified agent plugins shipped direc
 | `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install https://github.com/yonro/xmemo-gemini-cli --ref 39e25b185b5157490d1683e4ca8c5c5fb1312a88` |
 | `kiro` | Kiro | `manual` | Preview | Steering rules & Power integration |
 | `vscode` | VS Code | `manual` | Preview | VS Code extension manual steps (pending marketplace publication) |
-| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo@0.1.0` |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin --profile <name> add dsh-xmemo` (requires `--profile`) |
 | `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex extension |
 | `cindy` | Cindy | `manual` | Preview | Native agent memory integration |
 | `codex` | Codex | `mcp` | Preview | Dedicated MCP configuration (`xmemo setup codex`) |
@@ -370,6 +370,9 @@ xmemo plugin install <id>
 
 # Non-interactive install
 xmemo plugin install <id> --yes
+
+# Specify profile for deepseek-dsh
+xmemo plugin install deepseek-dsh --profile default --yes
 
 # Specify custom target directory for git-dir plugins
 xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code

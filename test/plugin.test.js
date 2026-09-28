@@ -725,4 +725,47 @@ test('plugin install: hermes selects hermes CLI route when available, pip fallba
   assert.deepEqual(pipCalls[1].args.slice(0, 4), ['-m', 'pip', 'install', 'hermes-xmemo==1.1.3']);
 });
 
+test('plugin install: deepseek-dsh requires --profile and constructs correct dsh argv', async () => {
+  // Case 1: missing --profile fails with exit code 2
+  const { io: ioNoProfile, getStderr: getStderrNoProfile } = createMockIo();
+  const codeNoProfile = await run(['plugin', 'install', 'deepseek-dsh'], ioNoProfile);
+  assert.equal(codeNoProfile, 2);
+  assert.match(getStderrNoProfile(), /deepseek-dsh requires --profile <name>/);
+
+  // Case 2: with --profile executes dsh plugin --profile <name> add dsh-xmemo
+  const calls = [];
+  const mockSpawn = (cmd, args, opts) => {
+    calls.push({ cmd, args });
+    return {
+      stdout: Readable.from(['Plugin dsh-xmemo added\n']),
+      stderr: Readable.from([]),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+
+  const { io: ioProfile, getStdout: getStdoutProfile } = createMockIo({
+    spawnHandler: mockSpawn
+  });
+  const codeProfile = await run(['plugin', 'install', 'deepseek-dsh', '--profile', 'dev-profile', '--yes'], ioProfile);
+  assert.equal(codeProfile, 0);
+  assert.match(getStdoutProfile(), /Command: dsh plugin --profile dev-profile add dsh-xmemo/);
+  assert.deepEqual(calls[0].cmd, 'dsh');
+  assert.deepEqual(calls[0].args, ['plugin', '--profile', 'dev-profile', 'add', 'dsh-xmemo']);
+
+  // Case 3: with --profile and --force appends --force
+  const forceCalls = [];
+  const mockForceSpawn = (cmd, args, opts) => {
+    forceCalls.push({ cmd, args });
+    return {
+      stdout: Readable.from(['Plugin dsh-xmemo forced\n']),
+      stderr: Readable.from([]),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+  const { io: ioForce } = createMockIo({ spawnHandler: mockForceSpawn });
+  const codeForce = await run(['plugin', 'install', 'deepseek-dsh', '--profile', 'prod', '--force', '--yes'], ioForce);
+  assert.equal(codeForce, 0);
+  assert.deepEqual(forceCalls[0].args, ['plugin', '--profile', 'prod', 'add', 'dsh-xmemo', '--force']);
+});
+
 

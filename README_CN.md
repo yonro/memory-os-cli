@@ -323,7 +323,7 @@ CLI 随 `@xmemo/client` 内置了经过官方验证的静态插件索引，每�
 | `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install https://github.com/yonro/xmemo-gemini-cli --ref 39e25b185b5157490d1683e4ca8c5c5fb1312a88` |
 | `kiro` | Kiro | `manual` | Preview | Steering 规则与 Power 配置 |
 | `vscode` | VS Code | `manual` | Preview | VS Code 手动安装指引（等待市场上架） |
-| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo@0.1.0` |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin --profile <name> add dsh-xmemo` (必须指定 `--profile`) |
 | `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex 扩展 |
 | `cindy` | Cindy | `manual` | Preview | 原生智能体记忆接入 |
 | `codex` | Codex | `mcp` | Preview | 专属 MCP 配置 (`xmemo setup codex`) |
@@ -348,6 +348,9 @@ xmemo plugin install <id>
 
 # 免交互确认直接安装
 xmemo plugin install <id> --yes
+
+# 为 deepseek-dsh 指定目标 Profile
+xmemo plugin install deepseek-dsh --profile default --yes
 
 # 指定自定义目录安装 git-dir 插件
 xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code

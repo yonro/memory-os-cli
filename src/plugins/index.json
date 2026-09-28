@@ -72,8 +72,8 @@
     "label": "DeepSeek DSH XMemo Plugin",
     "repo": "yonro/xmemo-deepseek-plugin",
     "kind": "native-cli",
-    "version": "0.1.0",
-    "tag": "v0.1.0",
+    "version": null,
+    "tag": null,
     "commit": "eabf1fb53edc4c143e70e58e288dfb1748695538",
     "detect": {
       "command": "dsh",
@@ -82,14 +82,17 @@
     "install": [
       "dsh",
       "plugin",
+      "--profile",
+      "<profile>",
       "add",
-      "dsh-xmemo@0.1.0"
+      "dsh-xmemo"
     ],
     "verify": {
       "command": "dsh",
       "args": ["--dump-config"]
     },
     "docs": "https://github.com/yonro/xmemo-deepseek-plugin",
+    "note": "unpinned (host does not document versions); requires --profile <name>",
     "status": "preview",
     "clientId": null
   },
