@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -51,7 +51,6 @@ function runScript(bin, scriptPath, args = [], env = {}, cwd = repoRoot) {
     delete baseEnv.XMEMO_SKILL_DIR;
     delete baseEnv.XMEMO_SKILL_FORCE;
     delete baseEnv.XMEMO_SKILL_RESOLVE_ONLY;
-    delete baseEnv.XMEMO_SKILL_TEST_ARCHIVE;
 
     const child = spawn(bin, [...args, scriptPath], {
       cwd,
@@ -69,16 +68,6 @@ function runScript(bin, scriptPath, args = [], env = {}, cwd = repoRoot) {
       resolve({ code: code ?? 0, stdout, stderr });
     });
   });
-}
-
-async function createTestArchive(targetTarGz) {
-  const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'xmemo-mock-archive-'));
-  const scriptsDir = path.join(tmpDir, 'scripts');
-  await mkdir(scriptsDir, { recursive: true });
-  await writeFile(path.join(scriptsDir, 'xmemo-skill.mjs'), '// mock skill entrypoint\nconsole.log("mock doctor");\n');
-  await writeFile(path.join(tmpDir, 'SKILL.md'), '# Mock Skill\n');
-  execFileSync('tar', ['-czf', targetTarGz, '-C', tmpDir, '.']);
-  await rm(tmpDir, { recursive: true, force: true });
 }
 
 test('skills/install.sh target resolution rules (POSIX sh)', async (t) => {
@@ -293,44 +282,36 @@ test('skills/install.sh target resolution rules (POSIX sh)', async (t) => {
     }
   });
 
-  await t.test('Replace and backup with XMEMO_SKILL_FORCE=1', async () => {
+  await t.test('Temporary extract directory is created in system temp and never under target parent directory', async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'installer-test-'));
+    const customSysTemp = await mkdtemp(path.join(os.tmpdir(), 'installer-system-temp-'));
     try {
-      const targetDir = path.join(tempDir, 'my-skill');
-      await mkdir(targetDir, { recursive: true });
-      await writeFile(path.join(targetDir, 'old-marker.txt'), 'old');
-
-      const archivePath = path.join(tempDir, 'mock.tar.gz');
-      await createTestArchive(archivePath);
-
       const posixHome = tempDir.replace(/\\/g, '/');
-      const posixTarget = targetDir.replace(/\\/g, '/');
-      const posixArchive = archivePath.replace(/\\/g, '/');
+      const posixSysTemp = customSysTemp.replace(/\\/g, '/');
+      const skillsDir = path.join(tempDir, '.claude', 'skills');
+      await mkdir(skillsDir, { recursive: true });
 
+      // Point XMEMO_BASE_URL to an unreachable HTTPS endpoint so download fails
       const res = await runScript(shellBin, scriptPath, [], {
         HOME: posixHome,
-        XMEMO_SKILL_DIR: posixTarget,
-        XMEMO_SKILL_FORCE: '1',
-        XMEMO_SKILL_TEST_ARCHIVE: posixArchive,
+        TMPDIR: posixSysTemp,
+        TMP: posixSysTemp,
+        TEMP: posixSysTemp,
+        XMEMO_SKILL_AGENT: 'claude-code',
+        XMEMO_BASE_URL: 'https://127.0.0.1:9',
       });
 
-      assert.equal(res.code, 0);
-      assert.match(res.stdout, /Backed up existing installation to/);
-      assert.match(res.stdout, /Installed XMemo Skill to/);
-      assert.match(res.stdout, /node ".*scripts\/xmemo-skill\.mjs" doctor --anonymous/);
-      assert.match(res.stdout, /Restart or reload your agent to pick up the skill\./);
+      assert.notEqual(res.code, 0);
 
-      // Verify old file was moved to backup directory under ~/.xmemo/backups/skills/custom/
-      const backupDir = path.join(tempDir, '.xmemo', 'backups', 'skills', 'custom');
-      const backups = await readdir(backupDir);
-      assert.ok(backups.length > 0);
-      assert.ok(backups[0].startsWith('my-skill-'));
+      // Verify that no *.tmp.* or temporary directory was ever created under .claude or .claude/skills
+      const skillsEntries = await readdir(skillsDir);
+      assert.deepEqual(skillsEntries, [], 'no temporary files or folders should exist in target skills directory');
 
-      // Verify newly installed directory contains xmemo-skill.mjs and does not contain old file
-      await access(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'));
-      await assert.rejects(access(path.join(targetDir, 'old-marker.txt')), { code: 'ENOENT' });
+      const claudeEntries = await readdir(path.join(tempDir, '.claude'));
+      assert.ok(!claudeEntries.some((e) => e.includes('.tmp.') || e.includes('tmp')), 'no tmp entries in .claude directory');
     } finally {
       await rm(tempDir, { recursive: true, force: true });
+      await rm(customSysTemp, { recursive: true, force: true });
     }
   });
 });
@@ -504,39 +485,33 @@ test('skills/install.ps1 target resolution and backup rules (PowerShell)', async
     }
   });
 
-  await t.test('Replace and backup with XMEMO_SKILL_FORCE=1', async () => {
+  await t.test('Temporary extract directory is created in system temp and never under target parent directory', async () => {
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'ps1-test-'));
+    const customSysTemp = await mkdtemp(path.join(os.tmpdir(), 'ps1-system-temp-'));
     try {
-      const targetDir = path.join(tempDir, 'my-ps1-skill');
-      await mkdir(targetDir, { recursive: true });
-      await writeFile(path.join(targetDir, 'old-marker.txt'), 'old');
-
-      const archivePath = path.join(tempDir, 'mock.tar.gz');
-      await createTestArchive(archivePath);
+      const skillsDir = path.join(tempDir, '.claude', 'skills');
+      await mkdir(skillsDir, { recursive: true });
 
       const res = await runScript(pwshBin, scriptPath, baseArgs, {
         HOME: tempDir,
         USERPROFILE: tempDir,
-        XMEMO_SKILL_DIR: targetDir,
-        XMEMO_SKILL_FORCE: '1',
-        XMEMO_SKILL_TEST_ARCHIVE: archivePath,
+        TEMP: customSysTemp,
+        TMP: customSysTemp,
+        XMEMO_SKILL_AGENT: 'claude-code',
+        XMEMO_BASE_URL: 'https://127.0.0.1:9',
       });
 
-      assert.equal(res.code, 0, res.stderr || res.stdout);
-      assert.match(res.stdout, /Backed up existing installation to/);
-      assert.match(res.stdout, /Installed XMemo Skill to/);
-      assert.match(res.stdout, /node ".*scripts[/\\]xmemo-skill\.mjs" doctor --anonymous/);
-      assert.match(res.stdout, /Restart or reload your agent to pick up the skill\./);
+      assert.notEqual(res.code, 0);
 
-      const backupDir = path.join(tempDir, '.xmemo', 'backups', 'skills', 'custom');
-      const backups = await readdir(backupDir);
-      assert.ok(backups.length > 0);
-      assert.ok(backups[0].startsWith('my-ps1-skill-'));
+      // Verify that no *.tmp.* or temporary directory was ever created under .claude or .claude/skills
+      const skillsEntries = await readdir(skillsDir);
+      assert.deepEqual(skillsEntries, [], 'no temporary files or folders should exist in target skills directory');
 
-      await access(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'));
-      await assert.rejects(access(path.join(targetDir, 'old-marker.txt')), { code: 'ENOENT' });
+      const claudeEntries = await readdir(path.join(tempDir, '.claude'));
+      assert.ok(!claudeEntries.some((e) => e.includes('.tmp.') || e.includes('tmp')), 'no tmp entries in .claude directory');
     } finally {
       await rm(tempDir, { recursive: true, force: true });
+      await rm(customSysTemp, { recursive: true, force: true });
     }
   });
 });

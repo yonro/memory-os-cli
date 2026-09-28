@@ -83,18 +83,19 @@ if [ -e "$install_dir" ]; then
   fi
 fi
 
-tmp_dir="${install_dir}.tmp.$$"
+tmp_base="${TMPDIR:-${TMP:-${TEMP:-/tmp}}}"
+tmp_dir="$(mktemp -d "${tmp_base}/xmemo-skill.XXXXXX" 2>/dev/null || true)"
+if [ -z "$tmp_dir" ] || [ ! -d "$tmp_dir" ]; then
+  tmp_dir="${tmp_base}/xmemo-skill.tmp.$$"
+  mkdir -p "$tmp_dir" || fail "cannot create temporary directory"
+fi
 cleanup() { rm -rf "$tmp_dir"; }
 trap cleanup 0 HUP INT TERM
 
-mkdir -p "$tmp_dir" "$tmp_dir/extract" || fail "cannot create temporary directory"
+mkdir -p "$tmp_dir/extract" || fail "cannot create temporary extraction directory"
 
-if [ -n "${XMEMO_SKILL_TEST_ARCHIVE:-}" ]; then
-  cp "$XMEMO_SKILL_TEST_ARCHIVE" "$tmp_dir/xmemo-skill.tar.gz" || fail "failed to copy test archive"
-else
-  curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
-    "$package_url" -o "$tmp_dir/xmemo-skill.tar.gz" || fail "download failed"
-fi
+curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
+  "$package_url" -o "$tmp_dir/xmemo-skill.tar.gz" || fail "download failed"
 
 (cd "$tmp_dir" && tar -xzf xmemo-skill.tar.gz -C extract) || fail "archive extraction failed"
 [ -f "$tmp_dir/extract/scripts/xmemo-skill.mjs" ] || fail "archive does not contain xmemo-skill"
@@ -114,7 +115,10 @@ parent_dir="$(dirname "$install_dir")"
 if [ "$parent_dir" != "." ] && [ ! -d "$parent_dir" ]; then
   mkdir -p "$parent_dir" || fail "cannot create parent directory for $install_dir"
 fi
-mv "$tmp_dir/extract" "$install_dir" || fail "could not finalize installation"
+if ! mv "$tmp_dir/extract" "$install_dir" 2>/dev/null; then
+  rm -rf "$install_dir" 2>/dev/null || true
+  cp -R "$tmp_dir/extract" "$install_dir" || fail "could not finalize installation"
+fi
 
 abs_install_dir="$(cd "$install_dir" && pwd -P)"
 doctor_script="$abs_install_dir/scripts/xmemo-skill.mjs"
