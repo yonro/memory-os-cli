@@ -4,6 +4,18 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Elegant Command Model (CLI-DESIGN v2)**:
+  - **Unified Resource Grammar**: Standardized all component operations on `xmemo <resource> <action>` (`mcp`, `plugin`, `skill`, `profile`) with canonical actions `install`, `remove`, `status` (plus `list`/`info` for plugins and `update` for skills).
+  - **Unified Target Resolver**: Smart client resolution across commands prioritizing explicit `--client <id>` / `--all`, calling agent environment (`CLAUDECODE` -> `claude-code`, Codex session -> `codex`), and auto-detected locally installed clients.
+  - **Plan, Confirm Once, Apply Engine (`PlanRunner`)**: Atomic planning and execution engine displaying full unified plan previews, single confirmation prompt `[y/N]`, stop-on-first-failure, idempotency detection, and full `--dry-run`, `--yes`, and `--json` support.
+  - **Declarative Client Registry**: All 24 client profiles declare setup composition (`setup.default`, `setup.optional`, `setupRecipe`) with zero hardcoded client ID string literals in command handlers.
+  - **Dynamic Registry Extension**: Support for dynamic runtime client registration (`registerClient`, `unregisterClient`) with automatic index rebuilding and synthetic client testing.
+
+### Changed
+- **Backward-Compatible Command Aliases**: Kept `mcp add` (alias for `mcp install`), `profile uninstall` (alias for `profile remove`), and `skill remove` / `uninstall` (alias for `skill remove`) with helpful one-line stderr hints in interactive terminal mode while preserving clean JSON mode output.
+- **Relocated Client Diagnostics**: Moved client-specific doctor implementations (`codexDoctor`, `kiroDoctor`) into dedicated `src/diagnostics/` modules, eliminating command-layer couplings.
+
 ## 0.4.187
 
 ### Added

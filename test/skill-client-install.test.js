@@ -244,7 +244,7 @@ test('skill install --client: installs to correct agent skill folders for codex,
     assert.equal(report3.target, claudeProjDir);
     assert.equal(fsSync.existsSync(path.join(claudeProjDir, 'SKILL.md')), true);
 
-    // 4. Install for openclaw
+    // 4. Install for openclaw runs openclaw skills install @xmemo/xmemo --version 1.1.35
     const calls4 = [];
     const res4 = await invoke(['skill', 'install', '--client', 'openclaw', '--yes', '--json'], {
       env,
@@ -254,9 +254,48 @@ test('skill install --client: installs to correct agent skill folders for codex,
     assert.equal(res4.code, 0);
     const report4 = JSON.parse(res4.stdout);
     assert.equal(report4.client, 'openclaw');
-    const openclawDir = path.join(tmpHome, '.openclaw', 'skills', 'xmemo-memory');
-    assert.equal(report4.target, openclawDir);
-    assert.equal(fsSync.existsSync(path.join(openclawDir, 'SKILL.md')), true);
+    assert.equal(report4.installed, true);
+    assert.equal(report4.skill, '@xmemo/xmemo');
+    assert.equal(report4.version, '1.1.35');
+    assert.deepEqual(calls4[0].args, [
+      'skills',
+      'install',
+      '@xmemo/xmemo',
+      '--version',
+      '1.1.35'
+    ]);
+    // Assert openclaw skill install never runs plugin commands
+    assert.ok(!calls4.some((c) => c.args.includes('plugins')));
+
+    // 5. Install for openclaw with --global and --force
+    const calls5 = [];
+    const res5 = await invoke(['skill', 'install', '--client', 'openclaw', '--global', '--force', '--yes', '--json'], {
+      env,
+      cwd: tmpCwd,
+      spawn: spawnStub(calls5)
+    });
+    assert.equal(res5.code, 0);
+    const report5 = JSON.parse(res5.stdout);
+    assert.equal(report5.global, true);
+    assert.deepEqual(calls5[0].args, [
+      'skills',
+      'install',
+      '@xmemo/xmemo',
+      '--version',
+      '1.1.35',
+      '--global',
+      '--force'
+    ]);
+
+    // 6. Assert plugin install openclaw never runs skills commands
+    const calls6 = [];
+    const res6 = await invoke(['plugin', 'install', 'openclaw', '--yes', '--json'], {
+      env,
+      cwd: tmpCwd,
+      spawn: spawnStub(calls6)
+    });
+    assert.equal(res6.code, 0);
+    assert.ok(!calls6.some((c) => c.args.includes('skills')));
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
     await fs.rm(tmpCwd, { recursive: true, force: true });
@@ -451,3 +490,171 @@ test('skill update: aliases to skill install --force', async () => {
     await fs.rm(tmpHome, { recursive: true, force: true });
   }
 });
+
+test('skill remove --client openclaw: handles absent skill, absent clawhub, consent prompt, and successful removal', async () => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-openclaw-remove-'));
+  const env = { USERPROFILE: tmpHome, HOME: tmpHome };
+
+  try {
+    // 1. When skill is not installed
+    const calls1 = [];
+    const spawnNotInstalled = (command, args) => {
+      calls1.push({ command, args });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        if (command === 'openclaw' && args[0] === 'skills' && args[1] === 'list') {
+          child.stdout.emit('data', 'No skills installed.\n');
+          child.emit('close', 0);
+        } else {
+          child.emit('close', 0);
+        }
+      });
+      return child;
+    };
+
+    const resNotInstJson = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes', '--json'], {
+      env,
+      spawn: spawnNotInstalled
+    });
+    assert.equal(resNotInstJson.code, 0);
+    const parsedNotInst = JSON.parse(resNotInstJson.stdout);
+    assert.equal(parsedNotInst.removed, false);
+    assert.equal(parsedNotInst.reason, 'not_installed');
+
+    const resNotInstHuman = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes'], {
+      env,
+      spawn: spawnNotInstalled
+    });
+    assert.equal(resNotInstHuman.code, 0);
+    assert.match(resNotInstHuman.stdout, /Skill is not installed for OpenClaw/);
+
+    // 2. When skill is installed, but clawhub is not available
+    const calls2 = [];
+    const spawnNoClawhub = (command, args) => {
+      calls2.push({ command, args });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        if (command === 'openclaw' && args[0] === 'skills' && args[1] === 'list') {
+          child.stdout.emit('data', '@xmemo/xmemo@1.1.35\n');
+          child.emit('close', 0);
+        } else if (command === 'clawhub') {
+          const err = new Error('spawn clawhub ENOENT');
+          err.code = 'ENOENT';
+          child.emit('error', err);
+        } else {
+          child.emit('close', 0);
+        }
+      });
+      return child;
+    };
+
+    const resNoClawhubJson = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes', '--json'], {
+      env,
+      spawn: spawnNoClawhub
+    });
+    assert.equal(resNoClawhubJson.code, 1);
+    const parsedNoClawhub = JSON.parse(resNoClawhubJson.stdout);
+    assert.equal(parsedNoClawhub.ok, false);
+    assert.equal(parsedNoClawhub.error, 'clawhub_not_found');
+    assert.deepEqual(parsedNoClawhub.command, ['clawhub', 'uninstall', '@xmemo/xmemo']);
+    assert.match(parsedNoClawhub.message, /clawhub is not installed or not available on PATH/);
+
+    const resNoClawhubHuman = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes'], {
+      env,
+      spawn: spawnNoClawhub
+    });
+    assert.equal(resNoClawhubHuman.code, 1);
+    assert.match(resNoClawhubHuman.stderr, /clawhub is not installed or not available on PATH/);
+    assert.match(resNoClawhubHuman.stderr, /clawhub uninstall @xmemo\/xmemo/);
+
+    // 3. When skill is installed and clawhub is available
+    const spawnWithClawhub = (calls, { uninstallCode = 0 } = {}) => (command, args) => {
+      calls.push({ command, args });
+      const child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      queueMicrotask(() => {
+        if (command === 'openclaw' && args[0] === 'skills' && args[1] === 'list') {
+          child.stdout.emit('data', '@xmemo/xmemo@1.1.35\n');
+          child.emit('close', 0);
+        } else if (command === 'clawhub' && args[0] === '--version') {
+          child.stdout.emit('data', 'clawhub/0.4.0\n');
+          child.emit('close', 0);
+        } else if (command === 'clawhub' && args[0] === 'uninstall') {
+          if (uninstallCode === 0) {
+            child.stdout.emit('data', 'Uninstalled @xmemo/xmemo successfully.\n');
+            child.emit('close', 0);
+          } else {
+            child.stderr.emit('data', 'Failed to uninstall\n');
+            child.emit('close', uninstallCode);
+          }
+        } else {
+          child.emit('close', 0);
+        }
+      });
+      return child;
+    };
+
+    // 3a. Prompt without --yes: JSON returns consentRequired: true
+    const callsPromptJson = [];
+    const resPromptJson = await invoke(['skill', 'remove', '--client', 'openclaw', '--json'], {
+      env,
+      spawn: spawnWithClawhub(callsPromptJson)
+    });
+    assert.equal(resPromptJson.code, 0);
+    const parsedPrompt = JSON.parse(resPromptJson.stdout);
+    assert.equal(parsedPrompt.consentRequired, true);
+    assert.equal(parsedPrompt.removed, false);
+    assert.deepEqual(parsedPrompt.command, ['clawhub', 'uninstall', '@xmemo/xmemo']);
+
+    // 3b. Prompt without --yes: interactive 'n' cancels
+    const callsCancel = [];
+    const resCancel = await invoke(['skill', 'remove', '--client', 'openclaw'], {
+      env,
+      stdin: 'n\n',
+      spawn: spawnWithClawhub(callsCancel)
+    });
+    assert.equal(resCancel.code, 0);
+    assert.match(resCancel.stdout, /Removal cancelled/);
+    assert.ok(!callsCancel.some((c) => c.command === 'clawhub' && c.args.includes('uninstall')));
+
+    // 3c. Successful removal with --yes
+    const callsRemoveJson = [];
+    const resRemoveJson = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes', '--json'], {
+      env,
+      spawn: spawnWithClawhub(callsRemoveJson)
+    });
+    assert.equal(resRemoveJson.code, 0);
+    const parsedRemove = JSON.parse(resRemoveJson.stdout);
+    assert.equal(parsedRemove.ok, true);
+    assert.equal(parsedRemove.removed, true);
+    assert.equal(parsedRemove.client, 'openclaw');
+    assert.deepEqual(parsedRemove.command, ['clawhub', 'uninstall', '@xmemo/xmemo']);
+    assert.ok(callsRemoveJson.some((c) => c.command === 'clawhub' && c.args.join(' ') === 'uninstall @xmemo/xmemo'));
+
+    // 3d. Successful removal human mode
+    const callsRemoveHuman = [];
+    const resRemoveHuman = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes'], {
+      env,
+      spawn: spawnWithClawhub(callsRemoveHuman)
+    });
+    assert.equal(resRemoveHuman.code, 0);
+    assert.match(resRemoveHuman.stdout, /✓ Removed XMemo skill for OpenClaw/);
+
+    // 3e. Failure during uninstall emits error
+    const callsFail = [];
+    const resFail = await invoke(['skill', 'remove', '--client', 'openclaw', '--yes'], {
+      env,
+      spawn: spawnWithClawhub(callsFail, { uninstallCode: 1 })
+    });
+    assert.equal(resFail.code, 2);
+    assert.match(resFail.stderr, /clawhub uninstall failed \(1\)/);
+  } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true });
+  }
+});
+

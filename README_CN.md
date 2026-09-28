@@ -109,6 +109,39 @@ npx @xmemo/client mcp serve
 > 推荐的标准接入方式为运行 `xmemo init`（或按 `xmemo account login` → `xmemo doctor` → `xmemo setup <client>` 分步执行）。
 > 仅在客户端暂无官方自动化适配方案时，才建议手动修改 MCP 配置文件。
 
+## 命令模型与架构设计
+
+XMemo CLI 采用一致性与健壮性导向的四层核心架构设计：
+
+### 1. 统一资源语法 (`xmemo <resource> <action>`)
+每个集成组件均作为一等公民资源管理，具有直观一致的生命周期操作：
+
+| 资源类别 | 说明 | 可用操作 | 命令示例 |
+| --- | --- | --- | --- |
+| `mcp` | MCP 服务器连接配置 | `install`, `remove`, `status` | `xmemo mcp install codex`, `xmemo mcp status` |
+| `plugin` | 智能体宿主原生扩展插件 | `install`, `remove`, `status`, `list`, `info` | `xmemo plugin install gemini-cli`, `xmemo plugin list` |
+| `skill` | 智能体技能脚本与操作指引 | `install`, `remove`, `status`, `update` | `xmemo skill install --client openclaw` |
+| `profile` | Markdown 格式智能体行为约束规范 | `install`, `remove`, `status`, `show` | `xmemo profile install cursor` |
+
+- **组合编排命令**：`xmemo setup [<client>...]`、`xmemo uninstall [<client>...]` 与 `xmemo status [<client>]` 会根据各客户端的声明式能力配置，一键组合编排上述底层资源。
+- **向后兼容别名**：旧习惯命令如 `xmemo mcp add`（指向 `mcp install`）、`xmemo profile uninstall`（指向 `profile remove`）、`xmemo skill uninstall`（指向 `skill remove`）完全保留，并在交互式终端模式下输出友好的一行 stderr 引导提示。
+
+### 2. 统一目标解析器 (Target Resolver)
+在未显式传递客户端参数时，CLI 按严格的三级优先级自动解析目标：
+1. **显式参数**：`--client <id>`、位置参数或 `--all`。
+2. **调用智能体环境探测**：在智能体工作流执行环境中自动识别（如 `CLAUDECODE` / `CLAUDE_CODE_ENTRYPOINT` 对应 `claude-code`，`CODEX_THREAD_ID` / `CODEX_SESSION_ID` 对应 `codex`）。
+3. **本地安装检测**：扫描本地配置文件与标记路径。若检测到恰好 1 个受支持客户端则自动选定；若检测到多个则在交互模式下提供选单。CLI 绝不会静默向未经验证的任意路径写入配置。
+
+### 3. 规划、单次确认、按序执行 (`PlanRunner`)
+变更操作遵循确定性的原子规划执行引擎：
+1. **生成执行计划**：跨资源按序组装操作步骤（例如先安装插件后部署技能）。
+2. **预览计划**：在终端打印完整执行步骤（包含变更文件路径、执行命令及 Unified Diff）。
+3. **单次确认**：全流程仅提示一次 `[y/N]` 确认；支持 `--yes` 免交互应用与 `--dry-run` 预览试跑。
+4. **顺序执行与幂等保障**：按依赖顺序应用各个步骤，遇到首个错误立即停止。对已配置完成的客户端重复执行会自动检测已是最新状态并提示 `Nothing to do`。
+
+### 4. 声明式客户端注册表
+所有 24 个客户端的配置结构、安装配方与能力均集中声明于 `src/clients/registry.js`。命令业务层完全通用化，零客户端 ID 硬编码。支持通过 `registerClient()` 在运行时动态扩展新平台支持。
+
 ## 支持的客户端集成
 
 | 客户端 | 推荐配置命令 | 连接方式 |
@@ -240,6 +273,9 @@ xmemo skill install --client claude-code
 xmemo skill install --client codex
 xmemo skill install --client openclaw
 
+# 全局安装 OpenClaw 技能（共享至 ~/.openclaw/skills）
+xmemo skill install --client openclaw --global
+
 # 安装至项目级技能目录 (Claude Code: .claude/skills/xmemo-memory)
 xmemo skill install --client claude-code --project
 
@@ -286,7 +322,7 @@ curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
 curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
 
 # OpenClaw: 建议通过 OpenClaw 官方 CLI 安装
-openclaw skills install xmemo
+openclaw skills install @xmemo/xmemo --version 1.1.35
 
 # Windows (PowerShell):
 # $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
@@ -309,16 +345,18 @@ openclaw skills install xmemo
 
 CLI 随 `@xmemo/client` 内置了经过官方验证的静态插件索引，每个插件条目均明确固定了发布版本、Release Tag 以及发布时刻解析的准确 Git Commit SHA。
 
+> ℹ️ **严格职责分离原则**：`xmemo plugin` 仅安装智能体插件（例如 `@xmemo/openclaw-memory`）。技能仅由 `xmemo skill install` 负责安装（例如 `@xmemo/xmemo`）。
+
 | 插件 ID | 平台 / 智能体 | 类型 (Kind) | 状态 | 安装方式 |
 | --- | --- | --- | --- | --- |
-| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
-| `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
+| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` (已安装时自动引导 update 更新) |
+| `hermes` | Hermes Agent | `native-cli` | Stable | `hermes plugins install xmemo` (兜底: `python -m pip install hermes-xmemo==1.1.3`) |
 | `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone 校验 commit `5d0d280` (默认安装至 `~/.xmemo/plugins/claude-code`) |
 | `cursor` | Cursor | `marketplace` | Preview | Cursor 插件市场安装 |
-| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` 扩展安装 (unpinned: 宿主暂不支持指定版本/ref) |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install https://github.com/yonro/xmemo-gemini-cli --ref 39e25b185b5157490d1683e4ca8c5c5fb1312a88` |
 | `kiro` | Kiro | `manual` | Preview | Steering 规则与 Power 配置 |
-| `vscode` | VS Code | `marketplace` | Preview | VS Code 插件市场扩展 |
-| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
+| `vscode` | VS Code | `manual` | Preview | VS Code 手动安装指引（等待市场上架） |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin --profile <name> add dsh-xmemo` (必须指定 `--profile`) |
 | `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex 扩展 |
 | `cindy` | Cindy | `manual` | Preview | 原生智能体记忆接入 |
 | `codex` | Codex | `mcp` | Preview | 专属 MCP 配置 (`xmemo setup codex`) |
@@ -343,6 +381,9 @@ xmemo plugin install <id>
 
 # 免交互确认直接安装
 xmemo plugin install <id> --yes
+
+# 为 deepseek-dsh 指定目标 Profile
+xmemo plugin install deepseek-dsh --profile default --yes
 
 # 指定自定义目录安装 git-dir 插件
 xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code

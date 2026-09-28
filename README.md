@@ -122,6 +122,39 @@ npx @xmemo/client mcp serve
 > Start with `xmemo init` (or `xmemo account login`, `xmemo doctor`, and `xmemo setup <client>`).
 > Hand-edit MCP configuration only when a client has no verified setup path.
 
+## How the commands fit together
+
+The XMemo CLI architecture is built on four core design principles:
+
+### 1. Unified Resource Grammar (`xmemo <resource> <action>`)
+Every integration component is a first-class resource with predictable lifecycle actions:
+
+| Resource | Scope | Actions | Examples |
+| --- | --- | --- | --- |
+| `mcp` | MCP server connection configuration | `install`, `remove`, `status` | `xmemo mcp install codex`, `xmemo mcp status` |
+| `plugin` | Host-native extension packages | `install`, `remove`, `status`, `list`, `info` | `xmemo plugin install gemini-cli`, `xmemo plugin list` |
+| `skill` | Agent skill scripts & documentation | `install`, `remove`, `status`, `update` | `xmemo skill install --client openclaw` |
+| `profile` | Markdown behavior steering instructions | `install`, `remove`, `status`, `show` | `xmemo profile install cursor` |
+
+- **Composite commands**: `xmemo setup [<client>...]`, `xmemo uninstall [<client>...]`, and `xmemo status [<client>]` orchestrate these resources in a single step according to the client's declarative profile.
+- **Backward-compatible aliases**: Familiar commands such as `xmemo mcp add` (alias for `mcp install`), `xmemo profile uninstall` (alias for `profile remove`), and `xmemo skill uninstall` (alias for `skill remove`) remain fully functional and print a helpful one-line hint in interactive terminals.
+
+### 2. Unified Target Resolver
+When no client is explicitly passed, the CLI uses a deterministic three-tier precedence resolution model:
+1. **Explicit flag or argument**: `--client <id>`, positional client argument, or `--all`.
+2. **Calling agent environment**: Automatically identifies the calling agent runtime when running inside an agent session (e.g., `CLAUDECODE` / `CLAUDE_CODE_ENTRYPOINT` maps to `claude-code`, and `CODEX_THREAD_ID` / `CODEX_SESSION_ID` maps to `codex`).
+3. **Detected installed clients**: Inspects local configuration paths and markers. If exactly one matching client is found, it is automatically selected; if multiple clients are found in interactive mode, an interactive picker is presented. The CLI never silently writes configuration to arbitrary unverified paths.
+
+### 3. Plan, Confirm Once, Apply (`PlanRunner`)
+Mutating commands follow a strict, atomic execution pattern:
+1. **Build Plan**: Assemble an ordered sequence of actions across resources (e.g. plugin install followed by skill configuration).
+2. **Preview**: Print the entire plan (including modified paths, commands, and unified diffs) to the terminal.
+3. **Confirm Once**: Prompt `[y/N]` exactly once for the entire sequence. Re-running with `--yes` or `-y` bypasses the prompt; `--dry-run` displays the preview without mutation.
+4. **Apply Sequentially**: Steps run in dependency order, stopping immediately upon first failure. Re-running an already configured client detects that all components are up to date and reports `Nothing to do`.
+
+### 4. Declarative Client Registry
+All client configurations, recipes, and capabilities are declared centrally in `src/clients/registry.js`. Command implementations are purely generic orchestrators with zero hardcoded client ID strings. Platforms can also be added dynamically at runtime via `registerClient()`.
+
 ## Supported integrations
 
 | Client | Recommended command | Connection |
@@ -262,6 +295,9 @@ xmemo skill install --client claude-code
 xmemo skill install --client codex
 xmemo skill install --client openclaw
 
+# Install OpenClaw skill globally (shared ~/.openclaw/skills)
+xmemo skill install --client openclaw --global
+
 # Install to project-level skill folder (Claude Code project: .claude/skills/xmemo-memory)
 xmemo skill install --client claude-code --project
 
@@ -308,7 +344,7 @@ curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
 curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
 
 # OpenClaw: install via OpenClaw CLI
-openclaw skills install xmemo
+openclaw skills install @xmemo/xmemo --version 1.1.35
 
 # Windows (PowerShell):
 # $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
@@ -331,16 +367,18 @@ openclaw skills install xmemo
 
 The CLI provides a curated, static index of verified agent plugins shipped directly in `@xmemo/client`. Each entry contains a pinned version, release tag, and exact Git commit SHA resolved at release time.
 
+> ℹ️ **Strict Separation Rule**: `xmemo plugin` installs agent plugins only (e.g. `@xmemo/openclaw-memory`). Skills are installed exclusively via `xmemo skill install` (e.g. `@xmemo/xmemo`).
+
 | Plugin ID | Platform / Agent | Kind | Status | Integration |
 | --- | --- | --- | --- | --- |
-| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
-| `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
+| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` (auto-prompts `update` if already installed) |
+| `hermes` | Hermes Agent | `native-cli` | Stable | `hermes plugins install xmemo` (fallback: `python -m pip install hermes-xmemo==1.1.3`) |
 | `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone verified against commit `5d0d280` (defaults to `~/.xmemo/plugins/claude-code`) |
 | `cursor` | Cursor | `marketplace` | Preview | Cursor Marketplace plugin |
-| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` extension (unpinned: host does not support refs) |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install https://github.com/yonro/xmemo-gemini-cli --ref 39e25b185b5157490d1683e4ca8c5c5fb1312a88` |
 | `kiro` | Kiro | `manual` | Preview | Steering rules & Power integration |
-| `vscode` | VS Code | `marketplace` | Preview | VS Code Marketplace extension |
-| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
+| `vscode` | VS Code | `manual` | Preview | VS Code extension manual steps (pending marketplace publication) |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin --profile <name> add dsh-xmemo` (requires `--profile`) |
 | `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex extension |
 | `cindy` | Cindy | `manual` | Preview | Native agent memory integration |
 | `codex` | Codex | `mcp` | Preview | Dedicated MCP configuration (`xmemo setup codex`) |
@@ -365,6 +403,9 @@ xmemo plugin install <id>
 
 # Non-interactive install
 xmemo plugin install <id> --yes
+
+# Specify profile for deepseek-dsh
+xmemo plugin install deepseek-dsh --profile default --yes
 
 # Specify custom target directory for git-dir plugins
 xmemo plugin install claude-code --yes --dir ~/.custom-plugins/claude-code

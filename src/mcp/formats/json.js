@@ -132,7 +132,7 @@ export function jsonClientServerConfig(clientId, mcpUrl, identity, options = {})
 export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, identity, force = false, options = {}) {
   const definition = requireJsonMcpClientDefinition(clientId);
   const serverConfig = serverConfigFromDefinition(definition, mcpUrl, identity, options);
-  await mergeJsonSectionConfig(configPath, definition.section, serverConfig, definition.section, (parsed) => {
+  return await mergeJsonSectionConfig(configPath, definition.section, serverConfig, definition.section, (parsed) => {
     if (definition.mergeExperimentalModelContextProtocolServers && isPlainObject(parsed.experimental)) {
       mergeExperimentalModelContextProtocolServers(parsed, serverConfig, mcpUrl);
     }
@@ -344,6 +344,20 @@ function isXMemoExperimentalEntry(entry, removedUrls = []) {
   return false;
 }
 
+function isDeepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    return a.every((val, idx) => isDeepEqual(val, b[idx]));
+  }
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((k) => Object.prototype.hasOwnProperty.call(b, k) && isDeepEqual(a[k], b[k]));
+}
+
 async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
@@ -354,14 +368,27 @@ async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, dup
     parsed[sectionName] = {};
   }
   const existingName = existingJsonMcpServerName(parsed[sectionName]);
-  if (existingName && !force) {
-    throw new UsageError(`MCP config already contains ${duplicatePath}.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+  if (existingName) {
+    const existingEntry = parsed[sectionName][existingName];
+    if (existingName === MCP_SERVER_NAME && isDeepEqual(existingEntry, serverConfig)) {
+      return { unchanged: true, configPath };
+    }
+    if (existingName !== MCP_SERVER_NAME && !force) {
+      throw new UsageError(`MCP config already contains ${duplicatePath}.${existingName}. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+    }
+    if (existing.trim().length > 0) {
+      const backupPath = `${configPath}.bak`;
+      try {
+        await fs.writeFile(backupPath, existing, { mode: 0o600 });
+      } catch {}
+    }
   }
   parsed[sectionName][MCP_SERVER_NAME] = serverConfig;
   afterMerge?.(parsed);
   await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
   await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
+  return { written: true, configPath };
 }
 
 function mergeExperimentalModelContextProtocolServers(parsed, serverConfig, mcpUrl) {

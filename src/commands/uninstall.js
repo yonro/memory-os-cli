@@ -15,7 +15,6 @@ import {
   autoScanClientIds,
   existingUninstallTargets
 } from '../mcp/clients/scan.js';
-import { removeCopilotMcpConfig } from '../mcp/proxy/copilot.js';
 import {
   profileClientConfig,
   profileUninstallResult
@@ -209,16 +208,11 @@ async function removeConfigForTarget(target, preview) {
   }
 
   try {
-    let result;
-    if (target.clientId === 'copilot-cli') {
-      result = await removeCopilotMcpConfig(target.configPath, { preview });
-    } else {
-      const client = MCP_CLIENTS.get(target.clientId);
-      if (!client || !client.removeConfig) {
-        return { status: 'not_found', reason: 'unsupported' };
-      }
-      result = await client.removeConfig(target.configPath, { preview });
+    const client = getClient(target.clientId) || MCP_CLIENTS.get(target.clientId);
+    if (!client || !client.removeConfig) {
+      return { status: 'not_found', reason: 'unsupported' };
     }
+    const result = await client.removeConfig(target.configPath, { preview });
 
     if (result.removed) {
       return { status: 'removed', removedNames: result.removedNames ?? [MCP_SERVER_NAME] };

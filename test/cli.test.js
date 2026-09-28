@@ -965,8 +965,8 @@ test('setup hermes installs native plugin and syncs shared credential without MC
   assert.equal(plan.selectedClient.mcp.enabled, false);
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.deepEqual(calls.map((call) => call.args), [
-    ['-m', 'pip', 'install', 'hermes-xmemo==1.1.3'],
-    ['install', '--hermes-home', hermesHome]
+    ['--version'],
+    ['plugins', 'install', 'xmemo']
   ]);
 
   const envFile = await fs.readFile(path.join(hermesHome, '.env'), 'utf8');
@@ -1720,8 +1720,8 @@ test('uninstall hermes reports manual-edit-required for flow-style YAML', async 
   assert.match(unchanged, /XMemo/);
 });
 
-test('setup cursor prompt can skip behavior profile with n', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-no-profile-'));
+test('setup cursor prompt cancels with n or Enter leaving all files untouched', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-cancel-'));
   const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test'], {
     env: {
       HOME: tempDir,
@@ -1732,11 +1732,55 @@ test('setup cursor prompt can skip behavior profile with n', async () => {
   });
 
   assert.equal(result.code, 0);
-  assert.match(result.stdout, /Write XMemo memory behavior profile/);
+  assert.match(result.stdout, /Proceed with above changes\? \[y\/N\]/);
+  assert.match(result.stdout, /Operation cancelled\./);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  await assert.rejects(fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'), /ENOENT/);
+  await assert.rejects(fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8'), /ENOENT/);
+});
+
+test('setup cursor prompt writes mcp and profile with y', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-confirm-'));
+  const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch(),
+    stdin: 'y\n'
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Proceed with above changes\? \[y\/N\]/);
   const config = JSON.parse(await fs.readFile(path.join(tempDir, '.cursor', 'mcp.json'), 'utf8'));
   assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
-  await assert.rejects(fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8'), /ENOENT/);
+  const profile = await fs.readFile(path.join(tempDir, '.cursor', 'memory-profile.md'), 'utf8');
+  assert.match(profile, /## XMemo memory/);
+});
+
+test('setup cursor is idempotent and reports nothing to do on rerun', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-idempotent-'));
+  const initial = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--yes'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+  assert.equal(initial.code, 0);
+
+  const rerun = await invoke(['setup', 'cursor', '--url', 'https://api.example.test', '--yes'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+  assert.equal(rerun.code, 0);
+  assert.match(rerun.stdout, /Nothing to do \(all components are up to date\)/);
 });
 
 test('setup copilot writes user MCP config for local proxy by default', async () => {
@@ -1806,14 +1850,14 @@ test('setup openclaw installs native plugin and skill without hosted MCP by defa
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.selectedClient.id, 'openclaw');
   assert.equal(plan.selectedClient.configKind, 'native-plugin');
-  assert.equal(plan.selectedClient.nativePlugin.installed, true);
   assert.equal(plan.selectedClient.skill.installed, true);
+  assert.equal(plan.selectedClient.skill.ref, '@xmemo/xmemo');
   assert.equal(plan.selectedClient.mcp.enabled, false);
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.equal(plan.selectedClient.status.connected, true);
   assert.deepEqual(calls.map((call) => call.args), [
     ['plugins', 'install', 'clawhub:@xmemo/openclaw-memory@1.0.18'],
-    ['skills', 'install', 'xmemo'],
+    ['skills', 'install', '@xmemo/xmemo', '--version', '1.1.35'],
     ['xmemo', 'status', '--json']
   ]);
 });
@@ -2315,7 +2359,7 @@ test('setup kimi-code --force overwrites existing config', async () => {
     path.join(kimicodeDir, 'mcp.json'),
     JSON.stringify({
       mcpServers: {
-        XMemo: {
+        'memory-os': {
           url: 'https://old.example.test/mcp',
           headers: { Authorization: 'Bearer old-token' }
         }
@@ -2357,7 +2401,7 @@ test('setup kimi-code --force overwrites existing config', async () => {
 
 test('setup kimi-code prints bearerTokenEnvVar guidance without leaking token', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kimi-code-text-'));
-  const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test'], {
+  const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--yes'], {
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,

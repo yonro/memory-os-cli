@@ -161,3 +161,17 @@ export function isRepo(cwd, env = process.env, markerDir = null) {
   }
   return existsSync(path.join(cwd, '.git')) || existsSync(path.join(cwd, 'package.json'));
 }
+
+export function isDeepEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return false;
+    return a.every((val, idx) => isDeepEqual(val, b[idx]));
+  }
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((k) => Object.prototype.hasOwnProperty.call(b, k) && isDeepEqual(a[k], b[k]));
+}

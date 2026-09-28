@@ -10,12 +10,18 @@ import { hasFlag, optionValue } from '../core/args.js';
 import { CLI_VERSION, COMMAND_NAME } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { PINNED_SKILL_VERSION, PINNED_SKILL_INTEGRITY } from '../core/pins.js';
+import {
+  PINNED_SKILL_VERSION,
+  PINNED_SKILL_INTEGRITY,
+  PINNED_OPENCLAW_SKILL_NAME,
+  PINNED_OPENCLAW_SKILL_VERSION
+} from '../core/pins.js';
 import {
   getClient,
   supportedSkillClientIds,
   supportedSkillClients
 } from '../clients/registry.js';
+import { resolveTargetClients } from '../core/target-resolver.js';
 
 const DEFAULT_INSTALL_DIR = 'xmemo-skill';
 const STRICT_SEMVER_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
@@ -45,14 +51,26 @@ function extractPositionalArgs(args, optionsWithValues = []) {
 
 async function readLineFromStdin(stdin) {
   if (!stdin) return '';
-  let input = '';
-  for await (const chunk of stdin) {
-    input += chunk;
-    if (input.includes('\n')) {
-      break;
-    }
+  if (!stdin._asyncIterator) {
+    if (typeof stdin[Symbol.asyncIterator] !== 'function') return '';
+    stdin._asyncIterator = stdin[Symbol.asyncIterator]();
+    stdin._buffer = '';
   }
-  return input.split(/\r?\n/, 1)[0] ?? '';
+  while (true) {
+    const nl = stdin._buffer.indexOf('\n');
+    if (nl !== -1) {
+      const line = stdin._buffer.slice(0, nl);
+      stdin._buffer = stdin._buffer.slice(nl + 1);
+      return line.replace(/\r$/, '');
+    }
+    const { value, done } = await stdin._asyncIterator.next();
+    if (done) {
+      const line = stdin._buffer;
+      stdin._buffer = '';
+      return line.replace(/\r$/, '');
+    }
+    stdin._buffer += typeof value === 'string' ? value : value?.toString('utf8') ?? '';
+  }
 }
 
 export function computeTarballIntegrity(buffer) {
@@ -139,7 +157,7 @@ export async function backupSkillDirectory(targetDir, options = {}) {
 
 export function writeSkillHelp(io) {
   writeLine(io.stdout, 'Skill commands:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--client <id>|--all] [--project] [--global] [--dir <path>] [--dry-run] [--yes] [--force] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} skill status [--client <id>|--all] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} skill remove --client <id> [--project] [--yes] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} skill update [--client <id>|--all] [--dry-run] [--yes] [--json]`);
@@ -149,7 +167,13 @@ export function writeSkillHelp(io) {
 }
 
 export async function skillCommand(args, io) {
-  const subcommand = args[0] ?? 'help';
+  let subcommand = args[0] ?? 'help';
+  if (subcommand === 'uninstall') {
+    if (!hasFlag(args, '--json') && io.stderr?.isTTY) {
+      writeLine(io.stderr, "Hint: 'xmemo skill uninstall' is an alias for 'xmemo skill remove'.");
+    }
+    subcommand = 'remove';
+  }
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     if (hasFlag(args, '--json')) {
       writeLine(io.stdout, JSON.stringify({
@@ -178,7 +202,10 @@ export async function skillCommand(args, io) {
   if (subcommand === 'status') {
     return await skillStatus(optionArgs, io);
   }
-  if (subcommand === 'remove') {
+  if (subcommand === 'remove' || subcommand === 'uninstall') {
+    if (subcommand === 'uninstall' && !hasFlag(optionArgs, '--json') && io.stderr?.isTTY) {
+      writeLine(io.stderr, "Hint: 'xmemo skill uninstall' is an alias for 'xmemo skill remove'.");
+    }
     return await skillRemove(optionArgs, io);
   }
   if (subcommand === 'update') {
@@ -205,16 +232,33 @@ export async function skillInstall(args, io) {
   if (options.project && !options.client) {
     throw new UsageError('--project requires --client <id>.');
   }
+  if (options.global && !options.client) {
+    throw new UsageError('--global requires --client <id>.');
+  }
+  if (options.project && options.global) {
+    throw new UsageError('Cannot specify both --project and --global.');
+  }
 
-  const isClientInstall = Boolean(options.client || options.all);
-
-  // If not a client install (--client or --all), preserve Phase 5 directory install exactly
-  if (!isClientInstall) {
+  // Explicit directory path passed via --dir or offline source via --from
+  if (options.dir || options.from) {
     return await directorySkillInstall(options, cwd, io);
   }
 
-  // Client install flow
-  return await clientSkillInstall(options, cwd, io);
+  // Environment variable override for directory install when no client specified
+  if (!options.client && !options.all && io.env?.XMEMO_SKILL_DIR) {
+    return await directorySkillInstall({ ...options, dir: io.env.XMEMO_SKILL_DIR }, cwd, io);
+  }
+
+  // Target client resolution via target-resolver
+  const targetClients = await resolveTargetClients('skill', args, io, { allowAll: true, allowMultiple: true });
+  if (targetClients.length === 1) {
+    return await clientSkillInstall({ ...options, client: targetClients[0].id }, cwd, io);
+  }
+  if (targetClients.length > 1) {
+    return await clientSkillInstall({ ...options, client: null, all: true, resolvedClients: targetClients }, cwd, io);
+  }
+
+  throw new UsageError('No matching client detected; specify --client <id> (or --dir <path>).');
 }
 
 async function directorySkillInstall(options, cwd, io) {
@@ -256,7 +300,7 @@ async function directorySkillInstall(options, cwd, io) {
         command = process.execPath;
         cmdArgs = [fromInfo.binPath, ...installerArgs];
       } else {
-        const npmRunner = resolveNpmRunner();
+        const npmRunner = resolveNpmRunner(io.env);
         if (!npmRunner) {
           throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
         }
@@ -267,8 +311,23 @@ async function directorySkillInstall(options, cwd, io) {
       sourceType = 'npm';
       spec = options.version ?? PINNED_SKILL_VERSION;
       networkUsed = true;
-      const npmRunner = resolveNpmRunner();
+      const npmRunner = resolveNpmRunner(io.env);
       if (!npmRunner) {
+        if (options.dryRun) {
+          if (options.json) {
+            writeLine(io.stdout, JSON.stringify({
+              ok: true,
+              dryRun: true,
+              package: '@xmemo/skill',
+              spec,
+              target,
+              installed: false
+            }, null, 2));
+            return 0;
+          }
+          writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${target}`);
+          return 0;
+        }
         throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
       }
 
@@ -323,6 +382,21 @@ async function directorySkillInstall(options, cwd, io) {
       try {
         packResult = await executeSubprocess(npmRunner.command, packArgs, io, cleanEnv, cwd);
       } catch (error) {
+        if (options.dryRun) {
+          if (options.json) {
+            writeLine(io.stdout, JSON.stringify({
+              ok: true,
+              dryRun: true,
+              package: '@xmemo/skill',
+              spec,
+              target,
+              installed: false
+            }, null, 2));
+            return 0;
+          }
+          writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${target}`);
+          return 0;
+        }
         if (error?.code === 'ENOENT') {
           throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
         }
@@ -373,6 +447,21 @@ async function directorySkillInstall(options, cwd, io) {
     try {
       result = await executeSubprocess(command, cmdArgs, io, cleanEnv, cwd);
     } catch (error) {
+      if (options.dryRun) {
+        if (options.json) {
+          writeLine(io.stdout, JSON.stringify({
+            ok: true,
+            dryRun: true,
+            package: '@xmemo/skill',
+            spec,
+            target,
+            installed: false
+          }, null, 2));
+          return 0;
+        }
+        writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${target}`);
+        return 0;
+      }
       if (error?.code === 'ENOENT') {
         throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
       }
@@ -430,7 +519,109 @@ async function directorySkillInstall(options, cwd, io) {
   }
 }
 
+async function nativeSkillInstall(client, options, cwd, io) {
+  if (options.project) {
+    throw new UsageError(`Client "${client.label}" does not support project-level skills.`);
+  }
+
+  const bin = client.skill?.bin ?? client.id;
+  const ref = client.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
+  const version = options.version ?? client.skill?.version ?? PINNED_OPENCLAW_SKILL_VERSION;
+  const cmdArgs = [
+    'skills',
+    'install',
+    ref,
+    '--version',
+    version,
+    ...(options.global ? ['--global'] : []),
+    ...(options.force ? ['--force'] : [])
+  ];
+  const fullCommand = [bin, ...cmdArgs];
+  const cmdStr = fullCommand.join(' ');
+
+  if (!options.json) {
+    writeLine(io.stdout, `Install plan for ${client.label} skill:`);
+    writeLine(io.stdout, `  Command: ${cmdStr}`);
+  }
+
+  if (options.dryRun) {
+    if (options.json) {
+      writeLine(io.stdout, JSON.stringify({
+        ok: true,
+        dryRun: true,
+        client: client.id,
+        command: fullCommand,
+        executed: false
+      }, null, 2));
+    } else {
+      writeLine(io.stdout, '[dry-run] Command not executed.');
+    }
+    return 0;
+  }
+
+  if (!options.yes) {
+    if (options.json) {
+      writeLine(io.stdout, JSON.stringify({
+        ok: false,
+        consentRequired: true,
+        client: client.id,
+        command: fullCommand,
+        executed: false
+      }, null, 2));
+      return 0;
+    }
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, `Execute "${cmdStr}"? [y/N]`);
+    const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
+    if (answer !== 'y' && answer !== 'yes') {
+      writeLine(io.stdout, 'Installation cancelled.');
+      return 0;
+    }
+  }
+
+  let result;
+  try {
+    result = await executeSubprocess(bin, cmdArgs, io, sanitizeEnv(io.env), cwd);
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      throw new UsageError(`${bin} is not installed or not available on PATH.`);
+    }
+    throw new UsageError(`Failed to execute ${bin}: ${err.message}`);
+  }
+
+  if (result.code !== 0) {
+    const combined = `${result.stderr || ''}\n${result.stdout || ''}`;
+    if (/already exists|already installed/i.test(combined) && !options.force) {
+      throw new UsageError(`${client.label} skill already exists. Use --force to replace.\n${result.stderr || result.stdout}`);
+    }
+    throw new UsageError(`${bin} skills install failed (${result.code}):\n${result.stderr || result.stdout}`);
+  }
+
+  if (options.json) {
+    writeLine(io.stdout, JSON.stringify({
+      ok: true,
+      client: client.id,
+      skill: ref,
+      version,
+      global: Boolean(options.global),
+      command: fullCommand,
+      installed: true,
+      stdout: result.stdout,
+      stderr: result.stderr
+    }, null, 2));
+    return 0;
+  }
+
+  writeLine(io.stdout, `✓ ${client.label} skill ${ref}@${version} installed successfully.`);
+  return 0;
+}
+
 async function clientSkillInstall(options, cwd, io) {
+  const clientObj = options.client ? getClient(options.client) : null;
+  if (clientObj?.skill?.kind === 'native') {
+    return await nativeSkillInstall(clientObj, options, cwd, io);
+  }
+
   const targets = [];
   if (options.client) {
     const client = getClient(options.client);
@@ -443,17 +634,24 @@ async function clientSkillInstall(options, cwd, io) {
     if (options.project && !client.supportsProjectSkill) {
       throw new UsageError(`Client "${client.label}" does not support project-level skills.`);
     }
-    const resolvedTarget = path.resolve(client.skillDir(io.env, { project: options.project, cwd }));
+    if (options.global && !client.supportsGlobalSkill) {
+      throw new UsageError(`Client "${client.label}" does not support --global skills.`);
+    }
+    const resolvedTarget = path.resolve(client.skillDir(io.env, { project: options.project, global: options.global, cwd }));
     targets.push({
       client,
       target: resolvedTarget,
       project: options.project
     });
-  } else if (options.all) {
-    for (const client of supportedSkillClients()) {
-      const clientObj = getClient(client.id);
+  } else if (options.all || options.resolvedClients) {
+    const candidateList = options.resolvedClients ?? supportedSkillClients();
+    for (const client of candidateList) {
+      const clientObj = getClient(client.id) || client;
+      if (clientObj?.skill?.kind === 'native') {
+        continue;
+      }
       const det = await clientObj.detect(io.env, { cwd });
-      if (det?.detected) {
+      if (det?.detected || options.resolvedClients) {
         targets.push({
           client: clientObj,
           target: path.resolve(clientObj.skillDir(io.env, { project: false, cwd })),
@@ -482,7 +680,7 @@ async function clientSkillInstall(options, cwd, io) {
     if (stat) {
       t.exists = true;
       t.existingVersion = await extractSkillVersionFromDirectory(t.target);
-      if (!options.force) {
+      if (!options.force && !options.dryRun) {
         throw new UsageError(`Skill destination already exists: ${t.target} (version: ${t.existingVersion ?? 'unknown'}). Use --force to replace.`);
       }
     } else {
@@ -770,6 +968,26 @@ export async function skillStatus(args, io) {
 
   // Check status for each target
   for (const t of targets) {
+    const clientObj = getClient(t.client);
+    if (clientObj?.skill?.kind === 'native') {
+      const bin = clientObj.skill?.bin ?? clientObj.id;
+      const ref = clientObj.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
+      try {
+        const res = await executeSubprocess(bin, ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+        if (res.code === 0 && (res.stdout.includes(ref) || res.stdout.includes('xmemo'))) {
+          t.installed = true;
+          const match = res.stdout.match(/@xmemo\/xmemo@([0-9.]+)/) || res.stdout.match(/xmemo@([0-9.]+)/);
+          t.version = match ? match[1] : (clientObj.skill?.version ?? PINNED_OPENCLAW_SKILL_VERSION);
+        } else {
+          t.installed = false;
+          t.version = null;
+        }
+      } catch {
+        t.installed = false;
+        t.version = null;
+      }
+      continue;
+    }
     const exists = await fs.stat(t.path).catch(() => null);
     if (exists && exists.isDirectory()) {
       t.installed = true;
@@ -803,7 +1021,13 @@ export async function skillRemove(args, io) {
     throw new UsageError(`Unexpected arguments for skill remove: ${positionals.join(', ')}.`);
   }
 
-  const rawClient = optionValue(args, '--client');
+  let rawClient = optionValue(args, '--client');
+  if (!rawClient) {
+    const resolved = await resolveTargetClients('skill', args, io, { allowMultiple: false }).catch(() => null);
+    if (resolved && resolved[0]) {
+      rawClient = resolved[0].id;
+    }
+  }
   if (!rawClient) {
     throw new UsageError('skill remove requires --client <id>.');
   }
@@ -822,9 +1046,113 @@ export async function skillRemove(args, io) {
   }
 
   const cwd = io.cwd ?? process.cwd();
-  const targetPath = path.resolve(client.skillDir(io.env, { project, cwd }));
   const isJson = hasFlag(args, '--json');
   const yes = hasFlag(args, '--yes');
+
+  if (client.skill?.kind === 'native') {
+    const bin = client.skill?.bin ?? client.id;
+    const ref = client.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
+    let isInstalled = false;
+    try {
+      const checkRes = await executeSubprocess(bin, ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+      if (checkRes.code === 0 && (checkRes.stdout.includes(ref) || checkRes.stdout.includes('xmemo'))) {
+        isInstalled = true;
+      }
+    } catch {}
+
+    if (!isInstalled) {
+      if (isJson) {
+        writeLine(io.stdout, JSON.stringify({
+          ok: true,
+          removed: false,
+          client: client.id,
+          reason: 'not_installed'
+        }, null, 2));
+        return 0;
+      }
+      writeLine(io.stdout, `Skill is not installed for ${client.label}.`);
+      return 0;
+    }
+
+    const removeBinary = 'clawhub';
+    const removeCmd = [removeBinary, 'uninstall', ref];
+    const removeCmdStr = removeCmd.join(' ');
+
+    let clawhubAvailable = false;
+    try {
+      const probeRes = await executeSubprocess(removeBinary, ['--version'], io, sanitizeEnv(io.env), cwd);
+      if (probeRes.code === 0) {
+        clawhubAvailable = true;
+      }
+    } catch {}
+
+    if (!clawhubAvailable) {
+      if (isJson) {
+        writeLine(io.stdout, JSON.stringify({
+          ok: false,
+          removed: false,
+          client: client.id,
+          command: removeCmd,
+          error: `${removeBinary}_not_found`,
+          message: `${removeBinary} is not installed or not available on PATH. Run "${removeCmdStr}" to remove the skill.`
+        }, null, 2));
+        return 1;
+      }
+      writeLine(io.stderr, `${removeBinary} is not installed or not available on PATH.`);
+      writeLine(io.stderr, `To remove this skill, install ${removeBinary} and run: ${removeCmdStr}`);
+      return 1;
+    }
+
+    if (!yes) {
+      if (isJson) {
+        writeLine(io.stdout, JSON.stringify({
+          ok: false,
+          removed: false,
+          consentRequired: true,
+          client: client.id,
+          command: removeCmd
+        }, null, 2));
+        return 0;
+      }
+      writeLine(io.stdout, `Remove XMemo skill for ${client.label} via "${removeCmdStr}"? [y/N]`);
+      const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
+      if (answer !== 'y' && answer !== 'yes') {
+        writeLine(io.stdout, 'Removal cancelled.');
+        return 0;
+      }
+    }
+
+    let result;
+    try {
+      result = await executeSubprocess(removeBinary, ['uninstall', ref], io, sanitizeEnv(io.env), cwd);
+    } catch (err) {
+      if (err?.code === 'ENOENT') {
+        writeLine(io.stderr, `${removeBinary} is not installed or not available on PATH.`);
+        writeLine(io.stderr, `To remove this skill, install ${removeBinary} and run: ${removeCmdStr}`);
+        return 1;
+      }
+      throw new UsageError(`Failed to execute ${removeBinary}: ${err.message}`);
+    }
+
+    if (result.code !== 0) {
+      throw new UsageError(`${removeBinary} uninstall failed (${result.code}):\n${result.stderr || result.stdout}`);
+    }
+
+    if (isJson) {
+      writeLine(io.stdout, JSON.stringify({
+        ok: true,
+        removed: true,
+        client: client.id,
+        command: removeCmd
+      }, null, 2));
+      return 0;
+    }
+
+    writeLine(io.stdout, `✓ Removed XMemo skill for ${client.label}.`);
+    return 0;
+  }
+
+  const targetPath = path.resolve(client.skillDir(io.env, { project, cwd }));
 
   const stat = await fs.stat(targetPath).catch(() => null);
   if (!stat || !stat.isDirectory()) {
@@ -891,7 +1219,7 @@ export async function skillRemove(args, io) {
 }
 
 function parseInstallOptions(args) {
-  const flags = new Set(['--dry-run', '--force', '--json', '--yes', '--project', '--all']);
+  const flags = new Set(['--dry-run', '--force', '--json', '--yes', '--project', '--global', '--all']);
   const optionsWithValues = ['--client', '--dir', '--target', '--version', '--from', '--integrity'];
   const seen = new Set();
   let client = null;
@@ -934,6 +1262,7 @@ function parseInstallOptions(args) {
     from,
     integrity,
     project: hasFlag(args, '--project'),
+    global: hasFlag(args, '--global'),
     all: hasFlag(args, '--all'),
     dryRun: hasFlag(args, '--dry-run'),
     force: hasFlag(args, '--force'),
@@ -1016,9 +1345,13 @@ function sanitizeEnv(baseEnv) {
   return env;
 }
 
-function resolveNpmRunner() {
+function resolveNpmRunner(env = process.env) {
+  const pathVal = env?.PATH ?? env?.Path;
+  if (pathVal === '') {
+    return null;
+  }
   if (process.platform === 'win32') {
-    const execPath = process.env.npm_execpath;
+    const execPath = env?.npm_execpath ?? process.env.npm_execpath;
     if (execPath && (execPath.endsWith('npm-cli.js') || execPath.endsWith('npm-cli.mjs')) && fsSync.existsSync(execPath)) {
       return { command: process.execPath, prefixArgs: [execPath] };
     }
@@ -1026,8 +1359,9 @@ function resolveNpmRunner() {
     if (fsSync.existsSync(standardNpmCli)) {
       return { command: process.execPath, prefixArgs: [standardNpmCli] };
     }
-    const appDataNpmCli = process.env.APPDATA
-      ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    const appData = env?.APPDATA ?? process.env.APPDATA;
+    const appDataNpmCli = appData
+      ? path.join(appData, 'npm', 'node_modules', 'npm', 'bin', 'npm-cli.js')
       : null;
     if (appDataNpmCli && fsSync.existsSync(appDataNpmCli)) {
       return { command: process.execPath, prefixArgs: [appDataNpmCli] };

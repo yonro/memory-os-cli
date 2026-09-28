@@ -55,11 +55,16 @@ import {
   mergeCopilotMcpConfig,
   removeCopilotMcpConfig
 } from '../mcp/proxy/copilot.js';
-import { kiroDoctor } from '../commands/kiro-doctor.js';
-import { codexDoctor } from '../commands/codex-doctor.js';
+import { kiroDoctor } from '../diagnostics/kiro.js';
+import { codexDoctor } from '../diagnostics/codex.js';
+import {
+  PINNED_OPENCLAW_SKILL_NAME,
+  PINNED_OPENCLAW_SKILL_VERSION
+} from '../core/pins.js';
+import { openclawSetupRecipe, hermesSetupRecipe } from './setup-recipes.js';
 import { isRepo, userHome } from '../core/runtime.js';
 
-export const CLIENT_REGISTRY = Object.freeze([
+export const CLIENT_REGISTRY = [
   // 1. Codex
   {
     id: 'codex',
@@ -478,7 +483,12 @@ export const CLIENT_REGISTRY = Object.freeze([
       bearerSyntax: 'env-colon'
     },
     profile: null,
-    skillDir: (env) => path.join(userHome(env), '.openclaw', 'skills', 'xmemo-memory'),
+    skillDir: (env, options = {}) =>
+      options?.global !== false
+        ? path.join(userHome(env), '.openclaw', 'skills', 'xmemo')
+        : path.join(options.cwd ?? process.cwd(), 'skills', 'xmemo'),
+    supportsGlobalSkill: true,
+    supportsProjectSkill: false,
     pluginId: 'openclaw',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('openclaw', env, options)
@@ -503,7 +513,8 @@ export const CLIENT_REGISTRY = Object.freeze([
       serverKind: 'http',
       urlKey: 'url',
       authentication: 'oauth',
-      bearerSyntax: 'env-colon'
+      bearerSyntax: 'env-colon',
+      supportsAuthMode: ['oauth', 'key']
     },
     profile: {
       label: 'Kiro',
@@ -882,19 +893,132 @@ export const CLIENT_REGISTRY = Object.freeze([
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('copilot-cli', env, options)
   }
-]);
+];
+
+for (const client of CLIENT_REGISTRY) {
+  if (!client.setup) {
+    if (client.id === 'openclaw') {
+      client.setup = { default: ['plugin', 'skill'], optional: ['mcp'] };
+      client.setupRecipe = openclawSetupRecipe;
+    } else if (client.id === 'hermes') {
+      client.setup = { default: ['plugin'], optional: ['mcp'] };
+      client.setupRecipe = hermesSetupRecipe;
+    } else if (client.profile) {
+      client.setup = { default: ['mcp', 'profile'], optional: [] };
+    } else {
+      client.setup = { default: ['mcp'], optional: [] };
+    }
+  }
+  if (client.plugin === undefined) {
+    client.plugin = client.pluginId ? { indexId: client.pluginId } : null;
+  }
+  if (client.skill === undefined) {
+    if (client.id === 'openclaw') {
+      client.skill = {
+        kind: 'native',
+        bin: 'openclaw',
+        ref: PINNED_OPENCLAW_SKILL_NAME,
+        version: PINNED_OPENCLAW_SKILL_VERSION
+      };
+    } else if (client.skillDir) {
+      client.skill = {
+        kind: 'dir',
+        skillDir: client.skillDir
+      };
+    } else {
+      client.skill = null;
+    }
+  }
+}
+
+export const MCP_CLIENTS = new Map();
+
+function enrichClient(client) {
+  if (client.mcp) {
+    if (!client.defaultConfigPath) client.defaultConfigPath = client.mcp.defaultConfigPath;
+    if (!client.writeConfig) client.writeConfig = client.mcp.writeConfig;
+    if (!client.removeConfig) client.removeConfig = client.mcp.removeConfig;
+    if (!client.configKind) client.configKind = client.mcp.configKind;
+    if (!client.buildSnippet) client.buildSnippet = client.mcp.buildSnippet;
+    if (!client.authentication) client.authentication = client.mcp.authentication;
+    if (!client.section) client.section = client.mcp.section;
+    if (!client.serverKind) client.serverKind = client.mcp.serverKind;
+  }
+}
 
 const CLIENTS_BY_ID = new Map();
 const ALIAS_TO_ID = new Map();
 
-for (const client of CLIENT_REGISTRY) {
-  CLIENTS_BY_ID.set(client.id, client);
-  ALIAS_TO_ID.set(client.id, client.id);
-  if (client.setupAlias) {
-    ALIAS_TO_ID.set(client.setupAlias, client.id);
+function rebuildClientIndices() {
+  CLIENTS_BY_ID.clear();
+  ALIAS_TO_ID.clear();
+  MCP_CLIENTS.clear();
+  for (const client of CLIENT_REGISTRY) {
+    enrichClient(client);
+    CLIENTS_BY_ID.set(client.id, client);
+    ALIAS_TO_ID.set(client.id, client.id);
+    if (client.setupAlias) {
+      ALIAS_TO_ID.set(client.setupAlias, client.id);
+    }
+    for (const alias of client.aliases || []) {
+      ALIAS_TO_ID.set(alias, client.id);
+    }
+    if (client.mcp) {
+      MCP_CLIENTS.set(client.id, client);
+    }
   }
-  for (const alias of client.aliases) {
-    ALIAS_TO_ID.set(alias, client.id);
+}
+rebuildClientIndices();
+
+export function registerClient(client) {
+  if (!client.setup) {
+    if (client.profile) {
+      client.setup = { default: ['mcp', 'profile'], optional: [] };
+    } else {
+      client.setup = { default: ['mcp'], optional: [] };
+    }
+  }
+  if (client.plugin === undefined) {
+    client.plugin = client.pluginId ? { indexId: client.pluginId } : null;
+  }
+  if (client.skill === undefined) {
+    client.skill = client.skillDir ? { kind: 'dir', skillDir: client.skillDir } : null;
+  }
+  const existing = CLIENT_REGISTRY.findIndex((c) => c.id === client.id);
+  if (existing !== -1) {
+    CLIENT_REGISTRY[existing] = client;
+  } else {
+    CLIENT_REGISTRY.push(client);
+  }
+  rebuildClientIndices();
+  return client;
+}
+
+export function unregisterClient(id) {
+  const index = CLIENT_REGISTRY.findIndex((c) => c.id === id);
+  let removed = null;
+  if (index !== -1) {
+    removed = CLIENT_REGISTRY.splice(index, 1)[0];
+    rebuildClientIndices();
+  }
+  return removed;
+}
+
+export function supportedClientsForResource(resource) {
+  switch (resource) {
+    case 'mcp':
+      return CLIENT_REGISTRY.filter((c) => c.mcp !== null);
+    case 'plugin':
+      return CLIENT_REGISTRY.filter((c) => c.plugin !== null || c.pluginId !== null);
+    case 'skill':
+      return CLIENT_REGISTRY.filter((c) => c.skill !== null || c.skillDir !== null);
+    case 'profile':
+      return CLIENT_REGISTRY.filter((c) => c.profile !== null);
+    case 'setup':
+    case 'uninstall':
+      return CLIENT_REGISTRY.filter((c) => c.setup !== null);
+    default:
+      return [...CLIENT_REGISTRY];
   }
 }
 
@@ -908,12 +1032,13 @@ async function detectClientByCandidates(clientId, env, options = {}) {
     return { detected: true, path: path.join(cwd, client.profile.markerDir) };
   }
   const candidates = client.mcp?.configPathCandidates ? client.mcp.configPathCandidates(env) : [];
+  const home = userHome(env);
   for (const filePath of candidates) {
     if (await fileExists(filePath)) {
       return { detected: true, path: filePath };
     }
     const parentDir = path.dirname(filePath);
-    if (await fileExists(parentDir)) {
+    if (parentDir !== home && await fileExists(parentDir)) {
       return { detected: true, path: filePath };
     }
   }
@@ -980,7 +1105,8 @@ export function supportedSkillClients() {
   return CLIENT_REGISTRY.filter((c) => c.skillDir !== null).map((c) => ({
     id: c.id,
     label: c.label,
-    supportsProjectSkill: Boolean(c.supportsProjectSkill)
+    supportsProjectSkill: Boolean(c.supportsProjectSkill),
+    supportsGlobalSkill: Boolean(c.supportsGlobalSkill)
   }));
 }
 
@@ -990,25 +1116,6 @@ export function usesClientOAuth(idOrAlias) {
 }
 
 export function createMcpClientsMap() {
-  const map = new Map();
-  for (const client of CLIENT_REGISTRY) {
-    if (client.mcp) {
-      map.set(client.id, {
-        id: client.id,
-        label: client.label,
-        defaultConfigPath: client.mcp.defaultConfigPath,
-        buildSnippet: client.mcp.buildSnippet,
-        writeConfig: client.mcp.writeConfig,
-        removeConfig: client.mcp.removeConfig,
-        configKind: client.mcp.configKind,
-        authentication: client.mcp.authentication,
-        section: client.mcp.section,
-        serverKind: client.mcp.serverKind,
-        pluginId: client.pluginId
-      });
-    }
-  }
-  return map;
+  return new Map(MCP_CLIENTS);
 }
 
-export const MCP_CLIENTS = createMcpClientsMap();

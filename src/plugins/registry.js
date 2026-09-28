@@ -68,6 +68,18 @@ export function validatePluginSchema(plugin) {
     }
   }
 
+  if (plugin.update !== undefined && plugin.update !== null) {
+    if (!Array.isArray(plugin.update) || plugin.update.length === 0 || !plugin.update.every((a) => typeof a === 'string')) {
+      throw new Error(`Plugin ${plugin.id}: update must be an argv array of strings or null`);
+    }
+  }
+
+  if (plugin.fallbackInstall !== undefined && plugin.fallbackInstall !== null) {
+    if (!Array.isArray(plugin.fallbackInstall) || plugin.fallbackInstall.length === 0 || !plugin.fallbackInstall.every((a) => typeof a === 'string')) {
+      throw new Error(`Plugin ${plugin.id}: fallbackInstall must be an argv array of strings or null`);
+    }
+  }
+
   if (plugin.detect !== null && typeof plugin.detect !== 'object') {
     throw new Error(`Plugin ${plugin.id}: detect must be an object or null`);
   }

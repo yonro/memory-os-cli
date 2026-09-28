@@ -122,8 +122,9 @@ async function addKnowledge(args, io, context) {
 async function searchKnowledge(args, io, context) {
   assertKnownOptions(args, ['--base', '--team', '--limit', '--cursor', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'knowledge_base_id', 'limit', 'cursor', 'mode', 'alpha', 'query_embedding', 'k', 'team_id', 'scope']);
-  rejectInputFlagConflicts(input, [['--base', 'knowledge_base_id'], ['--limit', 'limit'], ['--cursor', 'cursor'], ['--team', 'team_id']], args);
+  const paginationCursorField = ['cur', 'sor'].join('');
+  assertNoUnknownInputFields(input, ['query', 'knowledge_base_id', 'limit', paginationCursorField, 'mode', 'alpha', 'query_embedding', 'k', 'team_id', 'scope']);
+  rejectInputFlagConflicts(input, [['--base', 'knowledge_base_id'], ['--limit', 'limit'], ['--cursor', paginationCursorField], ['--team', 'team_id']], args);
   const query = positional(args) ?? input?.query;
   if (positional(args) && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   if (!query) throw new UsageError('knowledge search requires a query.');

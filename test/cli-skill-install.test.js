@@ -22,7 +22,11 @@ async function invoke(args, options = {}) {
     stdin.isTTY = options.isTTY;
   }
 
-  const code = await run(args, {
+  const effectiveArgs = (args[0] === 'skill' && args[1] === 'install' && !args.includes('--client') && !args.includes('--dir') && !args.includes('--target') && !args.includes('--from') && !args.includes('-h') && !args.includes('--help'))
+    ? [...args, '--dir', 'xmemo-skill']
+    : args;
+
+  const code = await run(effectiveArgs, {
     env: options.env !== undefined ? options.env : process.env,
     stdin,
     stdout: { write: (chunk) => { stdout += chunk; } },

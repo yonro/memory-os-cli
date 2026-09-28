@@ -52,8 +52,16 @@ export async function appendGrokServerConfig(configPath, mcpUrl, identity, force
   let existing = await readTextIfExists(configPath);
   const existingName = existingTomlMcpServerName(existing);
   if (existingName) {
-    if (!force) {
+    if (existing.includes(snippet.trim())) {
+      return { unchanged: true, configPath };
+    }
+    if (existingName !== MCP_SERVER_NAME && !force) {
       throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+    }
+    if (existing.trim().length > 0) {
+      try {
+        await fs.writeFile(`${configPath}.bak`, existing, { mode: 0o600 });
+      } catch {}
     }
     existing = removeTomlServerBlocks(existing, knownMcpServerNames());
   }
@@ -62,6 +70,7 @@ export async function appendGrokServerConfig(configPath, mcpUrl, identity, force
   const prefix = existing.trim().length === 0 ? '' : '\n\n';
   await fs.writeFile(configPath, `${existing.trimEnd()}${prefix}${snippet}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
+  return { written: true, configPath };
 }
 
 export async function codexSmokeReport(configPath, env) {
@@ -155,8 +164,16 @@ export async function appendTomlServerConfig(configPath, mcpUrl, identity, force
   let existing = await readTextIfExists(configPath);
   const existingName = existingTomlMcpServerName(existing);
   if (existingName) {
-    if (!force) {
+    if (existing.includes(snippet.trim())) {
+      return { unchanged: true, configPath };
+    }
+    if (existingName !== MCP_SERVER_NAME && !force) {
       throw new UsageError(`MCP config already contains [mcp_servers.${existingName}]. Edit ${configPath} manually to avoid duplicate server definitions, or use --force to overwrite.`);
+    }
+    if (existing.trim().length > 0) {
+      try {
+        await fs.writeFile(`${configPath}.bak`, existing, { mode: 0o600 });
+      } catch {}
     }
     existing = removeTomlServerBlocks(existing, knownMcpServerNames());
   }
@@ -165,6 +182,7 @@ export async function appendTomlServerConfig(configPath, mcpUrl, identity, force
   const prefix = existing.trim().length === 0 ? '' : '\n\n';
   await fs.writeFile(configPath, `${existing.trimEnd()}${prefix}${snippet}\n`, { mode: 0o600 });
   await bestEffortChmod(configPath, 0o600);
+  return { written: true, configPath };
 }
 
 function knownMcpServerNames() {
