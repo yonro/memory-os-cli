@@ -1,2 +1,3 @@
 * text=auto
 skills/xmemo/** text eol=lf
+skills/install.sh text eol=lf
