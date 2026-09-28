@@ -5,6 +5,12 @@ All notable changes to the XMemo CLI client will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Dogfood CLI Enhancements (CLI-DOGFOOD)**:
+  - **Schema Unification**: Standardized `data.items` across `xmemo memory search`, `xmemo memory list`, and `xmemo context recall`. Every item includes consistent attributes: `id`, `memory_id`, `path`, `content`, `created_at`, and `score` (similarity score for search, context score for recall, null for list). Preserves existing `id` on list items while ensuring `memory_id` is the stable reference. Full backward compatibility maintained for `data.results` (search), `data.memories` (list/recall), and numeric property access `data[0..n]`.
+  - **Path Normalization**: Added robust path normalization (`normalizeMemoryPath`) and prefix matching (`matchesPathPrefix`) for `xmemo memory list`. Automatically handles case-insensitivity, leading/trailing slashes, whitespace around slashes, and `[ROOT]/` stripping. Fast server-side prefix try first, falling back to bounded paging and client-side matching when 0 server results match. Added `--project <name>` shorthand (`projects/<name>`) and `--exact-path` for literal matching.
+  - **Memory List Filters & Auto-Paging**: Added `--query`/`--filter <text>` for substring searching over content and path, `--type <memory_type>` for memory type filtering, and `--all` for automatic multi-page retrieval (page size 500, hard cap 10,000 items with warning in `meta.warnings`, and stderr progress in human mode).
+  - **Search Boost Reranking**: Added `--keyword <words...>` and `--exact <phrase>` to `xmemo memory search` with deterministic client-side reranking (exact phrase matches first, followed by keyword occurrence count, preserving stable original order on ties).
+  - **EPIPE Safety**: Safe handling for `EPIPE` errors on `stdout` and `stderr` in bin entry and line writers, exiting cleanly with status code 0 when downstream readers (e.g. `head`, `less`) close the pipe.
 - **Elegant Command Model (CLI-DESIGN v2)**:
   - **Unified Resource Grammar**: Standardized all component operations on `xmemo <resource> <action>` (`mcp`, `plugin`, `skill`, `profile`) with canonical actions `install`, `remove`, `status` (plus `list`/`info` for plugins and `update` for skills).
   - **Unified Target Resolver**: Smart client resolution across commands prioritizing explicit `--client <id>` / `--all`, calling agent environment (`CLAUDECODE` -> `claude-code`, Codex session -> `codex`), and auto-detected locally installed clients.

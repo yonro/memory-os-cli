@@ -25,17 +25,21 @@ function writeMemoryList(io, data, meta) {
   const memories = Array.isArray(data) ? data : Array.isArray(data?.memories) ? data.memories : Array.isArray(data?.items) ? data.items : [];
   if (memories.length === 0) {
     writeLine(io.stdout, 'No memories found.');
-    return;
-  }
-  for (const item of memories) {
-    const id = item?.id ?? item?.memory_id ?? 'unknown';
-    const location = item?.path ?? item?.memory_path ?? 'unknown path';
-    const content = typeof item?.content === 'string' ? item.content.replace(/\s+/gu, ' ').trim() : '';
-    const preview = content.length > 80 ? `${content.slice(0, 77)}...` : content;
-    writeLine(io.stdout, `${location}  [${id}]${preview ? `  ${preview}` : ''}`);
+  } else {
+    for (const item of memories) {
+      const id = item?.id ?? item?.memory_id ?? 'unknown';
+      const location = item?.path ?? item?.memory_path ?? 'unknown path';
+      const content = typeof item?.content === 'string' ? item.content.replace(/\s+/gu, ' ').trim() : '';
+      const preview = content.length > 80 ? `${content.slice(0, 77)}...` : content;
+      writeLine(io.stdout, `${location}  [${id}]${preview ? `  ${preview}` : ''}`);
+    }
   }
   if (meta?.nextCursor || data?.next_cursor) {
     writeLine(io.stdout, `Next cursor: ${meta?.nextCursor ?? data.next_cursor}`);
+  }
+  const allWarnings = [...(meta?.warnings ?? []), ...(data?.warnings ?? [])];
+  for (const warning of allWarnings) {
+    writeLine(io.stderr, `Warning: ${warning}`);
   }
 }
 

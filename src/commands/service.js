@@ -10,6 +10,7 @@ import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/servic
 import { confirmRemoteAction } from '../api/confirmation.js';
 import { processDocumentStubs } from '../api/document-stub.js';
 import { memoryTransfer, prepareMemoryTransfer } from './memory-transfer.js';
+import { matchesPathPrefix, normalizeMemoryPath, unifyMemoryItem, rerankSearchResults } from '../api/memory-schema.js';
 
 export async function memoryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -18,9 +19,9 @@ export async function memoryCommand(args, io) {
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `memory.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Memory commands:');
     writeLine(io.stdout, '  xmemo memory add --content <text> --path <path> [--bucket <name>] [--json]');
-    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--json]');
+    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--keyword <words>] [--exact <phrase>] [--json]');
     writeLine(io.stdout, '  xmemo memory read <memory-id> [--team <id>] [--json]');
-    writeLine(io.stdout, '  xmemo memory list [--path-prefix <literal-prefix>] [--limit <n>] [--offset <n>]');
+    writeLine(io.stdout, '  xmemo memory list [--path-prefix <prefix>] [--project <name>] [--exact-path] [--query <text>] [--type <type>] [--all] [--limit <n>] [--offset <n>] [--json]');
     writeLine(io.stdout, '  xmemo memory import --file <jsonl> [--dry-run | --idempotency-key <key> --yes]');
     writeLine(io.stdout, '  xmemo memory ledger-delete|expense-delete --id <transaction-uuid> --yes');
     return 0;
@@ -28,7 +29,8 @@ export async function memoryCommand(args, io) {
   if (subcommand === 'add') return await runServiceCommand('memory.add', args.slice(1), io, memoryAdd, validateMemoryAdd);
   if (subcommand === 'search') return await runServiceCommand('memory.search', args.slice(1), io, memorySearch, validateMemorySearch);
   if (subcommand === 'read') return await runServiceCommand('memory.read', args.slice(1), io, memoryRead, validateMemoryRead);
-  if (['list', 'import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
+  if (subcommand === 'list') return await runServiceCommand('memory.list', args.slice(1), io, memoryList, validateMemoryList);
+  if (['import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
     let prepared;
     return await runServiceCommand(`memory.${subcommand}`, args.slice(1), io,
       (options, streams, context) => memoryTransfer(subcommand, options, streams, context, prepared),
@@ -136,36 +138,317 @@ async function validateMemoryRead(args, io) {
   if (typeof (positionalId ?? input?.memory_id) !== 'string' || !(positionalId ?? input?.memory_id).trim()) throw new UsageError('memory read requires a memory ID.');
 }
 
-async function memorySearch(args, io, context) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+async function memoryList(args, io, context) {
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents']], args);
+  const pathPrefixArg = optionValue(args, '--path-prefix') ?? input?.path_prefix;
+  const projectArg = optionValue(args, '--project') ?? input?.project;
+  const exactPath = hasFlag(args, '--exact-path') || optionalBooleanInput(input, 'exact_path') === true;
+  const filterText = optionValue(args, '--query') ?? optionValue(args, '--filter') ?? input?.query ?? input?.filter ?? null;
+  const typeFilter = optionValue(args, '--type') ?? input?.type ?? null;
+  const all = hasFlag(args, '--all') || optionalBooleanInput(input, 'all') === true;
+  const isHumanMode = !hasFlag(args, '--json');
+
+  const rawLimit = optionValue(args, '--limit') ?? input?.limit;
+  const rawOffset = optionValue(args, '--offset') ?? input?.offset;
+  const limit = rawLimit !== undefined && rawLimit !== null
+    ? parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 500 })
+    : 100;
+  const offset = rawOffset !== undefined && rawOffset !== null
+    ? parseIntegerInRange(rawOffset, '--offset', { min: 0, max: Number.MAX_SAFE_INTEGER })
+    : 0;
+
+  let targetPrefix = null;
+  let rawPrefixForServer = '';
+  if (projectArg) {
+    targetPrefix = exactPath ? `projects/${projectArg}` : normalizeMemoryPath(`projects/${projectArg}`);
+    rawPrefixForServer = targetPrefix;
+  } else if (pathPrefixArg !== undefined && pathPrefixArg !== null) {
+    targetPrefix = exactPath ? pathPrefixArg : normalizeMemoryPath(pathPrefixArg);
+    rawPrefixForServer = exactPath ? pathPrefixArg : (normalizeMemoryPath(pathPrefixArg) || pathPrefixArg);
+  }
+
+  function matchesItem(item) {
+    if (targetPrefix !== null) {
+      if (!matchesPathPrefix(item?.path ?? item?.memory_path, targetPrefix, exactPath)) {
+        return false;
+      }
+    }
+    if (typeFilter) {
+      const itemType = String(item?.memory_type ?? item?.type ?? '');
+      if (itemType.toLowerCase() !== typeFilter.toLowerCase()) {
+        return false;
+      }
+    }
+    if (filterText) {
+      const textToSearch = `${item?.content ?? ''} ${item?.path ?? item?.memory_path ?? ''}`.toLowerCase();
+      if (!textToSearch.includes(filterText.toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const warnings = [];
+
+  if (all) {
+    const pageSize = 500;
+    const maxItems = 10000;
+    let totalFetched = 0;
+    const allItems = [];
+
+    let useFallback = false;
+    if (targetPrefix !== null && !exactPath) {
+      const firstPage = await context.client.request({
+        method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
+        query: { path_prefix: rawPrefixForServer, limit: pageSize, offset: 0 }
+      });
+      const memories = firstPage?.data?.memories ?? (Array.isArray(firstPage?.data) ? firstPage.data : []);
+      if (memories.length === 0 && (firstPage?.data?.total === 0 || firstPage?.data?.total === undefined)) {
+        useFallback = true;
+      } else {
+        totalFetched += memories.length;
+        if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
+        for (const item of memories) {
+          if (matchesItem(item)) allItems.push(item);
+        }
+        let currentOffset = memories.length;
+        while (memories.length === pageSize && totalFetched < maxItems) {
+          const nextPage = await context.client.request({
+            method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
+            query: { path_prefix: rawPrefixForServer, limit: pageSize, offset: currentOffset }
+          });
+          const nextMems = nextPage?.data?.memories ?? (Array.isArray(nextPage?.data) ? nextPage.data : []);
+          if (nextMems.length === 0) break;
+          totalFetched += nextMems.length;
+          if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
+          for (const item of nextMems) {
+            if (matchesItem(item)) allItems.push(item);
+          }
+          if (nextMems.length < pageSize) break;
+          currentOffset += nextMems.length;
+        }
+      }
+    }
+
+    if (useFallback || targetPrefix === null || exactPath) {
+      if (!useFallback && (targetPrefix === null || exactPath)) {
+        let currentOffset = 0;
+        while (totalFetched < maxItems) {
+          const query = { limit: pageSize, offset: currentOffset };
+          if (targetPrefix !== null) query.path_prefix = rawPrefixForServer;
+          const pageRes = await context.client.request({
+            method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
+            query
+          });
+          const mems = pageRes?.data?.memories ?? (Array.isArray(pageRes?.data) ? pageRes.data : []);
+          if (mems.length === 0) break;
+          totalFetched += mems.length;
+          if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
+          for (const item of mems) {
+            if (matchesItem(item)) allItems.push(item);
+          }
+          if (mems.length < pageSize) break;
+          currentOffset += mems.length;
+        }
+      } else if (useFallback) {
+        let currentOffset = 0;
+        while (totalFetched < maxItems) {
+          const pageRes = await context.client.request({
+            method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
+            query: { limit: pageSize, offset: currentOffset }
+          });
+          const mems = pageRes?.data?.memories ?? (Array.isArray(pageRes?.data) ? pageRes.data : []);
+          if (mems.length === 0) break;
+          totalFetched += mems.length;
+          if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
+          for (const item of mems) {
+            if (matchesItem(item)) allItems.push(item);
+          }
+          if (mems.length < pageSize) break;
+          currentOffset += mems.length;
+        }
+      }
+    }
+
+    if (totalFetched >= maxItems) {
+      warnings.push('Hit 10,000 item limit while fetching all memories; results may be truncated.');
+    }
+
+    const unified = allItems.map((item) => unifyMemoryItem(item, { score: null }));
+    const responseData = {
+      total: unified.length,
+      memories: unified,
+      items: unified
+    };
+    for (let i = 0; i < unified.length; i += 1) {
+      responseData[i] = unified[i];
+    }
+    return {
+      data: responseData,
+      meta: {
+        warnings,
+        nextCursor: null
+      }
+    };
+  }
+
+  // Non-all: single page with fast try or bounded fallback
+  let memories = [];
+  let serverTotal = null;
+  let useFallback = false;
+
+  const initialQuery = { limit, offset, path_prefix: rawPrefixForServer };
+
+  const res = await context.client.request({
+    method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
+    query: initialQuery
+  });
+  memories = res?.data?.memories ?? (Array.isArray(res?.data) ? res.data : []);
+  serverTotal = res?.data?.total;
+
+  if (targetPrefix !== null && !exactPath && memories.length === 0 && (serverTotal === 0 || serverTotal === undefined) && offset === 0) {
+    useFallback = true;
+  }
+
+  let finalItems = [];
+  if (useFallback) {
+    const scanLimit = 500;
+    const maxScan = 1000;
+    let scanned = 0;
+    let scanOffset = 0;
+    const matched = [];
+    while (scanned < maxScan) {
+      const pageRes = await context.client.request({
+        method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
+        query: { limit: scanLimit, offset: scanOffset }
+      });
+      const mems = pageRes?.data?.memories ?? (Array.isArray(pageRes?.data) ? pageRes.data : []);
+      if (mems.length === 0) break;
+      scanned += mems.length;
+      for (const item of mems) {
+        if (matchesItem(item)) matched.push(item);
+      }
+      if (matched.length >= offset + limit || mems.length < scanLimit) break;
+      scanOffset += mems.length;
+    }
+    finalItems = matched.slice(offset, offset + limit);
+    serverTotal = matched.length;
+  } else {
+    finalItems = memories.filter(matchesItem);
+  }
+
+  const unified = finalItems.map((item) => unifyMemoryItem(item, { score: null }));
+  const responseData = {
+    total: serverTotal ?? unified.length,
+    memories: unified,
+    items: unified
+  };
+  for (let i = 0; i < unified.length; i += 1) {
+    responseData[i] = unified[i];
+  }
+  return {
+    data: responseData,
+    meta: {
+      warnings,
+      nextCursor: (serverTotal !== null && serverTotal !== undefined && offset + unified.length < serverTotal)
+        ? String(offset + unified.length)
+        : null
+    }
+  };
+}
+
+async function validateMemoryList(args, io) {
+  assertKnownOptions(args, [
+    '--path-prefix', '--project', '--exact-path',
+    '--query', '--filter', '--type', '--all',
+    '--limit', '--offset',
+    '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json'
+  ]);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, [
+    'path_prefix', 'project', 'exact_path',
+    'query', 'filter', 'type', 'all',
+    'limit', 'offset'
+  ]);
+  rejectInputFlagConflicts(input, [
+    ['--path-prefix', 'path_prefix'],
+    ['--project', 'project'],
+    ['--query', 'query'],
+    ['--filter', 'filter'],
+    ['--type', 'type'],
+    ['--limit', 'limit'],
+    ['--offset', 'offset']
+  ], args);
+
+  const pathPrefix = optionValue(args, '--path-prefix') ?? input?.path_prefix;
+  const project = optionValue(args, '--project') ?? input?.project;
+  if (pathPrefix !== undefined && project !== undefined) {
+    throw new UsageError('Cannot supply both --path-prefix and --project.');
+  }
+
+  const query = optionValue(args, '--query') ?? input?.query;
+  const filter = optionValue(args, '--filter') ?? input?.filter;
+  if (query !== undefined && filter !== undefined && query !== filter) {
+    throw new UsageError('Cannot supply both --query and --filter.');
+  }
+
+  const rawLimit = optionValue(args, '--limit') ?? input?.limit;
+  if (rawLimit !== undefined && rawLimit !== null) {
+    parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 500 });
+  }
+
+  const rawOffset = optionValue(args, '--offset') ?? input?.offset;
+  if (rawOffset !== undefined && rawOffset !== null) {
+    parseIntegerInRange(rawOffset, '--offset', { min: 0, max: Number.MAX_SAFE_INTEGER });
+  }
+
+  optionalBooleanInput(input, 'exact_path');
+  optionalBooleanInput(input, 'all');
+}
+
+async function memorySearch(args, io, context) {
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact']);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact']], args);
   const queryArg = singlePositional(args, 'memory search');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('memory search requires a query.');
   const rawLimit = optionValue(args, '--limit') ?? input?.limit;
+  const keyword = optionValue(args, '--keyword') ?? input?.keyword;
+  const exact = optionValue(args, '--exact') ?? input?.exact;
   const response = await context.client.request({
     method: 'GET', path: '/api/v1/recall', retry: 'bounded', sideEffect: false,
     query: compact({ query, limit: rawLimit === undefined || rawLimit === null ? undefined : parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 }), team_id: optionValue(args, '--team') ?? input?.team_id, bucket: optionValue(args, '--bucket') ?? input?.bucket, path: optionValue(args, '--path') ?? input?.path, prefer_working: hasFlag(args, '--prefer-working') ? true : optionalBooleanInput(input, 'prefer_working') })
   });
   const data = response?.data ?? response;
-  const items = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+  const items = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.items) ? data.items : [];
   const expandDocuments = hasFlag(args, '--expand-documents') || optionalBooleanInput(input, 'expand_documents') === true;
   await processDocumentStubs(items, {
     expandDocuments,
     client: context.client,
     teamId: optionValue(args, '--team') ?? input?.team_id
   });
+  const reranked = rerankSearchResults(items, { keyword, exact });
+  const unified = reranked.map((item) => unifyMemoryItem(item, { score: item.similarity ?? item.score ?? null }));
+  const unifiedData = {
+    results: unified,
+    items: unified,
+    ...(data?.coverage !== undefined ? { coverage: data.coverage } : {})
+  };
+  for (let i = 0; i < unified.length; i += 1) {
+    unifiedData[i] = unified[i];
+  }
+  response.data = unifiedData;
   return response;
 }
 
 async function validateMemorySearch(args, io) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents']], args);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact']);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact']], args);
   const queryArg = singlePositional(args, 'memory search');
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
@@ -205,6 +488,14 @@ async function contextRecall(args, io, context) {
     client: context.client,
     teamId: optionValue(args, '--team') ?? input?.team_id
   });
+  const unified = items.map((item) => unifyMemoryItem(item, { score: item.score ?? null }));
+  const unifiedData = (typeof data === 'object' && data !== null) ? { ...data } : {};
+  unifiedData.items = unified;
+  unifiedData.memories = unified;
+  for (let i = 0; i < unified.length; i += 1) {
+    unifiedData[i] = unified[i];
+  }
+  response.data = unifiedData;
   if (includeKnowledge) {
     const knowledgeSkipped = Boolean(
       data?.knowledge_skipped ||
@@ -371,7 +662,7 @@ async function runServiceCommand(command, args, io, handler, validate = null) {
 }
 
 function singlePositional(args, command) {
-  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline']);
+  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline', '--keyword', '--exact', '--path-prefix', '--project', '--query', '--filter', '--type', '--offset']);
   const values = [];
   let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {

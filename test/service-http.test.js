@@ -75,7 +75,11 @@ test('CLI-09 actual HTTP + child CLI exercise all 18 frozen commands and pinned 
   let knowledgeRevision = 'k1', knowledgeVersion = 1;
   const api = await fixture(t, (r, res) => {
     const p = r.url.pathname, b = r.body;
-    if (p === '/v1/memories') { assert.equal(r.url.searchParams.get('path_prefix'), '中文_%'); return respond(res, {memories:[],total:0}); }
+    if (p === '/v1/memories') {
+      const prefix = r.url.searchParams.get('path_prefix');
+      if (prefix) assert.equal(prefix, '中文_%');
+      return respond(res, { memories: [], total: 0 });
+    }
     if (p === '/v1/memories/import') { assert.equal(b.dry_run,true); return respond(res, {errors:[],next_cursor:null}); }
     if (p === '/v1/skill/operations') { assert.ok(['ledger-delete','expense-delete'].includes(b.operation)); return respond(res,{ok:true,result:{status:'deleted'}}); }
     if (p === '/api/v1/remember') { assert.equal(b.content, '中文 synthetic'); return respond(res, { memory_id: 'm1' }, 201); }
