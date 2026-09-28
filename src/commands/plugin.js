@@ -288,32 +288,37 @@ async function pluginInstall(args, io) {
     let route = null;
     let pathDescription = null;
 
-    if (plugin.id === 'deepseek-dsh') {
+    if (plugin.requiresProfile) {
       if (!profile) {
-        throw new UsageError('deepseek-dsh requires --profile <name> (e.g. xmemo plugin install deepseek-dsh --profile <name>).');
+        throw new UsageError(`${plugin.id} requires --profile <name> (e.g. xmemo plugin install ${plugin.id} --profile <name>).`);
       }
-      installCmd = ['dsh', 'plugin', '--profile', profile, 'add', 'dsh-xmemo', ...(force ? ['--force'] : [])];
-    } else if (plugin.id === 'hermes') {
-      let hermesAvailable = false;
+      installCmd = plugin.install.map((a) => (a === '<profile>' ? profile : a));
+      if (force) installCmd.push('--force');
+    } else if (plugin.fallbackInstall) {
+      let cliAvailable = false;
+      const detectCmd = plugin.detect?.command ?? plugin.install?.[0];
+      const detectArgs = plugin.detect?.args ?? ['--version'];
       try {
-        const hRes = await execPluginProcess('hermes', ['--version'], io);
+        const hRes = await execPluginProcess(detectCmd, detectArgs, io);
         if (hRes.code === 0) {
-          hermesAvailable = true;
+          cliAvailable = true;
         }
       } catch {}
 
-      if (hermesAvailable) {
-        route = 'hermes-cli';
-        pathDescription = 'Hermes CLI (official catalog entry "xmemo")';
-        installCmd = ['hermes', 'plugins', 'install', 'xmemo', ...(force ? ['--force'] : [])];
+      const catalogEntry = plugin.install?.[plugin.install.length - 1];
+      const cliLabel = detectCmd.charAt(0).toUpperCase() + detectCmd.slice(1) + ' CLI';
+      if (cliAvailable) {
+        route = `${detectCmd}-cli`;
+        pathDescription = `${cliLabel} (official catalog entry "${catalogEntry}")`;
+        installCmd = [...plugin.install, ...(force ? ['--force'] : [])];
       } else {
         route = 'pip-fallback';
-        pathDescription = 'pip fallback (hermes binary not found on PATH)';
+        pathDescription = `pip fallback (${detectCmd} binary not found on PATH)`;
         const pyBin = io.env?.PYTHON_BIN ?? (process.platform === 'win32' ? 'python' : 'python3');
-        installCmd = [pyBin, '-m', 'pip', 'install', 'hermes-xmemo==1.1.3'];
+        installCmd = [pyBin, ...plugin.fallbackInstall.slice(1)];
       }
-    } else if (plugin.id === 'openclaw') {
-      installCmd = ['openclaw', 'plugins', 'install', 'clawhub:@xmemo/openclaw-memory@1.0.18', ...(force ? ['--force'] : [])];
+    } else if (plugin.install) {
+      installCmd = [...plugin.install, ...(force ? ['--force'] : [])];
     }
 
     const cmdStr = installCmd.join(' ');
@@ -364,15 +369,17 @@ async function pluginInstall(args, io) {
     const [bin, ...cmdArgs] = installCmd;
     const result = await execPluginProcess(bin, cmdArgs, io);
 
-    // If OpenClaw reports already installed without --force, run update command
-    if (plugin.id === 'openclaw' && result.code !== 0 && !force) {
+    // If native CLI reports already installed without --force, run update command
+    if (result.code !== 0 && !force && plugin.update) {
       const combinedOutput = `${result.stderr || ''}\n${result.stdout || ''}`;
       const isAlreadyInstalled = /already installed|already exists|destination already exists/i.test(combinedOutput);
       if (isAlreadyInstalled) {
-        const updateCmd = plugin.update ?? ['openclaw', 'plugins', 'update', '@xmemo/openclaw-memory'];
+        const updateCmd = plugin.update;
         const updateCmdStr = updateCmd.join(' ');
         if (!json) {
-          writeLine(io.stdout, 'OpenClaw reports @xmemo/openclaw-memory is already installed.');
+          const hostName = plugin.label.split(' ')[0];
+          const targetPackage = plugin.update[plugin.update.length - 1];
+          writeLine(io.stdout, `${hostName} reports ${targetPackage} is already installed.`);
           writeLine(io.stdout, `Update plan: ${updateCmdStr}`);
         }
         if (!yes) {
@@ -513,8 +520,8 @@ async function pluginInstall(args, io) {
       throw new UsageError(`Commit verification failed for ${plugin.id}: expected ${plugin.commit}, got ${actualCommit}. Removed cloned directory.`);
     }
 
-    const loadInstructions = plugin.id === 'claude-code'
-      ? `claude --plugin-dir ${targetDir}`
+    const loadInstructions = plugin.loadCommandTemplate
+      ? plugin.loadCommandTemplate.replace('{targetDir}', targetDir)
       : `Load from: ${targetDir}`;
 
     if (json) {
@@ -547,56 +554,43 @@ async function checkPluginStatus(plugin, io) {
   let detail = null;
 
   if (plugin.kind === 'native-cli') {
-    if (plugin.id === 'openclaw') {
+    const detectCmd = plugin.detect?.command ?? plugin.install?.[0];
+    const detectArgs = plugin.detect?.args ?? ['--version'];
+    let cliDetected = false;
+    if (detectCmd) {
       try {
-        const res = await execPluginProcess('openclaw', ['--version'], io);
+        const res = await execPluginProcess(detectCmd, detectArgs, io);
         if (res.code === 0) {
-          detail = 'openclaw binary present';
-          const pRes = await execPluginProcess('openclaw', ['plugins', 'inspect', 'xmemo-memory', '--runtime', '--json'], io);
-          if (pRes.code === 0) {
-            installed = true;
-            detail = 'plugin installed';
+          cliDetected = true;
+          detail = `${detectCmd} binary present`;
+          if (plugin.verify?.command) {
+            const vRes = await execPluginProcess(plugin.verify.command, plugin.verify.args ?? [], io);
+            const matches = !plugin.verify.match || (vRes.stdout && new RegExp(plugin.verify.match, 'i').test(vRes.stdout));
+            if (vRes.code === 0 && matches) {
+              installed = true;
+              detail = plugin.verify.match ? `${detectCmd} plugin installed` : 'plugin installed';
+            }
           }
+        } else {
+          detail = `${detectCmd} binary not found`;
         }
       } catch {
-        detail = 'openclaw binary not found';
+        detail = `${detectCmd} binary not found`;
       }
-    } else if (plugin.id === 'hermes') {
-      let hermesChecked = false;
+    }
+    if (!installed && plugin.fallbackVerify?.command) {
+      const fallbackPkg = plugin.fallbackVerify.args?.[plugin.fallbackVerify.args.length - 1] ?? 'fallback';
       try {
-        const hRes = await execPluginProcess('hermes', ['--version'], io);
-        if (hRes.code === 0) {
-          hermesChecked = true;
-          const lRes = await execPluginProcess('hermes', ['plugins', 'list'], io);
-          if (lRes.code === 0 && /xmemo/i.test(lRes.stdout)) {
-            installed = true;
-            detail = 'hermes plugin installed';
-          }
+        const fRes = await execPluginProcess(plugin.fallbackVerify.command, plugin.fallbackVerify.args ?? [], io);
+        const matches = !plugin.fallbackVerify.match || (fRes.stdout && fRes.stdout.includes(plugin.fallbackVerify.match));
+        if (fRes.code === 0 && matches) {
+          installed = true;
+          detail = `${fallbackPkg} installed`;
+        } else {
+          detail = cliDetected ? `${detectCmd} plugin not installed` : `${fallbackPkg} not installed`;
         }
       } catch {
-        // hermes CLI not found
-      }
-      if (!installed) {
-        try {
-          const res = await execPluginProcess('python', ['-m', 'pip', 'show', 'hermes-xmemo'], io);
-          if (res.code === 0 && res.stdout.includes('Name: hermes-xmemo')) {
-            installed = true;
-            detail = 'hermes-xmemo installed';
-          } else {
-            detail = hermesChecked ? 'hermes plugin not installed' : 'hermes-xmemo not installed';
-          }
-        } catch {
-          detail = hermesChecked ? 'hermes plugin not installed' : 'python not found';
-        }
-      }
-    } else if (plugin.detect?.command) {
-      try {
-        const res = await execPluginProcess(plugin.detect.command, plugin.detect.args ?? ['--version'], io);
-        if (res.code === 0) {
-          detail = `${plugin.detect.command} available`;
-        }
-      } catch {
-        detail = `${plugin.detect.command} not found`;
+        detail = cliDetected ? `${detectCmd} plugin not installed` : `${plugin.fallbackVerify.command} not found`;
       }
     }
   } else if (plugin.kind === 'git-dir') {

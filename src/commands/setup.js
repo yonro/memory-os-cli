@@ -28,8 +28,11 @@ import {
   supportedMcpClients
 } from '../mcp/clients.js';
 import { mergeCopilotMcpConfig } from '../mcp/proxy/copilot.js';
-import { hermesSetupPlan } from './hermes.js';
-import { openclawSetupPlan } from './openclaw.js';
+import {
+  CLIENT_REGISTRY,
+  getClient,
+  usesClientOAuth
+} from '../clients/registry.js';
 
 import {
   agentIdentity,
@@ -80,7 +83,13 @@ export async function setupCommand(args, io) {
   }
 
   const auth = optionValue(optionArgs, '--auth');
-  if (auth && (clientId !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key requires setup kiro.');
+  if (auth) {
+    const authClient = clientId ? getClient(clientId) : null;
+    if (!authClient?.mcp || authClient.mcp.authentication !== 'oauth' || !['oauth', 'key'].includes(auth)) {
+      const oauthClient = CLIENT_REGISTRY.find((c) => c.mcp?.authentication === 'oauth');
+      throw new UsageError(`--auth oauth|key requires setup ${oauthClient?.id}.`);
+    }
+  }
   const dryRun = hasFlag(optionArgs, '--dry-run') || hasFlag(optionArgs, '--preview');
   const force = hasFlag(optionArgs, '--force');
   const writeConfig = !dryRun && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes') || shortClientSetup || (setupAll && (hasFlag(optionArgs, '--write') || hasFlag(optionArgs, '--yes'))));
@@ -113,8 +122,9 @@ export async function setupCommand(args, io) {
     const targets = await detectedSetupTargets(scanIds, io.env, MCP_CLIENTS);
     for (const target of targets) {
       const scanId = target.clientId;
+      const client = getClient(scanId) || MCP_CLIENTS.get(scanId);
       let clientPlan;
-      if (scanId === 'copilot-cli') {
+      if (client?.mcp?.configKind === 'local-proxy') {
         const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
         clientPlan = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
         clientPlan.configPath = target.configPath;
@@ -123,7 +133,6 @@ export async function setupCommand(args, io) {
           clientPlan.written = true;
         }
       } else {
-        const client = MCP_CLIENTS.get(scanId);
         const identity = writeConfig ? await agentIdentity(scanId, io.env) : envReferenceIdentity(scanId);
         clientPlan = clientSetupPlan(scanId, client, setupPlan.mcpUrl, io.env, identity);
         clientPlan.configPath = target.configPath;
@@ -142,8 +151,8 @@ export async function setupCommand(args, io) {
                 json: outputJson
               });
               clientPlan.behaviorProfile = profileResult;
-              if (scanId === 'codex') {
-                clientPlan.codexProfile = profileResult;
+              if (client.profile?.profileVersion?.startsWith(scanId)) {
+                clientPlan[`${scanId}Profile`] = profileResult;
               }
             }
           }
@@ -152,10 +161,14 @@ export async function setupCommand(args, io) {
       setupPlan.detectedClients.push(clientPlan);
     }
   } else if (clientId) {
-    if (clientId === 'hermes') {
-      const client = MCP_CLIENTS.get(clientId);
+    const client = getClient(clientId) || MCP_CLIENTS.get(clientId);
+    if (!client) {
+      throw new UsageError(`Unsupported MCP client: ${clientId}. Supported clients: ${supportedSetupClientIds(MCP_CLIENTS).join(', ')}.`);
+    }
+
+    if (typeof client.setupRecipe === 'function') {
       const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
-      setupPlan.selectedClient = await hermesSetupPlan({
+      setupPlan.selectedClient = await client.setupRecipe({
         setupPlan,
         optionArgs,
         io,
@@ -164,14 +177,7 @@ export async function setupCommand(args, io) {
         client,
         force
       });
-    } else if (clientId === 'openclaw') {
-      setupPlan.selectedClient = await openclawSetupPlan({
-        setupPlan,
-        optionArgs,
-        io,
-        dryRun
-      });
-    } else if (clientId === 'copilot-cli') {
+    } else if (client.mcp?.configKind === 'local-proxy') {
       const proxyPort = parsePositiveInteger(optionValue(optionArgs, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
       setupPlan.selectedClient = copilotSetupPlan(setupPlan.mcpUrl, proxyPort, io.env);
       if (writeConfig) {
@@ -179,11 +185,6 @@ export async function setupCommand(args, io) {
         setupPlan.selectedClient.written = true;
       }
     } else {
-      const client = MCP_CLIENTS.get(clientId);
-      if (!client) {
-        throw new UsageError(`Unsupported MCP client: ${clientId}. Supported clients: ${supportedSetupClientIds(MCP_CLIENTS).join(', ')}.`);
-      }
-
       const identity = writeConfig ? await agentIdentity(clientId, io.env) : envReferenceIdentity(clientId);
       setupPlan.selectedClient = clientSetupPlan(clientId, client, setupPlan.mcpUrl, io.env, identity, { auth });
       if (writeConfig) {
@@ -231,8 +232,8 @@ export async function setupCommand(args, io) {
         profileResult.skipped = skipped;
         profileResult.isHomeTarget = isHomeTarget;
         setupPlan.selectedClient.behaviorProfile = profileResult;
-        if (clientId === 'codex') {
-          setupPlan.selectedClient.codexProfile = profileResult;
+        if (client.profile?.profileVersion?.startsWith(clientId)) {
+          setupPlan.selectedClient[`${clientId}Profile`] = profileResult;
         }
       }
     }

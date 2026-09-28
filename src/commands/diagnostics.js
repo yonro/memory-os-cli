@@ -1,4 +1,3 @@
-import { kiroDoctor } from './kiro-doctor.js';
 import {
   booleanValue,
   hasFlag,
@@ -28,8 +27,6 @@ import {
   probe
 } from '../network/http.js';
 import { writeLine } from '../core/io.js';
-import { codexDoctor } from './codex-doctor.js';
-import { defaultCodexConfigPath } from '../config/paths.js';
 import { serviceContext } from '../api/service-context.js';
 import { assertKnownOptions } from '../api/input.js';
 import { ServiceClientError, errorToExitCode } from '../api/errors.js';
@@ -71,7 +68,7 @@ export async function doctorCommand(args, io) {
     return await doctorClient.doctor(args, io);
   }
   if (hasFlag(args, '--smoke')) {
-    throw new UsageError('Smoke requires --client codex for this MCP-depth release.');
+    throw new UsageError(`Smoke requires --client ${supportedDoctorClientIds()[0]} for this MCP-depth release.`);
   }
   if (hasFlag(args, '--fix')) throw new UsageError(`Local config repair requires --client <${supportedDoctorClientIds().join('|')}>.`);
   if (hasFlag(args, '--services')) return await serviceDoctor(args, io);
@@ -283,8 +280,9 @@ export async function statusCommand(args, io) {
 }
 
 export function writeSmokeHelp(io) {
-  writeLine(io.stdout, 'Smoke command (deprecated, use "xmemo doctor --client codex --smoke"):');
-  writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client codex [--config <path>] [--json]`);
+  const defaultClient = supportedDoctorClientIds()[0];
+  writeLine(io.stdout, `Smoke command (deprecated, use "xmemo doctor --client ${defaultClient} --smoke"):`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} smoke --client ${defaultClient} [--config <path>] [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Run read-only smoke checks for client MCP configuration.');
   return 0;
@@ -295,13 +293,17 @@ export async function smokeCommand(args, io) {
     return writeSmokeHelp(io);
   }
 
-  const clientId = optionValue(args, '--client');
-  if (!clientId) {
-    throw new UsageError('Smoke requires --client codex for this MCP-depth release.');
+  const defaultClient = supportedDoctorClientIds()[0];
+  const rawClient = optionValue(args, '--client');
+  if (!rawClient) {
+    throw new UsageError(`Smoke requires --client ${defaultClient} for this MCP-depth release.`);
   }
-  if (clientId !== 'codex') {
-    throw new UsageError('Only Codex smoke checks are available in this MCP-depth release.');
+  const clientId = resolveClientId(rawClient);
+  const client = getClient(clientId);
+  if (!client || !client.doctor || clientId !== defaultClient) {
+    const defaultLabel = getClient(defaultClient)?.label ?? 'Codex';
+    throw new UsageError(`Only ${defaultLabel} smoke checks are available in this MCP-depth release.`);
   }
 
-  return await codexDoctor(args, io);
+  return await client.doctor(args, io);
 }

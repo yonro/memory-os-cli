@@ -28,6 +28,13 @@ import {
   mcpConfigTemplate,
   mcpLocalProxyTemplate
 } from '../mcp/core/templates.js';
+import fs from 'node:fs/promises';
+import { fileExists } from '../core/runtime.js';
+import {
+  CLIENT_REGISTRY,
+  getClient,
+  supportedProfileClientIds
+} from '../clients/registry.js';
 import { usesClientOAuth } from '../mcp/clients/registry.js';
 import {
   codexMemoryProfile,
@@ -66,11 +73,13 @@ export function writeMcpHelp(io, subcommand) {
     writeLine(io.stdout, 'Run a local MCP proxy server.');
     return 0;
   }
+  const defaultProfileClient = supportedProfileClientIds()[0];
+  const authModeClient = CLIENT_REGISTRY.find((c) => c.mcp?.supportsAuthMode);
   if (subcommand === 'profile') {
     writeLine(io.stdout, 'MCP profile command:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
+    writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile ${defaultProfileClient} [--json]`);
     writeLine(io.stdout, '');
-    writeLine(io.stdout, 'Display or check Codex behavior profile.');
+    writeLine(io.stdout, `Display or check ${getClient(defaultProfileClient)?.label ?? 'Codex'} behavior profile.`);
     return 0;
   }
   if (subcommand === 'serve' || subcommand === 'stdio') {
@@ -82,12 +91,12 @@ export function writeMcpHelp(io, subcommand) {
   }
   writeLine(io.stdout, 'MCP commands:');
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp serve`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client kiro [--auth oauth|key] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add kiro [--auth oauth|key] [--write] [--force] [--config <path>]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client ${authModeClient?.id} [--auth oauth|key] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp add ${authModeClient?.id} [--auth oauth|key] [--write] [--force] [--config <path>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp list`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp config --client <${supportedMcpClientIds().join('|')}> [--base-url <url>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp proxy [--port ${DEFAULT_PROXY_PORT}] [--base-url <url>]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile codex [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} mcp profile ${defaultProfileClient} [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <https://api.example.com>] --write [--config <path>]`);
   return 0;
@@ -140,11 +149,15 @@ export async function mcpCommand(args, io) {
     }
     const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
     const mcpUrl = endpointUrl(baseUrl, '/mcp');
-    const useLocalProxy = clientId === 'copilot-cli' && !hasFlag(args, '--remote-env');
+    const targetClient = getClient(clientId) || MCP_CLIENTS.get(clientId);
+    const useLocalProxy = targetClient?.mcp?.configKind === 'local-proxy' && !hasFlag(args, '--remote-env');
     const proxyPort = parsePositiveInteger(optionValue(args, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
     const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
     const auth = optionValue(args, '--auth');
-    if (auth && (clientId !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key is supported only for Kiro.');
+    const authModeClient = CLIENT_REGISTRY.find((c) => c.mcp?.supportsAuthMode);
+    if (auth && (clientId !== authModeClient?.id || !['oauth', 'key'].includes(auth))) {
+      throw new UsageError(`--auth oauth|key is supported only for ${authModeClient?.label ?? 'Kiro'}.`);
+    }
     const templateOptions = { mcpClients: MCP_CLIENTS, auth };
     const template = useLocalProxy
       ? mcpLocalProxyTemplate(clientId, proxyUrl, templateOptions)
@@ -189,9 +202,11 @@ export async function mcpCommand(args, io) {
   }
 
   if (subcommand === 'profile') {
-    const clientId = args[1] ?? 'codex';
-    if (clientId !== 'codex') {
-      throw new UsageError('Only the Codex memory behavior profile is available in this MCP-depth release.');
+    const defaultProfileClient = supportedProfileClientIds()[0];
+    const targetId = args[1] ?? defaultProfileClient;
+    if (targetId !== defaultProfileClient) {
+      const defaultLabel = getClient(defaultProfileClient)?.label ?? 'Codex';
+      throw new UsageError(`Only the ${defaultLabel} memory behavior profile is available in this MCP-depth release.`);
     }
 
     const profile = codexMemoryProfile();
@@ -204,13 +219,70 @@ export async function mcpCommand(args, io) {
     return 0;
   }
 
+  if (subcommand === 'remove' || subcommand === 'rm') {
+    if (subcommand === 'rm' && !hasFlag(args, '--json') && io.stderr?.isTTY) {
+      writeLine(io.stderr, "Hint: 'xmemo mcp rm' is an alias for 'xmemo mcp remove'.");
+    }
+    const rawTarget = args[1] ?? optionValue(args, '--client');
+    const target = resolveClientAlias(rawTarget);
+    const client = getClient(target) || MCP_CLIENTS.get(target);
+    if (!client || !client.mcp?.removeConfig) {
+      throw new UsageError(`Unsupported MCP client: ${rawTarget ?? 'missing'}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
+    }
+    const configPath = optionValue(args, '--config') ?? (typeof client.mcp.defaultConfigPath === 'function' ? client.mcp.defaultConfigPath(io.env) : null);
+    const result = await client.mcp.removeConfig(configPath, { preview: hasFlag(args, '--dry-run') });
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify(result, null, 2));
+    } else {
+      writeLine(io.stdout, result.removed ? `Removed MCP config from ${configPath}` : `No MCP config found in ${configPath}`);
+    }
+    return 0;
+  }
+
+  if (subcommand === 'status') {
+    const rawTarget = args[1] ?? optionValue(args, '--client');
+    const target = resolveClientAlias(rawTarget);
+    const client = getClient(target) || MCP_CLIENTS.get(target);
+    if (!client || !client.mcp) {
+      throw new UsageError(`Unsupported MCP client: ${rawTarget ?? 'missing'}. Supported clients: ${supportedMcpClientIds().join(', ')}.`);
+    }
+    const configPath = optionValue(args, '--config') ?? (typeof client.mcp.defaultConfigPath === 'function' ? client.mcp.defaultConfigPath(io.env) : null);
+    let configured = false;
+    try {
+      if (configPath && (await fileExists(configPath))) {
+        const text = await fs.readFile(configPath, 'utf8');
+        configured = text.includes(MCP_SERVER_NAME) || text.includes('XMemo') || text.includes('xmemo');
+      }
+    } catch {}
+    const statusResult = {
+      client: client.id,
+      label: client.label,
+      configPath,
+      configured,
+      authentication: client.mcp.authentication
+    };
+    if (hasFlag(args, '--json')) {
+      writeLine(io.stdout, JSON.stringify(statusResult, null, 2));
+    } else {
+      writeLine(io.stdout, `${client.label} MCP status: ${configured ? 'configured' : 'not configured'} (${configPath ?? 'no config path'})`);
+    }
+    return 0;
+  }
+
+  if (subcommand === 'add' && !hasFlag(args, '--json') && io.stderr?.isTTY) {
+    writeLine(io.stderr, "Hint: 'xmemo mcp add' is an alias for 'xmemo mcp install'.");
+  }
+
   const rawTarget = args[1] ?? '';
   const target = resolveClientAlias(rawTarget);
   const auth = optionValue(args, '--auth');
-  if (auth && (target !== 'kiro' || !['oauth', 'key'].includes(auth))) throw new UsageError('--auth oauth|key is supported only for Kiro.');
+  const authModeClient = CLIENT_REGISTRY.find((c) => c.mcp?.supportsAuthMode);
+  if (auth && (target !== authModeClient?.id || !['oauth', 'key'].includes(auth))) {
+    throw new UsageError(`--auth oauth|key is supported only for ${authModeClient?.label ?? 'Kiro'}.`);
+  }
   const client = MCP_CLIENTS.get(target);
 
-  if (subcommand !== 'add' || !client) {
+  if ((subcommand !== 'add' && subcommand !== 'install') || !client) {
     throw new UsageError(`Supported MCP setup command: ${COMMAND_NAME} mcp add <${supportedMcpClientIds().join('|')}> [--url <url>]`);
   }
 

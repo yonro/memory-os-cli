@@ -122,6 +122,39 @@ npx @xmemo/client mcp serve
 > Start with `xmemo init` (or `xmemo account login`, `xmemo doctor`, and `xmemo setup <client>`).
 > Hand-edit MCP configuration only when a client has no verified setup path.
 
+## How the commands fit together
+
+The XMemo CLI architecture is built on four core design principles:
+
+### 1. Unified Resource Grammar (`xmemo <resource> <action>`)
+Every integration component is a first-class resource with predictable lifecycle actions:
+
+| Resource | Scope | Actions | Examples |
+| --- | --- | --- | --- |
+| `mcp` | MCP server connection configuration | `install`, `remove`, `status` | `xmemo mcp install codex`, `xmemo mcp status` |
+| `plugin` | Host-native extension packages | `install`, `remove`, `status`, `list`, `info` | `xmemo plugin install gemini-cli`, `xmemo plugin list` |
+| `skill` | Agent skill scripts & documentation | `install`, `remove`, `status`, `update` | `xmemo skill install --client openclaw` |
+| `profile` | Markdown behavior steering instructions | `install`, `remove`, `status`, `show` | `xmemo profile install cursor` |
+
+- **Composite commands**: `xmemo setup [<client>...]`, `xmemo uninstall [<client>...]`, and `xmemo status [<client>]` orchestrate these resources in a single step according to the client's declarative profile.
+- **Backward-compatible aliases**: Familiar commands such as `xmemo mcp add` (alias for `mcp install`), `xmemo profile uninstall` (alias for `profile remove`), and `xmemo skill uninstall` (alias for `skill remove`) remain fully functional and print a helpful one-line hint in interactive terminals.
+
+### 2. Unified Target Resolver
+When no client is explicitly passed, the CLI uses a deterministic three-tier precedence resolution model:
+1. **Explicit flag or argument**: `--client <id>`, positional client argument, or `--all`.
+2. **Calling agent environment**: Automatically identifies the calling agent runtime when running inside an agent session (e.g., `CLAUDECODE` / `CLAUDE_CODE_ENTRYPOINT` maps to `claude-code`, and `CODEX_THREAD_ID` / `CODEX_SESSION_ID` maps to `codex`).
+3. **Detected installed clients**: Inspects local configuration paths and markers. If exactly one matching client is found, it is automatically selected; if multiple clients are found in interactive mode, an interactive picker is presented. The CLI never silently writes configuration to arbitrary unverified paths.
+
+### 3. Plan, Confirm Once, Apply (`PlanRunner`)
+Mutating commands follow a strict, atomic execution pattern:
+1. **Build Plan**: Assemble an ordered sequence of actions across resources (e.g. plugin install followed by skill configuration).
+2. **Preview**: Print the entire plan (including modified paths, commands, and unified diffs) to the terminal.
+3. **Confirm Once**: Prompt `[y/N]` exactly once for the entire sequence. Re-running with `--yes` or `-y` bypasses the prompt; `--dry-run` displays the preview without mutation.
+4. **Apply Sequentially**: Steps run in dependency order, stopping immediately upon first failure. Re-running an already configured client detects that all components are up to date and reports `Nothing to do`.
+
+### 4. Declarative Client Registry
+All client configurations, recipes, and capabilities are declared centrally in `src/clients/registry.js`. Command implementations are purely generic orchestrators with zero hardcoded client ID strings. Platforms can also be added dynamically at runtime via `registerClient()`.
+
 ## Supported integrations
 
 | Client | Recommended command | Connection |

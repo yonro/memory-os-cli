@@ -5,7 +5,11 @@ import { hasFlag, optionValue } from '../core/args.js';
 import { TOKEN_ENV_VAR, LEGACY_TOKEN_ENV_VAR } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { PINNED_HERMES_PLUGIN_VERSION } from '../core/pins.js';
+import {
+  PINNED_HERMES_PLUGIN_VERSION,
+  PINNED_OPENCLAW_PLUGIN_SPEC,
+  PINNED_OPENCLAW_SKILL_NAME
+} from '../core/pins.js';
 import {
   bestEffortChmod,
   readTextIfExists,
@@ -16,6 +20,161 @@ import {
   resolveCredentialToken,
   storeTokenValue
 } from '../network/auth.js';
+
+// --- OpenClaw Recipe ---
+
+const DEFAULT_OPENCLAW_BIN = 'openclaw';
+const OPENCLAW_PLUGIN_SPEC = PINNED_OPENCLAW_PLUGIN_SPEC;
+const OPENCLAW_MCP_NAME = 'xmemo';
+
+function commandText(command, args) {
+  return [command, ...args].join(' ');
+}
+
+function extractLastJsonObject(text) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return null;
+  }
+  for (let index = trimmed.lastIndexOf('{'); index >= 0; index = trimmed.lastIndexOf('{', index - 1)) {
+    const candidate = trimmed.slice(index);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Keep scanning; OpenClaw may print warnings before the final JSON object.
+    }
+  }
+  return null;
+}
+
+async function runOpenClaw(openclawBin, args, io, { allowAlreadyInstalled = false } = {}) {
+  const result = await runProcess(openclawBin, args, io, { stream: false });
+  if (result.code !== 0) {
+    const combinedOutput = `${result.stderr || ''}\n${result.stdout || ''}`;
+    const isAlreadyInstalled = /already installed|already exists|destination already exists/i.test(combinedOutput);
+    if (allowAlreadyInstalled && isAlreadyInstalled) {
+      return { ...result, code: 0, alreadyInstalled: true };
+    }
+    throw new UsageError(
+      `OpenClaw command failed (${result.code}): ${commandText(openclawBin, args)}\n${result.stderr || result.stdout}`,
+    );
+  }
+  return result;
+}
+
+function openclawCredentialPlan(env) {
+  if (env[TOKEN_ENV_VAR]) {
+    return { ready: true, source: 'env', variable: TOKEN_ENV_VAR };
+  }
+  if (env.MEMORY_OS_MCP_TOKEN) {
+    return { ready: true, source: 'env', variable: 'MEMORY_OS_MCP_TOKEN' };
+  }
+  return { ready: false, source: 'shared-credential-or-missing', variable: null };
+}
+
+export async function openclawSetupRecipe({ setupPlan, optionArgs, io, dryRun }) {
+  const openclawBin = optionValue(optionArgs, '--openclaw-bin') ?? DEFAULT_OPENCLAW_BIN;
+  const mcpOnly = hasFlag(optionArgs, '--mcp-only');
+  const withMcp = mcpOnly || hasFlag(optionArgs, '--with-mcp');
+  const force = hasFlag(optionArgs, '--force');
+  const isJson = hasFlag(optionArgs, '--json');
+  const credential = openclawCredentialPlan(io.env);
+  const sharedToken = await resolveCredentialToken(io.env);
+  if (sharedToken && !credential.ready) {
+    credential.ready = true;
+    credential.source = 'shared-credential';
+  }
+
+  const pluginArgs = ['plugins', 'install', OPENCLAW_PLUGIN_SPEC, ...(force ? ['--force'] : [])];
+  const mcpArgs = [
+    'mcp',
+    'add',
+    OPENCLAW_MCP_NAME,
+    '--url',
+    setupPlan.mcpUrl,
+    '--transport',
+    'streamable-http',
+    '--header',
+    `Authorization=Bearer \${${TOKEN_ENV_VAR}}`,
+    '--no-probe',
+  ];
+
+  const selectedClient = {
+    id: 'openclaw',
+    label: 'OpenClaw',
+    configKind: 'native-plugin',
+    setupMode: mcpOnly ? 'mcp-only' : withMcp ? 'native-with-mcp' : 'native',
+    written: false,
+    writesTokenValue: false,
+    openclawBin,
+    credential,
+    nativePlugin: {
+      package: OPENCLAW_PLUGIN_SPEC,
+      command: commandText(openclawBin, pluginArgs),
+      installed: false,
+      alreadyInstalled: false,
+      skipped: mcpOnly,
+    },
+    skill: {
+      ref: PINNED_OPENCLAW_SKILL_NAME,
+      command: 'xmemo skill install --client openclaw',
+      installed: false,
+      skipped: mcpOnly,
+      note: 'Skill is installed separately via xmemo skill install --client openclaw',
+    },
+    mcp: {
+      enabled: withMcp,
+      serverName: OPENCLAW_MCP_NAME,
+      mcpUrl: setupPlan.mcpUrl,
+      command: commandText(openclawBin, mcpArgs),
+      written: false,
+      only: mcpOnly,
+      note: withMcp
+        ? mcpOnly
+          ? `Hosted MCP references ${TOKEN_ENV_VAR}; native plugin and Skill are skipped by --mcp-only.`
+          : `Hosted MCP fallback references ${TOKEN_ENV_VAR}; native plugin remains primary.`
+        : 'Hosted MCP is not installed by default; use --with-mcp for an explicit fallback.',
+    },
+    status: null,
+    dryRun,
+  };
+
+  if (dryRun) {
+    return selectedClient;
+  }
+
+  if (!mcpOnly) {
+    if (!isJson) {
+      writeLine(io.stdout, `Running: ${commandText(openclawBin, pluginArgs)}`);
+    }
+    const pluginResult = await runOpenClaw(openclawBin, pluginArgs, io, { allowAlreadyInstalled: true });
+    if (pluginResult.alreadyInstalled) {
+      selectedClient.nativePlugin.alreadyInstalled = true;
+      if (!isJson) {
+        writeLine(io.stdout, 'OpenClaw plugin is already installed. Use --force to reinstall.');
+      }
+    } else {
+      selectedClient.nativePlugin.installed = true;
+    }
+  }
+
+  if (withMcp) {
+    if (!isJson) {
+      writeLine(io.stdout, `Running: ${commandText(openclawBin, mcpArgs)}`);
+    }
+    await runOpenClaw(openclawBin, mcpArgs, io);
+    selectedClient.mcp.written = true;
+  }
+
+  if (!mcpOnly) {
+    const statusResult = await runOpenClaw(openclawBin, ['xmemo', 'status', '--json'], io);
+    selectedClient.status = extractLastJsonObject(statusResult.stdout);
+  }
+  selectedClient.written = true;
+  return selectedClient;
+}
+
+// --- Hermes Recipe ---
 
 const HERMES_MCP_NAME = 'XMemo';
 const HERMES_PLUGIN_PACKAGE = 'hermes-xmemo';
@@ -108,10 +267,6 @@ async function resolveHermesCredential(io, hermesEnvPath) {
   return { token: null, source: 'missing' };
 }
 
-function commandText(command, args) {
-  return [command, ...args].join(' ');
-}
-
 async function runHermesCommand(command, args, io) {
   const result = await runProcess(command, args, io, { stream: false });
   if (result.code !== 0) {
@@ -122,7 +277,7 @@ async function runHermesCommand(command, args, io) {
   return result;
 }
 
-export async function hermesSetupPlan({ setupPlan, optionArgs, io, dryRun, identity, client, force }) {
+export async function hermesSetupRecipe({ setupPlan, optionArgs, io, dryRun, identity, client, force }) {
   const hermesHome = optionValue(optionArgs, '--hermes-home') ?? defaultHermesHome(io.env);
   const hermesEnvPath = path.join(hermesHome, '.env');
   const configPath = optionValue(optionArgs, '--config') ?? path.join(hermesHome, 'config.yaml');

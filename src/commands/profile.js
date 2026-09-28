@@ -40,9 +40,9 @@ export function writeProfileHelp(io, subcommand) {
     writeLine(io.stdout, 'Check behavior profile installation status.');
     return 0;
   }
-  if (subcommand === 'uninstall') {
-    writeLine(io.stdout, 'Profile uninstall command:');
-    writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <${clients}> [--target <path>] [--json]`);
+  if (subcommand === 'remove' || subcommand === 'uninstall') {
+    writeLine(io.stdout, 'Profile remove command:');
+    writeLine(io.stdout, `  ${COMMAND_NAME} profile remove <${clients}> [--target <path>] [--json]`);
     writeLine(io.stdout, '');
     writeLine(io.stdout, 'Remove behavior profile instructions.');
     return 0;
@@ -51,14 +51,21 @@ export function writeProfileHelp(io, subcommand) {
   writeLine(io.stdout, `  ${COMMAND_NAME} profile install <${clients}> [--target <path>] [--dry-run|--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile show <${clients}> [--target <path>] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} profile status <${clients}> [--target <path>] [--json]`);
-  writeLine(io.stdout, `  ${COMMAND_NAME} profile uninstall <${clients}> [--target <path>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} profile remove <${clients}> [--target <path>] [--json]`);
   writeLine(io.stdout, '');
   writeLine(io.stdout, 'Profile installs are section-scoped and never write token values.');
   return 0;
 }
 
 export async function profileCommand(args, io) {
-  const subcommand = args[0] ?? 'help';
+  let subcommand = args[0] ?? 'help';
+  if (subcommand === 'uninstall') {
+    if (!hasFlag(args, '--json') && io.stderr?.isTTY) {
+      writeLine(io.stderr, "Hint: 'xmemo profile uninstall' is an alias for 'xmemo profile remove'.");
+    }
+    subcommand = 'remove';
+  }
+
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     if (hasFlag(args, '--json')) {
       writeLine(io.stdout, JSON.stringify({
@@ -66,7 +73,7 @@ export async function profileCommand(args, io) {
         ok: true,
         command: 'profile',
         data: {
-          subcommands: ['install', 'show', 'status', 'uninstall'],
+          subcommands: ['install', 'show', 'status', 'remove', 'uninstall'],
           supportedClients: supportedProfileClientIds()
         },
         error: null
@@ -107,7 +114,7 @@ export async function profileCommand(args, io) {
     };
   } else if (subcommand === 'status') {
     result = await profileStatusResult(clientId, targetPath);
-  } else if (subcommand === 'uninstall') {
+  } else if (subcommand === 'remove') {
     result = await profileUninstallResult(clientId, targetPath, { write: !hasFlag(optionArgs, '--dry-run') });
   } else {
     throw new UsageError(`Unknown profile command: ${subcommand}`);

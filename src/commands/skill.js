@@ -166,7 +166,13 @@ export function writeSkillHelp(io) {
 }
 
 export async function skillCommand(args, io) {
-  const subcommand = args[0] ?? 'help';
+  let subcommand = args[0] ?? 'help';
+  if (subcommand === 'uninstall') {
+    if (!hasFlag(args, '--json') && io.stderr?.isTTY) {
+      writeLine(io.stderr, "Hint: 'xmemo skill uninstall' is an alias for 'xmemo skill remove'.");
+    }
+    subcommand = 'remove';
+  }
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h' || subcommand.startsWith('-') || hasFlag(args, '--help') || hasFlag(args, '-h')) {
     if (hasFlag(args, '--json')) {
       writeLine(io.stdout, JSON.stringify({
@@ -195,7 +201,10 @@ export async function skillCommand(args, io) {
   if (subcommand === 'status') {
     return await skillStatus(optionArgs, io);
   }
-  if (subcommand === 'remove') {
+  if (subcommand === 'remove' || subcommand === 'uninstall') {
+    if (subcommand === 'uninstall' && !hasFlag(optionArgs, '--json') && io.stderr?.isTTY) {
+      writeLine(io.stderr, "Hint: 'xmemo skill uninstall' is an alias for 'xmemo skill remove'.");
+    }
     return await skillRemove(optionArgs, io);
   }
   if (subcommand === 'update') {
@@ -453,27 +462,28 @@ async function directorySkillInstall(options, cwd, io) {
   }
 }
 
-async function openclawSkillInstall(options, cwd, io) {
-  const client = getClient('openclaw');
+async function nativeSkillInstall(client, options, cwd, io) {
   if (options.project) {
     throw new UsageError(`Client "${client.label}" does not support project-level skills.`);
   }
 
-  const version = options.version ?? PINNED_OPENCLAW_SKILL_VERSION;
+  const bin = client.skill?.bin ?? client.id;
+  const ref = client.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
+  const version = options.version ?? client.skill?.version ?? PINNED_OPENCLAW_SKILL_VERSION;
   const cmdArgs = [
     'skills',
     'install',
-    PINNED_OPENCLAW_SKILL_NAME,
+    ref,
     '--version',
     version,
     ...(options.global ? ['--global'] : []),
     ...(options.force ? ['--force'] : [])
   ];
-  const fullCommand = ['openclaw', ...cmdArgs];
+  const fullCommand = [bin, ...cmdArgs];
   const cmdStr = fullCommand.join(' ');
 
   if (!options.json) {
-    writeLine(io.stdout, 'Install plan for OpenClaw skill:');
+    writeLine(io.stdout, `Install plan for ${client.label} skill:`);
     writeLine(io.stdout, `  Command: ${cmdStr}`);
   }
 
@@ -482,7 +492,7 @@ async function openclawSkillInstall(options, cwd, io) {
       writeLine(io.stdout, JSON.stringify({
         ok: true,
         dryRun: true,
-        client: 'openclaw',
+        client: client.id,
         command: fullCommand,
         executed: false
       }, null, 2));
@@ -497,7 +507,7 @@ async function openclawSkillInstall(options, cwd, io) {
       writeLine(io.stdout, JSON.stringify({
         ok: false,
         consentRequired: true,
-        client: 'openclaw',
+        client: client.id,
         command: fullCommand,
         executed: false
       }, null, 2));
@@ -514,27 +524,27 @@ async function openclawSkillInstall(options, cwd, io) {
 
   let result;
   try {
-    result = await executeSubprocess('openclaw', cmdArgs, io, sanitizeEnv(io.env), cwd);
+    result = await executeSubprocess(bin, cmdArgs, io, sanitizeEnv(io.env), cwd);
   } catch (err) {
     if (err?.code === 'ENOENT') {
-      throw new UsageError('openclaw is not installed or not available on PATH.');
+      throw new UsageError(`${bin} is not installed or not available on PATH.`);
     }
-    throw new UsageError(`Failed to execute openclaw: ${err.message}`);
+    throw new UsageError(`Failed to execute ${bin}: ${err.message}`);
   }
 
   if (result.code !== 0) {
     const combined = `${result.stderr || ''}\n${result.stdout || ''}`;
     if (/already exists|already installed/i.test(combined) && !options.force) {
-      throw new UsageError(`OpenClaw skill already exists. Use --force to replace.\n${result.stderr || result.stdout}`);
+      throw new UsageError(`${client.label} skill already exists. Use --force to replace.\n${result.stderr || result.stdout}`);
     }
-    throw new UsageError(`openclaw skills install failed (${result.code}):\n${result.stderr || result.stdout}`);
+    throw new UsageError(`${bin} skills install failed (${result.code}):\n${result.stderr || result.stdout}`);
   }
 
   if (options.json) {
     writeLine(io.stdout, JSON.stringify({
       ok: true,
-      client: 'openclaw',
-      skill: PINNED_OPENCLAW_SKILL_NAME,
+      client: client.id,
+      skill: ref,
       version,
       global: Boolean(options.global),
       command: fullCommand,
@@ -545,13 +555,14 @@ async function openclawSkillInstall(options, cwd, io) {
     return 0;
   }
 
-  writeLine(io.stdout, `✓ OpenClaw skill ${PINNED_OPENCLAW_SKILL_NAME}@${version} installed successfully.`);
+  writeLine(io.stdout, `✓ ${client.label} skill ${ref}@${version} installed successfully.`);
   return 0;
 }
 
 async function clientSkillInstall(options, cwd, io) {
-  if (options.client === 'openclaw') {
-    return await openclawSkillInstall(options, cwd, io);
+  const clientObj = options.client ? getClient(options.client) : null;
+  if (clientObj?.skill?.kind === 'native') {
+    return await nativeSkillInstall(clientObj, options, cwd, io);
   }
 
   const targets = [];
@@ -577,10 +588,10 @@ async function clientSkillInstall(options, cwd, io) {
     });
   } else if (options.all) {
     for (const client of supportedSkillClients()) {
-      if (client.id === 'openclaw') {
+      const clientObj = getClient(client.id);
+      if (clientObj?.skill?.kind === 'native') {
         continue;
       }
-      const clientObj = getClient(client.id);
       const det = await clientObj.detect(io.env, { cwd });
       if (det?.detected) {
         targets.push({
@@ -899,13 +910,16 @@ export async function skillStatus(args, io) {
 
   // Check status for each target
   for (const t of targets) {
-    if (t.client === 'openclaw') {
+    const clientObj = getClient(t.client);
+    if (clientObj?.skill?.kind === 'native') {
+      const bin = clientObj.skill?.bin ?? clientObj.id;
+      const ref = clientObj.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
       try {
-        const res = await executeSubprocess('openclaw', ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
-        if (res.code === 0 && (res.stdout.includes(PINNED_OPENCLAW_SKILL_NAME) || res.stdout.includes('xmemo'))) {
+        const res = await executeSubprocess(bin, ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+        if (res.code === 0 && (res.stdout.includes(ref) || res.stdout.includes('xmemo'))) {
           t.installed = true;
           const match = res.stdout.match(/@xmemo\/xmemo@([0-9.]+)/) || res.stdout.match(/xmemo@([0-9.]+)/);
-          t.version = match ? match[1] : PINNED_OPENCLAW_SKILL_VERSION;
+          t.version = match ? match[1] : (clientObj.skill?.version ?? PINNED_OPENCLAW_SKILL_VERSION);
         } else {
           t.installed = false;
           t.version = null;
@@ -971,11 +985,13 @@ export async function skillRemove(args, io) {
   const isJson = hasFlag(args, '--json');
   const yes = hasFlag(args, '--yes');
 
-  if (client.id === 'openclaw') {
+  if (client.skill?.kind === 'native') {
+    const bin = client.skill?.bin ?? client.id;
+    const ref = client.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
     let isInstalled = false;
     try {
-      const checkRes = await executeSubprocess('openclaw', ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
-      if (checkRes.code === 0 && (checkRes.stdout.includes(PINNED_OPENCLAW_SKILL_NAME) || checkRes.stdout.includes('xmemo'))) {
+      const checkRes = await executeSubprocess(bin, ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+      if (checkRes.code === 0 && (checkRes.stdout.includes(ref) || checkRes.stdout.includes('xmemo'))) {
         isInstalled = true;
       }
     } catch {}
@@ -990,16 +1006,17 @@ export async function skillRemove(args, io) {
         }, null, 2));
         return 0;
       }
-      writeLine(io.stdout, 'Skill is not installed for OpenClaw.');
+      writeLine(io.stdout, `Skill is not installed for ${client.label}.`);
       return 0;
     }
 
-    const removeCmd = ['clawhub', 'uninstall', PINNED_OPENCLAW_SKILL_NAME];
+    const removeBinary = 'clawhub';
+    const removeCmd = [removeBinary, 'uninstall', ref];
     const removeCmdStr = removeCmd.join(' ');
 
     let clawhubAvailable = false;
     try {
-      const probeRes = await executeSubprocess('clawhub', ['--version'], io, sanitizeEnv(io.env), cwd);
+      const probeRes = await executeSubprocess(removeBinary, ['--version'], io, sanitizeEnv(io.env), cwd);
       if (probeRes.code === 0) {
         clawhubAvailable = true;
       }
@@ -1012,13 +1029,13 @@ export async function skillRemove(args, io) {
           removed: false,
           client: client.id,
           command: removeCmd,
-          error: 'clawhub_not_found',
-          message: `clawhub is not installed or not available on PATH. Run "${removeCmdStr}" to remove the skill.`
+          error: `${removeBinary}_not_found`,
+          message: `${removeBinary} is not installed or not available on PATH. Run "${removeCmdStr}" to remove the skill.`
         }, null, 2));
         return 1;
       }
-      writeLine(io.stderr, 'clawhub is not installed or not available on PATH.');
-      writeLine(io.stderr, `To remove this skill, install clawhub and run: ${removeCmdStr}`);
+      writeLine(io.stderr, `${removeBinary} is not installed or not available on PATH.`);
+      writeLine(io.stderr, `To remove this skill, install ${removeBinary} and run: ${removeCmdStr}`);
       return 1;
     }
 
@@ -1033,7 +1050,7 @@ export async function skillRemove(args, io) {
         }, null, 2));
         return 0;
       }
-      writeLine(io.stdout, `Remove XMemo skill for OpenClaw via "${removeCmdStr}"? [y/N]`);
+      writeLine(io.stdout, `Remove XMemo skill for ${client.label} via "${removeCmdStr}"? [y/N]`);
       const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
       if (answer !== 'y' && answer !== 'yes') {
         writeLine(io.stdout, 'Removal cancelled.');
@@ -1043,18 +1060,18 @@ export async function skillRemove(args, io) {
 
     let result;
     try {
-      result = await executeSubprocess('clawhub', ['uninstall', PINNED_OPENCLAW_SKILL_NAME], io, sanitizeEnv(io.env), cwd);
+      result = await executeSubprocess(removeBinary, ['uninstall', ref], io, sanitizeEnv(io.env), cwd);
     } catch (err) {
       if (err?.code === 'ENOENT') {
-        writeLine(io.stderr, 'clawhub is not installed or not available on PATH.');
-        writeLine(io.stderr, `To remove this skill, install clawhub and run: ${removeCmdStr}`);
+        writeLine(io.stderr, `${removeBinary} is not installed or not available on PATH.`);
+        writeLine(io.stderr, `To remove this skill, install ${removeBinary} and run: ${removeCmdStr}`);
         return 1;
       }
-      throw new UsageError(`Failed to execute clawhub: ${err.message}`);
+      throw new UsageError(`Failed to execute ${removeBinary}: ${err.message}`);
     }
 
     if (result.code !== 0) {
-      throw new UsageError(`clawhub uninstall failed (${result.code}):\n${result.stderr || result.stdout}`);
+      throw new UsageError(`${removeBinary} uninstall failed (${result.code}):\n${result.stderr || result.stdout}`);
     }
 
     if (isJson) {
@@ -1067,7 +1084,7 @@ export async function skillRemove(args, io) {
       return 0;
     }
 
-    writeLine(io.stdout, '✓ Removed XMemo skill for OpenClaw.');
+    writeLine(io.stdout, `✓ Removed XMemo skill for ${client.label}.`);
     return 0;
   }
 
