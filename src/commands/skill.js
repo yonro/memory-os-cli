@@ -1320,7 +1320,7 @@ async function validateFromSource(cwd, fromArg) {
   throw new UsageError(`Invalid --from source: ${resolved}. Must be a package directory or .tgz tarball.`);
 }
 
-function sanitizeEnv(baseEnv) {
+export function sanitizeEnv(baseEnv) {
   const source = baseEnv ?? process.env;
   const env = { ...source };
   const hasPath = Object.keys(env).some((k) => k.toUpperCase() === 'PATH');
@@ -1371,7 +1371,7 @@ function resolveNpmRunner(env = process.env) {
   return { command: 'npm', prefixArgs: [] };
 }
 
-async function executeSubprocess(command, args, io, env, cwd) {
+export async function executeSubprocess(command, args, io, env, cwd) {
   const spawnFn = io.spawn ?? spawn;
   return await new Promise((resolve, reject) => {
     let child;

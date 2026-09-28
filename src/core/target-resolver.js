@@ -153,6 +153,9 @@ export async function resolveTargetClients(resource, args, io, options = {}) {
   }
 
   if (detected.length > 1) {
+    if (resource === 'status' || options.returnAllDetected) {
+      return detected;
+    }
     const isInteractive = io?.stdin?.isTTY && !hasFlag(args, '--yes') && !hasFlag(args, '-y') && !hasFlag(args, '--json');
     if (isInteractive) {
       const chosen = await promptSelectClient(detected, io);
@@ -166,6 +169,10 @@ export async function resolveTargetClients(resource, args, io, options = {}) {
   }
 
   // detected.length === 0
+  if (options.allowEmpty) {
+    return [];
+  }
+
   if (resource === 'skill' && (hasFlag(args, '--dir') || optionValue(args, '--dir'))) {
     return [];
   }

@@ -549,7 +549,7 @@ async function pluginInstall(args, io) {
   throw new UsageError(`Unsupported plugin kind: ${plugin.kind}`);
 }
 
-async function checkPluginStatus(plugin, io) {
+export async function checkPluginStatus(plugin, io) {
   let installed = false;
   let detail = null;
 

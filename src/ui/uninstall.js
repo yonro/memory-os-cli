@@ -29,11 +29,15 @@ async function readLine(stdin) {
   return input.split(/\r?\n/, 1)[0] ?? '';
 }
 
-export function writeUninstallSummary(plan, io) {
+export function writeUninstallSummary(plan, io, { isPreview = false } = {}) {
   writeLine(io.stdout, `${PRODUCT_NAME} uninstall summary`);
 
   if (plan.dryRun) {
-    writeLine(io.stdout, '  (dry run — no files were modified)');
+    if (isPreview) {
+      writeLine(io.stdout, '  Planned changes:');
+    } else {
+      writeLine(io.stdout, '  (dry run — no files were modified)');
+    }
   }
 
   if (plan.profiles) {
