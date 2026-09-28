@@ -3,10 +3,11 @@ import { createInterface } from 'node:readline/promises';
 import { hasFlag } from '../core/args.js';
 import { ConfirmationRequiredError } from './errors.js';
 
-export async function confirmRemoteAction(args, io, message) {
+export async function confirmRemoteAction(args, io, message, nonTtyMessage = null) {
   if (hasFlag(args, '--yes')) return;
-  if (io.preflightOnly) throw new ConfirmationRequiredError(message);
-  if (hasFlag(args, '--json') || !io.stdin?.isTTY) throw new ConfirmationRequiredError(message);
+  const nonTtyErr = nonTtyMessage ?? message;
+  if (io.preflightOnly) throw new ConfirmationRequiredError(nonTtyErr);
+  if (hasFlag(args, '--json') || !io.stdin?.isTTY) throw new ConfirmationRequiredError(nonTtyErr);
   let accepted;
   if (typeof io.confirm === 'function') {
     accepted = await io.confirm(`${message} [y/N] `);

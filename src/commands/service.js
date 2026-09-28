@@ -146,7 +146,7 @@ async function memoryDelete(args, io, context) {
   const input = await readJsonInput(args, io);
   const memoryId = singlePositional(args, 'memory delete') ?? optionValue(args, '--id') ?? input?.id;
   const reason = optionValue(args, '--reason') ?? input?.reason;
-  await confirmRemoteAction(args, io, `Soft-delete memory ${memoryId}?`);
+  await confirmRemoteAction(args, io, `Soft-delete memory ${memoryId}?`, `Confirmation required to soft-delete memory ${memoryId}; rerun with --yes.`);
   const body = { mode: 'soft_delete' };
   if (typeof reason === 'string' && reason.trim()) {
     body.reason = reason.trim();
@@ -175,11 +175,17 @@ async function validateMemoryDelete(args, io) {
 async function memoryRestore(args, io, context) {
   const input = await readJsonInput(args, io);
   const memoryId = singlePositional(args, 'memory restore') ?? optionValue(args, '--id') ?? input?.id;
-  await confirmRemoteAction(args, io, `Restore memory ${memoryId}?`);
+  await confirmRemoteAction(args, io, `Restore memory ${memoryId}?`, `Confirmation required to restore memory ${memoryId}; rerun with --yes.`);
+  const reason = optionValue(args, '--reason') ?? input?.reason;
+  const body = {};
+  if (typeof reason === 'string' && reason.trim()) {
+    body.reason = reason.trim();
+  }
   try {
     return await context.client.request({
       method: 'POST',
       path: `/v1/memories/${encodeURIComponent(memoryId)}/restore`,
+      body,
       sideEffect: true
     });
   } catch (error) {
@@ -196,10 +202,10 @@ async function memoryRestore(args, io, context) {
 }
 
 async function validateMemoryRestore(args, io) {
-  assertKnownOptions(args, ['--id', '--yes', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--id', '--reason', '--yes', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['id']);
-  rejectInputFlagConflicts(input, [['--id', 'id']], args);
+  assertNoUnknownInputFields(input, ['id', 'reason']);
+  rejectInputFlagConflicts(input, [['--id', 'id'], ['--reason', 'reason']], args);
   const positionalId = singlePositional(args, 'memory restore');
   const flagId = optionValue(args, '--id');
   if (positionalId && flagId) throw new UsageError('Memory ID cannot be supplied both positionally and via --id.');
@@ -227,24 +233,21 @@ async function memoryList(args, io, context) {
     ? parseIntegerInRange(rawOffset, '--offset', { min: 0, max: Number.MAX_SAFE_INTEGER })
     : 0;
 
-  let targetPrefix = null;
-  let rawPrefixForServer = '';
+  let typedPrefix = null;
   if (projectArg) {
-    targetPrefix = exactPath ? `projects/${projectArg}` : normalizeMemoryPath(`projects/${projectArg}`);
-    rawPrefixForServer = targetPrefix;
+    typedPrefix = exactPath ? `projects/${projectArg}` : `projects/${projectArg.toLowerCase()}`;
   } else if (pathPrefixArg !== undefined && pathPrefixArg !== null) {
-    targetPrefix = exactPath ? pathPrefixArg : normalizeMemoryPath(pathPrefixArg);
-    rawPrefixForServer = exactPath ? pathPrefixArg : (normalizeMemoryPath(pathPrefixArg) || pathPrefixArg);
+    typedPrefix = pathPrefixArg;
   }
 
   function matchesItem(item) {
-    if (targetPrefix !== null) {
-      if (!matchesPathPrefix(item?.path ?? item?.memory_path, targetPrefix, exactPath)) {
+    if (typedPrefix !== null) {
+      if (!matchesPathPrefix(item?.path ?? item?.memory_path, typedPrefix, exactPath)) {
         return false;
       }
     }
     if (typeFilter) {
-      const itemType = String(item?.memory_type ?? item?.type ?? '');
+      const itemType = String(item?.memory_type ?? item?.metadata?.memory_type ?? item?.type ?? '');
       if (itemType.toLowerCase() !== typeFilter.toLowerCase()) {
         return false;
       }
@@ -258,90 +261,85 @@ async function memoryList(args, io, context) {
     return true;
   }
 
+  // Adaptive page fetcher: default limit 100, halves on RESPONSE_TOO_LARGE down to 25
+  async function fetchPageAdaptive(baseQuery, requestedLimit = 100) {
+    let currentLimit = requestedLimit;
+    while (true) {
+      try {
+        const res = await context.client.request({
+          method: 'GET',
+          path: '/v1/memories',
+          retry: 'bounded',
+          sideEffect: false,
+          query: { ...baseQuery, limit: currentLimit }
+        });
+        const memories = res?.data?.memories ?? (Array.isArray(res?.data) ? res.data : []);
+        const total = res?.data?.total;
+        return { memories, total, limitUsed: currentLimit };
+      } catch (error) {
+        if (error?.code === 'RESPONSE_TOO_LARGE' || /limit/i.test(error?.message || '')) {
+          if (currentLimit > 25) {
+            currentLimit = Math.max(25, Math.floor(currentLimit / 2));
+            continue;
+          }
+        }
+        throw error;
+      }
+    }
+  }
+
   const warnings = [];
 
+  // Branch 1: --all
   if (all) {
-    const pageSize = 500;
+    let effectiveServerPrefix = null;
+    let serverPrefixWorked = false;
+    if (typedPrefix !== null) {
+      const firstTry = await fetchPageAdaptive({ path_prefix: typedPrefix, offset: 0 }, 100);
+      if (firstTry.memories.length > 0 || (firstTry.total !== undefined && firstTry.total > 0)) {
+        effectiveServerPrefix = typedPrefix;
+        serverPrefixWorked = true;
+      } else if (!exactPath) {
+        let altPrefix = null;
+        if (/^\[root\]\s*\/?\s*/iu.test(typedPrefix)) {
+          altPrefix = typedPrefix.replace(/^\[root\]\s*\/?\s*/iu, '');
+        } else {
+          altPrefix = `[ROOT]/${typedPrefix}`;
+        }
+        if (altPrefix) {
+          const secondTry = await fetchPageAdaptive({ path_prefix: altPrefix, offset: 0 }, 100);
+          if (secondTry.memories.length > 0 || (secondTry.total !== undefined && secondTry.total > 0)) {
+            effectiveServerPrefix = altPrefix;
+            serverPrefixWorked = true;
+          }
+        }
+      }
+    }
+
     const maxItems = 10000;
     let totalFetched = 0;
     const allItems = [];
-
-    let useFallback = false;
-    if (targetPrefix !== null && !exactPath) {
-      const firstPage = await context.client.request({
-        method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
-        query: { path_prefix: rawPrefixForServer, limit: pageSize, offset: 0 }
-      });
-      const memories = firstPage?.data?.memories ?? (Array.isArray(firstPage?.data) ? firstPage.data : []);
-      if (memories.length === 0 && (firstPage?.data?.total === 0 || firstPage?.data?.total === undefined)) {
-        useFallback = true;
-      } else {
-        totalFetched += memories.length;
-        if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
-        for (const item of memories) {
-          if (matchesItem(item)) allItems.push(item);
-        }
-        let currentOffset = memories.length;
-        while (memories.length === pageSize && totalFetched < maxItems) {
-          const nextPage = await context.client.request({
-            method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
-            query: { path_prefix: rawPrefixForServer, limit: pageSize, offset: currentOffset }
-          });
-          const nextMems = nextPage?.data?.memories ?? (Array.isArray(nextPage?.data) ? nextPage.data : []);
-          if (nextMems.length === 0) break;
-          totalFetched += nextMems.length;
-          if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
-          for (const item of nextMems) {
-            if (matchesItem(item)) allItems.push(item);
-          }
-          if (nextMems.length < pageSize) break;
-          currentOffset += nextMems.length;
-        }
-      }
+    let currentOffset = 0;
+    const baseQuery = {};
+    if (serverPrefixWorked && effectiveServerPrefix !== null) {
+      baseQuery.path_prefix = effectiveServerPrefix;
     }
 
-    if (useFallback || targetPrefix === null || exactPath) {
-      if (!useFallback && (targetPrefix === null || exactPath)) {
-        let currentOffset = 0;
-        while (totalFetched < maxItems) {
-          const query = { limit: pageSize, offset: currentOffset };
-          if (targetPrefix !== null) query.path_prefix = rawPrefixForServer;
-          const pageRes = await context.client.request({
-            method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
-            query
-          });
-          const mems = pageRes?.data?.memories ?? (Array.isArray(pageRes?.data) ? pageRes.data : []);
-          if (mems.length === 0) break;
-          totalFetched += mems.length;
-          if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
-          for (const item of mems) {
-            if (matchesItem(item)) allItems.push(item);
-          }
-          if (mems.length < pageSize) break;
-          currentOffset += mems.length;
-        }
-      } else if (useFallback) {
-        let currentOffset = 0;
-        while (totalFetched < maxItems) {
-          const pageRes = await context.client.request({
-            method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
-            query: { limit: pageSize, offset: currentOffset }
-          });
-          const mems = pageRes?.data?.memories ?? (Array.isArray(pageRes?.data) ? pageRes.data : []);
-          if (mems.length === 0) break;
-          totalFetched += mems.length;
-          if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
-          for (const item of mems) {
-            if (matchesItem(item)) allItems.push(item);
-          }
-          if (mems.length < pageSize) break;
-          currentOffset += mems.length;
-        }
+    while (totalFetched < maxItems) {
+      const page = await fetchPageAdaptive({ ...baseQuery, offset: currentOffset }, 100);
+      const mems = page.memories;
+      if (mems.length === 0) break;
+      totalFetched += mems.length;
+      if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
+      for (const item of mems) {
+        if (matchesItem(item)) allItems.push(item);
       }
+      if (mems.length < page.limitUsed) break;
+      currentOffset += mems.length;
     }
 
     if (totalFetched >= maxItems) {
-      warnings.push('Hit 10,000 item limit while fetching all memories; results may be truncated.');
+      warnings.push('Hit 10,000 item limit while auto-paging memories; results may be truncated.');
     }
 
     const unified = allItems.map((item) => unifyMemoryItem(item, { score: null }));
@@ -355,61 +353,144 @@ async function memoryList(args, io, context) {
     }
     return {
       data: responseData,
-      meta: {
-        warnings,
-        nextCursor: null
-      }
+      meta: { warnings, nextCursor: null }
     };
   }
 
-  // Non-all: single page with fast try or bounded fallback
-  let memories = [];
-  let serverTotal = null;
-  let useFallback = false;
-
-  const initialQuery = { limit, offset, path_prefix: rawPrefixForServer };
-
-  const res = await context.client.request({
-    method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
-    query: initialQuery
-  });
-  memories = res?.data?.memories ?? (Array.isArray(res?.data) ? res.data : []);
-  serverTotal = res?.data?.total;
-
-  if (targetPrefix !== null && !exactPath && memories.length === 0 && (serverTotal === 0 || serverTotal === undefined) && offset === 0) {
-    useFallback = true;
-  }
-
-  let finalItems = [];
-  if (useFallback) {
-    const scanLimit = 500;
-    const maxScan = 1000;
-    let scanned = 0;
-    let scanOffset = 0;
-    const matched = [];
-    while (scanned < maxScan) {
-      const pageRes = await context.client.request({
-        method: 'GET', path: '/v1/memories', retry: 'bounded', sideEffect: false,
-        query: { limit: scanLimit, offset: scanOffset }
-      });
-      const mems = pageRes?.data?.memories ?? (Array.isArray(pageRes?.data) ? pageRes.data : []);
-      if (mems.length === 0) break;
-      scanned += mems.length;
-      for (const item of mems) {
-        if (matchesItem(item)) matched.push(item);
+  // Branch 2: Standard single page when no client filters (--query, --filter, --type)
+  if (!filterText && !typeFilter) {
+    if (typedPrefix === null) {
+      const page = await fetchPageAdaptive({ offset }, limit);
+      const unified = page.memories.map((item) => unifyMemoryItem(item, { score: null }));
+      const responseData = {
+        total: page.total ?? unified.length,
+        memories: unified,
+        items: unified
+      };
+      for (let i = 0; i < unified.length; i += 1) {
+        responseData[i] = unified[i];
       }
-      if (matched.length >= offset + limit || mems.length < scanLimit) break;
-      scanOffset += mems.length;
+      return {
+        data: responseData,
+        meta: {
+          warnings,
+          nextCursor: (page.total !== null && page.total !== undefined && offset + unified.length < page.total)
+            ? String(offset + unified.length)
+            : null
+        }
+      };
     }
-    finalItems = matched.slice(offset, offset + limit);
-    serverTotal = matched.length;
-  } else {
-    finalItems = memories.filter(matchesItem);
+
+    const firstTry = await fetchPageAdaptive({ path_prefix: typedPrefix, offset }, limit);
+    if (firstTry.memories.length > 0 || (firstTry.total !== undefined && firstTry.total > 0) || offset > 0) {
+      const unified = firstTry.memories.map((item) => unifyMemoryItem(item, { score: null }));
+      const responseData = {
+        total: firstTry.total ?? unified.length,
+        memories: unified,
+        items: unified
+      };
+      for (let i = 0; i < unified.length; i += 1) {
+        responseData[i] = unified[i];
+      }
+      return {
+        data: responseData,
+        meta: {
+          warnings,
+          nextCursor: (firstTry.total !== null && firstTry.total !== undefined && offset + unified.length < firstTry.total)
+            ? String(offset + unified.length)
+            : null
+        }
+      };
+    }
+
+    if (!exactPath) {
+      let altPrefix = null;
+      if (/^\[root\]\s*\/?\s*/iu.test(typedPrefix)) {
+        altPrefix = typedPrefix.replace(/^\[root\]\s*\/?\s*/iu, '');
+      } else {
+        altPrefix = `[ROOT]/${typedPrefix}`;
+      }
+      if (altPrefix) {
+        const secondTry = await fetchPageAdaptive({ path_prefix: altPrefix, offset: 0 }, limit);
+        if (secondTry.memories.length > 0 || (secondTry.total !== undefined && secondTry.total > 0)) {
+          const unified = secondTry.memories.map((item) => unifyMemoryItem(item, { score: null }));
+          const responseData = {
+            total: secondTry.total ?? unified.length,
+            memories: unified,
+            items: unified
+          };
+          for (let i = 0; i < unified.length; i += 1) {
+            responseData[i] = unified[i];
+          }
+          return {
+            data: responseData,
+            meta: {
+              warnings,
+              nextCursor: (secondTry.total !== null && secondTry.total !== undefined && offset + unified.length < secondTry.total)
+                ? String(offset + unified.length)
+                : null
+            }
+          };
+        }
+      }
+    }
   }
 
+  // Branch 3: Client-side scan (for client filters or path normalization fallback)
+  let effectiveServerPrefix = null;
+  let serverPrefixWorked = false;
+  if (typedPrefix !== null && (filterText || typeFilter)) {
+    const firstTry = await fetchPageAdaptive({ path_prefix: typedPrefix, offset: 0 }, 100);
+    if (firstTry.memories.length > 0 || (firstTry.total !== undefined && firstTry.total > 0)) {
+      effectiveServerPrefix = typedPrefix;
+      serverPrefixWorked = true;
+    } else if (!exactPath) {
+      let altPrefix = null;
+      if (/^\[root\]\s*\/?\s*/iu.test(typedPrefix)) {
+        altPrefix = typedPrefix.replace(/^\[root\]\s*\/?\s*/iu, '');
+      } else {
+        altPrefix = `[ROOT]/${typedPrefix}`;
+      }
+      if (altPrefix) {
+        const secondTry = await fetchPageAdaptive({ path_prefix: altPrefix, offset: 0 }, 100);
+        if (secondTry.memories.length > 0 || (secondTry.total !== undefined && secondTry.total > 0)) {
+          effectiveServerPrefix = altPrefix;
+          serverPrefixWorked = true;
+        }
+      }
+    }
+  }
+
+  const matched = [];
+  let scanOffset = 0;
+  let totalScanned = 0;
+  const maxScan = 10000;
+  const baseQuery = {};
+  if (serverPrefixWorked && effectiveServerPrefix !== null) {
+    baseQuery.path_prefix = effectiveServerPrefix;
+  }
+
+  while (totalScanned < maxScan) {
+    const page = await fetchPageAdaptive({ ...baseQuery, offset: scanOffset }, 100);
+    const mems = page.memories;
+    if (mems.length === 0) break;
+    totalScanned += mems.length;
+    if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalScanned})`);
+    for (const item of mems) {
+      if (matchesItem(item)) matched.push(item);
+    }
+    if (matched.length >= offset + limit || mems.length < page.limitUsed) break;
+    scanOffset += mems.length;
+  }
+
+  if (totalScanned >= maxScan) {
+    warnings.push('Hit 10,000 item limit while scanning memories; results may be truncated.');
+  }
+
+  const finalItems = matched.slice(offset, offset + limit);
   const unified = finalItems.map((item) => unifyMemoryItem(item, { score: null }));
   const responseData = {
-    total: serverTotal ?? unified.length,
+    total: matched.length,
     memories: unified,
     items: unified
   };
@@ -420,7 +501,7 @@ async function memoryList(args, io, context) {
     data: responseData,
     meta: {
       warnings,
-      nextCursor: (serverTotal !== null && serverTotal !== undefined && offset + unified.length < serverTotal)
+      nextCursor: (matched.length > offset + unified.length)
         ? String(offset + unified.length)
         : null
     }

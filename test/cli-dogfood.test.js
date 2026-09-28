@@ -50,11 +50,11 @@ test('CLI-DOGFOOD 1-2: matchesPathPrefix handles normalized matching and --exact
 
 // 2. Schema Unification & ID Stability Unit Tests
 test('CLI-DOGFOOD 2-1: unifyMemoryItem preserves id and provides stable memory_id reference', () => {
-  // Case A: item with existing id (e.g. from list)
+  // Case A: item with existing id (e.g. from list) without verified memory_id
   const itemWithId = { id: 'list-id-123', path: 'proj/a', content: 'hello', createdAt: '2026-09-28' };
   const unifiedA = unifyMemoryItem(itemWithId, { score: null });
   assert.equal(unifiedA.id, 'list-id-123');
-  assert.equal(unifiedA.memory_id, 'list-id-123');
+  assert.equal(unifiedA.memory_id, null);
   assert.equal(unifiedA.path, 'proj/a');
   assert.equal(unifiedA.content, 'hello');
   assert.equal(unifiedA.created_at, '2026-09-28');
@@ -72,6 +72,12 @@ test('CLI-DOGFOOD 2-1: unifyMemoryItem preserves id and provides stable memory_i
   const unifiedC = unifyMemoryItem(itemWithBoth);
   assert.equal(unifiedC.id, 'record-1');
   assert.equal(unifiedC.memory_id, 'mem-1');
+
+  // Case D: live-shaped list item where id != memory_id and memory_id in metadata
+  const itemWithMetaId = { id: 'dffc5988', metadata: { memory_id: '55a2fb27' }, content: 'live item' };
+  const unifiedD = unifyMemoryItem(itemWithMetaId);
+  assert.equal(unifiedD.id, 'dffc5988');
+  assert.equal(unifiedD.memory_id, '55a2fb27');
 });
 
 // 3. Search Boost Reranking Unit Tests
@@ -228,7 +234,7 @@ test('CLI-DOGFOOD 5-3: memory list falls back to bounded paging and client match
 
   const code = await run(['memory', 'list', '--path-prefix', 'projects/xmemo', '--json'], io);
   assert.equal(code, 0);
-  assert.equal(requestCount, 2); // 1 fast try + 1 fallback request
+  assert.equal(requestCount, 3); // 2 fast tries (verbatim + [ROOT]/) + 1 fallback request
   const envelope = JSON.parse(io.stdout.value);
   assert.equal(envelope.data.items.length, 1);
   assert.equal(envelope.data.items[0].id, '1');
@@ -267,19 +273,19 @@ test('CLI-DOGFOOD 5-5: memory list rejects conflicting options', async () => {
 });
 
 // 6. Memory List Auto-Paging (--all)
-test('CLI-DOGFOOD 6-1: memory list --all auto-pages with page size 500 up to cap and reports progress on stderr in human mode', async () => {
+test('CLI-DOGFOOD 6-1: memory list --all auto-pages with page size 100 up to cap and reports progress on stderr in human mode', async () => {
   let callCount = 0;
   const ioHuman = makeIo(async (url) => {
     const parsed = new URL(url);
     callCount += 1;
     const offset = parseInt(parsed.searchParams.get('offset') || '0', 10);
-    assert.equal(parsed.searchParams.get('limit'), '500');
+    assert.equal(parsed.searchParams.get('limit'), '100');
     if (offset === 0) {
-      const page1 = Array.from({ length: 500 }, (_, i) => ({ id: `mem-${i}`, path: 'p', content: `item ${i}` }));
-      return new Response(JSON.stringify({ memories: page1, total: 600 }), { status: 200 });
+      const page1 = Array.from({ length: 100 }, (_, i) => ({ id: `mem-${i}`, path: 'p', content: `item ${i}` }));
+      return new Response(JSON.stringify({ memories: page1, total: 150 }), { status: 200 });
     }
-    const page2 = Array.from({ length: 100 }, (_, i) => ({ id: `mem-${500 + i}`, path: 'p', content: `item ${500 + i}` }));
-    return new Response(JSON.stringify({ memories: page2, total: 600 }), { status: 200 });
+    const page2 = Array.from({ length: 50 }, (_, i) => ({ id: `mem-${100 + i}`, path: 'p', content: `item ${100 + i}` }));
+    return new Response(JSON.stringify({ memories: page2, total: 150 }), { status: 200 });
   });
 
   const code = await run(['memory', 'list', '--all'], ioHuman);
@@ -333,3 +339,102 @@ test('CLI-DOGFOOD 8-1: writeLine suppresses EPIPE cleanly', () => {
   };
   assert.doesNotThrow(() => writeLine(brokenStream, 'test'));
 });
+
+// 9. Reviewer-Requested Edge Cases (P1 & P2)
+test('CLI-DOGFOOD 9-1: exact literal [ROOT]/projects/xmemo/Plans hits server first without fallback', async () => {
+  let requestedPrefix = null;
+  let callCount = 0;
+  const io = makeIo(async (url) => {
+    callCount += 1;
+    const parsed = new URL(url);
+    requestedPrefix = parsed.searchParams.get('path_prefix');
+    return new Response(JSON.stringify({
+      memories: [{ id: 'plan-1', path: '[ROOT]/projects/xmemo/Plans/Architecture.md' }],
+      total: 1
+    }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--path-prefix', '[ROOT]/projects/xmemo/Plans', '--json'], io);
+  assert.equal(code, 0);
+  assert.equal(callCount, 1); // exactly 1 request, server prefix matched verbatim
+  assert.equal(requestedPrefix, '[ROOT]/projects/xmemo/Plans');
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 1);
+  assert.equal(envelope.data.items[0].id, 'plan-1');
+});
+
+test('CLI-DOGFOOD 9-2: adaptive pagination halves on RESPONSE_TOO_LARGE down to 25', async () => {
+  const limitsAttempted = [];
+  const io = makeIo(async (url) => {
+    const parsed = new URL(url);
+    const limit = parseInt(parsed.searchParams.get('limit') || '100', 10);
+    limitsAttempted.push(limit);
+    if (limit > 25) {
+      // Simulate 2MB response limit enforcement
+      return new Response(JSON.stringify({
+        error: { code: 'RESPONSE_TOO_LARGE', message: 'Service response exceeded the 2097152-byte limit' }
+      }), { status: 413 });
+    }
+    // Limit 25 succeeds
+    return new Response(JSON.stringify({
+      memories: Array.from({ length: 25 }, (_, i) => ({ id: `m-${i}`, path: 'p' })),
+      total: 50
+    }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--json'], io);
+  assert.equal(code, 0);
+  // Attempted 100 -> 50 -> 25
+  assert.deepEqual(limitsAttempted, [100, 50, 25]);
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 25);
+});
+
+test('CLI-DOGFOOD 9-3: 2300-item account paging retrieves target beyond first page', async () => {
+  let calls = 0;
+  const io = makeIo(async (url) => {
+    const parsed = new URL(url);
+    calls += 1;
+    const offset = parseInt(parsed.searchParams.get('offset') || '0', 10);
+    const limit = parseInt(parsed.searchParams.get('limit') || '100', 10);
+    // Target item is at offset 150 (page 2)
+    const pageItems = [];
+    for (let i = 0; i < limit && offset + i < 2316; i += 1) {
+      const idx = offset + i;
+      if (idx === 150) {
+        pageItems.push({ id: 'target-item', path: 'projects/deep/target.md', content: 'needle in haystack' });
+      } else {
+        pageItems.push({ id: `m-${idx}`, path: `noise/${idx}`, content: `filler ${idx}` });
+      }
+    }
+    return new Response(JSON.stringify({ memories: pageItems, total: 2316 }), { status: 200 });
+  });
+
+  // Query filter that forces scanning until needle is found
+  const code = await run(['memory', 'list', '--query', 'needle', '--json'], io);
+  assert.equal(code, 0);
+  assert.ok(calls >= 2); // Fetched at least page 1 and page 2
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 1);
+  assert.equal(envelope.data.items[0].id, 'target-item');
+});
+
+test('CLI-DOGFOOD 9-4: memory list --type matches item.metadata.memory_type', async () => {
+  const io = makeIo(async () => {
+    return new Response(JSON.stringify({
+      memories: [
+        { id: '1', path: 'a', content: 'note 1', metadata: { memory_type: 'procedural' } },
+        { id: '2', path: 'b', content: 'note 2', metadata: { memory_type: 'fact' } },
+        { id: '3', path: 'c', content: 'note 3' }
+      ],
+      total: 3
+    }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--type', 'procedural', '--json'], io);
+  assert.equal(code, 0);
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 1);
+  assert.equal(envelope.data.items[0].id, '1');
+});
+

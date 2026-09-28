@@ -77,7 +77,7 @@ test('CLI-09 actual HTTP + child CLI exercise all 18 frozen commands and pinned 
     const p = r.url.pathname, b = r.body;
     if (p === '/v1/memories') {
       const prefix = r.url.searchParams.get('path_prefix');
-      if (prefix) assert.equal(prefix, '中文_%');
+      if (prefix) assert.ok(prefix === '中文_%' || prefix === '[ROOT]/中文_%');
       return respond(res, { memories: [], total: 0 });
     }
     if (p === '/v1/memories/import') { assert.equal(b.dry_run,true); return respond(res, {errors:[],next_cursor:null}); }

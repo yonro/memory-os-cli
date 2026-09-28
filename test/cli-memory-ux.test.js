@@ -7,6 +7,7 @@ import path from 'node:path';
 import { run } from '../src/cli.js';
 import { DEFAULT_DEVICE_LOGIN_SCOPES } from '../src/network/auth.js';
 import { isDocumentStub, processDocumentStubs, MAX_EXPAND_DOCUMENTS, MAX_EXPAND_CHARS } from '../src/api/document-stub.js';
+import { formatErrorDetail } from '../src/api/errors.js';
 
 class Stream {
   constructor() { this.value = ''; }
@@ -479,3 +480,99 @@ test('CLI-MEMORY-UX Rev-323fadd0 P3: cloud-skill list prints asset_status and pu
   assert.match(io.stdout.value, /- XMemo Helper \(xmemo-helper\) · active \(published\)/);
   assert.match(io.stdout.value, /- Draft Skill \(draft-skill\) · active \(draft\)/);
 });
+
+// Rev-10eae569 / b23a67c5 reviewer findings tests
+test('CLI-MEMORY-UX Rev-10eae569 P1: memory restore sends JSON body and formats FastAPI 422 detail array', async () => {
+  let sentBody = null;
+  const io = makeIo(async (url, init) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/v1/memories/m1/restore') {
+      sentBody = init.body ? JSON.parse(init.body) : null;
+      return new Response(JSON.stringify({ ok: true, id: 'm1', restored: true }), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+
+  // Call memory restore with --yes
+  const code = await run(['memory', 'restore', 'm1', '--yes', '--json'], io);
+  assert.equal(code, 0);
+  assert.deepEqual(sentBody, {}); // sent JSON body {}
+
+  // FastAPI 422 error detail array formatting
+  const io422 = makeIo(async () => {
+    return new Response(JSON.stringify({
+      detail: [{ type: 'missing', loc: ['body'], msg: 'Field required' }]
+    }), { status: 422 });
+  });
+
+  const code422 = await run(['memory', 'restore', 'm1', '--yes'], io422);
+  assert.notEqual(code422, 0);
+  assert.match(io422.stderr.value, /body: Field required/);
+  assert.doesNotMatch(io422.stderr.value, /\[object Object\]/);
+});
+
+test('CLI-MEMORY-UX Rev-10eae569 P3: non-TTY confirmation messages for memory delete and restore without --yes', async () => {
+  // Non-TTY memory delete
+  const ioDel = makeIo(async () => new Response('{}', { status: 200 }));
+  const codeDel = await run(['memory', 'delete', 'mem-123'], ioDel);
+  assert.notEqual(codeDel, 0);
+  assert.match(ioDel.stderr.value, /Confirmation required to soft-delete memory mem-123; rerun with --yes\./);
+
+  // Non-TTY memory restore
+  const ioRes = makeIo(async () => new Response('{}', { status: 200 }));
+  const codeRes = await run(['memory', 'restore', 'mem-123'], ioRes);
+  assert.notEqual(codeRes, 0);
+  assert.match(ioRes.stderr.value, /Confirmation required to restore memory mem-123; rerun with --yes\./);
+});
+
+test('CLI-MEMORY-UX Rev-10eae569 P2: context recall --expand-documents renders expanded document text in human mode', async () => {
+  const items = [
+    { memory_id: 'mem-doc-1', content: 'Document-backed memory: Design Doc', metadata: { document_ref: 'doc-1' } }
+  ];
+
+  const fullText = 'This is the full expanded design document content that should be visible to humans.';
+  const io = makeIo(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/v1/recall/context') {
+      return new Response(JSON.stringify({ items, context_text: 'Document-backed memory: Design Doc' }), { status: 200 });
+    }
+    if (parsed.pathname === '/api/v1/memories/mem-doc-1/explain') {
+      return new Response(JSON.stringify({ memory: { content: fullText } }), { status: 200 });
+    }
+    throw new Error(`Unexpected call: ${url}`);
+  });
+
+  const code = await run(['context', 'recall', 'query', '--expand-documents'], io);
+  assert.equal(code, 0);
+  assert.match(io.stdout.value, /This is the full expanded design document content/);
+});
+
+test('CLI-MEMORY-UX Rev-10eae569 P3: memory list human mode prints More: --offset <N>', async () => {
+  const io = makeIo(async () => {
+    return new Response(JSON.stringify({
+      memories: [
+        { id: '1', path: 'p1', content: 'content 1' },
+        { id: '2', path: 'p2', content: 'content 2' }
+      ],
+      total: 5
+    }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--limit', '2'], io);
+  assert.equal(code, 0);
+  assert.match(io.stdout.value, /More: --offset 2/);
+  assert.doesNotMatch(io.stdout.value, /Next cursor:/);
+});
+
+test('CLI-MEMORY-UX Rev-10eae569 P1: formatErrorDetail formats FastAPI detail arrays into clean text', () => {
+  assert.equal(formatErrorDetail(null), '');
+  assert.equal(formatErrorDetail('simple error'), 'simple error');
+  assert.equal(formatErrorDetail([{ type: 'missing', loc: ['body'], msg: 'Field required' }]), 'body: Field required');
+  assert.equal(formatErrorDetail([
+    { loc: ['body', 'title'], msg: 'Field required' },
+    { loc: ['query', 'limit'], msg: 'Must be positive' }
+  ]), 'title: Field required; query.limit: Must be positive');
+  assert.equal(formatErrorDetail({ message: 'Custom object error' }), 'Custom object error');
+});
+
+

@@ -27,12 +27,22 @@ export function unifyMemoryItem(item, { score = null } = {}) {
   const existingId = item.id;
   const existingMemoryId = item.memory_id;
 
-  // Stable memory reference:
-  // If memory_id exists, use it. If not, fallback to existingId.
-  const memoryId = existingMemoryId ?? existingId ?? null;
-  // Existing id must not be overwritten with a different meaning.
-  // If id is missing, set it to memoryId.
-  const id = existingId ?? memoryId;
+  let metadataMemoryId = null;
+  if (item.metadata && typeof item.metadata === 'object') {
+    metadataMemoryId = item.metadata.memory_id ?? null;
+  } else if (typeof item.metadata === 'string') {
+    try {
+      const parsed = JSON.parse(item.metadata);
+      if (parsed && typeof parsed === 'object') metadataMemoryId = parsed.memory_id ?? null;
+    } catch {}
+  }
+
+  // Canonical memory reference:
+  // Use memory_id if explicitly provided in item or metadata.
+  // For list/record items without a verified memory_id, set memory_id to null
+  // so that item.id is not conflated with memory_id.
+  const memoryId = existingMemoryId ?? metadataMemoryId ?? null;
+  const id = existingId ?? memoryId ?? null;
 
   return {
     ...item,

@@ -110,21 +110,48 @@ export class PrerequisiteRequiredError extends ServiceClientError {
   }
 }
 
+export function formatErrorDetail(detail) {
+  if (detail === undefined || detail === null) return '';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const formatted = detail.map((d) => {
+      if (typeof d === 'string') return d;
+      if (typeof d === 'object' && d !== null) {
+        let loc = '';
+        if (Array.isArray(d.loc)) {
+          const filtered = d.loc.filter((part) => part !== 'body' || d.loc.length === 1);
+          loc = filtered.join('.') || 'body';
+        } else if (d.loc) {
+          loc = String(d.loc);
+        }
+        const msg = d.msg ?? d.message ?? JSON.stringify(d);
+        return loc ? `${loc}: ${msg}` : msg;
+      }
+      return String(d);
+    });
+    return formatted.filter(Boolean).join('; ');
+  }
+  if (typeof detail === 'object') {
+    return detail.message ?? detail.msg ?? detail.error ?? JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
 export function classifyHttpFailure(status, payload) {
   const serviceError = payload?.error;
   const detail = payload?.detail;
-  const serviceCode = typeof serviceError === 'object'
+  const serviceCode = typeof serviceError === 'object' && !Array.isArray(serviceError)
     ? serviceError.code ?? serviceError.error_code ?? null
-    : typeof detail === 'object'
+    : typeof detail === 'object' && !Array.isArray(detail)
       ? detail.code ?? detail.error_code ?? null
       : typeof payload?.code === 'string' ? payload.code : null;
-  const message = typeof serviceError === 'string'
+  const rawMessage = typeof serviceError === 'string'
     ? serviceError
     : serviceError?.message
-      ?? payload?.detail?.message
-      ?? payload?.detail
+      ?? (detail !== undefined && detail !== null ? formatErrorDetail(detail) : null)
       ?? payload?.message
       ?? `HTTP ${status}`;
+  const message = typeof rawMessage === 'string' && rawMessage.trim() ? rawMessage : `HTTP ${status}`;
   const scopeText = `${serviceCode ?? ''} ${message}`.toLowerCase();
   const code = status === 401 ? 'AUTH_REQUIRED'
     : status === 403 ? 'PERMISSION_DENIED'

@@ -37,7 +37,7 @@ function writeMemoryList(io, data, meta) {
     }
   }
   if (meta?.nextCursor || data?.next_cursor) {
-    writeLine(io.stdout, `Next cursor: ${meta?.nextCursor ?? data.next_cursor}`);
+    writeLine(io.stdout, `More: --offset ${meta?.nextCursor ?? data.next_cursor}`);
   }
   const allWarnings = [...(meta?.warnings ?? []), ...(data?.warnings ?? [])];
   for (const warning of allWarnings) {
@@ -63,13 +63,14 @@ function writeMemoryRestore(io, data) {
 
 function writeStateResult(io, command, data) {
   const payload = (data && typeof data === 'object' && (data.result ?? data.item ?? data.record)) || data || {};
-  const key = payload.state_key ?? payload.key ?? data?.state_key ?? data?.key ?? data?.arguments?.state_key ?? 'unknown';
-  const version = payload.version ?? data?.version ?? 'unknown';
-  const expiry = payload.expires_at ?? data?.expires_at ?? (payload.ttl_seconds !== undefined ? `${payload.ttl_seconds}s` : null) ?? (data?.ttl_seconds !== undefined ? `${data.ttl_seconds}s` : null) ?? 'none';
+  const nestedState = (payload.state && typeof payload.state === 'object') ? payload.state : {};
+  const key = payload.state_key ?? payload.key ?? nestedState.state_key ?? nestedState.key ?? data?.state_key ?? data?.key ?? data?.arguments?.state_key ?? 'unknown';
+  const version = payload.version ?? nestedState.version ?? payload.state_version ?? nestedState.state_version ?? payload.record_version ?? data?.version ?? data?.state_version ?? 'unknown';
+  const expiry = payload.expires_at ?? nestedState.expires_at ?? data?.expires_at ?? (payload.ttl_seconds !== undefined ? `${payload.ttl_seconds}s` : null) ?? (nestedState.ttl_seconds !== undefined ? `${nestedState.ttl_seconds}s` : null) ?? (data?.ttl_seconds !== undefined ? `${data.ttl_seconds}s` : null) ?? 'none';
   const verb = command === 'state.restore' ? 'Restored' : 'Saved';
   writeLine(io.stdout, `${verb} state: key=${key}, version=${version}, expiry=${expiry}`);
   if (command === 'state.restore') {
-    const rawContent = payload.content ?? data?.content;
+    const rawContent = payload.content ?? nestedState.content ?? data?.content;
     if (typeof rawContent === 'string' && rawContent) {
       if (rawContent.length > 2000) {
         writeLine(io.stdout, rawContent.slice(0, 2000));
@@ -124,13 +125,29 @@ function writeContextRecall(io, data, meta = {}) {
   const budget = data?.budget ?? data?.usage ?? {};
   writeLine(io.stdout, `Recalled ${items.length} context ${items.length === 1 ? 'item' : 'items'}.`);
   if (budget.used_tokens !== undefined || budget.max_tokens !== undefined) writeLine(io.stdout, `Token budget: ${budget.used_tokens ?? 'unknown'} / ${budget.max_tokens ?? 'unknown'}.`);
-  if (typeof data?.context_text === 'string' && data.context_text) writeLine(io.stdout, data.context_text);
-  else if (items.length === 0) writeLine(io.stdout, 'No matching context was returned. Refine the query or adjust the current filters.');
+  if (typeof data?.context_text === 'string' && data.context_text) {
+    writeLine(io.stdout, data.context_text);
+  } else if (items.length === 0) {
+    writeLine(io.stdout, 'No matching context was returned. Refine the query or adjust the current filters.');
+  }
 
   for (const item of items) {
-    if (item?.document_backed && (!item?.expanded || item?.content_truncated)) {
+    if (item?.document_backed) {
       const id = item?.memory_id ?? item?.document_id ?? item?.id ?? '';
-      if (id) writeLine(io.stdout, `Full document: xmemo memory read ${id}`);
+      if (item?.expanded) {
+        const contentSnippet = typeof item.content === 'string' ? item.content.slice(0, Math.min(100, item.content.length)) : '';
+        if (contentSnippet && (!data?.context_text || !data.context_text.includes(contentSnippet))) {
+          writeLine(io.stdout, item.content);
+        }
+        if (item?.content_truncated && id) {
+          writeLine(io.stdout, `Full document: xmemo memory read ${id}`);
+        }
+      } else if (item?.expand_error) {
+        writeLine(io.stdout, `(failed to expand document: ${item.expand_error})`);
+        if (id) writeLine(io.stdout, `Full document: xmemo memory read ${id}`);
+      } else if (id) {
+        writeLine(io.stdout, `Full document: xmemo memory read ${id}`);
+      }
     }
   }
 
