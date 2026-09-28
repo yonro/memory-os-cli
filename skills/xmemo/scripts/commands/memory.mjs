@@ -1,33 +1,12 @@
+import { EXIT_CODE, exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError } from '../lib/core.mjs';
+import { printMemoryResults } from '../lib/auth-state.mjs';
+import { processDocumentStubs, flushJsonAndExit } from '../lib/document-stub.mjs';
 import {
-  EXIT_CODE,
-  exitCodeForHttpStatus,
-  exitCodeForErrorCode,
-  exitCodeForError,
-} from '../lib/core.mjs';
-
-import {
-  printMemoryResults,
-} from '../lib/auth-state.mjs';
-
-import {
-  makeHttpRequest,
-  parseJsonResponse,
-  extractRequestId,
-  extractId,
-  apiErrorMessage,
-  outputRestError,
-  handleRestError,
-  outputJsonFailure,
-  safeJson,
-  sanitizeTerminalText,
-  formatMemoryContent,
-  describeError,
-  extractRecord,
+  makeHttpRequest, parseJsonResponse, extractRequestId, extractId,
+  apiErrorMessage, outputRestError, handleRestError, outputJsonFailure,
+  safeJson, sanitizeTerminalText, formatMemoryContent, describeError, extractRecord,
 } from '../lib/api.mjs';
-
-import {
-  printAuthErrorHint,
-} from '../lib/auth-hint.mjs';
+import { printAuthErrorHint } from '../lib/auth-hint.mjs';
 
 function reqSuffix(data) {
   const reqId = extractRequestId(data);
@@ -50,9 +29,7 @@ export async function handleMemory(ctx) {
     const endpoint = command === 'restart-snapshot' ? '/v1/restart/snapshot' : '/v1/restart/restore';
     const label = command === 'restart-snapshot' ? 'Restart snapshot' : 'Restart restore';
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', flags, {
-        'Authorization': `Bearer ${token}`
-      }, options.timeoutMs);
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', flags, { Authorization: `Bearer ${token}` }, options.timeoutMs);
       const data = parseJsonResponse(res, `${label} request`);
       const succeeded = res.statusCode >= 200 && res.statusCode < 300;
       if (options.json) {
@@ -102,9 +79,7 @@ export async function handleMemory(ctx) {
       }).filter(([, v]) => v !== undefined)
     );
     try {
-      const res = await makeHttpRequest(options.baseUrl, '/v1/recall/context', 'POST', body, {
-        'Authorization': `Bearer ${token}`
-      }, options.timeoutMs);
+      const res = await makeHttpRequest(options.baseUrl, '/v1/recall/context', 'POST', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
       const data = parseJsonResponse(res, 'Recall context request');
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
       if (options.json) {
@@ -131,9 +106,7 @@ export async function handleMemory(ctx) {
     ].filter(Boolean);
     const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/explain?include_embedding=false${queryParams.length ? `&${queryParams.join('&')}` : ''}`;
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
-        'Authorization': `Bearer ${token}`
-      }, options.timeoutMs);
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
       const data = handleRestError(res, {
         notFoundMessage: `Memory '${flags.id}' not found.`,
@@ -188,9 +161,7 @@ export async function handleMemory(ctx) {
     }
 
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'PATCH', body, {
-        'Authorization': `Bearer ${token}`
-      }, options.timeoutMs);
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'PATCH', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
       if (res.statusCode === 400) {
         let errData = null;
@@ -248,9 +219,7 @@ export async function handleMemory(ctx) {
     }
 
     try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', body, {
-        'Authorization': `Bearer ${token}`
-      }, options.timeoutMs);
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
       handleRestError(res, {
         notFoundMessage: `Record '${flags.id}' not found.`,
@@ -274,17 +243,19 @@ export async function handleMemory(ctx) {
   if (command === 'remember' || command === 'recall' || command === 'search') {
     try {
       const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
-        operation: command,
-        arguments: flags,
-      }, {
-        'Authorization': `Bearer ${token}`
-      }, options.timeoutMs);
+        operation: command, arguments: flags,
+      }, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
       const data = parseJsonResponse(res, `${command} request`);
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
+      if (succeeded && (command === 'recall' || command === 'search')) {
+        await processDocumentStubs(data.result || data, {
+          expandDocuments: flags['expand-documents'] || flags.expand_documents,
+          baseUrl: options.baseUrl, token, timeoutMs: options.timeoutMs, flags,
+        });
+      }
       if (options.json) {
-        console.log(safeJson(data));
-        process.exit(succeeded ? EXIT_CODE.SUCCESS : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode)));
+        return flushJsonAndExit(data, succeeded ? EXIT_CODE.SUCCESS : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode)));
       }
 
       if (!succeeded) {

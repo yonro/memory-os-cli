@@ -74,11 +74,11 @@ export const COMMAND_USAGE_REGISTRY = {
     desc: 'Save a memory from text, stdin, or file',
   },
   recall: {
-    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--expand-documents] [--compact]',
     desc: 'Recall memories matching a query',
   },
   search: {
-    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact]',
+    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--expand-documents] [--compact]',
     desc: 'Search memories matching a query',
   },
   'recall-context': {

@@ -59,12 +59,16 @@ export function parseArgs(args) {
       const eq = rawKey.indexOf('=');
       const key = eq === -1 ? rawKey : rawKey.slice(0, eq);
       const inlineValue = eq === -1 ? undefined : rawKey.slice(eq + 1);
-      const isBoolFlag = ['json', 'terminal', 'no-json', 'plain', 'verify', 'compact', 'help', 'version', 'allow-plaintext', 'from-stdin', 'anonymous', 'revoke-environment-token'].includes(key);
+      const isBoolFlag = ['json', 'terminal', 'no-json', 'plain', 'verify', 'compact', 'help', 'version', 'allow-plaintext', 'from-stdin', 'anonymous', 'revoke-environment-token', 'expand-documents', 'expand_documents'].includes(key);
       if (isBoolFlag) {
         rejectBooleanValue(key, inlineValue);
         if (key === 'json') explicitJson = true;
         else if (['terminal', 'no-json', 'plain'].includes(key)) explicitTerminal = true;
         else if (key === 'from-stdin') flags[key] = true;
+        else if (key === 'expand-documents' || key === 'expand_documents') {
+          flags['expand-documents'] = true;
+          flags.expand_documents = true;
+        }
         else if (key === 'allow-plaintext') options.allowPlaintext = true;
         else if (key === 'revoke-environment-token') options.revokeEnvironmentToken = true;
         else options[key] = true;

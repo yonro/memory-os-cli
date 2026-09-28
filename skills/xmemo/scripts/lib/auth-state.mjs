@@ -40,6 +40,12 @@ import {
   printAuthErrorHint,
 } from './auth-hint.mjs';
 
+import {
+  isDocumentStub,
+  processDocumentStubs,
+  flushJsonAndExit,
+} from './document-stub.mjs';
+
 export { warnedCredentialOrigins, isSurrogateToken, isOpenClawSentinel, looksLikeOpenClawSentinel };
 
 // Read credential helper
@@ -175,6 +181,12 @@ export function printMemoryResults(result, compact) {
   results.forEach((item, index) => {
     console.log(`[${index + 1}] ID: ${sanitizeTerminalText(item?.id || item?.memory_id || '(unknown)')} | Path: ${sanitizeTerminalText(item?.path || '(unknown)')}`);
     console.log(`Content: ${formatMemoryContent(item?.content, compact)}`);
+    if (item?.next_command) {
+      console.log(`Full document: ${sanitizeTerminalText(item.next_command)}`);
+    } else if (isDocumentStub(item) && !item?.expanded) {
+      const id = item?.id || item?.memory_id || '';
+      console.log(`Full document: node scripts/xmemo-skill.mjs read --id ${sanitizeTerminalText(id)}`);
+    }
     console.log('---');
   });
 }
@@ -226,9 +238,19 @@ export async function requestTemporaryMemoryOperation(command, options, flags, c
     process.exit(exitCode);
   }
 
+  if (command === 'recall' || command === 'search') {
+    const list = extractList(data.result || data);
+    await processDocumentStubs(list, {
+      expandDocuments: flags['expand-documents'] || flags.expand_documents,
+      baseUrl: options.baseUrl,
+      token: credential.token,
+      timeoutMs: options.timeoutMs,
+      flags,
+    });
+  }
+
   if (options.json) {
-    console.log(safeJson(data));
-    process.exit(EXIT_CODE.SUCCESS);
+    return flushJsonAndExit(data, EXIT_CODE.SUCCESS);
   }
 
   if (command === 'remember') {

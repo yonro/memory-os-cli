@@ -147,7 +147,7 @@
       "--help"
     ],
     "code": 0,
-    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--expand-documents] [--compact] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
     "stderr": "",
     "httpRequests": []
   },
@@ -223,7 +223,7 @@
       "--help"
     ],
     "code": 0,
-    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--compact] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--expand-documents] [--compact] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
     "stderr": "",
     "httpRequests": []
   },
