@@ -32,6 +32,6 @@ export const PINNED_HERMES_PLUGIN_VERSION = '1.1.3';
 export const PINNED_HERMES_CATALOG_ID = 'xmemo';
 export const HERMES_CATALOG_ID = PINNED_HERMES_CATALOG_ID;
 
-export const PINNED_SKILL_VERSION = '1.1.33';
-export const PINNED_SKILL_INTEGRITY = 'sha512-1+nfcHczdEM8YNyASWMu5ntJ2RQ5q+CvoJHwq6vObvHGkRSXe4tBFdYpooRW45NYp7xMjZIwrnRAiMZ/V+cgaw==';
+export const PINNED_SKILL_VERSION = '1.1.35';
+export const PINNED_SKILL_INTEGRITY = 'sha512-/MBclXYenR2TU2wHKuPnif7GcMs7AGKKiwp/RRNoMIGxGmAs7WGqjhgmPr7zwTpoRNMjI43HLXccFhRcC991Yg==';
 

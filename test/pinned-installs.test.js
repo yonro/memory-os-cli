@@ -70,13 +70,13 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, ta
       let callCode = code;
       if (code === 0) {
         if (args.includes('view')) {
-          callStdout = JSON.stringify('sha512-1+nfcHczdEM8YNyASWMu5ntJ2RQ5q+CvoJHwq6vObvHGkRSXe4tBFdYpooRW45NYp7xMjZIwrnRAiMZ/V+cgaw==');
+          callStdout = JSON.stringify('sha512-/MBclXYenR2TU2wHKuPnif7GcMs7AGKKiwp/RRNoMIGxGmAs7WGqjhgmPr7zwTpoRNMjI43HLXccFhRcC991Yg==');
         } else if (args.includes('pack')) {
           const destIdx = args.indexOf('--pack-destination');
           if (destIdx !== -1 && args[destIdx + 1]) {
             const destDir = args[destIdx + 1];
-            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
-            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.35.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.35.tgz');
             try {
               if (tarballContent !== null) {
                 fsSync.writeFileSync(tgzPath, tarballContent);
@@ -85,7 +85,7 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, ta
               }
             } catch {}
           }
-          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.35.tgz' }]);
         }
       }
       if (callStdout) {
@@ -144,6 +144,7 @@ test('pins module: all constants are defined and follow strict semver', () => {
   assert.ok(STRICT_SEMVER_REGEX.test(PINNED_SKILL_VERSION), 'Skill version must be valid semver');
   assert.doesNotMatch(PINNED_SKILL_VERSION, /latest/i);
   assert.doesNotMatch(PINNED_SKILL_VERSION, /-U/);
+  assert.equal(PINNED_SKILL_VERSION, PINNED_OPENCLAW_SKILL_VERSION, 'PINNED_SKILL_VERSION must equal PINNED_OPENCLAW_SKILL_VERSION');
 
   assert.match(PINNED_SKILL_INTEGRITY, /^sha512-[A-Za-z0-9+/=]+$/, 'Skill integrity must be a valid sha512 SRI string');
 });
