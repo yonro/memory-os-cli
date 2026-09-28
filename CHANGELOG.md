@@ -4,6 +4,8 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.188] - 2026-09-29
+
 ### Added
 - **Dogfood CLI Enhancements (CLI-DOGFOOD)**:
   - **Schema Unification**: Standardized `data.items` across `xmemo memory search`, `xmemo memory list`, and `xmemo context recall`. Every item includes consistent attributes: `id`, `memory_id`, `path`, `content`, `created_at`, and `score` (similarity score for search, context score for recall, null for list). Preserves existing `id` on list items while ensuring `memory_id` is the stable reference. Full backward compatibility maintained for `data.results` (search), `data.memories` (list/recall), and numeric property access `data[0..n]`.

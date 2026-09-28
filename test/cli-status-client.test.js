@@ -52,10 +52,16 @@ function createMockServer() {
 }
 
 function runCli(args, { cwd, env, timeout = 15000 }) {
+  const sanitizedEnv = env ? { ...env } : { ...process.env };
+  for (const key of Object.keys(sanitizedEnv)) {
+    if (key === 'CLAUDECODE' || key.startsWith('CLAUDE_') || key.startsWith('CODEX_')) {
+      delete sanitizedEnv[key];
+    }
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [binPath, ...args], {
       cwd,
-      env,
+      env: sanitizedEnv,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -92,8 +98,15 @@ async function createIsolatedEnv(t) {
   const tempDir = await fs.realpath(rawTempDir);
   t.after(() => fs.rm(tempDir, { recursive: true, force: true }));
 
+  const cleanProcessEnv = { ...process.env };
+  for (const key of Object.keys(cleanProcessEnv)) {
+    if (key === 'CLAUDECODE' || key.startsWith('CLAUDE_') || key.startsWith('CODEX_')) {
+      delete cleanProcessEnv[key];
+    }
+  }
+
   const env = {
-    ...process.env,
+    ...cleanProcessEnv,
     HOME: tempDir,
     USERPROFILE: tempDir,
     LOCALAPPDATA: path.join(tempDir, 'LocalAppData'),
@@ -305,3 +318,25 @@ test('status with no client arguments and nothing detected reports service probe
   assert.match(humanResult.stdout, /OK\s+200/);
   assert.doesNotMatch(humanResult.stdout, /Cursor \(cursor\):/);
 });
+
+test('status client resolution strips CLAUDECODE and CODEX_* variables from outer environment', async (t) => {
+  const server = await createMockServer();
+  t.after(() => server.close());
+
+  const { tempDir, env } = await createIsolatedEnv(t);
+  // Inject outer agent variables
+  env.CLAUDECODE = '1';
+  env.CLAUDE_CODE_ENTRYPOINT = 'cli';
+  env.CODEX_THREAD_ID = 'thread-123';
+  env.CODEX_SESSION_ID = 'session-456';
+
+  const jsonResult = await runCli(['status', '--url', server.baseUrl, '--json'], {
+    cwd: tempDir,
+    env
+  });
+  assert.equal(jsonResult.code, 0);
+  const report = JSON.parse(jsonResult.stdout);
+  assert.equal(report.ok, true);
+  assert.equal(report.clients, undefined);
+});
+
