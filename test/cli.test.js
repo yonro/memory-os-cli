@@ -53,7 +53,7 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
   const packDest = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
   const expectedPackArgs = [
     'pack',
-    '@xmemo/skill@1.1.33',
+    '@xmemo/skill@1.1.35',
     '--pack-destination',
     packDest,
     '--json'
@@ -93,7 +93,7 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
   assert.equal(report.installed, false);
   assert.equal(report.networkUsed, true);
   assert.equal(report.source, 'npm');
-  assert.equal(report.spec, '1.1.33');
+  assert.equal(report.spec, '1.1.35');
   assert.equal(report.tokenSent, false);
 });
 
@@ -2675,14 +2675,14 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '' } = {}) {
         const destIdx = args.indexOf('--pack-destination');
         if (destIdx !== -1 && args[destIdx + 1]) {
           const destDir = args[destIdx + 1];
-          const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
-          const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+          const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.35.fixture');
+          const tgzPath = path.join(destDir, 'xmemo-skill-1.1.35.tgz');
           try {
             const bytes = readFileSync(fixturePath);
             writeFileSync(tgzPath, bytes);
           } catch {}
         }
-        callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+        callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.35.tgz' }]);
       }
       if (callStdout) {
         child.stdout.emit('data', callStdout);

@@ -257,7 +257,7 @@ CLI 支持将经过官方完整性校验的 XMemo Skill 安装至各智能体专
   - **Codex**: `~/.codex/skills/xmemo-memory`
   - **OpenClaw**: `~/.openclaw/skills/xmemo-memory`
   - 其余 21 款客户端在官方文档明确前均设为 `null`
-- 默认安装 npm 上锁定的 `@xmemo/skill@1.1.33` 版本，并在解压前严格校验 tarball 完整性哈希（sha512 SRI）。
+- 默认安装 npm 上锁定的 `@xmemo/skill@1.1.35` 版本，并在解压前严格校验 tarball 完整性哈希（sha512 SRI）。
 - 可通过 `--version <semver>` 指定特定版本，或显式传入 `--version latest` 获取最新版本。
 - 在离线或内网隔离环境中，可通过 `--from <dir|tgz>` 从本地目录或打好的 tarball 进行离线安装（支持 `--integrity <sha512>`）。
 - 支持通过 `skill status` 查看安装状态，通过 `skill update` 快捷更新，通过 `skill remove` 干净移除。

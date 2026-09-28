@@ -56,18 +56,18 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
       let callCode = code;
       if (code === 0) {
         if (args.includes('view')) {
-          callStdout = JSON.stringify('sha512-1+nfcHczdEM8YNyASWMu5ntJ2RQ5q+CvoJHwq6vObvHGkRSXe4tBFdYpooRW45NYp7xMjZIwrnRAiMZ/V+cgaw==');
+          callStdout = JSON.stringify('sha512-/MBclXYenR2TU2wHKuPnif7GcMs7AGKKiwp/RRNoMIGxGmAs7WGqjhgmPr7zwTpoRNMjI43HLXccFhRcC991Yg==');
         } else if (args.includes('pack')) {
           const destIdx = args.indexOf('--pack-destination');
           if (destIdx !== -1 && args[destIdx + 1]) {
             const destDir = args[destIdx + 1];
-            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
-            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.35.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.35.tgz');
             try {
               fsSync.copyFileSync(fixturePath, tgzPath);
             } catch {}
           }
-          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.35.tgz' }]);
         } else if (args.includes('install')) {
           const targetIdx = args.indexOf('--target');
           const targetPath = targetIdx !== -1 ? args[targetIdx + 1] : path.resolve('xmemo-skill');
@@ -76,20 +76,20 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
             fsSync.mkdirSync(path.join(targetPath, 'scripts'), { recursive: true });
             fsSync.writeFileSync(
               path.join(targetPath, 'SKILL.md'),
-              '# XMemo Skill\nVersion: 1.1.33\nXMemo memory assistant.\n'
+              '# XMemo Skill\nVersion: 1.1.35\nXMemo memory assistant.\n'
             );
             fsSync.writeFileSync(
               path.join(targetPath, 'scripts', 'xmemo-skill.mjs'),
-              "const SKILL_VERSION = '1.1.33';\n"
+              "const SKILL_VERSION = '1.1.35';\n"
             );
             fsSync.writeFileSync(
               path.join(targetPath, 'package.json'),
-              JSON.stringify({ name: '@xmemo/skill', version: '1.1.33' })
+              JSON.stringify({ name: '@xmemo/skill', version: '1.1.35' })
             );
           } catch {}
           callStdout = JSON.stringify({
             package: '@xmemo/skill',
-            skillVersion: '1.1.33',
+            skillVersion: '1.1.35',
             target: targetPath,
             installed: true,
             replaced: args.includes('--force')
@@ -367,15 +367,15 @@ test('skill status: checks installed path and version for clients', async () => 
     // Install codex skill
     const targetDir = path.join(tmpHome, '.codex', 'skills', 'xmemo-memory');
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
-    await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill v1.1.33\nxmemo');
-    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.33';");
+    await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill v1.1.35\nxmemo');
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.35';");
 
     // Status after install
     const res2 = await invoke(['skill', 'status', '--client', 'codex', '--json'], { env });
     assert.equal(res2.code, 0);
     const parsed2 = JSON.parse(res2.stdout);
     assert.equal(parsed2.targets[0].installed, true);
-    assert.equal(parsed2.targets[0].version, '1.1.33');
+    assert.equal(parsed2.targets[0].version, '1.1.35');
 
     // Status --all
     const resAll = await invoke(['skill', 'status', '--all', '--json'], { env, cwd: tmpCwd });
@@ -390,7 +390,7 @@ test('skill status: checks installed path and version for clients', async () => 
     assert.equal(resHuman.code, 0);
     assert.match(resHuman.stdout, /Client: Codex \(codex\) \[user\]/);
     assert.match(resHuman.stdout, /Status: installed/);
-    assert.match(resHuman.stdout, /Version: 1\.1\.33/);
+    assert.match(resHuman.stdout, /Version: 1\.1\.35/);
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
     await fs.rm(tmpCwd, { recursive: true, force: true });
@@ -421,7 +421,7 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
     // 3. Make it a legitimate XMemo skill folder and create a pre-existing backup outside the skills dir
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
     await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill\nxmemo');
-    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.33';");
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.35';");
     await fs.mkdir(expectedBackupDir, { recursive: true });
     await fs.writeFile(path.join(expectedBackupDir, 'backup-proof.txt'), 'preserved');
 
@@ -453,7 +453,7 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
     // Recreate skill and remove human mode
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
     await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill\nxmemo');
-    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.33';");
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.35';");
 
     const resHumanRemove = await invoke(['skill', 'remove', '--client', 'codex', '--yes'], { env });
     assert.equal(resHumanRemove.code, 0);

@@ -56,13 +56,13 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, ta
       let callCode = code;
       if (code === 0) {
         if (args.includes('view')) {
-          callStdout = JSON.stringify('sha512-1+nfcHczdEM8YNyASWMu5ntJ2RQ5q+CvoJHwq6vObvHGkRSXe4tBFdYpooRW45NYp7xMjZIwrnRAiMZ/V+cgaw==');
+          callStdout = JSON.stringify('sha512-/MBclXYenR2TU2wHKuPnif7GcMs7AGKKiwp/RRNoMIGxGmAs7WGqjhgmPr7zwTpoRNMjI43HLXccFhRcC991Yg==');
         } else if (args.includes('pack')) {
           const destIdx = args.indexOf('--pack-destination');
           if (destIdx !== -1 && args[destIdx + 1]) {
             const destDir = args[destIdx + 1];
-            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.33.fixture');
-            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.33.tgz');
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.35.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.35.tgz');
             try {
               if (tarballContent !== null) {
                 fsSync.writeFileSync(tgzPath, tarballContent);
@@ -71,7 +71,7 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, ta
               }
             } catch {}
           }
-          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.33.tgz' }]);
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.35.tgz' }]);
         }
       }
       if (callStdout) {
@@ -113,7 +113,7 @@ test('CLI skill install: default delegates to @xmemo/skill@pinned without shell'
   const packDest1 = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
   const expectedPackArgs1 = [
     'pack',
-    '@xmemo/skill@1.1.33',
+    '@xmemo/skill@1.1.35',
     '--pack-destination',
     packDest1,
     '--json'
@@ -158,7 +158,7 @@ test('CLI skill install: default delegates to @xmemo/skill@pinned without shell'
 
   const report = JSON.parse(result.stdout);
   assert.equal(report.source, 'npm');
-  assert.equal(report.spec, '1.1.33');
+  assert.equal(report.spec, '1.1.35');
   assert.equal(report.networkUsed, true);
   assert.equal(report.tokenSent, false);
   assert.equal(report.package, '@xmemo/skill');
@@ -313,7 +313,7 @@ test('CLI skill install: non-JSON human readable output', async () => {
 
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Installed XMemo Skill 1\.1\.25 to/);
-  assert.match(result.stdout, /Source: npm \(@xmemo\/skill@1\.1\.33\) \(no credential used\)/);
+  assert.match(result.stdout, /Source: npm \(@xmemo\/skill@1\.1\.35\) \(no credential used\)/);
 });
 
 test('CLI skill install: end-to-end with --from <dir> installs byte-identical skill', async () => {
