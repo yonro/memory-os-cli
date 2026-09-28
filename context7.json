@@ -36,6 +36,6 @@
     "Store durable and reusable context in XMemo, such as project facts, decisions, preferences, corrections, and handoff information; avoid transient conversation noise.",
     "Preserve documented project, memory scope, provenance, and attribution semantics when saving or retrieving context.",
     "Prefer the current canonical XMemo developer documentation at https://xmemo.dev/docs/quickstart over old examples, marketing pages, third-party snippets, or deprecated configuration.",
-    "This repository is the public client. The XMemo service repository is private; do not link readers to github.com/yunze7373/memory-os, which is not publicly reachable."
+    "This repository is the public client. The XMemo service repository is private; do not link to it."
   ]
 }

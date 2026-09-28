@@ -475,7 +475,9 @@ xmemo plugin status [<id>] [--all] [--json]
 xmemo memory add --content "Remember this" --path notes/example --json
 xmemo memory search "example" --json
 xmemo memory read <id> --json
-xmemo memory list [--path <path>] --json
+xmemo memory list [--path <path>] [--path-prefix <prefix>] [--limit <n>] [--offset <n>] --json
+xmemo memory import --file memories.jsonl [--dry-run] [--idempotency-key <key>] [--yes] --json
+xmemo memory ledger-delete --id <transaction-uuid> --yes --json
 xmemo context recall "resume this task" --include-knowledge --json
 xmemo state save --current-task "ship the client" --next-action "run tests" --json
 xmemo state restore --json

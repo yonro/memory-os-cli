@@ -353,6 +353,7 @@ function assertCredentialVerificationOrigin(credential, baseUrl) {
 }
 
 function writeCredentialStatus(report, io, { mode }) {
+  const loginCmd = mode === 'account' ? `${COMMAND_NAME} account login` : `${COMMAND_NAME} login`;
   if (mode === 'auth') {
     writeLine(io.stdout, `${PRODUCT_NAME} auth status`);
     writeLine(io.stdout, `Logged in: ${report.loggedIn ? 'yes' : 'no'}`);
@@ -360,7 +361,7 @@ function writeCredentialStatus(report, io, { mode }) {
     if (report.account) {
       writeLine(io.stdout, `Account: ${formatAccount(report.account)}`);
     }
-    writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${COMMAND_NAME} login\` to sign in.`);
+    writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${loginCmd}\` to sign in.`);
     return;
   }
   writeLine(io.stdout, `Environment token: ${report.environmentToken.present ? 'present' : 'missing'} (${report.environmentToken.variable})`);
@@ -371,7 +372,7 @@ function writeCredentialStatus(report, io, { mode }) {
   if (report.account) {
     writeLine(io.stdout, `Account: ${formatAccount(report.account)}`);
   }
-  writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${COMMAND_NAME} login\` to sign in.`);
+  writeLine(io.stdout, report.loggedIn ? 'Credential is ready; token value remains hidden.' : `Run \`${loginCmd}\` to sign in.`);
 }
 
 function hasHelpFlag(args) {

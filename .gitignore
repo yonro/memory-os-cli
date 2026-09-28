@@ -44,7 +44,7 @@ docs/evidence/
 .review-worktrees/
 
 
-# DevFlow engine
+# Local tooling state
 .progress/
 .npm-cache-review/
 .tmp-npm-cache/
@@ -52,12 +52,12 @@ docs/evidence/
 # Agent registry & profiles
 .agents/
 
-# GitHub Copilot agents & instructions (DevFlow-specific)
+# GitHub Copilot agents & instructions
 .github/agents/
 .github/instructions/
 .github/copilot-instructions.md
 
-# VS Code workspace (contains DevFlow references)
+# VS Code workspace
 *.code-workspace
 
 # Runtime & state files
@@ -66,9 +66,8 @@ STANDBY_STATE.json
 telegram_bridge_settings.json
 .github/hooks/devflow-lifecycle.json
 
-# === DevFlow Bridge Runtime ===
+# Local bridge transport state
 # Runtime bridge files are local transport state and should not be versioned.
-# Added by: DevFlow standard deploy/init
 
 .progress/.bridge_inbox_*.tmp
 .progress/.bridge_delivery_claims/
