@@ -88,7 +88,8 @@ function runCli(args, { cwd, env, timeout = 15000 }) {
 }
 
 async function createIsolatedEnv(t) {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-status-client-test-'));
+  const rawTempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-status-client-test-'));
+  const tempDir = await fs.realpath(rawTempDir);
   t.after(() => fs.rm(tempDir, { recursive: true, force: true }));
 
   const env = {
