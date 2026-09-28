@@ -4,6 +4,8 @@ import path from 'node:path';
 import { hasFlag } from '../core/args.js';
 import {
   COMMAND_NAME,
+  DEFAULT_PROXY_HOST,
+  DEFAULT_PROXY_PORT,
   PRODUCT_NAME
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
@@ -19,10 +21,12 @@ import {
   defaultProfileTarget,
   isHomeProfileTarget,
   profileBlock,
+  profileClientConfig,
   profileInstallResult,
   findAllProfileSections
 } from '../config/profile.js';
 import { agentIdentity, envReferenceIdentity } from '../mcp/identity/device.js';
+import { mcpLocalProxyTemplate } from '../mcp/core/templates.js';
 import { PINNED_SKILL_VERSION } from '../core/pins.js';
 import { skillCommand } from './skill.js';
 import { getPlugin } from '../plugins/registry.js';
@@ -234,16 +238,19 @@ export async function initCommand(args, io, options = {}) {
   }
 
   const candidateClients = clientFilters.length > 0
-    ? clientFilters.map((id) => getClient(id))
+    ? clientFilters.map((id) => getClient(id)).filter(Boolean)
     : CLIENT_REGISTRY;
 
   const detectedClients = [];
   for (const client of candidateClients) {
-    const detection = await client.detect(io.env, { cwd: io.cwd });
-    if (detection?.detected) {
+    if (!client) continue;
+    const detection = typeof client.detect === 'function'
+      ? (await client.detect(io.env, { cwd: io.cwd }))
+      : { detected: false };
+    if (detection?.detected || clientFilters.length > 0) {
       detectedClients.push({
         client,
-        detectionPath: detection.path ?? null
+        detectionPath: detection?.path ?? null
       });
     }
   }
@@ -278,11 +285,11 @@ export async function initCommand(args, io, options = {}) {
     const actions = {};
 
     // 3a. Agent instruction section (shown first)
-    const hasProfile = Boolean(client.profile);
+    const hasProfile = Boolean(client.profile && profileClientConfig(client.id) && typeof client.profile.defaultTarget === 'function');
     if (hasProfile) {
       const profileTarget = defaultProfileTarget(client.id, io.env, { cwd: io.cwd });
       const isHomeTarget = isHomeProfileTarget(profileTarget, io.env, { cwd: io.cwd, clientId: client.id });
-      const block = profileBlock(client.id);
+      const block = typeof profileBlock === 'function' ? profileBlock(client.id) : '';
       const existing = await readTextIfExists(path.resolve(profileTarget));
       const sections = findAllProfileSections(existing);
       const hadExistingSection = sections.length > 0;
@@ -328,18 +335,25 @@ export async function initCommand(args, io, options = {}) {
       }
 
       if (acceptProfile) {
-        const result = await profileInstallResult(client.id, profileTarget, {
-          write: true,
-          io,
-          cwd: io.cwd,
-          env: io.env,
-          json,
-          isHomeTarget
-        });
-        profilePlan.status = 'completed';
-        profilePlan.backupPath = result.backupPath;
-        if (!json) {
-          writeLine(io.stdout, `     ✓ Configured agent instructions in ${profileTarget}`);
+        try {
+          const result = await profileInstallResult(client.id, profileTarget, {
+            write: true,
+            io,
+            cwd: io.cwd,
+            env: io.env,
+            json,
+            isHomeTarget
+          });
+          profilePlan.status = 'completed';
+          profilePlan.backupPath = result.backupPath;
+          if (!json) {
+            writeLine(io.stdout, `     ✓ Configured agent instructions in ${profileTarget}`);
+          }
+        } catch (err) {
+          profilePlan.status = 'skipped';
+          if (!json) {
+            writeLine(io.stdout, `     Agent instructions error: ${err.message}`);
+          }
         }
       } else if (!dryRun && (!json || yes)) {
         profilePlan.status = 'skipped';
@@ -354,32 +368,65 @@ export async function initCommand(args, io, options = {}) {
     }
 
     // 3b. MCP configuration
-    const hasMcp = Boolean(client.mcp);
+    const hasMcp = Boolean(client.mcp && typeof client.mcp.defaultConfigPath === 'function');
     if (hasMcp) {
       const configPath = client.mcp.defaultConfigPath(io.env);
+      const isLocalProxy = client.mcp.configKind === 'local-proxy';
+      const proxyPort = DEFAULT_PROXY_PORT;
+      const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
       const mcpUrl = endpointUrl(baseUrl, '/mcp');
+      const targetUrl = isLocalProxy ? proxyUrl : mcpUrl;
       const dummyIdentity = envReferenceIdentity(client.id);
-      const snippet = client.mcp.buildSnippet(mcpUrl, dummyIdentity);
-      const existingConfig = await readTextIfExists(path.resolve(configPath));
+
+      let snippet = null;
+      let requiresLocalCommand = null;
+      if (typeof client.mcp.buildSnippet === 'function') {
+        snippet = client.mcp.buildSnippet(mcpUrl, dummyIdentity);
+      } else if (isLocalProxy) {
+        const proxyTemplate = mcpLocalProxyTemplate(client.id, proxyUrl);
+        snippet = proxyTemplate.snippet;
+        requiresLocalCommand = proxyTemplate.requiresLocalCommand;
+      }
+
+      const existingConfig = configPath ? await readTextIfExists(path.resolve(configPath)) : '';
       const exists = Boolean(existingConfig.trim());
 
       const mcpPlan = {
         available: true,
         configPath,
-        mcpUrl,
+        mcpUrl: targetUrl,
         command: `${COMMAND_NAME} mcp add ${client.id} --write`
       };
+      if (isLocalProxy) {
+        mcpPlan.proxyUrl = proxyUrl;
+        if (requiresLocalCommand) {
+          mcpPlan.requiresLocalCommand = requiresLocalCommand;
+        }
+      }
 
       if (!json) {
         writeLine(io.stdout, `  b. MCP Configuration:`);
-        writeLine(io.stdout, `     Config path: ${configPath}`);
-        writeLine(io.stdout, `     Server URL: ${mcpUrl}`);
-        writeLine(io.stdout, '     Snippet:');
-        const snippetLines = typeof snippet === 'string'
-          ? snippet.trim().split('\n')
-          : JSON.stringify(snippet, null, 2).split('\n');
-        for (const line of snippetLines) {
-          writeLine(io.stdout, `       ${line}`);
+        if (configPath) {
+          writeLine(io.stdout, `     Config path: ${configPath}`);
+        }
+        if (isLocalProxy) {
+          writeLine(io.stdout, `     Local proxy URL: ${proxyUrl}`);
+          if (requiresLocalCommand) {
+            writeLine(io.stdout, `     Local proxy command: ${requiresLocalCommand}`);
+          }
+        } else {
+          writeLine(io.stdout, `     Server URL: ${mcpUrl}`);
+        }
+        if (snippet) {
+          writeLine(io.stdout, '     Snippet:');
+          const snippetLines = typeof snippet === 'string'
+            ? snippet.trim().split('\n')
+            : JSON.stringify(snippet, null, 2).split('\n');
+          for (const line of snippetLines) {
+            writeLine(io.stdout, `       ${line}`);
+          }
+        } else {
+          writeLine(io.stdout, `     Configure with: ${COMMAND_NAME} mcp add ${client.id} --write`);
         }
       }
 
@@ -398,7 +445,7 @@ export async function initCommand(args, io, options = {}) {
       }
 
       if (acceptMcp) {
-        if (exists) {
+        if (exists && configPath) {
           const backupPath = `${path.resolve(configPath)}.xmemo.bak`;
           await fs.writeFile(backupPath, existingConfig);
           mcpPlan.backupPath = backupPath;
@@ -406,11 +453,28 @@ export async function initCommand(args, io, options = {}) {
             writeLine(io.stdout, `     Created backup at ${backupPath}`);
           }
         }
-        const liveIdentity = await agentIdentity(client.id, io.env);
-        await client.mcp.writeConfig(configPath, mcpUrl, liveIdentity, { force: false });
-        mcpPlan.status = 'completed';
-        if (!json) {
-          writeLine(io.stdout, `     ✓ Configured MCP server in ${configPath}`);
+        if (typeof client.mcp.writeConfig === 'function') {
+          try {
+            const liveIdentity = await agentIdentity(client.id, io.env);
+            await client.mcp.writeConfig(configPath, targetUrl, liveIdentity, { force: false });
+            mcpPlan.status = 'completed';
+            if (!json) {
+              writeLine(io.stdout, `     ✓ Configured MCP server in ${configPath}`);
+              if (isLocalProxy && requiresLocalCommand) {
+                writeLine(io.stdout, `     Keep \`${requiresLocalCommand}\` running while you use ${client.label}.`);
+              }
+            }
+          } catch (err) {
+            mcpPlan.status = 'skipped';
+            if (!json) {
+              writeLine(io.stdout, `     MCP configuration error: ${err.message}`);
+            }
+          }
+        } else {
+          mcpPlan.status = 'skipped';
+          if (!json) {
+            writeLine(io.stdout, `     Automatic MCP configuration is not supported for ${client.label}.`);
+          }
         }
       } else if (!dryRun && (!json || yes)) {
         mcpPlan.status = 'skipped';
