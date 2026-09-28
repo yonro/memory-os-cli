@@ -55,5 +55,5 @@ export async function serviceContext(args, io) {
     ...client,
     request: (request) => client.request({ ...request, ...(deadlineMs === undefined || request.deadlineMs !== undefined ? {} : { deadlineMs }) })
   });
-  return { client: deadlineClient, baseUrl: client.baseUrl, tokenSource: environmentToken ? 'environment' : 'credential-file', signal: io.signal };
+  return { client: deadlineClient, baseUrl: client.baseUrl, token, tokenSource: environmentToken ? 'environment' : 'credential-file', signal: io.signal };
 }

@@ -89,11 +89,13 @@ test('CLI-MEMORY-UX P1-1: memory search --expand-documents expands up to 3 stubs
 
   // mem-1: fully expanded
   assert.equal(results[0].expanded, true);
+  assert.equal(results[0].document_expanded, true);
   assert.equal(results[0].content, 'Short expanded content 1');
-  assert.equal(results[0].next_command, undefined);
+  assert.equal(results[0].next_command, 'xmemo memory read mem-1');
 
   // mem-2: truncated at 20000 chars
   assert.equal(results[1].expanded, true);
+  assert.equal(results[1].document_expanded, true);
   assert.equal(results[1].content.length, 20000);
   assert.equal(results[1].content_truncated, true);
   assert.equal(results[1].next_command, 'xmemo memory read mem-2');
@@ -101,10 +103,14 @@ test('CLI-MEMORY-UX P1-1: memory search --expand-documents expands up to 3 stubs
   // mem-3: explain error captured per-item, parent command succeeded
   assert.ok(results[2].expand_error);
   assert.equal(results[2].expanded, undefined);
+  assert.equal(results[2].document_expanded, false);
+  assert.equal(results[2].next_command, 'xmemo memory read mem-3');
 
   // mem-4: 4th stub not expanded (capped at 3)
   assert.equal(results[3].expanded, undefined);
+  assert.equal(results[3].document_expanded, false);
   assert.equal(results[3].document_backed, true);
+  assert.equal(results[3].next_command, 'xmemo memory read mem-4');
 });
 
 test('CLI-MEMORY-UX P1-1: context recall supports --expand-documents and stubs', async () => {
@@ -292,4 +298,184 @@ test('CLI-MEMORY-UX P3-b: status plugin line for MCP-kind plugins displays n/a (
   const code = await run(['status', 'codex'], io);
   assert.equal(code, 0);
   assert.match(io.stdout.value, /Plugin: n\/a \(uses MCP\)/);
+});
+
+test('CLI-MEMORY-UX Rev-323fadd0 P1: recall with live-shaped document stub (id != memory_id, document_id, no metadata.document_ref)', async () => {
+  const recallItems = [
+    {
+      id: 'recall-row-999',
+      memory_id: 'mem-real-456',
+      document_id: 'doc-backing-789',
+      content: 'Document-backed memory: XMemo / Yonro Architecture Spec',
+      path: 'projects/xmemo/Plans'
+    }
+  ];
+
+  // 1. Human mode without --expand-documents: shows Full document hint with memory_id (not recall row id)
+  const ioHuman = makeIo(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/v1/recall/context') {
+      return new Response(JSON.stringify({
+        context_text: 'content: Document-backed memory: XMemo / Yonro Architecture Spec\ndocument_id: doc-backing-789',
+        items: recallItems
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected url: ${url}`);
+  });
+
+  const codeHuman = await run(['context', 'recall', 'architecture'], ioHuman);
+  assert.equal(codeHuman, 0);
+  assert.match(ioHuman.stdout.value, /Recalled 1 context item\./);
+  assert.match(ioHuman.stdout.value, /Full document: xmemo memory read mem-real-456/);
+  assert.doesNotMatch(ioHuman.stdout.value, /recall-row-999/);
+
+  // 2. Human mode with --expand-documents: fetches explain using memory_id and expands context_text
+  const expandedText = 'Full text of the architecture specification document spanning multiple pages.';
+  const ioExpandHuman = makeIo(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/v1/recall/context') {
+      return new Response(JSON.stringify({
+        context_text: 'content: Document-backed memory: XMemo / Yonro Architecture Spec\ndocument_id: doc-backing-789',
+        items: recallItems
+      }), { status: 200 });
+    }
+    if (parsed.pathname === '/api/v1/memories/mem-real-456/explain') {
+      return new Response(JSON.stringify({
+        memory: { content: expandedText }
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected url: ${url}`);
+  });
+
+  const codeExpandHuman = await run(['context', 'recall', 'architecture', '--expand-documents'], ioExpandHuman);
+  assert.equal(codeExpandHuman, 0);
+  assert.match(ioExpandHuman.stdout.value, /Full text of the architecture specification document/);
+
+  // 3. JSON mode with --expand-documents: preserves next_command and sets document_expanded
+  const ioExpandJson = makeIo(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/v1/recall/context') {
+      return new Response(JSON.stringify({
+        items: recallItems
+      }), { status: 200 });
+    }
+    if (parsed.pathname === '/api/v1/memories/mem-real-456/explain') {
+      return new Response(JSON.stringify({
+        memory: { content: expandedText }
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected url: ${url}`);
+  });
+
+  const codeExpandJson = await run(['context', 'recall', 'architecture', '--expand-documents', '--json'], ioExpandJson);
+  assert.equal(codeExpandJson, 0);
+  const envelope = JSON.parse(ioExpandJson.stdout.value);
+  assert.equal(envelope.ok, true);
+  const item = envelope.data.items[0];
+  assert.equal(item.id, 'recall-row-999');
+  assert.equal(item.memory_id, 'mem-real-456');
+  assert.equal(item.document_backed, true);
+  assert.equal(item.document_expanded, true);
+  assert.equal(item.next_command, 'xmemo memory read mem-real-456');
+  assert.equal(item.content, expandedText);
+});
+
+test('CLI-MEMORY-UX Rev-323fadd0 P1: memory delete and restore endpoints', async () => {
+  let deleteBody = null;
+  let deleteCalled = false;
+  let restoreCalled = false;
+
+  const io = makeIo(async (url, init) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/v1/memories/mem-to-delete/forget') {
+      deleteCalled = true;
+      deleteBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({ ok: true, id: 'mem-to-delete', mode: 'soft_delete', forgotten: true }), { status: 200 });
+    }
+    if (parsed.pathname === '/v1/memories/mem-to-restore/restore') {
+      restoreCalled = true;
+      return new Response(JSON.stringify({ ok: true, id: 'mem-to-restore', restored: true }), { status: 200 });
+    }
+    throw new Error(`Unexpected url: ${url}`);
+  });
+
+  // 1. memory delete with --yes
+  const codeDel = await run(['memory', 'delete', 'mem-to-delete', '--reason', 'outdated note', '--yes'], io);
+  assert.equal(codeDel, 0);
+  assert.equal(deleteCalled, true);
+  assert.deepEqual(deleteBody, { mode: 'soft_delete', reason: 'outdated note' });
+  assert.match(io.stdout.value, /Soft-deleted memory mem-to-delete\./);
+
+  // 2. memory delete non-interactive without --yes fails with confirmation required
+  const ioNoYes = makeIo(async () => new Response('{}', { status: 200 }));
+  const codeNoYes = await run(['memory', 'delete', 'mem-to-delete'], ioNoYes);
+  assert.equal(codeNoYes, 10);
+
+  // 3. memory restore with --yes
+  const codeRes = await run(['memory', 'restore', 'mem-to-restore', '--yes'], io);
+  assert.equal(codeRes, 0);
+  assert.equal(restoreCalled, true);
+  assert.match(io.stdout.value, /Restored memory mem-to-restore\./);
+
+  // 4. memory restore when REST endpoint is unavailable (404) advises MCP restore_memory
+  const io404 = makeIo(async (url) => {
+    return new Response(JSON.stringify({ error: { code: 'route_not_found', message: 'Route not found' } }), { status: 404 });
+  });
+  const code404 = await run(['memory', 'restore', 'mem-to-restore', '--yes'], io404);
+  assert.equal(code404, 5);
+  assert.match(io404.stderr.value, /restore is available through MCP restore_memory/i);
+});
+
+test('CLI-MEMORY-UX Rev-323fadd0 P2: state restore human output unwraps live-shaped data.result payload', async () => {
+  const io = makeIo(async () => new Response(JSON.stringify({
+    ok: true,
+    result: {
+      state_key: 'cli-e2e-20260929040817',
+      version: 4,
+      expires_at: '2026-10-01T12:00:00Z',
+      content: 'cli e2e state working memory content'
+    }
+  }), { status: 200 }));
+
+  const code = await run(['state', 'restore', 'cli-e2e-20260929040817'], io);
+  assert.equal(code, 0);
+  assert.match(io.stdout.value, /Restored state: key=cli-e2e-20260929040817, version=4, expiry=2026-10-01T12:00:00Z/);
+  assert.match(io.stdout.value, /cli e2e state working memory content/);
+  assert.doesNotMatch(io.stdout.value, /key=active_task/);
+});
+
+test('CLI-MEMORY-UX Rev-323fadd0 P2: context recall --include-knowledge warns on real live response lacking knowledge', async () => {
+  // Live response: token without knowledge:read returns regular memory items with no knowledge keys at all
+  const livePayload = {
+    context_text: 'Regular memory note content',
+    items: [
+      { id: 'm1', memory_id: 'm1', content: 'Regular memory note content' }
+    ]
+  };
+
+  const ioHuman = makeIo(async () => new Response(JSON.stringify(livePayload), { status: 200 }));
+  const codeHuman = await run(['context', 'recall', 'query', '--include-knowledge'], ioHuman);
+  assert.equal(codeHuman, 0);
+  assert.match(ioHuman.stderr.value, /Warning: Knowledge search was skipped \(requires knowledge:read scope\)\./);
+
+  const ioJson = makeIo(async () => new Response(JSON.stringify(livePayload), { status: 200 }));
+  const codeJson = await run(['context', 'recall', 'query', '--include-knowledge', '--json'], ioJson);
+  assert.equal(codeJson, 0);
+  const envelope = JSON.parse(ioJson.stdout.value);
+  assert.ok(envelope.meta.warnings.some((w) => /Knowledge search was skipped/.test(w)));
+});
+
+test('CLI-MEMORY-UX Rev-323fadd0 P3: cloud-skill list prints asset_status and publication status', async () => {
+  const io = makeIo(async () => new Response(JSON.stringify({
+    skills: [
+      { name: 'XMemo Helper', slug: 'xmemo-helper', asset_status: 'active', published_revision_id: 'rev-42' },
+      { name: 'Draft Skill', slug: 'draft-skill', asset_status: 'active', published_revision_id: null }
+    ]
+  }), { status: 200 }));
+
+  const code = await run(['cloud-skill', 'list'], io);
+  assert.equal(code, 0);
+  assert.match(io.stdout.value, /Found 2 cloud skills:/);
+  assert.match(io.stdout.value, /- XMemo Helper \(xmemo-helper\) · active \(published\)/);
+  assert.match(io.stdout.value, /- Draft Skill \(draft-skill\) · active \(draft\)/);
 });

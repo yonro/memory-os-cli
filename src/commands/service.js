@@ -2,7 +2,7 @@ import { hasFlag, optionValue, parseIntegerInRange } from '../core/args.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
 import { assertKnownOptions, assertNoUnknownInputFields, optionalBooleanInput, readJsonInput, rejectInputFlagConflicts } from '../api/input.js';
-import { UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
+import { ServiceClientError, UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 import { serviceContext } from '../api/service-context.js';
 import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
@@ -22,6 +22,8 @@ export async function memoryCommand(args, io) {
     writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--keyword <words>] [--exact <phrase>] [--json]');
     writeLine(io.stdout, '  xmemo memory read <memory-id> [--team <id>] [--json]');
     writeLine(io.stdout, '  xmemo memory list [--path-prefix <prefix>] [--project <name>] [--exact-path] [--query <text>] [--type <type>] [--all] [--limit <n>] [--offset <n>] [--json]');
+    writeLine(io.stdout, '  xmemo memory delete <memory-id> [--reason <text>] [--yes] [--json]');
+    writeLine(io.stdout, '  xmemo memory restore <memory-id> [--yes] [--json]');
     writeLine(io.stdout, '  xmemo memory import --file <jsonl> [--dry-run | --idempotency-key <key> --yes]');
     writeLine(io.stdout, '  xmemo memory ledger-delete|expense-delete --id <transaction-uuid> --yes');
     return 0;
@@ -30,6 +32,8 @@ export async function memoryCommand(args, io) {
   if (subcommand === 'search') return await runServiceCommand('memory.search', args.slice(1), io, memorySearch, validateMemorySearch);
   if (subcommand === 'read') return await runServiceCommand('memory.read', args.slice(1), io, memoryRead, validateMemoryRead);
   if (subcommand === 'list') return await runServiceCommand('memory.list', args.slice(1), io, memoryList, validateMemoryList);
+  if (subcommand === 'delete') return await runServiceCommand('memory.delete', args.slice(1), io, memoryDelete, validateMemoryDelete);
+  if (subcommand === 'restore') return await runServiceCommand('memory.restore', args.slice(1), io, memoryRestore, validateMemoryRestore);
   if (['import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
     let prepared;
     return await runServiceCommand(`memory.${subcommand}`, args.slice(1), io,
@@ -136,6 +140,72 @@ async function validateMemoryRead(args, io) {
   const positionalId = singlePositional(args, 'memory read');
   if (positionalId && input?.memory_id !== undefined) throw new UsageError('Memory ID cannot be supplied both positionally and in --input.');
   if (typeof (positionalId ?? input?.memory_id) !== 'string' || !(positionalId ?? input?.memory_id).trim()) throw new UsageError('memory read requires a memory ID.');
+}
+
+async function memoryDelete(args, io, context) {
+  const input = await readJsonInput(args, io);
+  const memoryId = singlePositional(args, 'memory delete') ?? optionValue(args, '--id') ?? input?.id;
+  const reason = optionValue(args, '--reason') ?? input?.reason;
+  await confirmRemoteAction(args, io, `Soft-delete memory ${memoryId}?`);
+  const body = { mode: 'soft_delete' };
+  if (typeof reason === 'string' && reason.trim()) {
+    body.reason = reason.trim();
+  }
+  return await context.client.request({
+    method: 'POST',
+    path: `/v1/memories/${encodeURIComponent(memoryId)}/forget`,
+    body,
+    sideEffect: true
+  });
+}
+
+async function validateMemoryDelete(args, io) {
+  assertKnownOptions(args, ['--id', '--reason', '--yes', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, ['id', 'reason']);
+  rejectInputFlagConflicts(input, [['--id', 'id'], ['--reason', 'reason']], args);
+  const positionalId = singlePositional(args, 'memory delete');
+  const flagId = optionValue(args, '--id');
+  if (positionalId && flagId) throw new UsageError('Memory ID cannot be supplied both positionally and via --id.');
+  if ((positionalId || flagId) && input?.id !== undefined) throw new UsageError('Memory ID cannot be supplied both positionally/via flags and in --input.');
+  const id = positionalId ?? flagId ?? input?.id;
+  if (typeof id !== 'string' || !id.trim()) throw new UsageError('memory delete requires a memory ID.');
+}
+
+async function memoryRestore(args, io, context) {
+  const input = await readJsonInput(args, io);
+  const memoryId = singlePositional(args, 'memory restore') ?? optionValue(args, '--id') ?? input?.id;
+  await confirmRemoteAction(args, io, `Restore memory ${memoryId}?`);
+  try {
+    return await context.client.request({
+      method: 'POST',
+      path: `/v1/memories/${encodeURIComponent(memoryId)}/restore`,
+      sideEffect: true
+    });
+  } catch (error) {
+    if ((error.httpStatus === 404 || error.httpStatus === 405 || error.code === 'CONTRACT_REQUIRED') &&
+        !(error?.data?.error?.code === 'MEMORY_NOT_FOUND' || /Memory .* not found/i.test(error?.message))) {
+      throw new ServiceClientError('REST restore endpoint is unavailable on this service. Restore is available through MCP restore_memory.', {
+        code: 'REST_RESTORE_UNAVAILABLE',
+        httpStatus: error.httpStatus,
+        nextAction: 'Use MCP restore_memory to restore this memory.'
+      });
+    }
+    throw error;
+  }
+}
+
+async function validateMemoryRestore(args, io) {
+  assertKnownOptions(args, ['--id', '--yes', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, ['id']);
+  rejectInputFlagConflicts(input, [['--id', 'id']], args);
+  const positionalId = singlePositional(args, 'memory restore');
+  const flagId = optionValue(args, '--id');
+  if (positionalId && flagId) throw new UsageError('Memory ID cannot be supplied both positionally and via --id.');
+  if ((positionalId || flagId) && input?.id !== undefined) throw new UsageError('Memory ID cannot be supplied both positionally/via flags and in --input.');
+  const id = positionalId ?? flagId ?? input?.id;
+  if (typeof id !== 'string' || !id.trim()) throw new UsageError('memory restore requires a memory ID.');
 }
 
 async function memoryList(args, io, context) {
@@ -488,16 +558,42 @@ async function contextRecall(args, io, context) {
     client: context.client,
     teamId: optionValue(args, '--team') ?? input?.team_id
   });
+  if (typeof data?.context_text === 'string') {
+    let updatedContextText = data.context_text;
+    for (const item of items) {
+      if (item.expanded && item._originalContent && updatedContextText.includes(item._originalContent)) {
+        updatedContextText = updatedContextText.replace(item._originalContent, item.content);
+      }
+    }
+    data.context_text = updatedContextText;
+  }
   const unified = items.map((item) => unifyMemoryItem(item, { score: item.score ?? null }));
   const unifiedData = (typeof data === 'object' && data !== null) ? { ...data } : {};
   unifiedData.items = unified;
   unifiedData.memories = unified;
+  if (data?.context_text !== undefined) unifiedData.context_text = data.context_text;
   for (let i = 0; i < unified.length; i += 1) {
     unifiedData[i] = unified[i];
   }
   response.data = unifiedData;
   if (includeKnowledge) {
-    const knowledgeSkipped = Boolean(
+    let tokenScopes = null;
+    if (context.token && typeof context.token === 'string') {
+      const parts = context.token.split('.');
+      if (parts.length === 3) {
+        try {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          if (Array.isArray(payload.scopes)) tokenScopes = payload.scopes;
+          else if (typeof payload.scope === 'string') tokenScopes = payload.scope.split(/[\s,]+/);
+        } catch {}
+      }
+    }
+    const hasKnowledgeContent = Boolean(
+      data?.knowledge ||
+      data?.coverage?.knowledge === true ||
+      (Array.isArray(data?.items) && data.items.some((it) => it.source === 'knowledge' || it.type === 'knowledge' || it.knowledge_id || it.base_id))
+    );
+    const knowledgeExplicitlySkipped = Boolean(
       data?.knowledge_skipped ||
       data?.knowledge_items_skipped ||
       data?.coverage?.knowledge === false ||
@@ -506,7 +602,9 @@ async function contextRecall(args, io, context) {
       (Array.isArray(data?.skipped_sources) && data.skipped_sources.includes('knowledge')) ||
       (Array.isArray(data?.warnings) && data.warnings.some((w) => /knowledge/i.test(w)))
     );
-    if (knowledgeSkipped) {
+    const lacksKnowledgeScope = tokenScopes ? !tokenScopes.includes('knowledge:read') : false;
+    const shouldWarn = knowledgeExplicitlySkipped || lacksKnowledgeScope || (!hasKnowledgeContent && !data?.coverage?.knowledge && !data?.knowledge);
+    if (shouldWarn) {
       response.meta = response.meta ?? {};
       response.meta.warnings = response.meta.warnings ?? [];
       if (!response.meta.warnings.some((w) => /knowledge/i.test(w))) {
@@ -662,7 +760,7 @@ async function runServiceCommand(command, args, io, handler, validate = null) {
 }
 
 function singlePositional(args, command) {
-  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline', '--keyword', '--exact', '--path-prefix', '--project', '--query', '--filter', '--type', '--offset']);
+  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline', '--keyword', '--exact', '--path-prefix', '--project', '--query', '--filter', '--type', '--offset', '--id', '--reason']);
   const values = [];
   let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {

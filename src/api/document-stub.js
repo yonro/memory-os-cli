@@ -3,25 +3,26 @@ export const MAX_EXPAND_CHARS = 20000;
 
 export function isDocumentStub(item) {
   if (!item || typeof item !== 'object') return false;
+  if (item.document_id || item.document_ref) return true;
   if (item.metadata) {
-    if (typeof item.metadata === 'object' && item.metadata.document_ref) {
+    if (typeof item.metadata === 'object' && (item.metadata.document_ref || item.metadata.document_id)) {
       return true;
     }
     if (typeof item.metadata === 'string') {
       try {
         const parsed = JSON.parse(item.metadata);
-        if (parsed && typeof parsed === 'object' && parsed.document_ref) {
+        if (parsed && typeof parsed === 'object' && (parsed.document_ref || parsed.document_id)) {
           return true;
         }
       } catch {}
     }
   }
   const content = typeof item.content === 'string' ? item.content : '';
-  return content.startsWith('Document-backed memory:');
+  return content.startsWith('Document-backed memory:') || /Document-backed memory:/i.test(content);
 }
 
 export function buildNextCommand(item) {
-  const id = item?.id || item?.memory_id || '';
+  const id = item?.memory_id || item?.document_id || item?.id || '';
   return `xmemo memory read ${id}`;
 }
 
@@ -31,6 +32,7 @@ export async function processDocumentStubs(items, { expandDocuments, client, tea
   for (const item of items) {
     if (isDocumentStub(item)) {
       item.document_backed = true;
+      item.document_expanded = Boolean(item.expanded);
       item.next_command = buildNextCommand(item);
     }
   }
@@ -39,7 +41,7 @@ export async function processDocumentStubs(items, { expandDocuments, client, tea
 
   const stubs = items.filter(isDocumentStub).slice(0, MAX_EXPAND_DOCUMENTS);
   for (const stub of stubs) {
-    const id = stub.id || stub.memory_id;
+    const id = stub.memory_id || stub.document_id || stub.id;
     if (!id) continue;
 
     try {
@@ -54,19 +56,22 @@ export async function processDocumentStubs(items, { expandDocuments, client, tea
       const record = (data && typeof data === 'object' && (data.memory || data.record || data.result)) || data;
       if (record && typeof record.content === 'string') {
         const fullText = record.content;
+        stub._originalContent = stub.content;
         stub.expanded = true;
+        stub.document_expanded = true;
+        stub.next_command = buildNextCommand(stub);
         if (fullText.length > MAX_EXPAND_CHARS) {
           stub.content = fullText.slice(0, MAX_EXPAND_CHARS);
           stub.content_truncated = true;
-          stub.next_command = buildNextCommand(stub);
         } else {
           stub.content = fullText;
-          delete stub.next_command;
         }
       } else {
+        stub.document_expanded = false;
         stub.expand_error = 'invalid_response';
       }
     } catch (e) {
+      stub.document_expanded = false;
       stub.expand_error = e.code || e.serviceCode || (e.httpStatus ? `HTTP_${e.httpStatus}` : 'network_error');
     }
   }

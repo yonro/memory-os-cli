@@ -81,6 +81,8 @@ test('CLI-09 actual HTTP + child CLI exercise all 18 frozen commands and pinned 
       return respond(res, { memories: [], total: 0 });
     }
     if (p === '/v1/memories/import') { assert.equal(b.dry_run,true); return respond(res, {errors:[],next_cursor:null}); }
+    if (p === '/v1/memories/m1/forget') return respond(res, { ok: true, id: 'm1', mode: 'soft_delete', forgotten: true });
+    if (p === '/v1/memories/m1/restore') return respond(res, { ok: true, id: 'm1', restored: true });
     if (p === '/v1/skill/operations') { assert.ok(['ledger-delete','expense-delete'].includes(b.operation)); return respond(res,{ok:true,result:{status:'deleted'}}); }
     if (p === '/api/v1/remember') { assert.equal(b.content, '中文 synthetic'); return respond(res, { memory_id: 'm1' }, 201); }
     if (p === '/api/v1/recall') return respond(res, [{ memory_id: 'm1', content: '中文 synthetic' }]);
@@ -127,6 +129,8 @@ test('CLI-09 actual HTTP + child CLI exercise all 18 frozen commands and pinned 
   await call(['memory','import','--file',importFile,'--dry-run']);
   await call(['memory','ledger-delete','--id','00000000-0000-4000-8000-000000000001','--yes']);
   await call(['memory','expense-delete','--id','00000000-0000-4000-8000-000000000001','--yes']);
+  await call(['memory', 'delete', 'm1', '--yes']);
+  await call(['memory', 'restore', 'm1', '--yes']);
   await call(['context', 'recall'], { query: 'synthetic', max_items: 3 });
   await call(['state', 'save'], { state_key: 'active_task', content: 'synthetic' });
   await call(['state', 'restore']);

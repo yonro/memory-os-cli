@@ -5,6 +5,8 @@ export function writeHumanServiceResult(io, command, data, meta = {}) {
   if (command === 'memory.read') return writeMemoryRead(io, data);
   if (command === 'memory.list') return writeMemoryList(io, data, meta);
   if (command === 'memory.add') return writeMemoryAdd(io, data);
+  if (command === 'memory.delete') return writeMemoryDelete(io, data);
+  if (command === 'memory.restore') return writeMemoryRestore(io, data);
   if (command === 'context.recall') return writeContextRecall(io, data, meta);
   if (command === 'state.save' || command === 'state.restore') return writeStateResult(io, command, data);
   if (command === 'restart.snapshot') return writeRestartSnapshot(io, data);
@@ -49,14 +51,33 @@ function writeMemoryAdd(io, data) {
   writeLine(io.stdout, `Saved memory ${id} at ${path}`);
 }
 
+function writeMemoryDelete(io, data) {
+  const id = data?.id ?? data?.memory_id ?? 'unknown';
+  writeLine(io.stdout, `Soft-deleted memory ${id}.`);
+}
+
+function writeMemoryRestore(io, data) {
+  const id = data?.id ?? data?.memory_id ?? 'unknown';
+  writeLine(io.stdout, `Restored memory ${id}.`);
+}
+
 function writeStateResult(io, command, data) {
-  const key = data?.state_key ?? data?.key ?? data?.arguments?.state_key ?? 'active_task';
-  const version = data?.version ?? 'unknown';
-  const expiry = data?.expires_at ?? (data?.ttl_seconds !== undefined ? `${data.ttl_seconds}s` : null) ?? 'none';
+  const payload = (data && typeof data === 'object' && (data.result ?? data.item ?? data.record)) || data || {};
+  const key = payload.state_key ?? payload.key ?? data?.state_key ?? data?.key ?? data?.arguments?.state_key ?? 'unknown';
+  const version = payload.version ?? data?.version ?? 'unknown';
+  const expiry = payload.expires_at ?? data?.expires_at ?? (payload.ttl_seconds !== undefined ? `${payload.ttl_seconds}s` : null) ?? (data?.ttl_seconds !== undefined ? `${data.ttl_seconds}s` : null) ?? 'none';
   const verb = command === 'state.restore' ? 'Restored' : 'Saved';
   writeLine(io.stdout, `${verb} state: key=${key}, version=${version}, expiry=${expiry}`);
-  if (command === 'state.restore' && typeof data?.content === 'string' && data.content) {
-    writeLine(io.stdout, data.content);
+  if (command === 'state.restore') {
+    const rawContent = payload.content ?? data?.content;
+    if (typeof rawContent === 'string' && rawContent) {
+      if (rawContent.length > 2000) {
+        writeLine(io.stdout, rawContent.slice(0, 2000));
+        writeLine(io.stdout, '(content truncated; use --json to view full content)');
+      } else {
+        writeLine(io.stdout, rawContent);
+      }
+    }
   }
 }
 
@@ -89,7 +110,11 @@ function writeCloudSkillList(io, data) {
   for (const skill of skills) {
     const name = skill?.name ?? 'Unnamed';
     const slug = skill?.slug ?? 'no-slug';
-    const status = skill?.status ?? 'unknown';
+    const baseStatus = skill?.asset_status ?? skill?.status;
+    const publication = skill?.published_revision_id ? 'published' : (skill?.published_revision_id === null ? 'draft' : null);
+    const status = baseStatus && publication && baseStatus !== publication
+      ? `${baseStatus} (${publication})`
+      : (baseStatus ?? publication ?? 'unknown');
     writeLine(io.stdout, `- ${name} (${slug}) · ${status}`);
   }
 }
@@ -104,7 +129,7 @@ function writeContextRecall(io, data, meta = {}) {
 
   for (const item of items) {
     if (item?.document_backed && (!item?.expanded || item?.content_truncated)) {
-      const id = item?.memory_id ?? item?.id ?? '';
+      const id = item?.memory_id ?? item?.document_id ?? item?.id ?? '';
       if (id) writeLine(io.stdout, `Full document: xmemo memory read ${id}`);
     }
   }
