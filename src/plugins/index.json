@@ -18,6 +18,12 @@
       "install",
       "clawhub:@xmemo/openclaw-memory@1.0.18"
     ],
+    "update": [
+      "openclaw",
+      "plugins",
+      "update",
+      "@xmemo/openclaw-memory"
+    ],
     "verify": {
       "command": "openclaw",
       "args": ["plugins", "inspect", "xmemo-memory", "--runtime", "--json"]
@@ -40,6 +46,12 @@
       "args": ["--version"]
     },
     "install": [
+      "hermes",
+      "plugins",
+      "install",
+      "xmemo"
+    ],
+    "fallbackInstall": [
       "python",
       "-m",
       "pip",
@@ -71,7 +83,7 @@
       "dsh",
       "plugin",
       "add",
-      "dsh-xmemo"
+      "dsh-xmemo@0.1.0"
     ],
     "verify": {
       "command": "dsh",
@@ -98,14 +110,16 @@
       "gemini",
       "extensions",
       "install",
-      "https://github.com/yonro/xmemo-gemini-cli"
+      "https://github.com/yonro/xmemo-gemini-cli",
+      "--ref",
+      "39e25b185b5157490d1683e4ca8c5c5fb1312a88"
     ],
     "verify": {
       "command": "gemini",
       "args": ["extensions", "list"]
     },
     "docs": "https://github.com/yonro/xmemo-gemini-cli",
-    "note": "unpinned (host does not support refs)",
+    "note": "pinned to commit 39e25b185b5157490d1683e4ca8c5c5fb1312a88 via --ref",
     "status": "preview",
     "clientId": "gemini-cli"
   },
@@ -184,19 +198,22 @@
     "platform": "vscode",
     "label": "VS Code XMemo Extension",
     "repo": "yonro/xmemo-vscode",
-    "kind": "marketplace",
+    "kind": "manual",
     "version": "0.1.1",
     "tag": null,
     "commit": "bf08e7c237bc46a84386b0aec15ee3b38dca5e98",
     "detect": null,
     "install": null,
     "steps": [
-      "Run: code --install-extension xmemo.xmemo-vscode",
-      "Or search for 'XMemo' in VS Code Extensions view",
+      "Not yet published on VS Code Marketplace or Open VSX (review pending)",
+      "Obtain or package the VSIX from https://github.com/yonro/xmemo-vscode",
+      "Install via command line: code --install-extension <path-to-xmemo-vscode.vsix>",
+      "Or in VS Code: Extensions view > '...' menu > 'Install from VSIX...'",
       "Run 'XMemo: Sign In' from the Command Palette to connect via OAuth"
     ],
     "verify": null,
     "docs": "https://github.com/yonro/xmemo-vscode",
+    "note": "not yet published on Marketplace / Open VSX",
     "status": "preview",
     "clientId": null
   },

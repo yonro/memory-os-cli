@@ -2,13 +2,12 @@ import { hasFlag, optionValue } from '../core/args.js';
 import { TOKEN_ENV_VAR } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { PINNED_OPENCLAW_PLUGIN_SPEC } from '../core/pins.js';
+import { PINNED_OPENCLAW_PLUGIN_SPEC, PINNED_OPENCLAW_SKILL_NAME } from '../core/pins.js';
 import { runProcess } from '../core/runtime.js';
 import { resolveCredentialToken } from '../network/auth.js';
 
 const DEFAULT_OPENCLAW_BIN = 'openclaw';
 const OPENCLAW_PLUGIN_SPEC = PINNED_OPENCLAW_PLUGIN_SPEC;
-const OPENCLAW_SKILL_REF = 'xmemo';
 const OPENCLAW_MCP_NAME = 'xmemo';
 
 function commandText(command, args) {
@@ -60,7 +59,6 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
   const openclawBin = optionValue(optionArgs, '--openclaw-bin') ?? DEFAULT_OPENCLAW_BIN;
   const mcpOnly = hasFlag(optionArgs, '--mcp-only');
   const withMcp = mcpOnly || hasFlag(optionArgs, '--with-mcp');
-  const noSkill = hasFlag(optionArgs, '--no-skill');
   const force = hasFlag(optionArgs, '--force');
   const isJson = hasFlag(optionArgs, '--json');
   const credential = credentialPlan(io.env);
@@ -71,7 +69,6 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
   }
 
   const pluginArgs = ['plugins', 'install', OPENCLAW_PLUGIN_SPEC, ...(force ? ['--force'] : [])];
-  const skillArgs = ['skills', 'install', OPENCLAW_SKILL_REF, ...(force ? ['--force'] : [])];
   const mcpArgs = [
     'mcp',
     'add',
@@ -102,11 +99,11 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
       skipped: mcpOnly,
     },
     skill: {
-      ref: OPENCLAW_SKILL_REF,
-      command: commandText(openclawBin, skillArgs),
+      ref: PINNED_OPENCLAW_SKILL_NAME,
+      command: 'xmemo skill install --client openclaw',
       installed: false,
-      alreadyInstalled: false,
-      skipped: noSkill || mcpOnly,
+      skipped: mcpOnly,
+      note: 'Skill is installed separately via xmemo skill install --client openclaw',
     },
     mcp: {
       enabled: withMcp,
@@ -141,21 +138,6 @@ export async function openclawSetupPlan({ setupPlan, optionArgs, io, dryRun }) {
       }
     } else {
       selectedClient.nativePlugin.installed = true;
-    }
-
-    if (!noSkill) {
-      if (!isJson) {
-        writeLine(io.stdout, `Running: ${commandText(openclawBin, skillArgs)}`);
-      }
-      const skillResult = await runOpenClaw(openclawBin, skillArgs, io, { allowAlreadyInstalled: true });
-      if (skillResult.alreadyInstalled) {
-        selectedClient.skill.alreadyInstalled = true;
-        if (!isJson) {
-          writeLine(io.stdout, 'OpenClaw skill is already installed. Use --force to reinstall.');
-        }
-      } else {
-        selectedClient.skill.installed = true;
-      }
     }
   }
 

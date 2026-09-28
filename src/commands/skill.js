@@ -10,7 +10,12 @@ import { hasFlag, optionValue } from '../core/args.js';
 import { CLI_VERSION, COMMAND_NAME } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
-import { PINNED_SKILL_VERSION, PINNED_SKILL_INTEGRITY } from '../core/pins.js';
+import {
+  PINNED_SKILL_VERSION,
+  PINNED_SKILL_INTEGRITY,
+  PINNED_OPENCLAW_SKILL_NAME,
+  PINNED_OPENCLAW_SKILL_VERSION
+} from '../core/pins.js';
 import {
   getClient,
   supportedSkillClientIds,
@@ -45,14 +50,26 @@ function extractPositionalArgs(args, optionsWithValues = []) {
 
 async function readLineFromStdin(stdin) {
   if (!stdin) return '';
-  let input = '';
-  for await (const chunk of stdin) {
-    input += chunk;
-    if (input.includes('\n')) {
-      break;
-    }
+  if (!stdin._asyncIterator) {
+    if (typeof stdin[Symbol.asyncIterator] !== 'function') return '';
+    stdin._asyncIterator = stdin[Symbol.asyncIterator]();
+    stdin._buffer = '';
   }
-  return input.split(/\r?\n/, 1)[0] ?? '';
+  while (true) {
+    const nl = stdin._buffer.indexOf('\n');
+    if (nl !== -1) {
+      const line = stdin._buffer.slice(0, nl);
+      stdin._buffer = stdin._buffer.slice(nl + 1);
+      return line.replace(/\r$/, '');
+    }
+    const { value, done } = await stdin._asyncIterator.next();
+    if (done) {
+      const line = stdin._buffer;
+      stdin._buffer = '';
+      return line.replace(/\r$/, '');
+    }
+    stdin._buffer += typeof value === 'string' ? value : value?.toString('utf8') ?? '';
+  }
 }
 
 export function computeTarballIntegrity(buffer) {
@@ -139,7 +156,7 @@ export async function backupSkillDirectory(targetDir, options = {}) {
 
 export function writeSkillHelp(io) {
   writeLine(io.stdout, 'Skill commands:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--client <id>|--all] [--project] [--dir <path>] [--dry-run] [--yes] [--force] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} skill install [--client <id>|--all] [--project] [--global] [--dir <path>] [--dry-run] [--yes] [--force] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} skill status [--client <id>|--all] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} skill remove --client <id> [--project] [--yes] [--json]`);
   writeLine(io.stdout, `  ${COMMAND_NAME} skill update [--client <id>|--all] [--dry-run] [--yes] [--json]`);
@@ -204,6 +221,12 @@ export async function skillInstall(args, io) {
   }
   if (options.project && !options.client) {
     throw new UsageError('--project requires --client <id>.');
+  }
+  if (options.global && !options.client) {
+    throw new UsageError('--global requires --client <id>.');
+  }
+  if (options.project && options.global) {
+    throw new UsageError('Cannot specify both --project and --global.');
   }
 
   const isClientInstall = Boolean(options.client || options.all);
@@ -430,7 +453,107 @@ async function directorySkillInstall(options, cwd, io) {
   }
 }
 
+async function openclawSkillInstall(options, cwd, io) {
+  const client = getClient('openclaw');
+  if (options.project) {
+    throw new UsageError(`Client "${client.label}" does not support project-level skills.`);
+  }
+
+  const version = options.version ?? PINNED_OPENCLAW_SKILL_VERSION;
+  const cmdArgs = [
+    'skills',
+    'install',
+    PINNED_OPENCLAW_SKILL_NAME,
+    '--version',
+    version,
+    ...(options.global ? ['--global'] : []),
+    ...(options.force ? ['--force'] : [])
+  ];
+  const fullCommand = ['openclaw', ...cmdArgs];
+  const cmdStr = fullCommand.join(' ');
+
+  if (!options.json) {
+    writeLine(io.stdout, 'Install plan for OpenClaw skill:');
+    writeLine(io.stdout, `  Command: ${cmdStr}`);
+  }
+
+  if (options.dryRun) {
+    if (options.json) {
+      writeLine(io.stdout, JSON.stringify({
+        ok: true,
+        dryRun: true,
+        client: 'openclaw',
+        command: fullCommand,
+        executed: false
+      }, null, 2));
+    } else {
+      writeLine(io.stdout, '[dry-run] Command not executed.');
+    }
+    return 0;
+  }
+
+  if (!options.yes) {
+    if (options.json) {
+      writeLine(io.stdout, JSON.stringify({
+        ok: false,
+        consentRequired: true,
+        client: 'openclaw',
+        command: fullCommand,
+        executed: false
+      }, null, 2));
+      return 0;
+    }
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, `Execute "${cmdStr}"? [y/N]`);
+    const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
+    if (answer !== 'y' && answer !== 'yes') {
+      writeLine(io.stdout, 'Installation cancelled.');
+      return 0;
+    }
+  }
+
+  let result;
+  try {
+    result = await executeSubprocess('openclaw', cmdArgs, io, sanitizeEnv(io.env), cwd);
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      throw new UsageError('openclaw is not installed or not available on PATH.');
+    }
+    throw new UsageError(`Failed to execute openclaw: ${err.message}`);
+  }
+
+  if (result.code !== 0) {
+    const combined = `${result.stderr || ''}\n${result.stdout || ''}`;
+    if (/already exists|already installed/i.test(combined) && !options.force) {
+      throw new UsageError(`OpenClaw skill already exists. Use --force to replace.\n${result.stderr || result.stdout}`);
+    }
+    throw new UsageError(`openclaw skills install failed (${result.code}):\n${result.stderr || result.stdout}`);
+  }
+
+  if (options.json) {
+    writeLine(io.stdout, JSON.stringify({
+      ok: true,
+      client: 'openclaw',
+      skill: PINNED_OPENCLAW_SKILL_NAME,
+      version,
+      global: Boolean(options.global),
+      command: fullCommand,
+      installed: true,
+      stdout: result.stdout,
+      stderr: result.stderr
+    }, null, 2));
+    return 0;
+  }
+
+  writeLine(io.stdout, `✓ OpenClaw skill ${PINNED_OPENCLAW_SKILL_NAME}@${version} installed successfully.`);
+  return 0;
+}
+
 async function clientSkillInstall(options, cwd, io) {
+  if (options.client === 'openclaw') {
+    return await openclawSkillInstall(options, cwd, io);
+  }
+
   const targets = [];
   if (options.client) {
     const client = getClient(options.client);
@@ -443,7 +566,10 @@ async function clientSkillInstall(options, cwd, io) {
     if (options.project && !client.supportsProjectSkill) {
       throw new UsageError(`Client "${client.label}" does not support project-level skills.`);
     }
-    const resolvedTarget = path.resolve(client.skillDir(io.env, { project: options.project, cwd }));
+    if (options.global && !client.supportsGlobalSkill) {
+      throw new UsageError(`Client "${client.label}" does not support --global skills.`);
+    }
+    const resolvedTarget = path.resolve(client.skillDir(io.env, { project: options.project, global: options.global, cwd }));
     targets.push({
       client,
       target: resolvedTarget,
@@ -451,6 +577,9 @@ async function clientSkillInstall(options, cwd, io) {
     });
   } else if (options.all) {
     for (const client of supportedSkillClients()) {
+      if (client.id === 'openclaw') {
+        continue;
+      }
       const clientObj = getClient(client.id);
       const det = await clientObj.detect(io.env, { cwd });
       if (det?.detected) {
@@ -770,6 +899,23 @@ export async function skillStatus(args, io) {
 
   // Check status for each target
   for (const t of targets) {
+    if (t.client === 'openclaw') {
+      try {
+        const res = await executeSubprocess('openclaw', ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+        if (res.code === 0 && (res.stdout.includes(PINNED_OPENCLAW_SKILL_NAME) || res.stdout.includes('xmemo'))) {
+          t.installed = true;
+          const match = res.stdout.match(/@xmemo\/xmemo@([0-9.]+)/) || res.stdout.match(/xmemo@([0-9.]+)/);
+          t.version = match ? match[1] : PINNED_OPENCLAW_SKILL_VERSION;
+        } else {
+          t.installed = false;
+          t.version = null;
+        }
+      } catch {
+        t.installed = false;
+        t.version = null;
+      }
+      continue;
+    }
     const exists = await fs.stat(t.path).catch(() => null);
     if (exists && exists.isDirectory()) {
       t.installed = true;
@@ -822,9 +968,83 @@ export async function skillRemove(args, io) {
   }
 
   const cwd = io.cwd ?? process.cwd();
-  const targetPath = path.resolve(client.skillDir(io.env, { project, cwd }));
   const isJson = hasFlag(args, '--json');
   const yes = hasFlag(args, '--yes');
+
+  if (client.id === 'openclaw') {
+    let isInstalled = false;
+    try {
+      const checkRes = await executeSubprocess('openclaw', ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+      if (checkRes.code === 0 && (checkRes.stdout.includes(PINNED_OPENCLAW_SKILL_NAME) || checkRes.stdout.includes('xmemo'))) {
+        isInstalled = true;
+      }
+    } catch {}
+
+    if (!isInstalled) {
+      if (isJson) {
+        writeLine(io.stdout, JSON.stringify({
+          ok: true,
+          removed: false,
+          client: client.id,
+          reason: 'not_installed'
+        }, null, 2));
+        return 0;
+      }
+      writeLine(io.stdout, 'Skill is not installed for OpenClaw.');
+      return 0;
+    }
+
+    const removeCmd = ['openclaw', 'skills', 'remove', PINNED_OPENCLAW_SKILL_NAME];
+    const removeCmdStr = removeCmd.join(' ');
+
+    if (!yes) {
+      if (isJson) {
+        writeLine(io.stdout, JSON.stringify({
+          ok: false,
+          removed: false,
+          consentRequired: true,
+          client: client.id,
+          command: removeCmd
+        }, null, 2));
+        return 0;
+      }
+      writeLine(io.stdout, `Remove XMemo skill for OpenClaw via "${removeCmdStr}"? [y/N]`);
+      const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
+      if (answer !== 'y' && answer !== 'yes') {
+        writeLine(io.stdout, 'Removal cancelled.');
+        return 0;
+      }
+    }
+
+    let result;
+    try {
+      result = await executeSubprocess('openclaw', ['skills', 'remove', PINNED_OPENCLAW_SKILL_NAME], io, sanitizeEnv(io.env), cwd);
+    } catch (err) {
+      if (err?.code === 'ENOENT') {
+        throw new UsageError('openclaw is not installed or not available on PATH.');
+      }
+      throw new UsageError(`Failed to execute openclaw: ${err.message}`);
+    }
+
+    if (result.code !== 0) {
+      throw new UsageError(`openclaw skills remove failed (${result.code}):\n${result.stderr || result.stdout}`);
+    }
+
+    if (isJson) {
+      writeLine(io.stdout, JSON.stringify({
+        ok: true,
+        removed: true,
+        client: client.id,
+        command: removeCmd
+      }, null, 2));
+      return 0;
+    }
+
+    writeLine(io.stdout, '✓ Removed XMemo skill for OpenClaw.');
+    return 0;
+  }
+
+  const targetPath = path.resolve(client.skillDir(io.env, { project, cwd }));
 
   const stat = await fs.stat(targetPath).catch(() => null);
   if (!stat || !stat.isDirectory()) {
@@ -891,7 +1111,7 @@ export async function skillRemove(args, io) {
 }
 
 function parseInstallOptions(args) {
-  const flags = new Set(['--dry-run', '--force', '--json', '--yes', '--project', '--all']);
+  const flags = new Set(['--dry-run', '--force', '--json', '--yes', '--project', '--global', '--all']);
   const optionsWithValues = ['--client', '--dir', '--target', '--version', '--from', '--integrity'];
   const seen = new Set();
   let client = null;
@@ -934,6 +1154,7 @@ function parseInstallOptions(args) {
     from,
     integrity,
     project: hasFlag(args, '--project'),
+    global: hasFlag(args, '--global'),
     all: hasFlag(args, '--all'),
     dryRun: hasFlag(args, '--dry-run'),
     force: hasFlag(args, '--force'),

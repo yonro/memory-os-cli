@@ -478,7 +478,12 @@ export const CLIENT_REGISTRY = Object.freeze([
       bearerSyntax: 'env-colon'
     },
     profile: null,
-    skillDir: (env) => path.join(userHome(env), '.openclaw', 'skills', 'xmemo-memory'),
+    skillDir: (env, options = {}) =>
+      options?.global !== false
+        ? path.join(userHome(env), '.openclaw', 'skills', 'xmemo')
+        : path.join(options.cwd ?? process.cwd(), 'skills', 'xmemo'),
+    supportsGlobalSkill: true,
+    supportsProjectSkill: false,
     pluginId: 'openclaw',
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('openclaw', env, options)
@@ -980,7 +985,8 @@ export function supportedSkillClients() {
   return CLIENT_REGISTRY.filter((c) => c.skillDir !== null).map((c) => ({
     id: c.id,
     label: c.label,
-    supportsProjectSkill: Boolean(c.supportsProjectSkill)
+    supportsProjectSkill: Boolean(c.supportsProjectSkill),
+    supportsGlobalSkill: Boolean(c.supportsGlobalSkill)
   }));
 }
 

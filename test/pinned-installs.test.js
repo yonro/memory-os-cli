@@ -240,10 +240,9 @@ test('setup openclaw: prints exact command before running, respects --force, and
     });
     assert.equal(realRes.code, 0);
     assert.match(realRes.stdout, new RegExp(`Running: openclaw plugins install ${PINNED_OPENCLAW_PLUGIN_SPEC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-    assert.match(realRes.stdout, /Running: openclaw skills install xmemo/);
+    assert.match(realRes.stdout, /Skill: xmemo skill install --client openclaw/);
     assert.deepEqual(realCalls.map((c) => c.args), [
       ['plugins', 'install', PINNED_OPENCLAW_PLUGIN_SPEC],
-      ['skills', 'install', 'xmemo'],
       ['xmemo', 'status', '--json']
     ]);
 
@@ -260,7 +259,6 @@ test('setup openclaw: prints exact command before running, respects --force, and
     assert.match(forceRes.stdout, new RegExp(`Running: openclaw plugins install ${PINNED_OPENCLAW_PLUGIN_SPEC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} --force`));
     assert.deepEqual(forceCalls.map((c) => c.args), [
       ['plugins', 'install', PINNED_OPENCLAW_PLUGIN_SPEC, '--force'],
-      ['skills', 'install', 'xmemo', '--force'],
       ['xmemo', 'status', '--json']
     ]);
   } finally {
@@ -285,7 +283,7 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
     assert.match(dryRes.stdout, new RegExp(`pip install hermes-xmemo==${PINNED_HERMES_PLUGIN_VERSION}`));
     assert.doesNotMatch(dryRes.stdout, /-U/);
 
-    // 2. Real run prints exact command before executing
+    // 2. Real run with hermes CLI available prints exact command before executing
     const realCalls = [];
     const realRes = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome], {
       env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'test-token' },
@@ -293,9 +291,38 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
       spawn: spawnStub(realCalls)
     });
     assert.equal(realRes.code, 0);
-    assert.match(realRes.stdout, new RegExp(`Running: .*pip install hermes-xmemo==${PINNED_HERMES_PLUGIN_VERSION}`));
-    assert.match(realRes.stdout, /Running: hermes-xmemo install/);
+    assert.match(realRes.stdout, /Running: hermes plugins install xmemo/);
     assert.deepEqual(realCalls.map((c) => c.args), [
+      ['--version'],
+      ['plugins', 'install', 'xmemo']
+    ]);
+
+    // 3. Fallback when hermes binary is absent: uses pip install hermes-xmemo==pinned
+    const pipCalls = [];
+    const pipRes = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome], {
+      env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'test-token' },
+      fetch: discoveryFetch(),
+      spawn: (command, args, options) => {
+        pipCalls.push({ command, args, options });
+        if (command === 'hermes') {
+          const err = new Error('spawn hermes ENOENT');
+          err.code = 'ENOENT';
+          throw err;
+        }
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          child.emit('close', 0);
+        });
+        return child;
+      }
+    });
+    assert.equal(pipRes.code, 0);
+    assert.match(pipRes.stdout, new RegExp(`Running: .*pip install hermes-xmemo==${PINNED_HERMES_PLUGIN_VERSION}`));
+    assert.match(pipRes.stdout, /Running: hermes-xmemo install/);
+    assert.deepEqual(pipCalls.map((c) => c.args), [
+      ['--version'],
       ['-m', 'pip', 'install', `hermes-xmemo==${PINNED_HERMES_PLUGIN_VERSION}`],
       ['install', '--hermes-home', hermesHome]
     ]);
@@ -441,7 +468,7 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
 
     assert.equal(resAlready.code, 0, `Expected exit code 0, got ${resAlready.code}`);
     assert.match(resAlready.stdout, /OpenClaw plugin is already installed\. Use --force to reinstall\./);
-    assert.match(resAlready.stdout, /OpenClaw skill is already installed\. Use --force to reinstall\./);
+    assert.match(resAlready.stdout, /Skill: xmemo skill install --client openclaw/);
 
     // 2. In --json mode: returns alreadyInstalled: true
     const jsonCalls = [];
@@ -457,9 +484,6 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
           if (args[0] === 'plugins' && args[1] === 'install') {
             child.stderr.emit('data', 'Error: plugin already installed\n');
             child.emit('close', 1);
-          } else if (args[0] === 'skills' && args[1] === 'install') {
-            child.stderr.emit('data', 'Error: skill already exists\n');
-            child.emit('close', 1);
           } else if (args[0] === 'xmemo' && args[1] === 'status') {
             child.stdout.emit('data', JSON.stringify({ configured: true, connected: true }));
             child.emit('close', 0);
@@ -474,7 +498,7 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
     const plan = JSON.parse(resJson.stdout);
     assert.equal(plan.selectedClient.nativePlugin.alreadyInstalled, true);
     assert.equal(plan.selectedClient.nativePlugin.installed, false);
-    assert.equal(plan.selectedClient.skill.alreadyInstalled, true);
+    assert.equal(plan.selectedClient.skill.command, 'xmemo skill install --client openclaw');
     assert.equal(plan.selectedClient.skill.installed, false);
 
     // 3. With --force: passes --force flag to reinstall
@@ -498,7 +522,6 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
     });
     assert.equal(resForce.code, 0);
     assert.ok(forceCalls[0].args.includes('--force'));
-    assert.ok(forceCalls[1].args.includes('--force'));
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

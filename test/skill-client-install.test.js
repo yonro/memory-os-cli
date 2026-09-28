@@ -244,7 +244,7 @@ test('skill install --client: installs to correct agent skill folders for codex,
     assert.equal(report3.target, claudeProjDir);
     assert.equal(fsSync.existsSync(path.join(claudeProjDir, 'SKILL.md')), true);
 
-    // 4. Install for openclaw
+    // 4. Install for openclaw runs openclaw skills install @xmemo/xmemo --version 1.1.35
     const calls4 = [];
     const res4 = await invoke(['skill', 'install', '--client', 'openclaw', '--yes', '--json'], {
       env,
@@ -254,9 +254,48 @@ test('skill install --client: installs to correct agent skill folders for codex,
     assert.equal(res4.code, 0);
     const report4 = JSON.parse(res4.stdout);
     assert.equal(report4.client, 'openclaw');
-    const openclawDir = path.join(tmpHome, '.openclaw', 'skills', 'xmemo-memory');
-    assert.equal(report4.target, openclawDir);
-    assert.equal(fsSync.existsSync(path.join(openclawDir, 'SKILL.md')), true);
+    assert.equal(report4.installed, true);
+    assert.equal(report4.skill, '@xmemo/xmemo');
+    assert.equal(report4.version, '1.1.35');
+    assert.deepEqual(calls4[0].args, [
+      'skills',
+      'install',
+      '@xmemo/xmemo',
+      '--version',
+      '1.1.35'
+    ]);
+    // Assert openclaw skill install never runs plugin commands
+    assert.ok(!calls4.some((c) => c.args.includes('plugins')));
+
+    // 5. Install for openclaw with --global and --force
+    const calls5 = [];
+    const res5 = await invoke(['skill', 'install', '--client', 'openclaw', '--global', '--force', '--yes', '--json'], {
+      env,
+      cwd: tmpCwd,
+      spawn: spawnStub(calls5)
+    });
+    assert.equal(res5.code, 0);
+    const report5 = JSON.parse(res5.stdout);
+    assert.equal(report5.global, true);
+    assert.deepEqual(calls5[0].args, [
+      'skills',
+      'install',
+      '@xmemo/xmemo',
+      '--version',
+      '1.1.35',
+      '--global',
+      '--force'
+    ]);
+
+    // 6. Assert plugin install openclaw never runs skills commands
+    const calls6 = [];
+    const res6 = await invoke(['plugin', 'install', 'openclaw', '--yes', '--json'], {
+      env,
+      cwd: tmpCwd,
+      spawn: spawnStub(calls6)
+    });
+    assert.equal(res6.code, 0);
+    assert.ok(!calls6.some((c) => c.args.includes('skills')));
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
     await fs.rm(tmpCwd, { recursive: true, force: true });

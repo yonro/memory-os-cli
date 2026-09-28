@@ -135,9 +135,7 @@ export function writeSetupSummary(plan, io) {
       writeLine(io.stdout, `  Setup mode: ${plan.selectedClient.setupMode}`);
       writeLine(io.stdout, `  Plugin: ${plan.selectedClient.nativePlugin.package}`);
       writeLine(io.stdout, `  Plugin installed: ${plan.selectedClient.nativePlugin.installed}`);
-      writeLine(io.stdout, `  Skill: ${plan.selectedClient.skill.ref}`);
-      writeLine(io.stdout, `  Skill installed: ${plan.selectedClient.skill.installed}`);
-      writeLine(io.stdout, `  Skill skipped: ${plan.selectedClient.skill.skipped}`);
+      writeLine(io.stdout, `  Skill: ${COMMAND_NAME} skill install --client openclaw`);
       writeLine(io.stdout, `  Credential source: ${plan.selectedClient.status?.credentialSource ?? plan.selectedClient.credential.source}`);
       writeLine(io.stdout, `  Connected: ${plan.selectedClient.status?.connected ?? 'unknown'}`);
       writeLine(io.stdout, `  Hosted MCP fallback: ${plan.selectedClient.mcp.enabled ? 'enabled' : 'not installed'}`);
@@ -151,9 +149,6 @@ export function writeSetupSummary(plan, io) {
       if (plan.selectedClient.dryRun) {
         writeLine(io.stdout, '  Dry run commands:');
         writeLine(io.stdout, `    ${plan.selectedClient.nativePlugin.command}`);
-        if (!plan.selectedClient.skill.skipped) {
-          writeLine(io.stdout, `    ${plan.selectedClient.skill.command}`);
-        }
         if (plan.selectedClient.mcp.enabled) {
           writeLine(io.stdout, `    ${plan.selectedClient.mcp.command}`);
         }
@@ -170,6 +165,9 @@ export function writeSetupSummary(plan, io) {
       writeLine(io.stdout, `  Credential source: ${plan.selectedClient.credential.source}`);
       writeLine(io.stdout, `  Hermes env synced: ${plan.selectedClient.credential.hermesEnvSynced}`);
       writeLine(io.stdout, `  Shared credential backfilled: ${plan.selectedClient.credential.sharedCredentialBackfilled}`);
+      if (plan.selectedClient.nativePlugin.route) {
+        writeLine(io.stdout, `  Native plugin route: ${plan.selectedClient.nativePlugin.route}`);
+      }
       writeLine(io.stdout, `  Native plugin package: ${plan.selectedClient.nativePlugin.package}`);
       writeLine(io.stdout, `  Native plugin installed: ${plan.selectedClient.nativePlugin.installed}`);
       writeLine(io.stdout, `  Native plugin skipped: ${plan.selectedClient.nativePlugin.skipped}`);
@@ -185,7 +183,9 @@ export function writeSetupSummary(plan, io) {
         writeLine(io.stdout, '  Dry run actions:');
         if (!plan.selectedClient.nativePlugin.skipped) {
           writeLine(io.stdout, `    ${plan.selectedClient.nativePlugin.installCommand}`);
-          writeLine(io.stdout, `    ${plan.selectedClient.nativePlugin.activateCommand}`);
+          if (plan.selectedClient.nativePlugin.activateCommand) {
+            writeLine(io.stdout, `    ${plan.selectedClient.nativePlugin.activateCommand}`);
+          }
         }
         writeLine(io.stdout, `    sync XMemo credential to ${plan.selectedClient.hermesEnvPath}`);
         if (plan.selectedClient.mcp.enabled) {

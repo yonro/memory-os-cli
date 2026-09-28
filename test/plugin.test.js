@@ -172,7 +172,7 @@ test('Plugin Index: all 13 plugins exist with valid schema and pinned commits', 
   }
 
   // Gemini CLI host note
-  assert.equal(getPlugin('gemini-cli')?.note, 'unpinned (host does not support refs)');
+  assert.match(getPlugin('gemini-cli')?.note, /pinned to commit 39e25b185b5157490d1683e4ca8c5c5fb1312a88 via --ref/);
 
   // Legacy plugins are marked legacy
   assert.equal(getPlugin('xmemo-hermes-plugin')?.status, 'legacy');
@@ -188,7 +188,7 @@ test('plugin list: lists active plugins by default, and legacy with --all', asyn
   assert.match(out, /openclaw/);
   assert.match(out, /hermes/);
   assert.match(out, /claude-code/);
-  assert.match(out, /gemini-cli.*\(unpinned \(host does not support refs\)\)/);
+  assert.match(out, /gemini-cli.*\(pinned to commit 39e25b185b5157490d1683e4ca8c5c5fb1312a88 via --ref\)/);
   assert.doesNotMatch(out, /xmemo-hermes-plugin/);
   assert.doesNotMatch(out, /xmemo-skills/);
 
@@ -225,11 +225,11 @@ test('plugin info: displays details for valid plugin and rejects invalid IDs / U
   assert.match(out, /Kind:\s+git-dir/);
   assert.match(out, /Commit:\s+5d0d2802daaf431eb31b038511f34a00b625ec9f/);
 
-  // Unpinned note displayed for gemini-cli
+  // Pinned note displayed for gemini-cli
   const { io: ioGemini, getStdout: getStdoutGemini } = createMockIo();
   const codeGemini = await run(['plugin', 'info', 'gemini-cli'], ioGemini);
   assert.equal(codeGemini, 0);
-  assert.match(getStdoutGemini(), /Note:\s+unpinned \(host does not support refs\)/);
+  assert.match(getStdoutGemini(), /Note:\s+pinned to commit 39e25b185b5157490d1683e4ca8c5c5fb1312a88 via --ref/);
 
   // Steps displayed for marketplace plugin
   const { io: ioCursor, getStdout: getStdoutCursor } = createMockIo();
@@ -623,4 +623,106 @@ test('setup client integration: prints Plugin available when registry links plug
   assert.match(outOpenClaw, /Plugin: clawhub:@xmemo\/openclaw-memory@1\.0\.18/);
   assert.doesNotMatch(outOpenClaw, /Plugin available: xmemo plugin install openclaw/);
 });
+
+test('plugin install: gemini-cli includes --ref commit in command', async () => {
+  const { io, getStdout, getSpawned } = createMockIo();
+  const code = await run(['plugin', 'install', 'gemini-cli', '--yes'], io);
+  assert.equal(code, 0);
+  assert.match(getStdout(), /Gemini CLI XMemo Extension installed successfully/);
+  assert.equal(getSpawned().length, 1);
+  assert.equal(getSpawned()[0].cmd, 'gemini');
+  assert.deepEqual(getSpawned()[0].args, [
+    'extensions',
+    'install',
+    'https://github.com/yonro/xmemo-gemini-cli',
+    '--ref',
+    '39e25b185b5157490d1683e4ca8c5c5fb1312a88'
+  ]);
+});
+
+test('plugin install: openclaw already installed triggers update with consent', async () => {
+  let callCount = 0;
+  const mockSpawn = (cmd, args, opts) => {
+    callCount++;
+    if (callCount === 1) {
+      // First call is openclaw plugins install, fails with "already installed"
+      return {
+        stdout: Readable.from(['']),
+        stderr: Readable.from(['Error: plugin already installed: @xmemo/openclaw-memory\n']),
+        on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(1), 1); }
+      };
+    }
+    // Second call is openclaw plugins update, succeeds
+    return {
+      stdout: Readable.from(['Plugin @xmemo/openclaw-memory updated to 1.0.18\n']),
+      stderr: Readable.from(['']),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+
+  const { io, getStdout } = createMockIo({
+    spawnHandler: mockSpawn,
+    stdinLines: ['y', 'y']
+  });
+  const code = await run(['plugin', 'install', 'openclaw'], io);
+  assert.equal(code, 0);
+  const out = getStdout();
+  assert.match(out, /OpenClaw reports @xmemo\/openclaw-memory is already installed/);
+  assert.match(out, /Update plan: openclaw plugins update @xmemo\/openclaw-memory/);
+  assert.match(out, /OpenClaw Memory Plugin updated successfully/);
+  assert.equal(callCount, 2);
+});
+
+test('plugin install: hermes selects hermes CLI route when available, pip fallback when absent', async () => {
+  // Case 1: hermes binary present
+  let hermesCalls = [];
+  const mockSpawnPresent = (cmd, args, opts) => {
+    hermesCalls.push({ cmd, args });
+    return {
+      stdout: Readable.from(['hermes 0.5.0\n']),
+      stderr: Readable.from(['']),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+  const { io: ioPresent, getStdout: getStdoutPresent } = createMockIo({
+    spawnHandler: mockSpawnPresent
+  });
+  const codePresent = await run(['plugin', 'install', 'hermes', '--yes'], ioPresent);
+  assert.equal(codePresent, 0);
+  assert.match(getStdoutPresent(), /Route: Hermes CLI \(official catalog entry "xmemo"\)/);
+  assert.match(getStdoutPresent(), /Hermes XMemo Memory Provider installed successfully via Hermes CLI/);
+  assert.deepEqual(hermesCalls[1].args, ['plugins', 'install', 'xmemo']);
+
+  // Case 2: hermes binary absent -> falls back to pip
+  let pipCalls = [];
+  const mockSpawnAbsent = (cmd, args, opts) => {
+    pipCalls.push({ cmd, args });
+    if (cmd === 'hermes') {
+      const err = new Error('spawn hermes ENOENT');
+      err.code = 'ENOENT';
+      const child = {
+        stdout: Readable.from([]),
+        stderr: Readable.from([]),
+        on: (ev, cb) => {
+          if (ev === 'error') setTimeout(() => cb(err), 1);
+        }
+      };
+      return child;
+    }
+    return {
+      stdout: Readable.from(['Successfully installed hermes-xmemo-1.1.3\n']),
+      stderr: Readable.from(['']),
+      on: (ev, cb) => { if (ev === 'close') setTimeout(() => cb(0), 1); }
+    };
+  };
+  const { io: ioAbsent, getStdout: getStdoutAbsent } = createMockIo({
+    spawnHandler: mockSpawnAbsent
+  });
+  const codeAbsent = await run(['plugin', 'install', 'hermes', '--yes'], ioAbsent);
+  assert.equal(codeAbsent, 0);
+  assert.match(getStdoutAbsent(), /Route: pip fallback \(hermes binary not found on PATH\)/);
+  assert.match(getStdoutAbsent(), /Hermes XMemo Memory Provider installed successfully via pip fallback/);
+  assert.deepEqual(pipCalls[1].args.slice(0, 4), ['-m', 'pip', 'install', 'hermes-xmemo==1.1.3']);
+});
+
 

@@ -965,8 +965,8 @@ test('setup hermes installs native plugin and syncs shared credential without MC
   assert.equal(plan.selectedClient.mcp.enabled, false);
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.deepEqual(calls.map((call) => call.args), [
-    ['-m', 'pip', 'install', 'hermes-xmemo==1.1.3'],
-    ['install', '--hermes-home', hermesHome]
+    ['--version'],
+    ['plugins', 'install', 'xmemo']
   ]);
 
   const envFile = await fs.readFile(path.join(hermesHome, '.env'), 'utf8');
@@ -1807,13 +1807,13 @@ test('setup openclaw installs native plugin and skill without hosted MCP by defa
   assert.equal(plan.selectedClient.id, 'openclaw');
   assert.equal(plan.selectedClient.configKind, 'native-plugin');
   assert.equal(plan.selectedClient.nativePlugin.installed, true);
-  assert.equal(plan.selectedClient.skill.installed, true);
+  assert.equal(plan.selectedClient.skill.installed, false);
+  assert.equal(plan.selectedClient.skill.command, 'xmemo skill install --client openclaw');
   assert.equal(plan.selectedClient.mcp.enabled, false);
   assert.equal(plan.selectedClient.mcp.written, false);
   assert.equal(plan.selectedClient.status.connected, true);
   assert.deepEqual(calls.map((call) => call.args), [
     ['plugins', 'install', 'clawhub:@xmemo/openclaw-memory@1.0.18'],
-    ['skills', 'install', 'xmemo'],
     ['xmemo', 'status', '--json']
   ]);
 });

@@ -240,6 +240,9 @@ xmemo skill install --client claude-code
 xmemo skill install --client codex
 xmemo skill install --client openclaw
 
+# 全局安装 OpenClaw 技能（共享至 ~/.openclaw/skills）
+xmemo skill install --client openclaw --global
+
 # 安装至项目级技能目录 (Claude Code: .claude/skills/xmemo-memory)
 xmemo skill install --client claude-code --project
 
@@ -286,7 +289,7 @@ curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
 curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
 
 # OpenClaw: 建议通过 OpenClaw 官方 CLI 安装
-openclaw skills install xmemo
+openclaw skills install @xmemo/xmemo --version 1.1.35
 
 # Windows (PowerShell):
 # $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
@@ -309,16 +312,18 @@ openclaw skills install xmemo
 
 CLI 随 `@xmemo/client` 内置了经过官方验证的静态插件索引，每个插件条目均明确固定了发布版本、Release Tag 以及发布时刻解析的准确 Git Commit SHA。
 
+> ℹ️ **严格职责分离原则**：`xmemo plugin` 仅安装智能体插件（例如 `@xmemo/openclaw-memory`）。技能仅由 `xmemo skill install` 负责安装（例如 `@xmemo/xmemo`）。
+
 | 插件 ID | 平台 / 智能体 | 类型 (Kind) | 状态 | 安装方式 |
 | --- | --- | --- | --- | --- |
-| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
-| `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
+| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` (已安装时自动引导 update 更新) |
+| `hermes` | Hermes Agent | `native-cli` | Stable | `hermes plugins install xmemo` (兜底: `python -m pip install hermes-xmemo==1.1.3`) |
 | `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone 校验 commit `5d0d280` (默认安装至 `~/.xmemo/plugins/claude-code`) |
 | `cursor` | Cursor | `marketplace` | Preview | Cursor 插件市场安装 |
-| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` 扩展安装 (unpinned: 宿主暂不支持指定版本/ref) |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install https://github.com/yonro/xmemo-gemini-cli --ref 39e25b185b5157490d1683e4ca8c5c5fb1312a88` |
 | `kiro` | Kiro | `manual` | Preview | Steering 规则与 Power 配置 |
-| `vscode` | VS Code | `marketplace` | Preview | VS Code 插件市场扩展 |
-| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
+| `vscode` | VS Code | `manual` | Preview | VS Code 手动安装指引（等待市场上架） |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo@0.1.0` |
 | `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex 扩展 |
 | `cindy` | Cindy | `manual` | Preview | 原生智能体记忆接入 |
 | `codex` | Codex | `mcp` | Preview | 专属 MCP 配置 (`xmemo setup codex`) |

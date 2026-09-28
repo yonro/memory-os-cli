@@ -262,6 +262,9 @@ xmemo skill install --client claude-code
 xmemo skill install --client codex
 xmemo skill install --client openclaw
 
+# Install OpenClaw skill globally (shared ~/.openclaw/skills)
+xmemo skill install --client openclaw --global
+
 # Install to project-level skill folder (Claude Code project: .claude/skills/xmemo-memory)
 xmemo skill install --client claude-code --project
 
@@ -308,7 +311,7 @@ curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
 curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
 
 # OpenClaw: install via OpenClaw CLI
-openclaw skills install xmemo
+openclaw skills install @xmemo/xmemo --version 1.1.35
 
 # Windows (PowerShell):
 # $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
@@ -331,16 +334,18 @@ openclaw skills install xmemo
 
 The CLI provides a curated, static index of verified agent plugins shipped directly in `@xmemo/client`. Each entry contains a pinned version, release tag, and exact Git commit SHA resolved at release time.
 
+> ℹ️ **Strict Separation Rule**: `xmemo plugin` installs agent plugins only (e.g. `@xmemo/openclaw-memory`). Skills are installed exclusively via `xmemo skill install` (e.g. `@xmemo/xmemo`).
+
 | Plugin ID | Platform / Agent | Kind | Status | Integration |
 | --- | --- | --- | --- | --- |
-| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` |
-| `hermes` | Hermes Agent | `native-cli` | Stable | `python -m pip install hermes-xmemo==1.1.3` |
+| `openclaw` | OpenClaw | `native-cli` | Stable | `openclaw plugins install clawhub:@xmemo/openclaw-memory@1.0.18` (auto-prompts `update` if already installed) |
+| `hermes` | Hermes Agent | `native-cli` | Stable | `hermes plugins install xmemo` (fallback: `python -m pip install hermes-xmemo==1.1.3`) |
 | `claude-code` | Claude Code | `git-dir` | Preview | Pinned Git clone verified against commit `5d0d280` (defaults to `~/.xmemo/plugins/claude-code`) |
 | `cursor` | Cursor | `marketplace` | Preview | Cursor Marketplace plugin |
-| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install` extension (unpinned: host does not support refs) |
+| `gemini-cli` | Gemini CLI | `native-cli` | Preview | `gemini extensions install https://github.com/yonro/xmemo-gemini-cli --ref 39e25b185b5157490d1683e4ca8c5c5fb1312a88` |
 | `kiro` | Kiro | `manual` | Preview | Steering rules & Power integration |
-| `vscode` | VS Code | `marketplace` | Preview | VS Code Marketplace extension |
-| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo` |
+| `vscode` | VS Code | `manual` | Preview | VS Code extension manual steps (pending marketplace publication) |
+| `deepseek-dsh` | DeepSeek DSH | `native-cli` | Preview | `dsh plugin add dsh-xmemo@0.1.0` |
 | `chatgpt-codex` | ChatGPT / Codex | `marketplace` | Preview | ChatGPT & Codex extension |
 | `cindy` | Cindy | `manual` | Preview | Native agent memory integration |
 | `codex` | Codex | `mcp` | Preview | Dedicated MCP configuration (`xmemo setup codex`) |
