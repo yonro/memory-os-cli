@@ -32,7 +32,8 @@ export async function processDocumentStubs(items, { expandDocuments, client, tea
   for (const item of items) {
     if (isDocumentStub(item)) {
       item.document_backed = true;
-      item.document_expanded = Boolean(item.expanded);
+      item.document_expanded = Boolean(item.expanded || item.document_expanded);
+      if (item.expanded) item.expanded = true;
       item.next_command = buildNextCommand(item);
     }
   }
@@ -68,10 +69,12 @@ export async function processDocumentStubs(items, { expandDocuments, client, tea
         }
       } else {
         stub.document_expanded = false;
+        delete stub.expanded;
         stub.expand_error = 'invalid_response';
       }
     } catch (e) {
       stub.document_expanded = false;
+      delete stub.expanded;
       stub.expand_error = e.code || e.serviceCode || (e.httpStatus ? `HTTP_${e.httpStatus}` : 'network_error');
     }
   }

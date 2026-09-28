@@ -170,6 +170,7 @@ export function classifyHttpFailure(status, payload) {
     outcome: 'known-failure',
     nextAction: status === 401 ? 'Log in or re-authenticate and retry.'
       : status === 403 && /knowledge.*scope|scope.*knowledge|knowledge_scope_required/.test(scopeText) ? `xmemo account login --scopes ${DEFAULT_DEVICE_LOGIN_SCOPES.join(',')}`
+      : status === 403 && /restore.*scope|scope.*restore|memory:restore|restore_scope_required/.test(scopeText) ? `xmemo account login --scopes ${DEFAULT_DEVICE_LOGIN_SCOPES.join(',')}`
         : status === 403 && /document|memory.*scope|scope.*memory/.test(scopeText) ? 'xmemo account login --scopes knowledge:write,memory:write'
           : status === 403 ? 'Check authorized scopes, account roles, and team workspace.'
           : status === 404 ? 'Check resource ID and service contract.'

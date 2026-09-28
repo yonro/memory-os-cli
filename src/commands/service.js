@@ -10,7 +10,7 @@ import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/servic
 import { confirmRemoteAction } from '../api/confirmation.js';
 import { processDocumentStubs } from '../api/document-stub.js';
 import { memoryTransfer, prepareMemoryTransfer } from './memory-transfer.js';
-import { matchesPathPrefix, normalizeMemoryPath, unifyMemoryItem, rerankSearchResults } from '../api/memory-schema.js';
+import { buildServerPrefixVariants, matchesPathPrefix, normalizeMemoryPath, unifyMemoryItem, rerankSearchResults } from '../api/memory-schema.js';
 
 export async function memoryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -295,22 +295,17 @@ async function memoryList(args, io, context) {
     let effectiveServerPrefix = null;
     let serverPrefixWorked = false;
     if (typedPrefix !== null) {
-      const firstTry = await fetchPageAdaptive({ path_prefix: typedPrefix, offset: 0 }, 100);
-      if (firstTry.memories.length > 0 || (firstTry.total !== undefined && firstTry.total > 0)) {
+      if (exactPath) {
         effectiveServerPrefix = typedPrefix;
         serverPrefixWorked = true;
-      } else if (!exactPath) {
-        let altPrefix = null;
-        if (/^\[root\]\s*\/?\s*/iu.test(typedPrefix)) {
-          altPrefix = typedPrefix.replace(/^\[root\]\s*\/?\s*/iu, '');
-        } else {
-          altPrefix = `[ROOT]/${typedPrefix}`;
-        }
-        if (altPrefix) {
-          const secondTry = await fetchPageAdaptive({ path_prefix: altPrefix, offset: 0 }, 100);
-          if (secondTry.memories.length > 0 || (secondTry.total !== undefined && secondTry.total > 0)) {
-            effectiveServerPrefix = altPrefix;
+      } else {
+        const variants = buildServerPrefixVariants(typedPrefix);
+        for (const variant of variants) {
+          const probe = await fetchPageAdaptive({ path_prefix: variant, offset: 0 }, 100);
+          if (probe.memories.length > 0 || (probe.total !== undefined && probe.total > 0)) {
+            effectiveServerPrefix = variant;
             serverPrefixWorked = true;
+            break;
           }
         }
       }
@@ -381,11 +376,11 @@ async function memoryList(args, io, context) {
       };
     }
 
-    const firstTry = await fetchPageAdaptive({ path_prefix: typedPrefix, offset }, limit);
-    if (firstTry.memories.length > 0 || (firstTry.total !== undefined && firstTry.total > 0) || offset > 0) {
-      const unified = firstTry.memories.map((item) => unifyMemoryItem(item, { score: null }));
+    if (exactPath) {
+      const page = await fetchPageAdaptive({ path_prefix: typedPrefix, offset }, limit);
+      const unified = page.memories.map((item) => unifyMemoryItem(item, { score: null }));
       const responseData = {
-        total: firstTry.total ?? unified.length,
+        total: page.total ?? unified.length,
         memories: unified,
         items: unified
       };
@@ -396,67 +391,68 @@ async function memoryList(args, io, context) {
         data: responseData,
         meta: {
           warnings,
-          nextCursor: (firstTry.total !== null && firstTry.total !== undefined && offset + unified.length < firstTry.total)
+          nextCursor: (page.total !== null && page.total !== undefined && offset + unified.length < page.total)
             ? String(offset + unified.length)
             : null
         }
       };
     }
 
-    if (!exactPath) {
-      let altPrefix = null;
-      if (/^\[root\]\s*\/?\s*/iu.test(typedPrefix)) {
-        altPrefix = typedPrefix.replace(/^\[root\]\s*\/?\s*/iu, '');
-      } else {
-        altPrefix = `[ROOT]/${typedPrefix}`;
-      }
-      if (altPrefix) {
-        const secondTry = await fetchPageAdaptive({ path_prefix: altPrefix, offset: 0 }, limit);
-        if (secondTry.memories.length > 0 || (secondTry.total !== undefined && secondTry.total > 0)) {
-          const unified = secondTry.memories.map((item) => unifyMemoryItem(item, { score: null }));
-          const responseData = {
-            total: secondTry.total ?? unified.length,
-            memories: unified,
-            items: unified
-          };
-          for (let i = 0; i < unified.length; i += 1) {
-            responseData[i] = unified[i];
-          }
-          return {
-            data: responseData,
-            meta: {
-              warnings,
-              nextCursor: (secondTry.total !== null && secondTry.total !== undefined && offset + unified.length < secondTry.total)
-                ? String(offset + unified.length)
-                : null
-            }
-          };
+    const variants = buildServerPrefixVariants(typedPrefix);
+    for (const variant of variants) {
+      const page = await fetchPageAdaptive({ path_prefix: variant, offset }, limit);
+      if (page.memories.length > 0 || (page.total !== undefined && page.total > 0) || offset > 0) {
+        const unified = page.memories.map((item) => unifyMemoryItem(item, { score: null }));
+        const responseData = {
+          total: page.total ?? unified.length,
+          memories: unified,
+          items: unified
+        };
+        for (let i = 0; i < unified.length; i += 1) {
+          responseData[i] = unified[i];
         }
+        return {
+          data: responseData,
+          meta: {
+            warnings,
+            nextCursor: (page.total !== null && page.total !== undefined && offset + unified.length < page.total)
+              ? String(offset + unified.length)
+              : null
+          }
+        };
       }
     }
   }
 
   // Branch 3: Client-side scan (for client filters or path normalization fallback)
+  if (exactPath) {
+    const page = await fetchPageAdaptive({ path_prefix: typedPrefix ?? undefined, offset }, limit);
+    const filtered = page.memories.filter((item) => matchesItem(item));
+    const unified = filtered.map((item) => unifyMemoryItem(item, { score: null }));
+    const responseData = {
+      total: unified.length,
+      memories: unified,
+      items: unified
+    };
+    for (let i = 0; i < unified.length; i += 1) {
+      responseData[i] = unified[i];
+    }
+    return {
+      data: responseData,
+      meta: { warnings, nextCursor: null }
+    };
+  }
+
   let effectiveServerPrefix = null;
   let serverPrefixWorked = false;
   if (typedPrefix !== null && (filterText || typeFilter)) {
-    const firstTry = await fetchPageAdaptive({ path_prefix: typedPrefix, offset: 0 }, 100);
-    if (firstTry.memories.length > 0 || (firstTry.total !== undefined && firstTry.total > 0)) {
-      effectiveServerPrefix = typedPrefix;
-      serverPrefixWorked = true;
-    } else if (!exactPath) {
-      let altPrefix = null;
-      if (/^\[root\]\s*\/?\s*/iu.test(typedPrefix)) {
-        altPrefix = typedPrefix.replace(/^\[root\]\s*\/?\s*/iu, '');
-      } else {
-        altPrefix = `[ROOT]/${typedPrefix}`;
-      }
-      if (altPrefix) {
-        const secondTry = await fetchPageAdaptive({ path_prefix: altPrefix, offset: 0 }, 100);
-        if (secondTry.memories.length > 0 || (secondTry.total !== undefined && secondTry.total > 0)) {
-          effectiveServerPrefix = altPrefix;
-          serverPrefixWorked = true;
-        }
+    const variants = buildServerPrefixVariants(typedPrefix);
+    for (const variant of variants) {
+      const probe = await fetchPageAdaptive({ path_prefix: variant, offset: 0 }, 100);
+      if (probe.memories.length > 0 || (probe.total !== undefined && probe.total > 0)) {
+        effectiveServerPrefix = variant;
+        serverPrefixWorked = true;
+        break;
       }
     }
   }

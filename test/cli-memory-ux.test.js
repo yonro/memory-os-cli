@@ -575,4 +575,67 @@ test('CLI-MEMORY-UX Rev-10eae569 P1: formatErrorDetail formats FastAPI detail ar
   assert.equal(formatErrorDetail({ message: 'Custom object error' }), 'Custom object error');
 });
 
+test('CLI-MEMORY-UX Rev-9dba0f2f P2: context recall --expand-documents renders expanded document text for live-shaped stub in human mode', async () => {
+  const recallItems = [
+    {
+      id: 'recall-row-111',
+      memory_id: 'mem-live-222',
+      document_id: 'doc-live-333',
+      content: 'Document-backed memory: Deep System Specification',
+      path: 'projects/xmemo/Plans'
+    }
+  ];
+
+  const fullText = 'This is the expanded document text for the deep system specification on live shape.';
+  const io = makeIo(async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === '/api/v1/recall/context') {
+      return new Response(JSON.stringify({
+        context_text: 'content: Document-backed memory: Deep System Specification\ndocument_id: doc-live-333',
+        items: recallItems
+      }), { status: 200 });
+    }
+    if (parsed.pathname === '/api/v1/memories/mem-live-222/explain') {
+      return new Response(JSON.stringify({
+        memory: { content: fullText }
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected url: ${url}`);
+  });
+
+  const code = await run(['context', 'recall', 'specification', '--expand-documents'], io);
+  assert.equal(code, 0);
+  assert.match(io.stdout.value, /This is the expanded document text for the deep system specification on live shape\./);
+  assert.doesNotMatch(io.stdout.value, /content: Document-backed memory: Deep System Specification/);
+  assert.doesNotMatch(io.stdout.value, /Full document: xmemo memory read/);
+});
+
+test('CLI-MEMORY-UX Rev-9dba0f2f P3: state restore human output omits version= when absent', async () => {
+  const io = makeIo(async () => {
+    return new Response(JSON.stringify({
+      state_key: 'session_cache',
+      content: '{"cached":true}',
+      expires_at: '2026-10-01T00:00:00Z'
+    }), { status: 200 });
+  });
+
+  const code = await run(['state', 'restore', '--state-key', 'session_cache'], io);
+  assert.equal(code, 0);
+  assert.match(io.stdout.value, /Restored state: key=session_cache, expiry=2026-10-01T00:00:00Z/);
+  assert.doesNotMatch(io.stdout.value, /version=/);
+});
+
+test('CLI-MEMORY-UX Rev-9dba0f2f P3: memory restore 403 with restore scope missing provides exact login command', async () => {
+  const io = makeIo(async () => {
+    return new Response(JSON.stringify({
+      detail: 'memory:restore scope required'
+    }), { status: 403 });
+  });
+
+  const code = await run(['memory', 'restore', 'mem-123', '--yes'], io);
+  assert.equal(code, 4); // FORBIDDEN
+  assert.match(io.stderr.value, /Next: xmemo account login --scopes memory:read,memory:write,memory:restore,ledger:write,ledger:read,knowledge:read/);
+});
+
+
 

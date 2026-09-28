@@ -30,7 +30,9 @@ All notable changes to the XMemo CLI client will be documented in this file.
 - **Relocated Client Diagnostics**: Moved client-specific doctor implementations (`codexDoctor`, `kiroDoctor`) into dedicated `src/diagnostics/` modules, eliminating command-layer couplings.
 
 ### Fixed
-- **Recall Document Stub Handling**: Fixed detection, hint, and expansion for recall items where `id != memory_id`, using `memory_id` for document fetching and updating `context_text`.
+- **Recall Document Stub Handling**: Fixed detection, hint, and expansion for recall items where `id != memory_id`, using `memory_id` for document fetching and updating `context_text`. In human mode, rendered the actual expanded document content directly, retaining `"Full document: xmemo memory read <id>"` only when content is truncated.
+- **Server Prefix Variants & Literal Matching (`memory list`)**: Optimized `xmemo memory list` path matching to probe fast server-side prefix variants (trimmed outer slashes, collapsed whitespace around slashes, with/without `[ROOT]/`) before falling back to client scanning, matching in <1s. Supported `--exact-path` to execute exactly one literal server query with zero client scanning.
+- **State Restore & Restore Scope Polish**: Omitted `version=` from `state restore` human output when version is absent or unknown. Provided the exact login command nextAction hint upon 403 Forbidden with missing `memory:restore` scope.
 - **Real-Signal Knowledge Warning**: Keyed `context recall --include-knowledge` skip warning on real signals (credential token lacking `knowledge:read` or response missing knowledge content).
 - **Memory Search Guidance**: Corrected empty search hint to suggest query refinement or `--team` instead of unsupported `--path` or `--bucket`.
 - **Restart Restore Validation Message**: Updated missing snapshot error to specify `--snapshot-id <id> or --state-key <key>` instead of internal session IDs.

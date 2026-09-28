@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { run } from '../src/cli.js';
 import { writeLine } from '../src/core/io.js';
 import {
+  buildServerPrefixVariants,
   normalizeMemoryPath,
   matchesPathPrefix,
   unifyMemoryItem,
@@ -437,4 +438,88 @@ test('CLI-DOGFOOD 9-4: memory list --type matches item.metadata.memory_type', as
   assert.equal(envelope.data.items.length, 1);
   assert.equal(envelope.data.items[0].id, '1');
 });
+
+test('CLI-DOGFOOD Rev-9dba0f2f P2: buildServerPrefixVariants generates expected clean and [ROOT]/ variants', () => {
+  const v1 = buildServerPrefixVariants('/projects/xmemo/plans');
+  assert.ok(v1.includes('projects/xmemo/plans'));
+  assert.ok(v1.includes('[ROOT]/projects/xmemo/plans'));
+  assert.equal(v1[0], 'projects/xmemo/plans');
+
+  const v2 = buildServerPrefixVariants('Projects / Xmemo / Plans');
+  assert.ok(v2.includes('Projects/Xmemo/Plans'));
+  assert.ok(v2.includes('[ROOT]/Projects/Xmemo/Plans'));
+  assert.ok(v2.includes('Projects / Xmemo / Plans'));
+  assert.ok(v2.includes('[ROOT]/Projects / Xmemo / Plans'));
+
+  const v3 = buildServerPrefixVariants('[ROOT]/projects/xmemo/Plans');
+  assert.equal(v3[0], '[ROOT]/projects/xmemo/Plans');
+  assert.ok(v3.includes('projects/xmemo/Plans'));
+});
+
+test('CLI-DOGFOOD Rev-9dba0f2f P2: leading slash /projects/xmemo/plans hits server variant with 0 scan requests', async () => {
+  const queries = [];
+  const io = makeIo(async (url) => {
+    const parsed = new URL(url);
+    const prefix = parsed.searchParams.get('path_prefix');
+    queries.push({ path: parsed.pathname, prefix });
+    if (prefix === 'projects/xmemo/plans') {
+      return new Response(JSON.stringify({
+        memories: [{ id: 'hit-1', path: 'projects/xmemo/plans/arch.md', content: 'Architecture' }],
+        total: 1
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ memories: [], total: 0 }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--path-prefix', '/projects/xmemo/plans', '--json'], io);
+  assert.equal(code, 0);
+  assert.equal(queries.length, 1); // Hit on first variant (projects/xmemo/plans), zero scan requests
+  assert.equal(queries[0].prefix, 'projects/xmemo/plans');
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 1);
+  assert.equal(envelope.data.items[0].id, 'hit-1');
+});
+
+test('CLI-DOGFOOD Rev-9dba0f2f P2: spaced prefix Projects / Xmemo / Plans hits server variant with 0 scan requests', async () => {
+  const queries = [];
+  const io = makeIo(async (url) => {
+    const parsed = new URL(url);
+    const prefix = parsed.searchParams.get('path_prefix');
+    queries.push({ path: parsed.pathname, prefix });
+    if (prefix === '[ROOT]/Projects/Xmemo/Plans') {
+      return new Response(JSON.stringify({
+        memories: [{ id: 'hit-2', path: '[ROOT]/Projects/Xmemo/Plans/design.md', content: 'Design' }],
+        total: 1
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ memories: [], total: 0 }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--path-prefix', 'Projects / Xmemo / Plans', '--json'], io);
+  assert.equal(code, 0);
+  // Variants tried until [ROOT]/Projects/Xmemo/Plans match, zero unbounded scans
+  assert.ok(queries.every((q) => q.prefix !== null)); // Every request had a path_prefix (zero full scans)
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 1);
+  assert.equal(envelope.data.items[0].id, 'hit-2');
+});
+
+test('CLI-DOGFOOD Rev-9dba0f2f P3: --exact-path executes exactly one literal server query and zero scans', async () => {
+  let callCount = 0;
+  let requestedPrefix = null;
+  const io = makeIo(async (url) => {
+    callCount += 1;
+    const parsed = new URL(url);
+    requestedPrefix = parsed.searchParams.get('path_prefix');
+    return new Response(JSON.stringify({ memories: [], total: 0 }), { status: 200 });
+  });
+
+  const code = await run(['memory', 'list', '--path-prefix', 'projects/xmemo/Plans', '--exact-path', '--json'], io);
+  assert.equal(code, 0);
+  assert.equal(callCount, 1); // Exactly 1 request! Zero fallback scans!
+  assert.equal(requestedPrefix, 'projects/xmemo/Plans');
+  const envelope = JSON.parse(io.stdout.value);
+  assert.equal(envelope.data.items.length, 0);
+});
+
 

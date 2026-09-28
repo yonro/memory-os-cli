@@ -22,6 +22,56 @@ export function matchesPathPrefix(itemPath, inputPrefix, exact = false) {
   return normItem.startsWith(normPrefix);
 }
 
+export function buildServerPrefixVariants(inputPrefix) {
+  if (typeof inputPrefix !== 'string' || !inputPrefix.trim()) return [];
+  const variants = [];
+  const seen = new Set();
+
+  function add(val) {
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.length > 0 && !seen.has(trimmed)) {
+        seen.add(trimmed);
+        variants.push(trimmed);
+      }
+    }
+  }
+
+  const startsWithRoot = /^\[root\]\s*\/?\s*/iu.test(inputPrefix.trim());
+
+  // Cleaned: leading/trailing slashes removed, spaces around slashes collapsed, consecutive slashes collapsed
+  const cleaned = inputPrefix.trim().replace(/^\/+|\/+$/gu, '').replace(/\s*\/\s*/gu, '/').replace(/\/+/gu, '/');
+  const cleanedWithoutRoot = cleaned.replace(/^\[root\]\s*\/?\s*/iu, '').replace(/^\/+|\/+$/gu, '');
+
+  if (cleanedWithoutRoot) {
+    if (startsWithRoot) {
+      add(`[ROOT]/${cleanedWithoutRoot}`);
+      add(cleanedWithoutRoot);
+    } else {
+      add(cleanedWithoutRoot);
+      add(`[ROOT]/${cleanedWithoutRoot}`);
+    }
+  }
+
+  // Verbatim stripped (preserves spaces around slashes if any)
+  const verbatimStripped = inputPrefix.trim().replace(/^\/+|\/+$/gu, '');
+  const verbatimWithoutRoot = verbatimStripped.replace(/^\[root\]\s*\/?\s*/iu, '').replace(/^\/+|\/+$/gu, '');
+  if (verbatimWithoutRoot) {
+    if (startsWithRoot) {
+      add(`[ROOT]/${verbatimWithoutRoot}`);
+      add(verbatimWithoutRoot);
+    } else {
+      add(verbatimWithoutRoot);
+      add(`[ROOT]/${verbatimWithoutRoot}`);
+    }
+  }
+
+  // Verbatim as typed
+  add(inputPrefix.trim());
+
+  return variants;
+}
+
 export function unifyMemoryItem(item, { score = null } = {}) {
   if (!item || typeof item !== 'object') return item;
   const existingId = item.id;
