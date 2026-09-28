@@ -267,7 +267,7 @@ test('setup openclaw: prints exact command before running, respects --force, and
 });
 
 test('setup hermes: prints exact command before running, uses hermes-xmemo==pinned without -U, and --dry-run exits without running', async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-hermes-print-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-hermes-print_'));
   const hermesHome = path.join(tempDir, '.hermes');
   try {
     // 1. Dry run exits without running
@@ -281,7 +281,7 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
     assert.equal(dryCalls.length, 0, 'dry-run must not spawn python or hermes-xmemo');
     assert.match(dryRes.stdout, /Dry run actions:/);
     assert.match(dryRes.stdout, new RegExp(`pip install hermes-xmemo==${PINNED_HERMES_PLUGIN_VERSION}`));
-    assert.doesNotMatch(dryRes.stdout, /-U/);
+    assert.doesNotMatch(dryRes.stdout, /\s-U(\s|$)/);
 
     // 2. Real run with hermes CLI available prints exact command before executing
     const realCalls = [];
