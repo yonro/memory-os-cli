@@ -11,10 +11,14 @@ All notable changes to the XMemo CLI client will be documented in this file.
   - **Plan, Confirm Once, Apply Engine (`PlanRunner`)**: Atomic planning and execution engine displaying full unified plan previews, single confirmation prompt `[y/N]`, stop-on-first-failure, idempotency detection, and full `--dry-run`, `--yes`, and `--json` support.
   - **Declarative Client Registry**: All 24 client profiles declare setup composition (`setup.default`, `setup.optional`, `setupRecipe`) with zero hardcoded client ID string literals in command handlers.
   - **Dynamic Registry Extension**: Support for dynamic runtime client registration (`registerClient`, `unregisterClient`) with automatic index rebuilding and synthetic client testing.
+  - **Client Resource Status Inspection (`xmemo status [<client>...|--all]`)**: Extended `xmemo status` to accept client identifiers and `--all` flag. Evaluates each client's resources according to registry declarations (MCP configuration status and path, plugin index status/detail, installed skill version and path, and profile presence and path) following service reachability probes, with structured `--json` output under `clients`.
 
 ### Changed
 - **Backward-Compatible Command Aliases**: Kept `mcp add` (alias for `mcp install`), `profile uninstall` (alias for `profile remove`), and `skill remove` / `uninstall` (alias for `skill remove`) with helpful one-line stderr hints in interactive terminal mode while preserving clean JSON mode output.
 - **Relocated Client Diagnostics**: Moved client-specific doctor implementations (`codexDoctor`, `kiroDoctor`) into dedicated `src/diagnostics/` modules, eliminating command-layer couplings.
+
+### Fixed
+- **Uninstall Plan Preview Heading (`xmemo uninstall`)**: Corrected preview heading in `xmemo uninstall` to display `Planned changes:` prior to user confirmation or `--yes` execution, reserving `(dry run — no files were modified)` strictly for actual `--dry-run` executions.
 
 ## 0.4.187
 

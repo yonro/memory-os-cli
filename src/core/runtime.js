@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -151,8 +151,14 @@ export function userHome(env = process.env) {
 
 export function isRepo(cwd, env = process.env, markerDir = null) {
   if (!cwd) return false;
-  const resolvedCwd = path.resolve(cwd);
-  const resolvedHome = path.resolve(userHome(env));
+  let resolvedCwd = path.resolve(cwd);
+  let resolvedHome = path.resolve(userHome(env));
+  try {
+    resolvedCwd = realpathSync(resolvedCwd);
+  } catch {}
+  try {
+    resolvedHome = realpathSync(resolvedHome);
+  } catch {}
   if (resolvedCwd === resolvedHome) {
     return existsSync(path.join(cwd, '.git'));
   }

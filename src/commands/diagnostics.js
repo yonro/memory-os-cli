@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
 import {
   booleanValue,
   hasFlag,
@@ -10,10 +13,12 @@ import { baseUrlOption } from '../network/base-url.js';
 import {
   CLI_VERSION,
   COMMAND_NAME,
+  MCP_SERVER_NAME,
   PACKAGE_NAME,
   PRODUCT_NAME
 } from '../core/constants.js';
 import { UsageError } from '../core/errors.js';
+import { fileExists } from '../core/runtime.js';
 import {
   agentDiscoveryClientIds,
   bestEffortRootVersion,
@@ -36,6 +41,19 @@ import {
   resolveClientId,
   supportedDoctorClientIds
 } from '../clients/registry.js';
+import { resolveTargetClients } from '../core/target-resolver.js';
+import { getPlugin } from '../plugins/registry.js';
+import { checkPluginStatus } from './plugin.js';
+import { profileStatusResult } from '../config/profile.js';
+import {
+  executeSubprocess,
+  extractSkillVersionFromDirectory,
+  sanitizeEnv
+} from './skill.js';
+import {
+  PINNED_OPENCLAW_SKILL_NAME,
+  PINNED_OPENCLAW_SKILL_VERSION
+} from '../core/pins.js';
 
 export function writeDoctorHelp(io) {
   writeLine(io.stdout, 'Doctor commands:');
@@ -225,16 +243,146 @@ export async function discoveryCommand(args, io) {
 
 export function writeStatusHelp(io) {
   writeLine(io.stdout, 'Status command:');
-  writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <url>] [--json]`);
+  writeLine(io.stdout, `  ${COMMAND_NAME} status [<client>...|--all] [--url <url>] [--json]`);
   writeLine(io.stdout, '');
-  writeLine(io.stdout, 'Probe hosted service endpoints and readiness.');
+  writeLine(io.stdout, 'Probe hosted service endpoints and inspect client integration status.');
   return 0;
+}
+
+async function collectClientResources(client, io) {
+  const resources = {};
+
+  // 1. MCP
+  if (client.mcp) {
+    const configPath = typeof client.mcp.defaultConfigPath === 'function'
+      ? client.mcp.defaultConfigPath(io.env)
+      : null;
+    let configured = false;
+    try {
+      if (configPath && (await fileExists(configPath))) {
+        const text = await fs.readFile(configPath, 'utf8');
+        configured = text.includes(MCP_SERVER_NAME) || text.includes('XMemo') || text.includes('xmemo');
+      }
+    } catch {}
+    resources.mcp = {
+      configured,
+      path: configPath
+    };
+  }
+
+  // 2. Plugin
+  const pluginId = client.pluginId ?? client.plugin?.indexId;
+  if (pluginId) {
+    const pluginEntry = getPlugin(pluginId);
+    if (pluginEntry) {
+      const pStatus = await checkPluginStatus(pluginEntry, io);
+      resources.plugin = {
+        installed: pStatus.installed,
+        status: pStatus.installed ? 'installed' : 'not installed',
+        detail: pStatus.detail,
+        version: pStatus.version ?? null
+      };
+    } else {
+      resources.plugin = {
+        installed: false,
+        status: 'n/a',
+        detail: 'n/a'
+      };
+    }
+  } else {
+    resources.plugin = {
+      installed: false,
+      status: 'n/a',
+      detail: 'n/a'
+    };
+  }
+
+  // 3. Skill
+  if (client.skillDir || client.skill) {
+    const cwd = io.cwd ?? process.cwd();
+    let installed = false;
+    let version = null;
+    let skillPath = null;
+    if (typeof client.skillDir === 'function') {
+      skillPath = path.resolve(client.skillDir(io.env, { project: false, cwd }));
+    }
+    if (client.skill?.kind === 'native') {
+      const bin = client.skill?.bin ?? client.id;
+      const ref = client.skill?.ref ?? PINNED_OPENCLAW_SKILL_NAME;
+      try {
+        const res = await executeSubprocess(bin, ['skills', 'list'], io, sanitizeEnv(io.env), cwd);
+        if (res.code === 0 && (res.stdout.includes(ref) || res.stdout.includes('xmemo'))) {
+          installed = true;
+          const match = res.stdout.match(/@xmemo\/xmemo@([0-9.]+)/) || res.stdout.match(/xmemo@([0-9.]+)/);
+          version = match ? match[1] : (client.skill?.version ?? PINNED_OPENCLAW_SKILL_VERSION);
+        }
+      } catch {}
+    } else if (skillPath) {
+      const exists = await fs.stat(skillPath).catch(() => null);
+      if (exists && exists.isDirectory()) {
+        installed = true;
+        version = await extractSkillVersionFromDirectory(skillPath);
+      }
+    }
+    resources.skill = {
+      installed,
+      version,
+      path: skillPath
+    };
+  }
+
+  // 4. Profile
+  if (client.profile) {
+    const targetPath = typeof client.profile.defaultTarget === 'function'
+      ? client.profile.defaultTarget(io.env, { cwd: io.cwd })
+      : null;
+    let installed = false;
+    if (targetPath) {
+      try {
+        const res = await profileStatusResult(client.id, targetPath);
+        installed = Boolean(res?.installed);
+      } catch {}
+    }
+    resources.profile = {
+      installed,
+      path: targetPath
+    };
+  }
+
+  return resources;
 }
 
 export async function statusCommand(args, io) {
   if (hasFlag(args, '--help') || hasFlag(args, '-h') || args[0] === 'help') {
     return writeStatusHelp(io);
   }
+
+  const optionsWithValues = new Set(['--url', '--base-url', '--timeout-ms', '--client']);
+  const positionals = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') {
+      positionals.push(...args.slice(i + 1));
+      break;
+    }
+    if (optionsWithValues.has(arg)) {
+      i++;
+      continue;
+    }
+    if (arg.startsWith('--url=') || arg.startsWith('--base-url=') || arg.startsWith('--timeout-ms=') || arg.startsWith('--client=')) {
+      continue;
+    }
+    if (!arg.startsWith('-')) {
+      positionals.push(arg);
+    }
+  }
+
+  const targetClients = await resolveTargetClients('status', args, io, {
+    positional: positionals,
+    allowAll: true,
+    allowMultiple: true,
+    allowEmpty: true
+  });
 
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
   const outputJson = hasFlag(args, '--json');
@@ -261,6 +409,19 @@ export async function statusCommand(args, io) {
     probes
   };
 
+  if (targetClients.length > 0) {
+    const clientReports = [];
+    for (const client of targetClients) {
+      const resources = await collectClientResources(client, io);
+      clientReports.push({
+        id: client.id,
+        label: client.label,
+        resources
+      });
+    }
+    result.clients = clientReports;
+  }
+
   if (outputJson) {
     writeLine(io.stdout, JSON.stringify(result, null, 2));
     return result.ok ? 0 : 1;
@@ -273,6 +434,32 @@ export async function statusCommand(args, io) {
       writeLine(io.stdout, `  OK   ${item.status} ${item.url}`);
     } else {
       writeLine(io.stdout, `  FAIL ${item.status ?? 'ERR'} ${item.url} ${item.error ?? ''}`.trimEnd());
+    }
+  }
+
+  if (result.clients) {
+    for (const c of result.clients) {
+      writeLine(io.stdout, '');
+      writeLine(io.stdout, `${c.label} (${c.id}):`);
+      if (c.resources.mcp) {
+        writeLine(io.stdout, `  MCP: ${c.resources.mcp.configured ? 'configured' : 'not configured'} (${c.resources.mcp.path ?? 'no config path'})`);
+      }
+      if (c.resources.plugin) {
+        const pStatus = c.resources.plugin.installed
+          ? 'installed'
+          : (c.resources.plugin.status === 'n/a' || c.resources.plugin.detail === 'n/a' ? 'n/a' : 'not installed');
+        const pDetail = c.resources.plugin.detail && c.resources.plugin.detail !== 'n/a' && c.resources.plugin.detail !== 'not installed'
+          ? ` (${c.resources.plugin.detail})`
+          : '';
+        writeLine(io.stdout, `  Plugin: ${pStatus}${pDetail}`);
+      }
+      if (c.resources.skill) {
+        const vText = c.resources.skill.version ? ` ${c.resources.skill.version}` : '';
+        writeLine(io.stdout, `  Skill: ${c.resources.skill.installed ? `installed${vText}` : 'not installed'} (${c.resources.skill.path ?? 'no skill path'})`);
+      }
+      if (c.resources.profile) {
+        writeLine(io.stdout, `  Profile: ${c.resources.profile.installed ? 'installed' : 'not installed'} (${c.resources.profile.path ?? 'no profile path'})`);
+      }
     }
   }
 

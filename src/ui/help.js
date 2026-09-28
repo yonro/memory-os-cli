@@ -77,8 +77,8 @@ export function writeHelp(io) {
   writeLine(io.stdout, 'Maintenance');
   writeLine(io.stdout, `  ${COMMAND_NAME} doctor [--services ...] [--discovery] [--client <id>] [--smoke] [--json]`);
   writeLine(io.stdout, '      Validate runtime, service reachability, and client configuration.');
-  writeLine(io.stdout, `  ${COMMAND_NAME} status [--url <url>] [--json]`);
-  writeLine(io.stdout, '      Probe hosted service endpoints and readiness.');
+  writeLine(io.stdout, `  ${COMMAND_NAME} status [<client>...|--all] [--url <url>] [--json]`);
+  writeLine(io.stdout, '      Probe hosted service endpoints and inspect client integration status.');
   writeLine(io.stdout, `  ${COMMAND_NAME} update [--dry-run]`);
   writeLine(io.stdout, '      Check or apply the latest npm package update.');
   writeLine(io.stdout, `  ${COMMAND_NAME} uninstall <client-id>|--all [--yes] [--profiles] [--dry-run]`);

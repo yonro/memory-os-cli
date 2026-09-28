@@ -91,7 +91,7 @@ export async function uninstallCommand(args, io) {
     if (outputJson) {
       writeLine(io.stdout, JSON.stringify(plan, null, 2));
     } else {
-      writeUninstallSummary(plan, io);
+      writeUninstallSummary(plan, io, { isPreview: false });
     }
     return plan.errors.length > 0 ? 1 : 0;
   }
@@ -100,13 +100,13 @@ export async function uninstallCommand(args, io) {
     if (outputJson) {
       writeLine(io.stdout, JSON.stringify(plan, null, 2));
     } else {
-      writeUninstallSummary(plan, io);
+      writeUninstallSummary(plan, io, { isPreview: !dryRun });
     }
     return 0;
   }
 
   if (!outputJson) {
-    writeUninstallSummary(plan, io);
+    writeUninstallSummary(plan, io, { isPreview: true });
   }
 
   if (!skipConfirm) {
