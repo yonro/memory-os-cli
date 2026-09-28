@@ -49,8 +49,8 @@ Two parallel integration paths:
 Recall relevant context before non-trivial work on a project where XMemo is in use; queries are sent to xmemo.dev, so keep secrets and sensitive identifiers out of query text:
 
 ```text
-node scripts/xmemo-skill.mjs recall --query "<topic or subsystem>" [--limit <n>] [--compact]
-node scripts/xmemo-skill.mjs search --query "<keywords>" [--limit <n>] [--compact]
+node scripts/xmemo-skill.mjs recall --query "<topic or subsystem>" [--limit <n>] [--expand-documents] [--compact]
+node scripts/xmemo-skill.mjs search --query "<keywords>" [--limit <n>] [--expand-documents] [--compact]
 ```
 
 Use `recall-context` to assemble bounded, prompt-ready memory context, optionally including user-owned Knowledge:
@@ -70,6 +70,12 @@ node scripts/xmemo-skill.mjs read --id <id> [--offset <n>] [--limit <n>]
 ```
 
 Backed by `GET /v1/memories/{id}/explain?include_embedding=false`. Optional `--offset` and `--limit` paginate characters (setting `truncated: true`). Empty content is valid memory. Missing records return 404 `not_found`; 401/403 errors are preserved without downgrade.
+
+### Document-Backed Memories
+
+Document-backed memories returned by `recall` or `search` appear as a one-line stub (`Document-backed memory: <title>`); the stub is not the full record.
+To retrieve the full text, run `node scripts/xmemo-skill.mjs read --id <id>` with the `id` from the result (no `--limit` needed), or pass `--expand-documents` to `recall` or `search`.
+Before telling the user a document was not saved in full, run `read --id` on the stub.
 
 ### What and When to Remember
 
@@ -170,9 +176,9 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | Command & Syntax | Description |
 |:---|:---|
 | `remember (--content <text> \| --content - \| --file <path>) [--path <path>] [--metadata <json>]` | Save durable memory |
-| `recall --query <text> [--limit <n>] [--compact]` | Recall memories by query |
-| `search --query <text> [--limit <n>] [--compact]` | Search memories by text query |
-| `read --id <id> [--offset <n>] [--limit <n>]` | Read memory by ID |
+| `recall --query <text> [--limit <n>] [--expand-documents] [--compact]` | Recall memories by query |
+| `search --query <text> [--limit <n>] [--expand-documents] [--compact]` | Search memories by text query |
+| `read --id <id> [--offset <n>] [--limit <n>]` | Read memory or full document by ID |
 | `update --id <id> [--content <text>] [--path <path>] [--metadata <json>]` | Update memory by ID |
 | `forget --id <id> --confirm [--reason <text>]` | Soft-delete record |
 | `recall-context --query <text> [--include_knowledge <true\|false>] [--max_items <n>]` | Bounded prompt context |
