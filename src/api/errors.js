@@ -1,3 +1,5 @@
+import { DEFAULT_DEVICE_LOGIN_SCOPES } from '../network/auth.js';
+
 export const EXIT_CODES = Object.freeze({
   SUCCESS: 0,
   INTERNAL: 1,
@@ -37,7 +39,7 @@ export class UnknownOutcomeError extends ServiceClientError {
       code: details.code ?? 'REQUEST_OUTCOME_UNKNOWN',
       outcome: 'unknown',
       retryable: false,
-      nextAction: details.nextAction ?? '核对服务端状态后再决定是否继续。'
+      nextAction: details.nextAction ?? 'Verify service resource status before deciding whether to continue.'
     });
     this.name = 'UnknownOutcomeError';
   }
@@ -50,7 +52,7 @@ export class ContractRequiredError extends ServiceClientError {
       code: 'SERVER_CONTRACT_REQUIRED',
       outcome: 'not-sent',
       retryable: false,
-      nextAction: details.contractNextAction ?? '升级服务端契约后重试；CLI 不会回退到旧写接口。'
+      nextAction: details.contractNextAction ?? 'Upgrade server contract and retry; CLI will not fall back to legacy write endpoints.'
     });
     this.name = 'ContractRequiredError';
   }
@@ -63,7 +65,7 @@ export class PartialCompletionError extends ServiceClientError {
       code: details.code ?? 'PARTIAL_COMPLETION',
       outcome: 'partial',
       retryable: false,
-      nextAction: details.nextAction ?? '使用返回的资源 ID 继续核对或完成后续步骤。'
+      nextAction: details.nextAction ?? 'Use the returned resource ID to verify or proceed with next steps.'
     });
     this.name = 'PartialCompletionError';
   }
@@ -108,21 +110,48 @@ export class PrerequisiteRequiredError extends ServiceClientError {
   }
 }
 
+export function formatErrorDetail(detail) {
+  if (detail === undefined || detail === null) return '';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const formatted = detail.map((d) => {
+      if (typeof d === 'string') return d;
+      if (typeof d === 'object' && d !== null) {
+        let loc = '';
+        if (Array.isArray(d.loc)) {
+          const filtered = d.loc.filter((part) => part !== 'body' || d.loc.length === 1);
+          loc = filtered.join('.') || 'body';
+        } else if (d.loc) {
+          loc = String(d.loc);
+        }
+        const msg = d.msg ?? d.message ?? JSON.stringify(d);
+        return loc ? `${loc}: ${msg}` : msg;
+      }
+      return String(d);
+    });
+    return formatted.filter(Boolean).join('; ');
+  }
+  if (typeof detail === 'object') {
+    return detail.message ?? detail.msg ?? detail.error ?? JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
 export function classifyHttpFailure(status, payload) {
   const serviceError = payload?.error;
   const detail = payload?.detail;
-  const serviceCode = typeof serviceError === 'object'
+  const serviceCode = typeof serviceError === 'object' && !Array.isArray(serviceError)
     ? serviceError.code ?? serviceError.error_code ?? null
-    : typeof detail === 'object'
+    : typeof detail === 'object' && !Array.isArray(detail)
       ? detail.code ?? detail.error_code ?? null
       : typeof payload?.code === 'string' ? payload.code : null;
-  const message = typeof serviceError === 'string'
+  const rawMessage = typeof serviceError === 'string'
     ? serviceError
     : serviceError?.message
-      ?? payload?.detail?.message
-      ?? payload?.detail
+      ?? (detail !== undefined && detail !== null ? formatErrorDetail(detail) : null)
       ?? payload?.message
       ?? `HTTP ${status}`;
+  const message = typeof rawMessage === 'string' && rawMessage.trim() ? rawMessage : `HTTP ${status}`;
   const scopeText = `${serviceCode ?? ''} ${message}`.toLowerCase();
   const code = status === 401 ? 'AUTH_REQUIRED'
     : status === 403 ? 'PERMISSION_DENIED'
@@ -139,13 +168,15 @@ export function classifyHttpFailure(status, payload) {
     serviceCode,
     retryable: status === 408 || status === 425 || status === 429 || status >= 500,
     outcome: 'known-failure',
-    nextAction: status === 401 ? '登录或重新授权后重试。'
-      : status === 403 && /document|memory.*scope|scope.*memory/.test(scopeText) ? '重新授权：xmemo login --scopes knowledge:write,memory:write。'
-        : status === 403 ? '检查授权 scope、账号角色和团队空间。'
-        : status === 404 ? '检查资源 ID 与服务契约。'
-          : status === 409 ? '重新读取最新资源后再提交。'
-            : status === 429 || status >= 500 ? '稍后重试；写入请求不会自动重放。'
-              : '修正请求后重试。'
+    nextAction: status === 401 ? 'Log in or re-authenticate and retry.'
+      : status === 403 && /knowledge.*scope|scope.*knowledge|knowledge_scope_required/.test(scopeText) ? `xmemo account login --scopes ${DEFAULT_DEVICE_LOGIN_SCOPES.join(',')}`
+      : status === 403 && /restore.*scope|scope.*restore|memory:restore|restore_scope_required/.test(scopeText) ? `xmemo account login --scopes ${DEFAULT_DEVICE_LOGIN_SCOPES.join(',')}`
+        : status === 403 && /document|memory.*scope|scope.*memory/.test(scopeText) ? 'xmemo account login --scopes knowledge:write,memory:write'
+          : status === 403 ? 'Check authorized scopes, account roles, and team workspace.'
+          : status === 404 ? 'Check resource ID and service contract.'
+            : status === 409 ? 'Reload the latest resource before resubmitting.'
+              : status === 429 || status >= 500 ? 'Retry later; write requests will not automatically replay.'
+                : 'Correct the request and retry.'
   };
 }
 

@@ -31,7 +31,7 @@ export const DEVICE_LOGIN_SCOPES = Object.freeze([
   'knowledge:write'
 ]);
 export const DEFAULT_DEVICE_LOGIN_SCOPES = Object.freeze([
-  'memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read'
+  'memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read', 'knowledge:read'
 ]);
 
 export function parseRequestedScopes(value) {

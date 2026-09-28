@@ -2,13 +2,15 @@ import { hasFlag, optionValue, parseIntegerInRange } from '../core/args.js';
 import { UsageError } from '../core/errors.js';
 import { writeLine } from '../core/io.js';
 import { assertKnownOptions, assertNoUnknownInputFields, optionalBooleanInput, readJsonInput, rejectInputFlagConflicts } from '../api/input.js';
-import { UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
+import { ServiceClientError, UnknownOutcomeError, errorToExitCode } from '../api/errors.js';
 import { writeFailure, writeSuccess } from '../api/envelope.js';
 import { serviceContext } from '../api/service-context.js';
 import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
 import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/service-output.js';
 import { confirmRemoteAction } from '../api/confirmation.js';
+import { processDocumentStubs } from '../api/document-stub.js';
 import { memoryTransfer, prepareMemoryTransfer } from './memory-transfer.js';
+import { buildServerPrefixVariants, matchesPathPrefix, normalizeMemoryPath, unifyMemoryItem, rerankSearchResults } from '../api/memory-schema.js';
 
 export async function memoryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -17,9 +19,11 @@ export async function memoryCommand(args, io) {
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `memory.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Memory commands:');
     writeLine(io.stdout, '  xmemo memory add --content <text> --path <path> [--bucket <name>] [--json]');
-    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--json]');
+    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--keyword <words>] [--exact <phrase>] [--json]');
     writeLine(io.stdout, '  xmemo memory read <memory-id> [--team <id>] [--json]');
-    writeLine(io.stdout, '  xmemo memory list [--path-prefix <literal-prefix>] [--limit <n>] [--offset <n>]');
+    writeLine(io.stdout, '  xmemo memory list [--path-prefix <prefix>] [--project <name>] [--exact-path] [--query <text>] [--type <type>] [--all] [--limit <n>] [--offset <n>] [--json]');
+    writeLine(io.stdout, '  xmemo memory delete <memory-id> [--reason <text>] [--yes] [--json]');
+    writeLine(io.stdout, '  xmemo memory restore <memory-id> [--yes] [--json]');
     writeLine(io.stdout, '  xmemo memory import --file <jsonl> [--dry-run | --idempotency-key <key> --yes]');
     writeLine(io.stdout, '  xmemo memory ledger-delete|expense-delete --id <transaction-uuid> --yes');
     return 0;
@@ -27,7 +31,10 @@ export async function memoryCommand(args, io) {
   if (subcommand === 'add') return await runServiceCommand('memory.add', args.slice(1), io, memoryAdd, validateMemoryAdd);
   if (subcommand === 'search') return await runServiceCommand('memory.search', args.slice(1), io, memorySearch, validateMemorySearch);
   if (subcommand === 'read') return await runServiceCommand('memory.read', args.slice(1), io, memoryRead, validateMemoryRead);
-  if (['list', 'import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
+  if (subcommand === 'list') return await runServiceCommand('memory.list', args.slice(1), io, memoryList, validateMemoryList);
+  if (subcommand === 'delete') return await runServiceCommand('memory.delete', args.slice(1), io, memoryDelete, validateMemoryDelete);
+  if (subcommand === 'restore') return await runServiceCommand('memory.restore', args.slice(1), io, memoryRestore, validateMemoryRestore);
+  if (['import', 'ledger-delete', 'expense-delete'].includes(subcommand)) {
     let prepared;
     return await runServiceCommand(`memory.${subcommand}`, args.slice(1), io,
       (options, streams, context) => memoryTransfer(subcommand, options, streams, context, prepared),
@@ -42,7 +49,7 @@ export async function contextCommand(args, io) {
     if (subcommand !== 'help' && hasFlag(args, '--json') && writeServiceHelpSchema(io, `context.${subcommand}`)) return 0;
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `context.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Context commands:');
-    writeLine(io.stdout, '  xmemo context recall <query> [--max-tokens <n>] [--max-items <n>] [--include-knowledge] [--json]');
+    writeLine(io.stdout, '  xmemo context recall <query> [--max-tokens <n>] [--max-items <n>] [--include-knowledge] [--expand-documents] [--json]');
     return 0;
   }
   if (subcommand === 'recall') return await runServiceCommand('context.recall', args.slice(1), io, contextRecall, validateContextRecall);
@@ -101,8 +108,11 @@ async function memoryAdd(args, io, context) {
     throw new UnknownOutcomeError('Memory write returned without a confirmed memory ID.', {
       code: 'WRITE_RECEIPT_MISSING',
       data: { status: response.status },
-      nextAction: '核对服务端是否已创建记忆；不要自动重试该写入。'
+      nextAction: 'Check whether the memory was created on the server; do not automatically retry this write.'
     });
+  }
+  if (result && typeof result === 'object' && !result.path && !result.memory_path) {
+    result.path = body.path;
   }
   return response;
 }
@@ -132,28 +142,460 @@ async function validateMemoryRead(args, io) {
   if (typeof (positionalId ?? input?.memory_id) !== 'string' || !(positionalId ?? input?.memory_id).trim()) throw new UsageError('memory read requires a memory ID.');
 }
 
-async function memorySearch(args, io, context) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+async function memoryDelete(args, io, context) {
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working']], args);
+  const memoryId = singlePositional(args, 'memory delete') ?? optionValue(args, '--id') ?? input?.id;
+  const reason = optionValue(args, '--reason') ?? input?.reason;
+  await confirmRemoteAction(args, io, `Soft-delete memory ${memoryId}?`, `Confirmation required to soft-delete memory ${memoryId}; rerun with --yes.`);
+  const body = { mode: 'soft_delete' };
+  if (typeof reason === 'string' && reason.trim()) {
+    body.reason = reason.trim();
+  }
+  return await context.client.request({
+    method: 'POST',
+    path: `/v1/memories/${encodeURIComponent(memoryId)}/forget`,
+    body,
+    sideEffect: true
+  });
+}
+
+async function validateMemoryDelete(args, io) {
+  assertKnownOptions(args, ['--id', '--reason', '--yes', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, ['id', 'reason']);
+  rejectInputFlagConflicts(input, [['--id', 'id'], ['--reason', 'reason']], args);
+  const positionalId = singlePositional(args, 'memory delete');
+  const flagId = optionValue(args, '--id');
+  if (positionalId && flagId) throw new UsageError('Memory ID cannot be supplied both positionally and via --id.');
+  if ((positionalId || flagId) && input?.id !== undefined) throw new UsageError('Memory ID cannot be supplied both positionally/via flags and in --input.');
+  const id = positionalId ?? flagId ?? input?.id;
+  if (typeof id !== 'string' || !id.trim()) throw new UsageError('memory delete requires a memory ID.');
+}
+
+async function memoryRestore(args, io, context) {
+  const input = await readJsonInput(args, io);
+  const memoryId = singlePositional(args, 'memory restore') ?? optionValue(args, '--id') ?? input?.id;
+  await confirmRemoteAction(args, io, `Restore memory ${memoryId}?`, `Confirmation required to restore memory ${memoryId}; rerun with --yes.`);
+  const reason = optionValue(args, '--reason') ?? input?.reason;
+  const body = {};
+  if (typeof reason === 'string' && reason.trim()) {
+    body.reason = reason.trim();
+  }
+  try {
+    return await context.client.request({
+      method: 'POST',
+      path: `/v1/memories/${encodeURIComponent(memoryId)}/restore`,
+      body,
+      sideEffect: true
+    });
+  } catch (error) {
+    if ((error.httpStatus === 404 || error.httpStatus === 405 || error.code === 'CONTRACT_REQUIRED') &&
+        !(error?.data?.error?.code === 'MEMORY_NOT_FOUND' || /Memory .* not found/i.test(error?.message))) {
+      throw new ServiceClientError('REST restore endpoint is unavailable on this service. Restore is available through MCP restore_memory.', {
+        code: 'REST_RESTORE_UNAVAILABLE',
+        httpStatus: error.httpStatus,
+        nextAction: 'Use MCP restore_memory to restore this memory.'
+      });
+    }
+    throw error;
+  }
+}
+
+async function validateMemoryRestore(args, io) {
+  assertKnownOptions(args, ['--id', '--reason', '--yes', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, ['id', 'reason']);
+  rejectInputFlagConflicts(input, [['--id', 'id'], ['--reason', 'reason']], args);
+  const positionalId = singlePositional(args, 'memory restore');
+  const flagId = optionValue(args, '--id');
+  if (positionalId && flagId) throw new UsageError('Memory ID cannot be supplied both positionally and via --id.');
+  if ((positionalId || flagId) && input?.id !== undefined) throw new UsageError('Memory ID cannot be supplied both positionally/via flags and in --input.');
+  const id = positionalId ?? flagId ?? input?.id;
+  if (typeof id !== 'string' || !id.trim()) throw new UsageError('memory restore requires a memory ID.');
+}
+
+async function memoryList(args, io, context) {
+  const input = await readJsonInput(args, io);
+  const pathPrefixArg = optionValue(args, '--path-prefix') ?? input?.path_prefix;
+  const projectArg = optionValue(args, '--project') ?? input?.project;
+  const exactPath = hasFlag(args, '--exact-path') || optionalBooleanInput(input, 'exact_path') === true;
+  const filterText = optionValue(args, '--query') ?? optionValue(args, '--filter') ?? input?.query ?? input?.filter ?? null;
+  const typeFilter = optionValue(args, '--type') ?? input?.type ?? null;
+  const all = hasFlag(args, '--all') || optionalBooleanInput(input, 'all') === true;
+  const isHumanMode = !hasFlag(args, '--json');
+
+  const rawLimit = optionValue(args, '--limit') ?? input?.limit;
+  const rawOffset = optionValue(args, '--offset') ?? input?.offset;
+  const limit = rawLimit !== undefined && rawLimit !== null
+    ? parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 500 })
+    : 100;
+  const offset = rawOffset !== undefined && rawOffset !== null
+    ? parseIntegerInRange(rawOffset, '--offset', { min: 0, max: Number.MAX_SAFE_INTEGER })
+    : 0;
+
+  let typedPrefix = null;
+  if (projectArg) {
+    typedPrefix = exactPath ? `projects/${projectArg}` : `projects/${projectArg.toLowerCase()}`;
+  } else if (pathPrefixArg !== undefined && pathPrefixArg !== null) {
+    typedPrefix = pathPrefixArg;
+  }
+
+  function matchesItem(item) {
+    if (typedPrefix !== null) {
+      if (!matchesPathPrefix(item?.path ?? item?.memory_path, typedPrefix, exactPath)) {
+        return false;
+      }
+    }
+    if (typeFilter) {
+      const itemType = String(item?.memory_type ?? item?.metadata?.memory_type ?? item?.type ?? '');
+      if (itemType.toLowerCase() !== typeFilter.toLowerCase()) {
+        return false;
+      }
+    }
+    if (filterText) {
+      const textToSearch = `${item?.content ?? ''} ${item?.path ?? item?.memory_path ?? ''}`.toLowerCase();
+      if (!textToSearch.includes(filterText.toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Adaptive page fetcher: default limit 100, halves on RESPONSE_TOO_LARGE down to 25
+  async function fetchPageAdaptive(baseQuery, requestedLimit = 100) {
+    let currentLimit = requestedLimit;
+    while (true) {
+      try {
+        const res = await context.client.request({
+          method: 'GET',
+          path: '/v1/memories',
+          retry: 'bounded',
+          sideEffect: false,
+          query: { ...baseQuery, limit: currentLimit }
+        });
+        const memories = res?.data?.memories ?? (Array.isArray(res?.data) ? res.data : []);
+        const total = res?.data?.total;
+        return { memories, total, limitUsed: currentLimit };
+      } catch (error) {
+        if (error?.code === 'RESPONSE_TOO_LARGE' || /limit/i.test(error?.message || '')) {
+          if (currentLimit > 25) {
+            currentLimit = Math.max(25, Math.floor(currentLimit / 2));
+            continue;
+          }
+        }
+        throw error;
+      }
+    }
+  }
+
+  const warnings = [];
+
+  // Branch 1: --all
+  if (all) {
+    let effectiveServerPrefix = null;
+    let serverPrefixWorked = false;
+    if (typedPrefix !== null) {
+      if (exactPath) {
+        effectiveServerPrefix = typedPrefix;
+        serverPrefixWorked = true;
+      } else {
+        const variants = buildServerPrefixVariants(typedPrefix);
+        for (const variant of variants) {
+          const probe = await fetchPageAdaptive({ path_prefix: variant, offset: 0 }, 100);
+          if (probe.memories.length > 0 || (probe.total !== undefined && probe.total > 0)) {
+            effectiveServerPrefix = variant;
+            serverPrefixWorked = true;
+            break;
+          }
+        }
+      }
+    }
+
+    const maxItems = 10000;
+    let totalFetched = 0;
+    const allItems = [];
+    let currentOffset = 0;
+    const baseQuery = {};
+    if (serverPrefixWorked && effectiveServerPrefix !== null) {
+      baseQuery.path_prefix = effectiveServerPrefix;
+    }
+
+    while (totalFetched < maxItems) {
+      const page = await fetchPageAdaptive({ ...baseQuery, offset: currentOffset }, 100);
+      const mems = page.memories;
+      if (mems.length === 0) break;
+      totalFetched += mems.length;
+      if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalFetched})`);
+      for (const item of mems) {
+        if (matchesItem(item)) allItems.push(item);
+      }
+      if (mems.length < page.limitUsed) break;
+      currentOffset += mems.length;
+    }
+
+    if (totalFetched >= maxItems) {
+      warnings.push('Hit 10,000 item limit while auto-paging memories; results may be truncated.');
+    }
+
+    const unified = allItems.map((item) => unifyMemoryItem(item, { score: null }));
+    const responseData = {
+      total: unified.length,
+      memories: unified,
+      items: unified
+    };
+    for (let i = 0; i < unified.length; i += 1) {
+      responseData[i] = unified[i];
+    }
+    return {
+      data: responseData,
+      meta: { warnings, nextCursor: null }
+    };
+  }
+
+  // Branch 2: Standard single page when no client filters (--query, --filter, --type)
+  if (!filterText && !typeFilter) {
+    if (typedPrefix === null) {
+      const page = await fetchPageAdaptive({ offset }, limit);
+      const unified = page.memories.map((item) => unifyMemoryItem(item, { score: null }));
+      const responseData = {
+        total: page.total ?? unified.length,
+        memories: unified,
+        items: unified
+      };
+      for (let i = 0; i < unified.length; i += 1) {
+        responseData[i] = unified[i];
+      }
+      return {
+        data: responseData,
+        meta: {
+          warnings,
+          nextCursor: (page.total !== null && page.total !== undefined && offset + unified.length < page.total)
+            ? String(offset + unified.length)
+            : null
+        }
+      };
+    }
+
+    if (exactPath) {
+      const page = await fetchPageAdaptive({ path_prefix: typedPrefix, offset }, limit);
+      const unified = page.memories.map((item) => unifyMemoryItem(item, { score: null }));
+      const responseData = {
+        total: page.total ?? unified.length,
+        memories: unified,
+        items: unified
+      };
+      for (let i = 0; i < unified.length; i += 1) {
+        responseData[i] = unified[i];
+      }
+      return {
+        data: responseData,
+        meta: {
+          warnings,
+          nextCursor: (page.total !== null && page.total !== undefined && offset + unified.length < page.total)
+            ? String(offset + unified.length)
+            : null
+        }
+      };
+    }
+
+    const variants = buildServerPrefixVariants(typedPrefix);
+    for (const variant of variants) {
+      const page = await fetchPageAdaptive({ path_prefix: variant, offset }, limit);
+      if (page.memories.length > 0 || (page.total !== undefined && page.total > 0) || offset > 0) {
+        const unified = page.memories.map((item) => unifyMemoryItem(item, { score: null }));
+        const responseData = {
+          total: page.total ?? unified.length,
+          memories: unified,
+          items: unified
+        };
+        for (let i = 0; i < unified.length; i += 1) {
+          responseData[i] = unified[i];
+        }
+        return {
+          data: responseData,
+          meta: {
+            warnings,
+            nextCursor: (page.total !== null && page.total !== undefined && offset + unified.length < page.total)
+              ? String(offset + unified.length)
+              : null
+          }
+        };
+      }
+    }
+  }
+
+  // Branch 3: Client-side scan (for client filters or path normalization fallback)
+  if (exactPath) {
+    const page = await fetchPageAdaptive({ path_prefix: typedPrefix ?? undefined, offset }, limit);
+    const filtered = page.memories.filter((item) => matchesItem(item));
+    const unified = filtered.map((item) => unifyMemoryItem(item, { score: null }));
+    const responseData = {
+      total: unified.length,
+      memories: unified,
+      items: unified
+    };
+    for (let i = 0; i < unified.length; i += 1) {
+      responseData[i] = unified[i];
+    }
+    return {
+      data: responseData,
+      meta: { warnings, nextCursor: null }
+    };
+  }
+
+  let effectiveServerPrefix = null;
+  let serverPrefixWorked = false;
+  if (typedPrefix !== null && (filterText || typeFilter)) {
+    const variants = buildServerPrefixVariants(typedPrefix);
+    for (const variant of variants) {
+      const probe = await fetchPageAdaptive({ path_prefix: variant, offset: 0 }, 100);
+      if (probe.memories.length > 0 || (probe.total !== undefined && probe.total > 0)) {
+        effectiveServerPrefix = variant;
+        serverPrefixWorked = true;
+        break;
+      }
+    }
+  }
+
+  const matched = [];
+  let scanOffset = 0;
+  let totalScanned = 0;
+  const maxScan = 10000;
+  const baseQuery = {};
+  if (serverPrefixWorked && effectiveServerPrefix !== null) {
+    baseQuery.path_prefix = effectiveServerPrefix;
+  }
+
+  while (totalScanned < maxScan) {
+    const page = await fetchPageAdaptive({ ...baseQuery, offset: scanOffset }, 100);
+    const mems = page.memories;
+    if (mems.length === 0) break;
+    totalScanned += mems.length;
+    if (isHumanMode) writeLine(io.stderr, `Fetching memories... (${totalScanned})`);
+    for (const item of mems) {
+      if (matchesItem(item)) matched.push(item);
+    }
+    if (matched.length >= offset + limit || mems.length < page.limitUsed) break;
+    scanOffset += mems.length;
+  }
+
+  if (totalScanned >= maxScan) {
+    warnings.push('Hit 10,000 item limit while scanning memories; results may be truncated.');
+  }
+
+  const finalItems = matched.slice(offset, offset + limit);
+  const unified = finalItems.map((item) => unifyMemoryItem(item, { score: null }));
+  const responseData = {
+    total: matched.length,
+    memories: unified,
+    items: unified
+  };
+  for (let i = 0; i < unified.length; i += 1) {
+    responseData[i] = unified[i];
+  }
+  return {
+    data: responseData,
+    meta: {
+      warnings,
+      nextCursor: (matched.length > offset + unified.length)
+        ? String(offset + unified.length)
+        : null
+    }
+  };
+}
+
+async function validateMemoryList(args, io) {
+  assertKnownOptions(args, [
+    '--path-prefix', '--project', '--exact-path',
+    '--query', '--filter', '--type', '--all',
+    '--limit', '--offset',
+    '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json'
+  ]);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, [
+    'path_prefix', 'project', 'exact_path',
+    'query', 'filter', 'type', 'all',
+    'limit', 'offset'
+  ]);
+  rejectInputFlagConflicts(input, [
+    ['--path-prefix', 'path_prefix'],
+    ['--project', 'project'],
+    ['--query', 'query'],
+    ['--filter', 'filter'],
+    ['--type', 'type'],
+    ['--limit', 'limit'],
+    ['--offset', 'offset']
+  ], args);
+
+  const pathPrefix = optionValue(args, '--path-prefix') ?? input?.path_prefix;
+  const project = optionValue(args, '--project') ?? input?.project;
+  if (pathPrefix !== undefined && project !== undefined) {
+    throw new UsageError('Cannot supply both --path-prefix and --project.');
+  }
+
+  const query = optionValue(args, '--query') ?? input?.query;
+  const filter = optionValue(args, '--filter') ?? input?.filter;
+  if (query !== undefined && filter !== undefined && query !== filter) {
+    throw new UsageError('Cannot supply both --query and --filter.');
+  }
+
+  const rawLimit = optionValue(args, '--limit') ?? input?.limit;
+  if (rawLimit !== undefined && rawLimit !== null) {
+    parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 500 });
+  }
+
+  const rawOffset = optionValue(args, '--offset') ?? input?.offset;
+  if (rawOffset !== undefined && rawOffset !== null) {
+    parseIntegerInRange(rawOffset, '--offset', { min: 0, max: Number.MAX_SAFE_INTEGER });
+  }
+
+  optionalBooleanInput(input, 'exact_path');
+  optionalBooleanInput(input, 'all');
+}
+
+async function memorySearch(args, io, context) {
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  const input = await readJsonInput(args, io);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact']);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact']], args);
   const queryArg = singlePositional(args, 'memory search');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('memory search requires a query.');
   const rawLimit = optionValue(args, '--limit') ?? input?.limit;
-  const data = await context.client.request({
+  const keyword = optionValue(args, '--keyword') ?? input?.keyword;
+  const exact = optionValue(args, '--exact') ?? input?.exact;
+  const response = await context.client.request({
     method: 'GET', path: '/api/v1/recall', retry: 'bounded', sideEffect: false,
     query: compact({ query, limit: rawLimit === undefined || rawLimit === null ? undefined : parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 }), team_id: optionValue(args, '--team') ?? input?.team_id, bucket: optionValue(args, '--bucket') ?? input?.bucket, path: optionValue(args, '--path') ?? input?.path, prefer_working: hasFlag(args, '--prefer-working') ? true : optionalBooleanInput(input, 'prefer_working') })
   });
-  return data;
+  const data = response?.data ?? response;
+  const items = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.items) ? data.items : [];
+  const expandDocuments = hasFlag(args, '--expand-documents') || optionalBooleanInput(input, 'expand_documents') === true;
+  await processDocumentStubs(items, {
+    expandDocuments,
+    client: context.client,
+    teamId: optionValue(args, '--team') ?? input?.team_id
+  });
+  const reranked = rerankSearchResults(items, { keyword, exact });
+  const unified = reranked.map((item) => unifyMemoryItem(item, { score: item.similarity ?? item.score ?? null }));
+  const unifiedData = {
+    results: unified,
+    items: unified,
+    ...(data?.coverage !== undefined ? { coverage: data.coverage } : {})
+  };
+  for (let i = 0; i < unified.length; i += 1) {
+    unifiedData[i] = unified[i];
+  }
+  response.data = unifiedData;
+  return response;
 }
 
 async function validateMemorySearch(args, io) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working']], args);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact']);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact']], args);
   const queryArg = singlePositional(args, 'memory search');
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
@@ -161,40 +603,107 @@ async function validateMemorySearch(args, io) {
   const rawLimit = optionValue(args, '--limit') ?? input?.limit;
   if (rawLimit !== undefined && rawLimit !== null) parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 });
   optionalBooleanInput(input, 'prefer_working');
+  optionalBooleanInput(input, 'expand_documents');
 }
 
 async function contextRecall(args, io, context) {
-  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items']], args);
+  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents']);
+  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents']], args);
   const queryArg = singlePositional(args, 'context recall');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Context query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('context recall requires a query.');
+  const includeKnowledge = hasFlag(args, '--include-knowledge') ? true : optionalBooleanInput(input, 'include_knowledge');
   const body = compact({
     ...input,
     query,
-    include_knowledge: hasFlag(args, '--include-knowledge') ? true : optionalBooleanInput(input, 'include_knowledge'),
+    include_knowledge: includeKnowledge,
     max_tokens: optionalRange(optionValue(args, '--max-tokens') ?? input?.max_tokens, '--max-tokens', 1, 100000),
     max_items: optionalRange(optionValue(args, '--max-items') ?? input?.max_items, '--max-items', 1, 500),
     prefer_working: optionalBooleanInput(input, 'prefer_working'),
     team_id: optionValue(args, '--team') ?? input?.team_id
   });
-  return await context.client.request({ method: 'POST', path: '/api/v1/recall/context', body, sideEffect: false, retry: 'bounded' });
+  delete body.expand_documents;
+  const response = await context.client.request({ method: 'POST', path: '/api/v1/recall/context', body, sideEffect: false, retry: 'bounded' });
+  const data = response?.data ?? response;
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.memories) ? data.memories : [];
+  const expandDocuments = hasFlag(args, '--expand-documents') || optionalBooleanInput(input, 'expand_documents') === true;
+  await processDocumentStubs(items, {
+    expandDocuments,
+    client: context.client,
+    teamId: optionValue(args, '--team') ?? input?.team_id
+  });
+  if (typeof data?.context_text === 'string') {
+    let updatedContextText = data.context_text;
+    for (const item of items) {
+      if (item.expanded && item._originalContent && updatedContextText.includes(item._originalContent)) {
+        updatedContextText = updatedContextText.replace(item._originalContent, item.content);
+      }
+    }
+    data.context_text = updatedContextText;
+  }
+  const unified = items.map((item) => unifyMemoryItem(item, { score: item.score ?? null }));
+  const unifiedData = (typeof data === 'object' && data !== null) ? { ...data } : {};
+  unifiedData.items = unified;
+  unifiedData.memories = unified;
+  if (data?.context_text !== undefined) unifiedData.context_text = data.context_text;
+  for (let i = 0; i < unified.length; i += 1) {
+    unifiedData[i] = unified[i];
+  }
+  response.data = unifiedData;
+  if (includeKnowledge) {
+    let tokenScopes = null;
+    if (context.token && typeof context.token === 'string') {
+      const parts = context.token.split('.');
+      if (parts.length === 3) {
+        try {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+          if (Array.isArray(payload.scopes)) tokenScopes = payload.scopes;
+          else if (typeof payload.scope === 'string') tokenScopes = payload.scope.split(/[\s,]+/);
+        } catch {}
+      }
+    }
+    const hasKnowledgeContent = Boolean(
+      data?.knowledge ||
+      data?.coverage?.knowledge === true ||
+      (Array.isArray(data?.items) && data.items.some((it) => it.source === 'knowledge' || it.type === 'knowledge' || it.knowledge_id || it.base_id))
+    );
+    const knowledgeExplicitlySkipped = Boolean(
+      data?.knowledge_skipped ||
+      data?.knowledge_items_skipped ||
+      data?.coverage?.knowledge === false ||
+      data?.knowledge_error ||
+      data?.knowledge_status === 'skipped' ||
+      (Array.isArray(data?.skipped_sources) && data.skipped_sources.includes('knowledge')) ||
+      (Array.isArray(data?.warnings) && data.warnings.some((w) => /knowledge/i.test(w)))
+    );
+    const lacksKnowledgeScope = tokenScopes ? !tokenScopes.includes('knowledge:read') : false;
+    const shouldWarn = knowledgeExplicitlySkipped || lacksKnowledgeScope || (!hasKnowledgeContent && !data?.coverage?.knowledge && !data?.knowledge);
+    if (shouldWarn) {
+      response.meta = response.meta ?? {};
+      response.meta.warnings = response.meta.warnings ?? [];
+      if (!response.meta.warnings.some((w) => /knowledge/i.test(w))) {
+        response.meta.warnings.push('Knowledge search was skipped (requires knowledge:read scope).');
+      }
+    }
+  }
+  return response;
 }
 
 async function validateContextRecall(args, io) {
-  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items']], args);
+  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents']);
+  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents']], args);
   const queryArg = singlePositional(args, 'context recall');
   if (queryArg && input?.query !== undefined) throw new UsageError('Context query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('context recall requires a query.');
   optionalBooleanInput(input, 'include_knowledge');
   optionalBooleanInput(input, 'prefer_working');
+  optionalBooleanInput(input, 'expand_documents');
   optionalRange(optionValue(args, '--max-tokens') ?? input?.max_tokens, '--max-tokens', 1, 100000);
   optionalRange(optionValue(args, '--max-items') ?? input?.max_items, '--max-items', 1, 500);
 }
@@ -290,7 +799,7 @@ async function restartRestore(args, io, context) {
   if (input?.restore_state !== undefined || input?.record_restore_event !== undefined) throw new UsageError('Use --preview or --apply to select restore intent; restore_state and record_restore_event are no longer accepted from --input.');
   if (apply) await confirmRemoteAction(args, io, 'Apply this restart snapshot and record the restore event?');
   const body = compact({ ...input, snapshot_id: optionValue(args, '--snapshot-id') ?? input?.snapshot_id, state_key: optionValue(args, '--state-key') ?? input?.state_key, bucket: optionValue(args, '--bucket') ?? input?.bucket, scope: optionValue(args, '--scope') ?? input?.scope, restore_state: apply, record_restore_event: apply, ttl_seconds: optionalRange(input?.ttl_seconds, 'ttl_seconds', 0, 604800) });
-  if (!body.snapshot_id && !body.source_session_id && !body.state_key) throw new UsageError('restart restore requires --snapshot-id, source_session_id, or state_key.');
+  if (!body.snapshot_id && !body.source_session_id && !body.state_key) throw new UsageError('restart restore requires --snapshot-id <id> or --state-key <key>.');
   return await context.client.request({ method: 'POST', path: '/api/v1/restart/restore', body, sideEffect: apply, retry: preview ? 'bounded' : 'none' });
 }
 
@@ -302,7 +811,7 @@ async function validateRestartRestore(args, io) {
   if (hasFlag(args, '--preview') === hasFlag(args, '--apply')) throw new UsageError('restart restore requires exactly one of --preview or --apply.');
   if (input?.restore_state !== undefined || input?.record_restore_event !== undefined) throw new UsageError('Use --preview or --apply to select restore intent; restore_state and record_restore_event are no longer accepted from --input.');
   if (!(optionValue(args, '--snapshot-id') ?? input?.snapshot_id ?? input?.source_session_id ?? optionValue(args, '--state-key') ?? input?.state_key)) {
-    throw new UsageError('restart restore requires --snapshot-id, source_session_id, or state_key.');
+    throw new UsageError('restart restore requires --snapshot-id <id> or --state-key <key>.');
   }
 }
 
@@ -328,7 +837,7 @@ async function runServiceCommand(command, args, io, handler, validate = null) {
 }
 
 function singlePositional(args, command) {
-  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline']);
+  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline', '--keyword', '--exact', '--path-prefix', '--project', '--query', '--filter', '--type', '--offset', '--id', '--reason']);
   const values = [];
   let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {

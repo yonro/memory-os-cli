@@ -98,7 +98,7 @@ export function createServiceClient({
             throw new UnknownOutcomeError(`Service may have processed the write before returning HTTP ${details.httpStatus}: ${method} ${path}.`, {
               ...details,
               data: safePayload,
-              nextAction: '核对服务端资源状态；不要自动重试该写入。'
+              nextAction: 'Check service resource status; do not automatically retry this write.'
             });
           }
           throw new ServiceClientError(details.message, { ...details, data: safePayload });
@@ -106,7 +106,7 @@ export function createServiceClient({
         return { status: response.status, headers: response.headers, data: payload };
       } catch (error) {
         if (error instanceof ContractRequiredError || (error instanceof ServiceClientError && error.httpStatus)) throw error;
-        if (sideEffect) throw new UnknownOutcomeError(`Service request outcome is unknown: ${method} ${path}.`, { cause: error, nextAction: '核对服务端资源状态；不要自动重试该写入。' });
+        if (sideEffect) throw new UnknownOutcomeError(`Service request outcome is unknown: ${method} ${path}.`, { cause: error, nextAction: 'Check service resource status; do not automatically retry this write.' });
         if (io.signal?.aborted) throw new InterruptedError('Local request interrupted.');
         if (error instanceof ServiceClientError) throw error;
         lastError = error;

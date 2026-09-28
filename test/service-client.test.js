@@ -199,7 +199,19 @@ test('CLI-01 gives document scope failures a precise reauthorization action', as
   });
   await assert.rejects(
     client.request({ method: 'POST', path: '/api/v1/documents', body: {}, sideEffect: true }),
-    (error) => error.nextAction === '重新授权：xmemo login --scopes knowledge:write,memory:write。'
+    (error) => error.nextAction === 'xmemo account login --scopes knowledge:write,memory:write'
+  );
+});
+
+test('CLI-01 gives knowledge scope failures the exact login command nextAction', async () => {
+  const client = createServiceClient({
+    baseUrl: 'https://api.example.test',
+    token: 'synthetic-token-value',
+    io: ioWith(async () => new Response(JSON.stringify({ detail: { code: 'knowledge_scope_required', message: 'knowledge:read scope required' } }), { status: 403 }))
+  });
+  await assert.rejects(
+    client.request({ method: 'GET', path: '/api/v1/knowledge-bases', sideEffect: false }),
+    (error) => error.nextAction === 'xmemo account login --scopes memory:read,memory:write,memory:restore,ledger:write,ledger:read,knowledge:read'
   );
 });
 

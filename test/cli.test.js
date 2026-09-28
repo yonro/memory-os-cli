@@ -344,7 +344,8 @@ test('device login stores issued token without printing it', async () => {
     'memory:write',
     'memory:restore',
     'ledger:write',
-    'ledger:read'
+    'ledger:read',
+    'knowledge:read'
   ]);
   assert.doesNotMatch(result.stdout, new RegExp(token));
   const payload = JSON.parse(result.stdout);

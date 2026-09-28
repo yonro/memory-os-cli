@@ -144,7 +144,7 @@ test('doctor --client codex --smoke validates codex config identically to smoke 
   // 5. doctor --smoke without --client codex throws usage error
   const resNoClient = await invoke(['doctor', '--smoke'], { env });
   assert.equal(resNoClient.code, 2);
-  assert.match(resNoClient.stderr, /Smoke requires --client codex/);
+  assert.match(resNoClient.stderr, /Smoke currently supports only --client codex/);
 
   // 6. doctor --smoke with non-codex client throws usage error
   const resWrongClient = await invoke(['doctor', '--client', 'kiro', '--smoke'], { env });

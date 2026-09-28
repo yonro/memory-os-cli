@@ -18,6 +18,8 @@ export const COMMAND_REGISTRY = Object.freeze([
   { command: 'memory.import', domain: 'memory', method: 'POST', path: '/v1/memories/import', scopes: ['memory:write'], availability: 'current', ...write },
   { command: 'memory.ledger-delete', domain: 'memory', method: 'POST', path: '/v1/skill/operations', scopes: ['memory:delete', 'ledger:read'], availability: 'current', ...write },
   { command: 'memory.expense-delete', domain: 'memory', method: 'POST', path: '/v1/skill/operations', scopes: ['memory:delete', 'ledger:read'], availability: 'current', ...write },
+  { command: 'memory.delete', domain: 'memory', method: 'POST', path: '/v1/memories/{memory_id}/forget', scopes: ['memory:write'], availability: 'current', ...write },
+  { command: 'memory.restore', domain: 'memory', method: 'POST', path: '/v1/memories/{memory_id}/restore', scopes: ['memory:write', 'memory:restore'], availability: 'current', ...write },
   {
     command: 'memory.add',
     domain: 'memory',

@@ -54,6 +54,8 @@ import {
   PINNED_OPENCLAW_SKILL_NAME,
   PINNED_OPENCLAW_SKILL_VERSION
 } from '../core/pins.js';
+import { knownMcpServerNames } from '../mcp/core/names.js';
+import { jsonMcpClientDefinition } from '../mcp/formats/json.js';
 
 export function writeDoctorHelp(io) {
   writeLine(io.stdout, 'Doctor commands:');
@@ -86,7 +88,7 @@ export async function doctorCommand(args, io) {
     return await doctorClient.doctor(args, io);
   }
   if (hasFlag(args, '--smoke')) {
-    throw new UsageError(`Smoke requires --client ${supportedDoctorClientIds()[0]} for this MCP-depth release.`);
+    throw new UsageError('Smoke currently supports only --client codex.');
   }
   if (hasFlag(args, '--fix')) throw new UsageError(`Local config repair requires --client <${supportedDoctorClientIds().join('|')}>.`);
   if (hasFlag(args, '--services')) return await serviceDoctor(args, io);
@@ -249,6 +251,44 @@ export function writeStatusHelp(io) {
   return 0;
 }
 
+function isClientMcpConfigured(client, text) {
+  const kind = client.mcp?.configKind ?? 'json';
+  const names = knownMcpServerNames();
+  if (kind === 'json') {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') {
+        const def = jsonMcpClientDefinition(client.id);
+        const sectionName = def?.section ?? 'mcpServers';
+        const section = parsed[sectionName] ?? parsed.mcpServers ?? parsed.servers;
+        if (section && typeof section === 'object') {
+          for (const name of names) {
+            if (name in section) return true;
+          }
+        }
+        if (Array.isArray(parsed.experimental?.modelContextProtocolServers)) {
+          if (parsed.experimental.modelContextProtocolServers.some((entry) => names.includes(entry?.name))) {
+            return true;
+          }
+        }
+      }
+    } catch {}
+    return false;
+  }
+  if (kind === 'toml') {
+    return names.some((name) => text.includes(`[mcp_servers.${name}]`));
+  }
+  if (kind === 'yaml') {
+    const lines = text.split(/\r?\n/);
+    const mcpIdx = lines.findIndex((l) => l.trim().startsWith('mcp_servers:'));
+    if (mcpIdx !== -1) {
+      return names.some((name) => lines.slice(mcpIdx).some((l) => l.trim().startsWith(`${name}:`)));
+    }
+    return false;
+  }
+  return false;
+}
+
 async function collectClientResources(client, io) {
   const resources = {};
 
@@ -261,7 +301,7 @@ async function collectClientResources(client, io) {
     try {
       if (configPath && (await fileExists(configPath))) {
         const text = await fs.readFile(configPath, 'utf8');
-        configured = text.includes(MCP_SERVER_NAME) || text.includes('XMemo') || text.includes('xmemo');
+        configured = isClientMcpConfigured(client, text);
       }
     } catch {}
     resources.mcp = {
@@ -275,13 +315,22 @@ async function collectClientResources(client, io) {
   if (pluginId) {
     const pluginEntry = getPlugin(pluginId);
     if (pluginEntry) {
-      const pStatus = await checkPluginStatus(pluginEntry, io);
-      resources.plugin = {
-        installed: pStatus.installed,
-        status: pStatus.installed ? 'installed' : 'not installed',
-        detail: pStatus.detail,
-        version: pStatus.version ?? null
-      };
+      if (pluginEntry.kind === 'mcp') {
+        resources.plugin = {
+          installed: resources.mcp ? resources.mcp.configured : false,
+          status: 'n/a (uses MCP)',
+          detail: 'uses MCP',
+          version: null
+        };
+      } else {
+        const pStatus = await checkPluginStatus(pluginEntry, io);
+        resources.plugin = {
+          installed: pStatus.installed,
+          status: pStatus.installed ? 'installed' : 'not installed',
+          detail: pStatus.detail,
+          version: pStatus.version ?? null
+        };
+      }
     } else {
       resources.plugin = {
         installed: false,
@@ -445,13 +494,17 @@ export async function statusCommand(args, io) {
         writeLine(io.stdout, `  MCP: ${c.resources.mcp.configured ? 'configured' : 'not configured'} (${c.resources.mcp.path ?? 'no config path'})`);
       }
       if (c.resources.plugin) {
-        const pStatus = c.resources.plugin.installed
-          ? 'installed'
-          : (c.resources.plugin.status === 'n/a' || c.resources.plugin.detail === 'n/a' ? 'n/a' : 'not installed');
-        const pDetail = c.resources.plugin.detail && c.resources.plugin.detail !== 'n/a' && c.resources.plugin.detail !== 'not installed'
-          ? ` (${c.resources.plugin.detail})`
-          : '';
-        writeLine(io.stdout, `  Plugin: ${pStatus}${pDetail}`);
+        if (c.resources.plugin.status === 'n/a (uses MCP)') {
+          writeLine(io.stdout, '  Plugin: n/a (uses MCP)');
+        } else {
+          const pStatus = c.resources.plugin.installed
+            ? 'installed'
+            : (c.resources.plugin.status === 'n/a' || c.resources.plugin.detail === 'n/a' ? 'n/a' : 'not installed');
+          const pDetail = c.resources.plugin.detail && c.resources.plugin.detail !== 'n/a' && c.resources.plugin.detail !== 'not installed'
+            ? ` (${c.resources.plugin.detail})`
+            : '';
+          writeLine(io.stdout, `  Plugin: ${pStatus}${pDetail}`);
+        }
       }
       if (c.resources.skill) {
         const vText = c.resources.skill.version ? ` ${c.resources.skill.version}` : '';
@@ -483,13 +536,12 @@ export async function smokeCommand(args, io) {
   const defaultClient = supportedDoctorClientIds()[0];
   const rawClient = optionValue(args, '--client');
   if (!rawClient) {
-    throw new UsageError(`Smoke requires --client ${defaultClient} for this MCP-depth release.`);
+    throw new UsageError('Smoke currently supports only --client codex.');
   }
   const clientId = resolveClientId(rawClient);
   const client = getClient(clientId);
   if (!client || !client.doctor || clientId !== defaultClient) {
-    const defaultLabel = getClient(defaultClient)?.label ?? 'Codex';
-    throw new UsageError(`Only ${defaultLabel} smoke checks are available in this MCP-depth release.`);
+    throw new UsageError('Smoke currently supports only --client codex.');
   }
 
   return await client.doctor(args, io);

@@ -303,7 +303,7 @@ test('CLI-08 Cloud Skill add probes only the create-only contract and never fall
   assert.equal(calls.length, 1);
   assert.equal(new URL(calls[0].url).pathname, '/v1/skills/create');
   assert.equal(envelope.error.code, 'SERVER_CONTRACT_REQUIRED');
-  assert.match(envelope.error.nextAction, /不.*回退/);
+  assert.match(envelope.error.nextAction, /will not fall back/i);
 });
 
 test('CLI-08 Cloud Skill update sends reviewed CAS revision and preserves omitted files by contract', async () => {

@@ -30,14 +30,14 @@ export async function serviceContext(args, io) {
           code: 'CREDENTIAL_ORIGIN_INVALID',
           httpStatus: 401,
           cause: error,
-          nextAction: '重新登录以替换无效的凭据 origin；CLI 不会发送该凭据。'
+          nextAction: 'Re-authenticate to replace the invalid credential origin; CLI will not send this credential.'
         });
       }
       if (new URL(normalizedStoredOrigin).origin !== new URL(baseUrl).origin) {
         throw new ServiceClientError('Stored credential is bound to a different service origin.', {
           code: 'CREDENTIAL_ORIGIN_MISMATCH',
           httpStatus: 401,
-          nextAction: '登录到目标服务 origin 后再重试；CLI 不会跨 origin 发送凭证。'
+          nextAction: 'Log in to the target service origin and retry; CLI will not send credentials across origins.'
         });
       }
     }
@@ -55,5 +55,5 @@ export async function serviceContext(args, io) {
     ...client,
     request: (request) => client.request({ ...request, ...(deadlineMs === undefined || request.deadlineMs !== undefined ? {} : { deadlineMs }) })
   });
-  return { client: deadlineClient, baseUrl: client.baseUrl, tokenSource: environmentToken ? 'environment' : 'credential-file', signal: io.signal };
+  return { client: deadlineClient, baseUrl: client.baseUrl, token, tokenSource: environmentToken ? 'environment' : 'credential-file', signal: io.signal };
 }

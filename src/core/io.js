@@ -14,7 +14,14 @@ export function defaultIo() {
 }
 
 export function writeLine(stream, line) {
-  stream.write(`${line}\n`);
+  try {
+    stream.write(`${line}\n`);
+  } catch (error) {
+    if (error?.code === 'EPIPE' || error?.errno === 'EPIPE') {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function readLineFromStdin(stdin) {
