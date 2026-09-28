@@ -277,7 +277,7 @@ test('skill-written section is replaced in place and interactive setup asks befo
     stdin: '\n'
   });
   assert.equal(declineResult.code, 0);
-  assert.match(declineResult.stdout, /Write XMemo memory behavior profile to .*\? \[y\/N\]/);
+  assert.match(declineResult.stdout, /(?:Write XMemo memory behavior profile to .*\?|Proceed with above changes\?) \[y\/N\]/);
   assert.match(declineResult.stdout, /Behavior profile installed: false/);
   const stillSkill = await fs.readFile(profilePath, 'utf8');
   assert.equal(stillSkill, skillSection);

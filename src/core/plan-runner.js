@@ -1,6 +1,6 @@
 import { hasFlag } from './args.js';
 import { UsageError } from './errors.js';
-import { writeLine } from './io.js';
+import { readLineFromStdin, writeLine } from './io.js';
 
 export class Plan {
   constructor(titleOrOptions = 'Execution Plan') {
@@ -160,37 +160,8 @@ export async function executePlan(plan, argsOrOptions = [], maybeIo) {
       return 0;
     }
 
-    if (io.stdin?.isTTY === false) {
-      throw new UsageError('Mutating command requires confirmation; re-run with --yes or --dry-run.');
-    }
-
     writeLine(io.stdout, 'Proceed with above changes? [y/N] ');
-    const answer = await new Promise((resolve) => {
-      let buffer = '';
-      const onData = (chunk) => {
-        buffer += String(chunk);
-        const nl = buffer.indexOf('\n');
-        if (nl !== -1) {
-          cleanup();
-          resolve(buffer.slice(0, nl).trim().toLowerCase());
-        }
-      };
-      const onEnd = () => {
-        cleanup();
-        resolve(buffer.trim().toLowerCase());
-      };
-      function cleanup() {
-        io.stdin?.off?.('data', onData);
-        io.stdin?.off?.('end', onEnd);
-      }
-      if (io.stdin && typeof io.stdin.on === 'function') {
-        io.stdin.on('data', onData);
-        io.stdin.on('end', onEnd);
-      } else {
-        resolve('no');
-      }
-    });
-
+    const answer = (await readLineFromStdin(io.stdin)).trim().toLowerCase();
     if (answer !== 'y' && answer !== 'yes') {
       writeLine(io.stdout, 'Operation cancelled.');
       return 0;

@@ -15,7 +15,44 @@ import {
   unregisterClient
 } from '../src/clients/registry.js';
 
-function createMockIo({ stdin = '', env = {}, cwd = process.cwd() } = {}) {
+function discoveryFetch() {
+  return async (url) => {
+    if (url.endsWith('/.well-known/memory-os.json')) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            service: 'memory-os',
+            urls: {
+              api_base: 'https://api.example.test',
+              mcp: 'https://mcp.example.test/mcp',
+              token_portal: 'https://console.example.test/tokens',
+              onboarding_status: 'https://api.example.test/v1/onboarding/status'
+            },
+            auth: {
+              token_env_var: 'XMEMO_KEY'
+            }
+          };
+        }
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          ready: true,
+          onboarding_complete: true,
+          account_ready: true,
+          mcp_ready: true
+        };
+      }
+    };
+  };
+}
+
+function createMockIo({ stdin = '', env = {}, cwd = process.cwd(), fetch = discoveryFetch() } = {}) {
   let stdout = '';
   let stderr = '';
   const listeners = {};
@@ -40,7 +77,8 @@ function createMockIo({ stdin = '', env = {}, cwd = process.cwd() } = {}) {
       }
     },
     env,
-    cwd
+    cwd,
+    fetch
   };
   return {
     io,
@@ -338,3 +376,163 @@ test('Principle 3: Plan runner executes steps sequentially, prompts [y/N] once, 
   assert.equal(emptyCode, 0);
   assert.match(getStdoutEmpty(), /Nothing to do \(all components are up to date\)/);
 });
+
+// -----------------------------------------------------------------------------
+// Reviewer Findings 1-5 End-to-End Verification Scenarios
+// -----------------------------------------------------------------------------
+
+test('Reviewer Finding 1: skill install target resolution uses calling-agent env when --client omitted', async () => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-target-'));
+  try {
+    const { io, getStdout } = createMockIo({
+      env: {
+        HOME: tmpHome,
+        USERPROFILE: tmpHome,
+        CLAUDECODE: '1'
+      },
+      cwd: tmpHome
+    });
+    const code = await run(['skill', 'install', '--dry-run', '--yes'], io);
+    assert.equal(code, 0);
+    const expectedSubpath = path.join('.claude', 'skills', 'xmemo-memory');
+    assert.ok(getStdout().includes(expectedSubpath), `Stdout should contain ${expectedSubpath}: ${getStdout()}`);
+  } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('Reviewer Finding 1: skill install target resolution detects single installed client when --client omitted', async () => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-detect-'));
+  try {
+    await fs.mkdir(path.join(tmpHome, '.codex'), { recursive: true });
+    const { io, getStdout } = createMockIo({
+      env: {
+        HOME: tmpHome,
+        USERPROFILE: tmpHome
+      },
+      cwd: tmpHome
+    });
+    const code = await run(['skill', 'install', '--dry-run', '--yes'], io);
+    assert.equal(code, 0);
+    const expectedSubpath = path.join('.codex', 'skills', 'xmemo-memory');
+    assert.ok(getStdout().includes(expectedSubpath), `Stdout should contain ${expectedSubpath}: ${getStdout()}`);
+  } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('Reviewer Finding 1: skill install with multiple detected clients fails cleanly asking for --client or --all', async () => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-multi-'));
+  try {
+    await fs.mkdir(path.join(tmpHome, '.codex'), { recursive: true });
+    await fs.mkdir(path.join(tmpHome, '.claude'), { recursive: true });
+    const { io, getStderr } = createMockIo({
+      env: {
+        HOME: tmpHome,
+        USERPROFILE: tmpHome
+      },
+      cwd: tmpHome
+    });
+    const code = await run(['skill', 'install', '--dry-run', '--yes'], io);
+    assert.equal(code, 2);
+    assert.match(getStderr(), /Multiple matching clients detected.*specify --client <id> or --all/);
+  } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('Reviewer Finding 1: skill install with no clients detected fails cleanly asking for --client <id> or --dir <path>', async () => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-none-'));
+  try {
+    const { io, getStderr } = createMockIo({
+      env: {
+        HOME: tmpHome,
+        USERPROFILE: tmpHome
+      },
+      cwd: tmpHome
+    });
+    const code = await run(['skill', 'install', '--dry-run', '--yes'], io);
+    assert.equal(code, 2);
+    assert.match(getStderr(), /No matching client detected; specify --client <id> \(or --dir <path>\)/);
+  } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true });
+  }
+});
+
+test('Reviewer Finding 2 & 3: setup cursor prompts once; cancel leaves files untouched; confirm writes; rerun is idempotent', async () => {
+  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-setup-home-'));
+  const tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-setup-ws-'));
+  try {
+    const mcpPath = path.join(tmpHome, '.cursor', 'mcp.json');
+    const profilePath = path.join(tmpHome, '.cursor', 'memory-profile.md');
+
+    // 1. Enter cancels and leaves all files untouched
+    const { io: ioCancel, getStdout: getStdoutCancel } = createMockIo({
+      stdin: '\n',
+      env: { HOME: tmpHome, USERPROFILE: tmpHome, APPDATA: tmpHome },
+      cwd: tmpWorkspace
+    });
+    const codeCancel = await run(['setup', 'cursor', '--url', 'https://api.example.test'], ioCancel);
+    assert.equal(codeCancel, 0);
+    assert.match(getStdoutCancel(), /Proceed with above changes\? \[y\/N\]/);
+    assert.match(getStdoutCancel(), /Operation cancelled\./);
+    assert.equal(await fs.access(mcpPath).then(() => true).catch(() => false), false);
+    assert.equal(await fs.access(profilePath).then(() => true).catch(() => false), false);
+
+    // 2. Setup with --yes writes both MCP and profile
+    const { io: ioApply, getStdout: getStdoutApply } = createMockIo({
+      env: { HOME: tmpHome, USERPROFILE: tmpHome, APPDATA: tmpHome },
+      cwd: tmpWorkspace
+    });
+    const codeApply = await run(['setup', 'cursor', '--url', 'https://api.example.test', '--yes'], ioApply);
+    assert.equal(codeApply, 0);
+    assert.match(getStdoutApply(), /Written: true/);
+    assert.match(getStdoutApply(), /Behavior profile installed: true/);
+    assert.equal(await fs.access(mcpPath).then(() => true).catch(() => false), true);
+    assert.equal(await fs.access(profilePath).then(() => true).catch(() => false), true);
+
+    // 3. Rerun setup with --yes is idempotent: reports Nothing to do and leaves config intact
+    const { io: ioRerun, getStdout: getStdoutRerun } = createMockIo({
+      env: { HOME: tmpHome, USERPROFILE: tmpHome, APPDATA: tmpHome },
+      cwd: tmpWorkspace
+    });
+    const codeRerun = await run(['setup', 'cursor', '--url', 'https://api.example.test', '--yes'], ioRerun);
+    assert.equal(codeRerun, 0);
+    assert.match(getStdoutRerun(), /Nothing to do \(all components are up to date\)/);
+  } finally {
+    await fs.rm(tmpHome, { recursive: true, force: true });
+    await fs.rm(tmpWorkspace, { recursive: true, force: true });
+  }
+});
+
+test('Reviewer Finding 4: setup openclaw defaults to plugin and skill; --no-skill skips skill', async () => {
+  const { io: ioDry, getStdout: getStdoutDry } = createMockIo();
+  const codeDry = await run(['setup', 'openclaw', '--url', 'https://api.example.test', '--dry-run'], ioDry);
+  assert.equal(codeDry, 0);
+  const outDry = getStdoutDry();
+  assert.match(outDry, /openclaw plugins install/);
+  assert.match(outDry, /openclaw skills install/);
+
+  const { io: ioNoSkill, getStdout: getStdoutNoSkill } = createMockIo();
+  const codeNoSkill = await run(['setup', 'openclaw', '--url', 'https://api.example.test', '--dry-run', '--no-skill'], ioNoSkill);
+  assert.equal(codeNoSkill, 0);
+  const outNoSkill = getStdoutNoSkill();
+  assert.match(outNoSkill, /openclaw plugins install/);
+  assert.doesNotMatch(outNoSkill, /openclaw skills install/);
+});
+
+test('Reviewer Finding 5: skill install --dry-run without npm on PATH produces plan and exits 0', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-no-npm-'));
+  try {
+    const { io, getStdout } = createMockIo({
+      env: { PATH: '' },
+      cwd: tmpDir
+    });
+    const code = await run(['skill', 'install', '--dir', tmpDir, '--dry-run'], io);
+    assert.equal(code, 0);
+    assert.match(getStdout(), /Would install XMemo Skill/);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+

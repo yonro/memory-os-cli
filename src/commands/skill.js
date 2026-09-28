@@ -21,6 +21,7 @@ import {
   supportedSkillClientIds,
   supportedSkillClients
 } from '../clients/registry.js';
+import { resolveTargetClients } from '../core/target-resolver.js';
 
 const DEFAULT_INSTALL_DIR = 'xmemo-skill';
 const STRICT_SEMVER_REGEX = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
@@ -238,15 +239,26 @@ export async function skillInstall(args, io) {
     throw new UsageError('Cannot specify both --project and --global.');
   }
 
-  const isClientInstall = Boolean(options.client || options.all);
-
-  // If not a client install (--client or --all), preserve Phase 5 directory install exactly
-  if (!isClientInstall) {
+  // Explicit directory path passed via --dir or offline source via --from
+  if (options.dir || options.from) {
     return await directorySkillInstall(options, cwd, io);
   }
 
-  // Client install flow
-  return await clientSkillInstall(options, cwd, io);
+  // Environment variable override for directory install when no client specified
+  if (!options.client && !options.all && io.env?.XMEMO_SKILL_DIR) {
+    return await directorySkillInstall({ ...options, dir: io.env.XMEMO_SKILL_DIR }, cwd, io);
+  }
+
+  // Target client resolution via target-resolver
+  const targetClients = await resolveTargetClients('skill', args, io, { allowAll: true, allowMultiple: true });
+  if (targetClients.length === 1) {
+    return await clientSkillInstall({ ...options, client: targetClients[0].id }, cwd, io);
+  }
+  if (targetClients.length > 1) {
+    return await clientSkillInstall({ ...options, client: null, all: true, resolvedClients: targetClients }, cwd, io);
+  }
+
+  throw new UsageError('No matching client detected; specify --client <id> (or --dir <path>).');
 }
 
 async function directorySkillInstall(options, cwd, io) {
@@ -288,7 +300,7 @@ async function directorySkillInstall(options, cwd, io) {
         command = process.execPath;
         cmdArgs = [fromInfo.binPath, ...installerArgs];
       } else {
-        const npmRunner = resolveNpmRunner();
+        const npmRunner = resolveNpmRunner(io.env);
         if (!npmRunner) {
           throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
         }
@@ -299,8 +311,23 @@ async function directorySkillInstall(options, cwd, io) {
       sourceType = 'npm';
       spec = options.version ?? PINNED_SKILL_VERSION;
       networkUsed = true;
-      const npmRunner = resolveNpmRunner();
+      const npmRunner = resolveNpmRunner(io.env);
       if (!npmRunner) {
+        if (options.dryRun) {
+          if (options.json) {
+            writeLine(io.stdout, JSON.stringify({
+              ok: true,
+              dryRun: true,
+              package: '@xmemo/skill',
+              spec,
+              target,
+              installed: false
+            }, null, 2));
+            return 0;
+          }
+          writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${target}`);
+          return 0;
+        }
         throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
       }
 
@@ -355,6 +382,21 @@ async function directorySkillInstall(options, cwd, io) {
       try {
         packResult = await executeSubprocess(npmRunner.command, packArgs, io, cleanEnv, cwd);
       } catch (error) {
+        if (options.dryRun) {
+          if (options.json) {
+            writeLine(io.stdout, JSON.stringify({
+              ok: true,
+              dryRun: true,
+              package: '@xmemo/skill',
+              spec,
+              target,
+              installed: false
+            }, null, 2));
+            return 0;
+          }
+          writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${target}`);
+          return 0;
+        }
         if (error?.code === 'ENOENT') {
           throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
         }
@@ -405,6 +447,21 @@ async function directorySkillInstall(options, cwd, io) {
     try {
       result = await executeSubprocess(command, cmdArgs, io, cleanEnv, cwd);
     } catch (error) {
+      if (options.dryRun) {
+        if (options.json) {
+          writeLine(io.stdout, JSON.stringify({
+            ok: true,
+            dryRun: true,
+            package: '@xmemo/skill',
+            spec,
+            target,
+            installed: false
+          }, null, 2));
+          return 0;
+        }
+        writeLine(io.stdout, `Would install XMemo Skill ${spec} to ${target}`);
+        return 0;
+      }
       if (error?.code === 'ENOENT') {
         throw new UsageError('npm is not installed or not available on PATH. Use --from <dir|tgz> to install offline.');
       }
@@ -586,14 +643,15 @@ async function clientSkillInstall(options, cwd, io) {
       target: resolvedTarget,
       project: options.project
     });
-  } else if (options.all) {
-    for (const client of supportedSkillClients()) {
-      const clientObj = getClient(client.id);
+  } else if (options.all || options.resolvedClients) {
+    const candidateList = options.resolvedClients ?? supportedSkillClients();
+    for (const client of candidateList) {
+      const clientObj = getClient(client.id) || client;
       if (clientObj?.skill?.kind === 'native') {
         continue;
       }
       const det = await clientObj.detect(io.env, { cwd });
-      if (det?.detected) {
+      if (det?.detected || options.resolvedClients) {
         targets.push({
           client: clientObj,
           target: path.resolve(clientObj.skillDir(io.env, { project: false, cwd })),
@@ -622,7 +680,7 @@ async function clientSkillInstall(options, cwd, io) {
     if (stat) {
       t.exists = true;
       t.existingVersion = await extractSkillVersionFromDirectory(t.target);
-      if (!options.force) {
+      if (!options.force && !options.dryRun) {
         throw new UsageError(`Skill destination already exists: ${t.target} (version: ${t.existingVersion ?? 'unknown'}). Use --force to replace.`);
       }
     } else {
@@ -963,7 +1021,13 @@ export async function skillRemove(args, io) {
     throw new UsageError(`Unexpected arguments for skill remove: ${positionals.join(', ')}.`);
   }
 
-  const rawClient = optionValue(args, '--client');
+  let rawClient = optionValue(args, '--client');
+  if (!rawClient) {
+    const resolved = await resolveTargetClients('skill', args, io, { allowMultiple: false }).catch(() => null);
+    if (resolved && resolved[0]) {
+      rawClient = resolved[0].id;
+    }
+  }
   if (!rawClient) {
     throw new UsageError('skill remove requires --client <id>.');
   }
@@ -1281,9 +1345,13 @@ function sanitizeEnv(baseEnv) {
   return env;
 }
 
-function resolveNpmRunner() {
+function resolveNpmRunner(env = process.env) {
+  const pathVal = env?.PATH ?? env?.Path;
+  if (pathVal === '') {
+    return null;
+  }
   if (process.platform === 'win32') {
-    const execPath = process.env.npm_execpath;
+    const execPath = env?.npm_execpath ?? process.env.npm_execpath;
     if (execPath && (execPath.endsWith('npm-cli.js') || execPath.endsWith('npm-cli.mjs')) && fsSync.existsSync(execPath)) {
       return { command: process.execPath, prefixArgs: [execPath] };
     }
@@ -1291,8 +1359,9 @@ function resolveNpmRunner() {
     if (fsSync.existsSync(standardNpmCli)) {
       return { command: process.execPath, prefixArgs: [standardNpmCli] };
     }
-    const appDataNpmCli = process.env.APPDATA
-      ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    const appData = env?.APPDATA ?? process.env.APPDATA;
+    const appDataNpmCli = appData
+      ? path.join(appData, 'npm', 'node_modules', 'npm', 'bin', 'npm-cli.js')
       : null;
     if (appDataNpmCli && fsSync.existsSync(appDataNpmCli)) {
       return { command: process.execPath, prefixArgs: [appDataNpmCli] };

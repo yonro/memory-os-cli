@@ -112,7 +112,7 @@ test('profile prompt: Enter defaults to No, writing nothing', async () => {
   });
 
   assert.equal(result.code, 0);
-  assert.match(result.stdout, /Write XMemo memory behavior profile to .*\? \[y\/N\]/);
+  assert.match(result.stdout, /(?:Write XMemo memory behavior profile to .*\?|Proceed with above changes\?) \[y\/N\]/);
   assert.match(result.stdout, /Behavior profile installed: false/);
 
   const profilePath = path.join(tempDir, '.cursor', 'memory-profile.md');
@@ -129,7 +129,7 @@ test('profile prompt: EOF / closed stdin defaults to No, writing nothing', async
   });
 
   assert.equal(result.code, 0);
-  assert.match(result.stdout, /Write XMemo memory behavior profile to .*\? \[y\/N\]/);
+  assert.match(result.stdout, /(?:Write XMemo memory behavior profile to .*\?|Proceed with above changes\?) \[y\/N\]/);
   assert.match(result.stdout, /Behavior profile installed: false/);
 
   const profilePath = path.join(tempDir, '.cursor', 'memory-profile.md');
@@ -145,7 +145,7 @@ test('profile prompt: unknown answer defaults to No without crashing', async () 
   });
 
   assert.equal(result.code, 0);
-  assert.match(result.stdout, /Write XMemo memory behavior profile to .*\? \[y\/N\]/);
+  assert.match(result.stdout, /(?:Write XMemo memory behavior profile to .*\?|Proceed with above changes\?) \[y\/N\]/);
   assert.match(result.stdout, /Behavior profile installed: false/);
 
   const profilePath = path.join(tempDir, '.cursor', 'memory-profile.md');

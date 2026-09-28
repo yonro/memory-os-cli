@@ -135,7 +135,10 @@ export function writeSetupSummary(plan, io) {
       writeLine(io.stdout, `  Setup mode: ${plan.selectedClient.setupMode}`);
       writeLine(io.stdout, `  Plugin: ${plan.selectedClient.nativePlugin.package}`);
       writeLine(io.stdout, `  Plugin installed: ${plan.selectedClient.nativePlugin.installed}`);
-      writeLine(io.stdout, `  Skill: ${COMMAND_NAME} skill install --client openclaw`);
+      if (!plan.selectedClient.skill.skipped) {
+        writeLine(io.stdout, `  Skill: ${plan.selectedClient.skill.ref}`);
+        writeLine(io.stdout, `  Skill installed: ${plan.selectedClient.skill.installed}`);
+      }
       writeLine(io.stdout, `  Credential source: ${plan.selectedClient.status?.credentialSource ?? plan.selectedClient.credential.source}`);
       writeLine(io.stdout, `  Connected: ${plan.selectedClient.status?.connected ?? 'unknown'}`);
       writeLine(io.stdout, `  Hosted MCP fallback: ${plan.selectedClient.mcp.enabled ? 'enabled' : 'not installed'}`);
@@ -148,7 +151,12 @@ export function writeSetupSummary(plan, io) {
       }
       if (plan.selectedClient.dryRun) {
         writeLine(io.stdout, '  Dry run commands:');
-        writeLine(io.stdout, `    ${plan.selectedClient.nativePlugin.command}`);
+        if (!plan.selectedClient.nativePlugin.skipped) {
+          writeLine(io.stdout, `    ${plan.selectedClient.nativePlugin.command}`);
+        }
+        if (!plan.selectedClient.skill.skipped) {
+          writeLine(io.stdout, `    ${plan.selectedClient.skill.command}`);
+        }
         if (plan.selectedClient.mcp.enabled) {
           writeLine(io.stdout, `    ${plan.selectedClient.mcp.command}`);
         }

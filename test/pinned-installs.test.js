@@ -12,6 +12,9 @@ import { run } from '../src/cli.js';
 import {
   PINNED_OPENCLAW_PLUGIN_VERSION,
   PINNED_OPENCLAW_PLUGIN_SPEC,
+  PINNED_OPENCLAW_SKILL_VERSION,
+  PINNED_OPENCLAW_SKILL_NAME,
+  PINNED_OPENCLAW_SKILL_SPEC,
   PINNED_HERMES_PLUGIN_VERSION,
   PINNED_SKILL_VERSION,
   PINNED_SKILL_INTEGRITY
@@ -33,7 +36,11 @@ async function invoke(args, options = {}) {
     stdin.isTTY = options.isTTY;
   }
 
-  const code = await run(args, {
+  const effectiveArgs = (args[0] === 'skill' && args[1] === 'install' && !args.includes('--client') && !args.includes('--dir') && !args.includes('--target') && !args.includes('--from') && !args.includes('-h') && !args.includes('--help'))
+    ? [...args, '--dir', 'xmemo-skill']
+    : args;
+
+  const code = await run(effectiveArgs, {
     env: options.env !== undefined ? options.env : process.env,
     stdin,
     stdout: { write: (chunk) => { stdout += chunk; } },
@@ -240,9 +247,11 @@ test('setup openclaw: prints exact command before running, respects --force, and
     });
     assert.equal(realRes.code, 0);
     assert.match(realRes.stdout, new RegExp(`Running: openclaw plugins install ${PINNED_OPENCLAW_PLUGIN_SPEC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-    assert.match(realRes.stdout, /Skill: xmemo skill install --client openclaw/);
+    assert.match(realRes.stdout, new RegExp(`Running: openclaw skills install ${PINNED_OPENCLAW_SKILL_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} --version ${PINNED_OPENCLAW_SKILL_VERSION}`));
+    assert.match(realRes.stdout, new RegExp(`Skill: ${PINNED_OPENCLAW_SKILL_NAME}`));
     assert.deepEqual(realCalls.map((c) => c.args), [
       ['plugins', 'install', PINNED_OPENCLAW_PLUGIN_SPEC],
+      ['skills', 'install', PINNED_OPENCLAW_SKILL_NAME, '--version', PINNED_OPENCLAW_SKILL_VERSION],
       ['xmemo', 'status', '--json']
     ]);
 
@@ -259,6 +268,7 @@ test('setup openclaw: prints exact command before running, respects --force, and
     assert.match(forceRes.stdout, new RegExp(`Running: openclaw plugins install ${PINNED_OPENCLAW_PLUGIN_SPEC.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} --force`));
     assert.deepEqual(forceCalls.map((c) => c.args), [
       ['plugins', 'install', PINNED_OPENCLAW_PLUGIN_SPEC, '--force'],
+      ['skills', 'install', PINNED_OPENCLAW_SKILL_NAME, '--version', PINNED_OPENCLAW_SKILL_VERSION, '--force'],
       ['xmemo', 'status', '--json']
     ]);
   } finally {
@@ -468,7 +478,8 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
 
     assert.equal(resAlready.code, 0, `Expected exit code 0, got ${resAlready.code}`);
     assert.match(resAlready.stdout, /OpenClaw plugin is already installed\. Use --force to reinstall\./);
-    assert.match(resAlready.stdout, /Skill: xmemo skill install --client openclaw/);
+    assert.match(resAlready.stdout, /OpenClaw skill is already installed\. Use --force to reinstall\./);
+    assert.match(resAlready.stdout, new RegExp(`Skill: ${PINNED_OPENCLAW_SKILL_NAME}`));
 
     // 2. In --json mode: returns alreadyInstalled: true
     const jsonCalls = [];
@@ -484,6 +495,9 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
           if (args[0] === 'plugins' && args[1] === 'install') {
             child.stderr.emit('data', 'Error: plugin already installed\n');
             child.emit('close', 1);
+          } else if (args[0] === 'skills' && args[1] === 'install') {
+            child.stderr.emit('data', 'Error: skill already installed\n');
+            child.emit('close', 1);
           } else if (args[0] === 'xmemo' && args[1] === 'status') {
             child.stdout.emit('data', JSON.stringify({ configured: true, connected: true }));
             child.emit('close', 0);
@@ -498,8 +512,8 @@ test('setup openclaw: handles already installed plugin/skill gracefully and resp
     const plan = JSON.parse(resJson.stdout);
     assert.equal(plan.selectedClient.nativePlugin.alreadyInstalled, true);
     assert.equal(plan.selectedClient.nativePlugin.installed, false);
-    assert.equal(plan.selectedClient.skill.command, 'xmemo skill install --client openclaw');
-    assert.equal(plan.selectedClient.skill.installed, false);
+    assert.match(plan.selectedClient.skill.command, /openclaw skills install/);
+    assert.equal(plan.selectedClient.skill.alreadyInstalled, true);
 
     // 3. With --force: passes --force flag to reinstall
     const forceCalls = [];

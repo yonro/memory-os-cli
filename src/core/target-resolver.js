@@ -1,6 +1,6 @@
 import { hasFlag, optionValue } from './args.js';
 import { UsageError } from './errors.js';
-import { writeLine } from './io.js';
+import { readLineFromStdin, writeLine } from './io.js';
 import {
   CLIENT_REGISTRY,
   getClient,
@@ -78,37 +78,12 @@ async function promptSelectClient(clients, io) {
   });
   writeLine(io.stdout, `Select a client to configure [1-${clients.length}, or Enter to cancel]: `);
 
-  return await new Promise((resolve) => {
-    let buffer = '';
-    const onData = (chunk) => {
-      buffer += String(chunk);
-      const nl = buffer.indexOf('\n');
-      if (nl !== -1) {
-        cleanup();
-        const line = buffer.slice(0, nl).trim();
-        const num = parseInt(line, 10);
-        if (!isNaN(num) && num >= 1 && num <= clients.length) {
-          resolve(clients[num - 1]);
-        } else {
-          resolve(null);
-        }
-      }
-    };
-    const onEnd = () => {
-      cleanup();
-      resolve(null);
-    };
-    function cleanup() {
-      io.stdin?.off?.('data', onData);
-      io.stdin?.off?.('end', onEnd);
-    }
-    if (io.stdin && typeof io.stdin.on === 'function') {
-      io.stdin.on('data', onData);
-      io.stdin.on('end', onEnd);
-    } else {
-      resolve(null);
-    }
-  });
+  const line = (await readLineFromStdin(io.stdin)).trim();
+  const num = parseInt(line, 10);
+  if (!isNaN(num) && num >= 1 && num <= clients.length) {
+    return clients[num - 1];
+  }
+  return null;
 }
 
 export async function resolveTargetClients(resource, args, io, options = {}) {
@@ -152,7 +127,8 @@ export async function resolveTargetClients(resource, args, io, options = {}) {
         throw new UsageError(`Unknown client: "${raw}". Supported clients: ${supported}.`);
       }
       if (!clientSupportsResource(client, resource)) {
-        throw new UsageError(`Client "${client.label}" does not support ${resource}.`);
+        const resLabel = resource === 'skill' ? 'skill installation' : resource;
+        throw new UsageError(`Client "${client.label}" does not support ${resLabel}.`);
       }
       if (!resolved.some((c) => c.id === client.id)) {
         resolved.push(client);
