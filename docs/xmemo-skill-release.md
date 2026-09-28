@@ -313,3 +313,39 @@ After publication, npm records a Sigstore-signed attestation linking the publish
 
 The CLI command `xmemo skill install` delegates installation to the `@xmemo/skill` npm package via `npm exec --yes --package @xmemo/skill@<spec> -- xmemo-skill install ...` (`latest` or validated `--version <semver>`). In air-gapped or offline environments, `--from <dir|tgz>` allows installing from a locally built package directory or an `npm pack` tarball with zero network access and no token transmission.
 
+---
+
+## 8. Standalone HTTPS Skill Installers (`install.sh` & `install.ps1`)
+
+The standalone installer scripts are hosted at `https://xmemo.dev/skill/install` (served from `skills/install.sh`) and `https://xmemo.dev/skill/install.ps1` (served from `skills/install.ps1`). They allow installing the verified XMemo skill on systems with only `curl` and `tar` (or PowerShell and `tar.exe`), requiring no Node.js package manager beforehand.
+
+### Storage & Repository Boundaries
+- **Outside Published Skill Root**: The installer scripts reside in `skills/` at the repository root and are strictly excluded from `skills/xmemo/` (the published skill payload). This prevents recursive packaging and ensures consumer archives only include skill execution code.
+- **POSIX sh Compliance**: `skills/install.sh` is strictly written in portable POSIX `sh` (zero bashisms).
+- **Security & HTTPS Requirement**: Both scripts require HTTPS URLs (`https://xmemo.dev/v1/skill/package`), enforce redirect validation, require zero `sudo` / root privileges, and handle zero secret tokens or authorization headers.
+
+### Target Resolution Precedence (First Match Wins)
+1. **Rule a (`XMEMO_SKILL_DIR`)**: Explicit destination directory override.
+2. **Rule b (`XMEMO_SKILL_AGENT`)**: Explicit agent target (`claude-code` or `codex`).
+   - `claude-code`: Installs to `${HOME}/.claude/skills/xmemo-memory`.
+   - `codex`: Installs to `${CODEX_HOME:-$HOME/.codex}/skills/xmemo-memory`.
+   - `openclaw`: Does not write into OpenClaw directories; outputs `For OpenClaw run: openclaw skills install xmemo` to stderr and exits with code 1.
+3. **Rule c (Auto-Detection)**: Detects active agent from documented environment variables:
+   - Claude Code: `CLAUDECODE=1` (or non-empty `CLAUDECODE`).
+   - Codex: `CODEX_THREAD_ID`, `CODEX_SESSION_ID` (automatically injected by Codex CLI into executed commands), or `CODEX_HOME`.
+4. **Rule d (Single Home Directory)**: If exactly one of `${HOME}/.claude` or `${HOME}/.codex` exists on the filesystem, installs to that agent.
+5. **Rule e (Fallback)**: Defaults to `./xmemo-skill` in current working directory and prints a warning on stderr explaining that AI agents will not automatically discover skills from arbitrary directories, with instructions on how to target an agent.
+
+### Overwrite Protection & Backup Mechanism
+- If the target folder already exists, installation aborts with exit code 1 unless `XMEMO_SKILL_FORCE=1` is provided.
+- When `XMEMO_SKILL_FORCE=1` is set, the existing folder is moved to `~/.xmemo/backups/skills/<agent>/<name>-<timestamp>`. Backups are never kept inside an agent's skills directory to prevent agents from loading stale backup copies.
+
+### Post-Install Output
+After extraction and verification, the installer outputs:
+- The absolute installation directory path.
+- The diagnostic doctor command: `node <abs_path>/scripts/xmemo-skill.mjs doctor --anonymous`.
+- An actionable restart prompt: `Restart or reload your agent to pick up the skill.`.
+
+### Testing & Pure Resolution Mode
+Setting `XMEMO_SKILL_RESOLVE_ONLY=1` runs only the target resolution logic, prints the resolved path to stdout (and any warning to stderr), and exits 0 without network requests, enabling fast, isolated unit and integration testing.
+

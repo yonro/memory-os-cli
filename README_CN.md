@@ -272,6 +272,39 @@ xmemo skill remove --client claude-code --project --yes
 xmemo skill install --client codex --dry-run
 ```
 
+#### 独立 curl 与 PowerShell 安装脚本
+
+对于尚未安装 Node.js 或 `@xmemo/client` 的轻量运行环境，XMemo 提供了开箱即用的独立 HTTPS 安装脚本：`https://xmemo.dev/skill/install` (POSIX `sh`) 与 `https://xmemo.dev/skill/install.ps1` (PowerShell)。
+
+安装脚本具备**智能体感知**能力，能够自动根据调用环境将技能安装到对应智能体的目录中：
+
+```bash
+# Claude Code: 安装至 ~/.claude/skills/xmemo-memory
+curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
+
+# Codex: 安装至 ${CODEX_HOME:-$HOME/.codex}/skills/xmemo-memory
+curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
+
+# OpenClaw: 建议通过 OpenClaw 官方 CLI 安装
+openclaw skills install xmemo
+
+# Windows (PowerShell):
+# $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
+# $env:XMEMO_SKILL_AGENT="codex"; irm https://xmemo.dev/skill/install.ps1 | iex
+```
+
+**目标解析优先级（命中首项生效）**：
+1. `XMEMO_SKILL_DIR`：安装至指定的显式目录。
+2. `XMEMO_SKILL_AGENT=claude-code|codex`：显式指定智能体安装目标（`openclaw` 会输出指引并提示运行 `openclaw skills install xmemo`）。
+3. **环境自动感知**：自动检测当前会话环境环境变量（Claude Code: `CLAUDECODE=1`；Codex: `CODEX_THREAD_ID`、`CODEX_SESSION_ID` 或 `CODEX_HOME`）。
+4. **单智能体目录推断**：若 HOME 目录下仅存在 `~/.claude` 或仅存在 `~/.codex`，则自动安装至对应智能体。
+5. **安全兜底**：安装至当前目录 `./xmemo-skill`，并在标准错误流输出告警，提醒用户智能体不会从任意工作区自动载入该技能。
+
+**安全覆盖与备份机制**：
+- 目标目录已存在时默认拒绝覆盖，除非传入 `XMEMO_SKILL_FORCE=1`。
+- 覆盖安装时，旧目录会自动移动至 `~/.xmemo/backups/skills/<agent>/<name>-<timestamp>` 进行归档备份（严禁备份在智能体技能搜索目录内，避免被误载）。
+- 安装完成后自动输出绝对安装路径、健康诊断命令 (`node <path>/scripts/xmemo-skill.mjs doctor --anonymous`) 以及重启智能体的生效提示。
+
 ### 智能体插件
 
 CLI 随 `@xmemo/client` 内置了经过官方验证的静态插件索引，每个插件条目均明确固定了发布版本、Release Tag 以及发布时刻解析的准确 Git Commit SHA。

@@ -294,6 +294,39 @@ xmemo skill remove --client claude-code --project --yes
 xmemo skill install --client codex --dry-run
 ```
 
+#### Standalone curl & PowerShell installers
+
+For environments without Node.js or `@xmemo/client`, XMemo provides standalone HTTPS installers at `https://xmemo.dev/skill/install` (POSIX `sh`) and `https://xmemo.dev/skill/install.ps1` (PowerShell).
+
+The installer is **agent-aware** and automatically resolves the correct target directory for your active agent:
+
+```bash
+# Claude Code: installs to ~/.claude/skills/xmemo-memory
+curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
+
+# Codex: installs to ${CODEX_HOME:-$HOME/.codex}/skills/xmemo-memory
+curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
+
+# OpenClaw: install via OpenClaw CLI
+openclaw skills install xmemo
+
+# Windows (PowerShell):
+# $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
+# $env:XMEMO_SKILL_AGENT="codex"; irm https://xmemo.dev/skill/install.ps1 | iex
+```
+
+**Target resolution precedence (first match wins)**:
+1. `XMEMO_SKILL_DIR`: Installs to the specified directory.
+2. `XMEMO_SKILL_AGENT=claude-code|codex`: Installs to the explicit agent's skills directory (`openclaw` redirects to `openclaw skills install xmemo`).
+3. **Auto-detection**: Automatically detects Claude Code (`CLAUDECODE=1`) or Codex (`CODEX_THREAD_ID`, `CODEX_SESSION_ID`, or `CODEX_HOME`).
+4. **Home directory discovery**: If only `~/.claude` or only `~/.codex` exists in HOME, selects that agent.
+5. **Fallback**: Installs to `./xmemo-skill` with a warning on stderr explaining that AI agents will not automatically load the skill from this directory.
+
+**Safety & Replacement**:
+- Refuses to overwrite existing installations unless `XMEMO_SKILL_FORCE=1` is provided.
+- When replacing, moves the previous installation to `~/.xmemo/backups/skills/<agent>/<name>-<timestamp>` (safely outside agent skill search paths).
+- After installation, prints the absolute install path, the verification doctor command (`node <path>/scripts/xmemo-skill.mjs doctor --anonymous`), and a prompt to reload your agent.
+
 ### Agent plugins
 
 The CLI provides a curated, static index of verified agent plugins shipped directly in `@xmemo/client`. Each entry contains a pinned version, release tag, and exact Git commit SHA resolved at release time.
