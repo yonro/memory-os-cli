@@ -8,6 +8,7 @@ import { serviceContext } from '../api/service-context.js';
 import { writeHumanServiceHelp, writeServiceHelpSchema } from '../api/contracts/help-schema.js';
 import { writeHumanServiceFailure, writeHumanServiceResult } from '../api/service-output.js';
 import { confirmRemoteAction } from '../api/confirmation.js';
+import { processDocumentStubs } from '../api/document-stub.js';
 import { memoryTransfer, prepareMemoryTransfer } from './memory-transfer.js';
 
 export async function memoryCommand(args, io) {
@@ -17,7 +18,7 @@ export async function memoryCommand(args, io) {
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `memory.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Memory commands:');
     writeLine(io.stdout, '  xmemo memory add --content <text> --path <path> [--bucket <name>] [--json]');
-    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--json]');
+    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--json]');
     writeLine(io.stdout, '  xmemo memory read <memory-id> [--team <id>] [--json]');
     writeLine(io.stdout, '  xmemo memory list [--path-prefix <literal-prefix>] [--limit <n>] [--offset <n>]');
     writeLine(io.stdout, '  xmemo memory import --file <jsonl> [--dry-run | --idempotency-key <key> --yes]');
@@ -42,7 +43,7 @@ export async function contextCommand(args, io) {
     if (subcommand !== 'help' && hasFlag(args, '--json') && writeServiceHelpSchema(io, `context.${subcommand}`)) return 0;
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `context.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Context commands:');
-    writeLine(io.stdout, '  xmemo context recall <query> [--max-tokens <n>] [--max-items <n>] [--include-knowledge] [--json]');
+    writeLine(io.stdout, '  xmemo context recall <query> [--max-tokens <n>] [--max-items <n>] [--include-knowledge] [--expand-documents] [--json]');
     return 0;
   }
   if (subcommand === 'recall') return await runServiceCommand('context.recall', args.slice(1), io, contextRecall, validateContextRecall);
@@ -101,8 +102,11 @@ async function memoryAdd(args, io, context) {
     throw new UnknownOutcomeError('Memory write returned without a confirmed memory ID.', {
       code: 'WRITE_RECEIPT_MISSING',
       data: { status: response.status },
-      nextAction: '核对服务端是否已创建记忆；不要自动重试该写入。'
+      nextAction: 'Check whether the memory was created on the server; do not automatically retry this write.'
     });
+  }
+  if (result && typeof result === 'object' && !result.path && !result.memory_path) {
+    result.path = body.path;
   }
   return response;
 }
@@ -133,27 +137,35 @@ async function validateMemoryRead(args, io) {
 }
 
 async function memorySearch(args, io, context) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working']], args);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents']);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents']], args);
   const queryArg = singlePositional(args, 'memory search');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('memory search requires a query.');
   const rawLimit = optionValue(args, '--limit') ?? input?.limit;
-  const data = await context.client.request({
+  const response = await context.client.request({
     method: 'GET', path: '/api/v1/recall', retry: 'bounded', sideEffect: false,
     query: compact({ query, limit: rawLimit === undefined || rawLimit === null ? undefined : parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 }), team_id: optionValue(args, '--team') ?? input?.team_id, bucket: optionValue(args, '--bucket') ?? input?.bucket, path: optionValue(args, '--path') ?? input?.path, prefer_working: hasFlag(args, '--prefer-working') ? true : optionalBooleanInput(input, 'prefer_working') })
   });
-  return data;
+  const data = response?.data ?? response;
+  const items = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+  const expandDocuments = hasFlag(args, '--expand-documents') || optionalBooleanInput(input, 'expand_documents') === true;
+  await processDocumentStubs(items, {
+    expandDocuments,
+    client: context.client,
+    teamId: optionValue(args, '--team') ?? input?.team_id
+  });
+  return response;
 }
 
 async function validateMemorySearch(args, io) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working']], args);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents']);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents']], args);
   const queryArg = singlePositional(args, 'memory search');
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
@@ -161,40 +173,71 @@ async function validateMemorySearch(args, io) {
   const rawLimit = optionValue(args, '--limit') ?? input?.limit;
   if (rawLimit !== undefined && rawLimit !== null) parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 });
   optionalBooleanInput(input, 'prefer_working');
+  optionalBooleanInput(input, 'expand_documents');
 }
 
 async function contextRecall(args, io, context) {
-  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items']], args);
+  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents']);
+  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents']], args);
   const queryArg = singlePositional(args, 'context recall');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Context query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('context recall requires a query.');
+  const includeKnowledge = hasFlag(args, '--include-knowledge') ? true : optionalBooleanInput(input, 'include_knowledge');
   const body = compact({
     ...input,
     query,
-    include_knowledge: hasFlag(args, '--include-knowledge') ? true : optionalBooleanInput(input, 'include_knowledge'),
+    include_knowledge: includeKnowledge,
     max_tokens: optionalRange(optionValue(args, '--max-tokens') ?? input?.max_tokens, '--max-tokens', 1, 100000),
     max_items: optionalRange(optionValue(args, '--max-items') ?? input?.max_items, '--max-items', 1, 500),
     prefer_working: optionalBooleanInput(input, 'prefer_working'),
     team_id: optionValue(args, '--team') ?? input?.team_id
   });
-  return await context.client.request({ method: 'POST', path: '/api/v1/recall/context', body, sideEffect: false, retry: 'bounded' });
+  delete body.expand_documents;
+  const response = await context.client.request({ method: 'POST', path: '/api/v1/recall/context', body, sideEffect: false, retry: 'bounded' });
+  const data = response?.data ?? response;
+  const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.memories) ? data.memories : [];
+  const expandDocuments = hasFlag(args, '--expand-documents') || optionalBooleanInput(input, 'expand_documents') === true;
+  await processDocumentStubs(items, {
+    expandDocuments,
+    client: context.client,
+    teamId: optionValue(args, '--team') ?? input?.team_id
+  });
+  if (includeKnowledge) {
+    const knowledgeSkipped = Boolean(
+      data?.knowledge_skipped ||
+      data?.knowledge_items_skipped ||
+      data?.coverage?.knowledge === false ||
+      data?.knowledge_error ||
+      data?.knowledge_status === 'skipped' ||
+      (Array.isArray(data?.skipped_sources) && data.skipped_sources.includes('knowledge')) ||
+      (Array.isArray(data?.warnings) && data.warnings.some((w) => /knowledge/i.test(w)))
+    );
+    if (knowledgeSkipped) {
+      response.meta = response.meta ?? {};
+      response.meta.warnings = response.meta.warnings ?? [];
+      if (!response.meta.warnings.some((w) => /knowledge/i.test(w))) {
+        response.meta.warnings.push('Knowledge search was skipped (requires knowledge:read scope).');
+      }
+    }
+  }
+  return response;
 }
 
 async function validateContextRecall(args, io) {
-  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working']);
-  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items']], args);
+  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents']);
+  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents']], args);
   const queryArg = singlePositional(args, 'context recall');
   if (queryArg && input?.query !== undefined) throw new UsageError('Context query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('context recall requires a query.');
   optionalBooleanInput(input, 'include_knowledge');
   optionalBooleanInput(input, 'prefer_working');
+  optionalBooleanInput(input, 'expand_documents');
   optionalRange(optionValue(args, '--max-tokens') ?? input?.max_tokens, '--max-tokens', 1, 100000);
   optionalRange(optionValue(args, '--max-items') ?? input?.max_items, '--max-items', 1, 500);
 }
@@ -290,7 +333,7 @@ async function restartRestore(args, io, context) {
   if (input?.restore_state !== undefined || input?.record_restore_event !== undefined) throw new UsageError('Use --preview or --apply to select restore intent; restore_state and record_restore_event are no longer accepted from --input.');
   if (apply) await confirmRemoteAction(args, io, 'Apply this restart snapshot and record the restore event?');
   const body = compact({ ...input, snapshot_id: optionValue(args, '--snapshot-id') ?? input?.snapshot_id, state_key: optionValue(args, '--state-key') ?? input?.state_key, bucket: optionValue(args, '--bucket') ?? input?.bucket, scope: optionValue(args, '--scope') ?? input?.scope, restore_state: apply, record_restore_event: apply, ttl_seconds: optionalRange(input?.ttl_seconds, 'ttl_seconds', 0, 604800) });
-  if (!body.snapshot_id && !body.source_session_id && !body.state_key) throw new UsageError('restart restore requires --snapshot-id, source_session_id, or state_key.');
+  if (!body.snapshot_id && !body.source_session_id && !body.state_key) throw new UsageError('restart restore requires --snapshot-id <id> or --state-key <key>.');
   return await context.client.request({ method: 'POST', path: '/api/v1/restart/restore', body, sideEffect: apply, retry: preview ? 'bounded' : 'none' });
 }
 
@@ -302,7 +345,7 @@ async function validateRestartRestore(args, io) {
   if (hasFlag(args, '--preview') === hasFlag(args, '--apply')) throw new UsageError('restart restore requires exactly one of --preview or --apply.');
   if (input?.restore_state !== undefined || input?.record_restore_event !== undefined) throw new UsageError('Use --preview or --apply to select restore intent; restore_state and record_restore_event are no longer accepted from --input.');
   if (!(optionValue(args, '--snapshot-id') ?? input?.snapshot_id ?? input?.source_session_id ?? optionValue(args, '--state-key') ?? input?.state_key)) {
-    throw new UsageError('restart restore requires --snapshot-id, source_session_id, or state_key.');
+    throw new UsageError('restart restore requires --snapshot-id <id> or --state-key <key>.');
   }
 }
 

@@ -13,11 +13,21 @@ All notable changes to the XMemo CLI client will be documented in this file.
   - **Dynamic Registry Extension**: Support for dynamic runtime client registration (`registerClient`, `unregisterClient`) with automatic index rebuilding and synthetic client testing.
   - **Client Resource Status Inspection (`xmemo status [<client>...|--all]`)**: Extended `xmemo status` to accept client identifiers and `--all` flag. Evaluates each client's resources according to registry declarations (MCP configuration status and path, plugin index status/detail, installed skill version and path, and profile presence and path) following service reachability probes, with structured `--json` output under `clients`.
 
+  - **Document-backed Memory Expansion (`--expand-documents`)**: Added `--expand-documents` support to `xmemo memory search` and `xmemo context recall`. Detects document stubs via `metadata.document_ref` or `"Document-backed memory:"` content prefix; expands up to 3 documents (up to 20,000 characters per document, per-item error tolerance without command failure) via `/api/v1/memories/<id>/explain`. Human mode guides users with `"Full document: xmemo memory read <id>"` when unexpanded or truncated, and `--json` exposes `document_backed: true` and `next_command`.
+  - **Knowledge Scope in Default Device Login**: Added `knowledge:read` to `DEFAULT_DEVICE_LOGIN_SCOPES` so `knowledge search/read` and `context recall --include-knowledge` succeed out-of-the-box after default `xmemo login`. 403 `knowledge_scope_required` provides the exact login command nextAction.
+
 ### Changed
+- **Concise Human-Mode Command Output**: Replaced raw JSON dumps across `memory list` (one line per memory with path, ID, preview), `memory add` ("Saved memory <id> at <path>"), `state save/restore` (key, version, expiry), `restart snapshot` (snapshot ID, expiry, item counts), and `cloud-skill list` (name, slug, status). `--json` structure remains unchanged.
+- **English Next Action Guidance**: Standardized all `nextAction` strings in error classifiers and client exceptions to clear English.
+- **Top-Level Help Alignment**: Aligned main `xmemo help` with CLI-DESIGN v2 grammar (`<resource> <install|remove|status>`, `status [<client>...|--all]`, `setup [<client>...]`, `uninstall [<client>...]`).
 - **Backward-Compatible Command Aliases**: Kept `mcp add` (alias for `mcp install`), `profile uninstall` (alias for `profile remove`), and `skill remove` / `uninstall` (alias for `skill remove`) with helpful one-line stderr hints in interactive terminal mode while preserving clean JSON mode output.
 - **Relocated Client Diagnostics**: Moved client-specific doctor implementations (`codexDoctor`, `kiroDoctor`) into dedicated `src/diagnostics/` modules, eliminating command-layer couplings.
 
 ### Fixed
+- **Memory Search Guidance**: Corrected empty search hint to suggest query refinement or `--team` instead of unsupported `--path` or `--bucket`.
+- **Restart Restore Validation Message**: Updated missing snapshot error to specify `--snapshot-id <id> or --state-key <key>` instead of internal session IDs.
+- **Doctor Smoke Validation Message**: Plainly states that smoke checks currently support only `--client codex`.
+- **Status MCP and Plugin Accuracy**: Improved `xmemo status` MCP detection to parse structured configs (JSON `mcpServers.XMemo`, TOML, YAML) and formatted MCP-kind plugin entries as `n/a (uses MCP)`.
 - **Uninstall Plan Preview Heading (`xmemo uninstall`)**: Corrected preview heading in `xmemo uninstall` to display `Planned changes:` prior to user confirmation or `--yes` execution, reserving `(dry run — no files were modified)` strictly for actual `--dry-run` executions.
 
 ## 0.4.187

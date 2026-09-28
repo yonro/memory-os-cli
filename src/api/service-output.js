@@ -3,7 +3,12 @@ import { writeLine } from '../core/io.js';
 export function writeHumanServiceResult(io, command, data, meta = {}) {
   if (command === 'memory.search') return writeMemorySearch(io, data, meta);
   if (command === 'memory.read') return writeMemoryRead(io, data);
-  if (command === 'context.recall') return writeContextRecall(io, data);
+  if (command === 'memory.list') return writeMemoryList(io, data, meta);
+  if (command === 'memory.add') return writeMemoryAdd(io, data);
+  if (command === 'context.recall') return writeContextRecall(io, data, meta);
+  if (command === 'state.save' || command === 'state.restore') return writeStateResult(io, command, data);
+  if (command === 'restart.snapshot') return writeRestartSnapshot(io, data);
+  if (command === 'cloud-skill.list') return writeCloudSkillList(io, data);
   if (command === 'knowledge.read') return writeKnowledgeRead(io, data);
   if (command === 'dream.show') return writeDreamShow(io, data);
   if (command === 'cloud-skill.show') return writeCloudSkillShow(io, data, meta);
@@ -16,13 +21,94 @@ export function writeHumanServiceResult(io, command, data, meta = {}) {
   }
 }
 
-function writeContextRecall(io, data) {
+function writeMemoryList(io, data, meta) {
+  const memories = Array.isArray(data) ? data : Array.isArray(data?.memories) ? data.memories : Array.isArray(data?.items) ? data.items : [];
+  if (memories.length === 0) {
+    writeLine(io.stdout, 'No memories found.');
+    return;
+  }
+  for (const item of memories) {
+    const id = item?.id ?? item?.memory_id ?? 'unknown';
+    const location = item?.path ?? item?.memory_path ?? 'unknown path';
+    const content = typeof item?.content === 'string' ? item.content.replace(/\s+/gu, ' ').trim() : '';
+    const preview = content.length > 80 ? `${content.slice(0, 77)}...` : content;
+    writeLine(io.stdout, `${location}  [${id}]${preview ? `  ${preview}` : ''}`);
+  }
+  if (meta?.nextCursor || data?.next_cursor) {
+    writeLine(io.stdout, `Next cursor: ${meta?.nextCursor ?? data.next_cursor}`);
+  }
+}
+
+function writeMemoryAdd(io, data) {
+  const id = data?.id ?? data?.memory_id ?? data?.memoryId ?? 'unknown';
+  const path = data?.path ?? data?.memory_path ?? 'unknown';
+  writeLine(io.stdout, `Saved memory ${id} at ${path}`);
+}
+
+function writeStateResult(io, command, data) {
+  const key = data?.state_key ?? data?.key ?? data?.arguments?.state_key ?? 'active_task';
+  const version = data?.version ?? 'unknown';
+  const expiry = data?.expires_at ?? (data?.ttl_seconds !== undefined ? `${data.ttl_seconds}s` : null) ?? 'none';
+  const verb = command === 'state.restore' ? 'Restored' : 'Saved';
+  writeLine(io.stdout, `${verb} state: key=${key}, version=${version}, expiry=${expiry}`);
+  if (command === 'state.restore' && typeof data?.content === 'string' && data.content) {
+    writeLine(io.stdout, data.content);
+  }
+}
+
+function writeRestartSnapshot(io, data) {
+  const id = data?.snapshot_id ?? data?.id ?? 'unknown';
+  const expiry = data?.expires_at ?? (data?.ttl_seconds !== undefined ? `${data.ttl_seconds}s` : null) ?? 'none';
+  writeLine(io.stdout, `Restart snapshot ${id} saved.`);
+  writeLine(io.stdout, `Expiry: ${expiry}`);
+  const counts = [];
+  if (data?.timeline_count !== undefined) counts.push(`timeline=${data.timeline_count}`);
+  else if (Array.isArray(data?.timeline)) counts.push(`timeline=${data.timeline.length}`);
+  if (data?.reminders_count !== undefined) counts.push(`reminders=${data.reminders_count}`);
+  else if (Array.isArray(data?.reminders)) counts.push(`reminders=${data.reminders.length}`);
+  if (data?.decisions_count !== undefined) counts.push(`decisions=${data.decisions_count}`);
+  else if (Array.isArray(data?.decisions)) counts.push(`decisions=${data.decisions.length}`);
+  if (data?.states_count !== undefined) counts.push(`states=${data.states_count}`);
+  else if (Array.isArray(data?.states)) counts.push(`states=${data.states.length}`);
+  if (counts.length) {
+    writeLine(io.stdout, `Counts: ${counts.join(', ')}`);
+  }
+}
+
+function writeCloudSkillList(io, data) {
+  const skills = Array.isArray(data) ? data : Array.isArray(data?.skills) ? data.skills : [];
+  if (skills.length === 0) {
+    writeLine(io.stdout, 'No cloud skills found.');
+    return;
+  }
+  writeLine(io.stdout, `Found ${skills.length} cloud ${skills.length === 1 ? 'skill' : 'skills'}:`);
+  for (const skill of skills) {
+    const name = skill?.name ?? 'Unnamed';
+    const slug = skill?.slug ?? 'no-slug';
+    const status = skill?.status ?? 'unknown';
+    writeLine(io.stdout, `- ${name} (${slug}) · ${status}`);
+  }
+}
+
+function writeContextRecall(io, data, meta = {}) {
   const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.memories) ? data.memories : [];
   const budget = data?.budget ?? data?.usage ?? {};
   writeLine(io.stdout, `Recalled ${items.length} context ${items.length === 1 ? 'item' : 'items'}.`);
   if (budget.used_tokens !== undefined || budget.max_tokens !== undefined) writeLine(io.stdout, `Token budget: ${budget.used_tokens ?? 'unknown'} / ${budget.max_tokens ?? 'unknown'}.`);
   if (typeof data?.context_text === 'string' && data.context_text) writeLine(io.stdout, data.context_text);
   else if (items.length === 0) writeLine(io.stdout, 'No matching context was returned. Refine the query or adjust the current filters.');
+
+  for (const item of items) {
+    if (item?.document_backed && (!item?.expanded || item?.content_truncated)) {
+      const id = item?.memory_id ?? item?.id ?? '';
+      if (id) writeLine(io.stdout, `Full document: xmemo memory read ${id}`);
+    }
+  }
+
+  const allWarnings = [...(meta?.warnings ?? []), ...(data?.warnings ?? [])];
+  for (const warning of allWarnings) {
+    writeLine(io.stderr, `Warning: ${warning}`);
+  }
 }
 
 function writeKnowledgeRead(io, data) {
@@ -74,7 +160,7 @@ function writeMemoryRead(io, data) {
 function writeMemorySearch(io, data, meta) {
   const results = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
   if (results.length === 0) {
-    writeLine(io.stdout, 'No matching memories found. Try a more specific query or adjust --path, --bucket, or --team.');
+    writeLine(io.stdout, 'No matching memories found. Try a more specific query or adjust --team.');
     return;
   }
   writeLine(io.stdout, `Found ${results.length} matching ${results.length === 1 ? 'memory' : 'memories'}.`);
@@ -84,6 +170,18 @@ function writeMemorySearch(io, data, meta) {
     const content = typeof item?.content === 'string' ? item.content.replace(/\s+/gu, ' ').trim() : '(content unavailable)';
     writeLine(io.stdout, `${index + 1}. ${location}  [${id}]`);
     writeLine(io.stdout, `   ${content.length > 180 ? `${content.slice(0, 177)}...` : content}`);
+    if (item?.document_backed) {
+      if (item?.expanded) {
+        if (item?.content_truncated) {
+          writeLine(io.stdout, `   Full document: xmemo memory read ${id}`);
+        }
+      } else if (item?.expand_error) {
+        writeLine(io.stdout, `   (failed to expand document: ${item.expand_error})`);
+        writeLine(io.stdout, `   Full document: xmemo memory read ${id}`);
+      } else {
+        writeLine(io.stdout, `   Full document: xmemo memory read ${id}`);
+      }
+    }
   }
   if (meta.nextCursor) writeLine(io.stdout, `More results: rerun with the returned cursor in JSON output.`);
 }
