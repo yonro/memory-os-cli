@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.35
+
+### Added
+
+- Add document-backed memory hints and `--expand-documents` opt-in flag to recall and search.
+
 ## 1.1.33
 
 ### Fixed
