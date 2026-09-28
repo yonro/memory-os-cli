@@ -215,16 +215,44 @@ export async function mcpCommand(args, io) {
   }
 
   const baseUrl = normalizeBaseUrl(baseUrlOption(args, io.env));
-  const configPath = optionValue(args, '--config') ?? client.defaultConfigPath(io.env);
+  const configPath = optionValue(args, '--config') ?? (typeof client.defaultConfigPath === 'function' ? client.defaultConfigPath(io.env) : null);
   const mcpUrl = endpointUrl(baseUrl, '/mcp');
+  const isLocalProxy = client.configKind === 'local-proxy';
+  const proxyPort = parsePositiveInteger(optionValue(args, '--port') ?? String(DEFAULT_PROXY_PORT), '--port');
+  const proxyUrl = `http://${DEFAULT_PROXY_HOST}:${proxyPort}/mcp`;
+  const targetUrl = isLocalProxy ? proxyUrl : mcpUrl;
 
   const willWrite = hasFlag(args, '--write');
   const identity = willWrite ? await agentIdentity(target, io.env) : envReferenceIdentity(target);
   if (willWrite) {
-    await client.writeConfig(configPath, mcpUrl, identity, { auth, force: hasFlag(args, '--force') });
+    if (typeof client.writeConfig === 'function') {
+      await client.writeConfig(configPath, targetUrl, identity, { auth, force: hasFlag(args, '--force') });
+    }
   }
 
   if (hasFlag(args, '--json')) {
+    if (isLocalProxy) {
+      const template = mcpLocalProxyTemplate(target, proxyUrl, { mcpClients: MCP_CLIENTS });
+      writeLine(io.stdout, JSON.stringify({
+        client: target,
+        label: client.label,
+        configKind: client.configKind,
+        configPath,
+        serverName: MCP_SERVER_NAME,
+        url: proxyUrl,
+        proxyUrl,
+        requiresLocalCommand: template.requiresLocalCommand,
+        tokenEnvVar: null,
+        authentication: 'local-proxy',
+        agentId: identity.agentId,
+        agentInstanceId: identity.agentInstanceId,
+        agentInstanceIdPath: identity.path,
+        agentInstanceGeneration: agentInstanceGenerationPolicy(target, { mcpClients: MCP_CLIENTS }),
+        writesTokenValue: false,
+        written: willWrite
+      }, null, 2));
+      return 0;
+    }
     const oauthClient = (usesClientOAuth(target) && auth !== 'key');
     writeLine(io.stdout, JSON.stringify({
       client: target,
@@ -247,6 +275,11 @@ export async function mcpCommand(args, io) {
 
   if (willWrite) {
     writeLine(io.stdout, `Updated ${client.label} MCP config: ${configPath}`);
+    if (isLocalProxy) {
+      writeLine(io.stdout, `Local proxy URL configured: ${proxyUrl}`);
+      writeLine(io.stdout, `Next: keep \`${COMMAND_NAME} mcp proxy --port ${proxyPort}\` running while you use ${client.label}.`);
+      return 0;
+    }
     if ((usesClientOAuth(target) && auth !== 'key')) {
       writeLine(io.stdout, `Token value was not written. ${client.label} will complete MCP OAuth on first use.`);
     } else {
@@ -256,17 +289,35 @@ export async function mcpCommand(args, io) {
     return 0;
   }
 
-  const snippet = client.buildSnippet(mcpUrl, identity, { auth });
-  writeLine(io.stdout, `Add this to your ${client.label} config (${configPath}):`);
-  writeLine(io.stdout, '');
-  writeLine(io.stdout, snippet.trimEnd());
-  writeLine(io.stdout, '');
-  if ((usesClientOAuth(target) && auth !== 'key')) {
-    writeLine(io.stdout, `Restart ${client.label} and complete its MCP OAuth flow. No token value is included here.`);
-  } else {
-    writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
+  if (typeof client.buildSnippet === 'function') {
+    const snippet = client.buildSnippet(mcpUrl, identity, { auth });
+    writeLine(io.stdout, `Add this to your ${client.label} config (${configPath}):`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, typeof snippet === 'string' ? snippet.trimEnd() : JSON.stringify(snippet, null, 2));
+    writeLine(io.stdout, '');
+    if ((usesClientOAuth(target) && auth !== 'key')) {
+      writeLine(io.stdout, `Restart ${client.label} and complete its MCP OAuth flow. No token value is included here.`);
+    } else {
+      writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
+    }
+    writeLine(io.stdout, `${AGENT_INSTANCE_ENV_VAR} must be stable per local ${client.label} install; run ${COMMAND_NAME} mcp add ${target} --write to generate it automatically.`);
+    return 0;
   }
-  writeLine(io.stdout, `${AGENT_INSTANCE_ENV_VAR} must be stable per local ${client.label} install; run ${COMMAND_NAME} mcp add ${target} --write to generate it automatically.`);
+
+  if (isLocalProxy) {
+    const template = mcpLocalProxyTemplate(target, proxyUrl, { mcpClients: MCP_CLIENTS });
+    writeLine(io.stdout, `Add this to your ${client.label} config (${configPath}):`);
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, JSON.stringify(template.snippet, null, 2));
+    writeLine(io.stdout, '');
+    writeLine(io.stdout, `Requires credential: ${COMMAND_NAME} login or ${COMMAND_NAME} token add --from-stdin --allow-plaintext`);
+    writeLine(io.stdout, `Run local proxy: ${template.requiresLocalCommand}`);
+    writeLine(io.stdout, `Run \`${COMMAND_NAME} mcp add ${target} --write\` to write this configuration automatically.`);
+    return 0;
+  }
+
+  writeLine(io.stdout, `No manual MCP snippet is available for ${client.label}.`);
+  writeLine(io.stdout, `Configure automatically with: ${COMMAND_NAME} mcp add ${target} --write`);
   return 0;
 }
 
