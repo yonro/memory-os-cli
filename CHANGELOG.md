@@ -4,6 +4,8 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ## [Unreleased]
 
+## 0.4.187
+
 ### Added
 - **Guided Onboarding (`xmemo init`)**: Interactive first-run wizard across account sign-in, client detection, agent instruction blocks, MCP server configuration, skills, and plugins, supporting `--dry-run`, non-interactive `--yes`, and structured `--json` envelopes.
 - **Agent Plugin Index (`xmemo plugin`)**: Added static plugin registry (`list`, `info`, `install`, `status`) covering official XMemo plugins with pinned versions, tags, and verified Git commit hashes.
@@ -19,6 +21,9 @@ All notable changes to the XMemo CLI client will be documented in this file.
 - **Pinned Supply-Chain Safety**: Third-party plugin installations and Skill packages are pinned to explicit verified release versions by default, and `skill install` verifies downloaded tarball integrity via sha512 checksums before extraction.
 - **Consistent `--json` Output Everywhere**: Supported structured JSON output envelopes across every CLI command and subcommand for reliable scripting and agent automation.
 - **Codebase Modernization**: Removed obsolete constants, deduplicated repository detection helpers, and streamlined legacy diagnostic commands.
+
+### Fixed
+- **Copilot CLI MCP Integration**: Resolved an issue where `xmemo init` and `xmemo mcp add copilot-cli` encountered an error when configuring clients that utilize a local proxy configuration without a dedicated snippet builder.
 
 ## 0.4.186
 
