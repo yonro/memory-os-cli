@@ -36,24 +36,52 @@ async function invoke(args, options = {}) {
     stdin.isTTY = options.isTTY;
   }
 
+  let createdTempCwd = null;
+  let cwd = options.cwd;
+  if (!cwd) {
+    if (options.env?.HOME) {
+      cwd = options.env.HOME;
+    } else if (options.env?.USERPROFILE) {
+      cwd = options.env.USERPROFILE;
+    } else {
+      createdTempCwd = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-pinned-cwd-'));
+      cwd = createdTempCwd;
+    }
+  }
+
+  const defaultSkillDir = path.join(cwd, 'xmemo-skill');
   const effectiveArgs = (args[0] === 'skill' && args[1] === 'install' && !args.includes('--client') && !args.includes('--dir') && !args.includes('--target') && !args.includes('--from') && !args.includes('-h') && !args.includes('--help'))
-    ? [...args, '--dir', 'xmemo-skill']
+    ? [...args, '--dir', defaultSkillDir]
     : args;
 
-  const code = await run(effectiveArgs, {
-    env: options.env !== undefined ? options.env : process.env,
-    stdin,
-    stdout: { write: (chunk) => { stdout += chunk; } },
-    stderr: { write: (chunk) => { stderr += chunk; } },
-    fetch: options.fetch,
-    spawn: options.spawn,
-    sleep: options.sleep,
-    confirm: options.confirm,
-    nodeVersion: options.nodeVersion,
-    cwd: options.cwd
-  });
+  const env = { ...(options.env !== undefined ? options.env : process.env) };
+  if (!env.HOME) env.HOME = cwd;
+  if (!env.USERPROFILE) env.USERPROFILE = cwd;
+  if (!env.LOCALAPPDATA) env.LOCALAPPDATA = path.join(cwd, 'LocalAppData');
+  if (!env.APPDATA) env.APPDATA = path.join(cwd, 'AppData');
 
-  return { code, stdout, stderr };
+  try {
+    const code = await run(effectiveArgs, {
+      env,
+      stdin,
+      stdout: { write: (chunk) => { stdout += chunk; } },
+      stderr: { write: (chunk) => { stderr += chunk; } },
+      fetch: options.fetch,
+      spawn: options.spawn,
+      sleep: options.sleep,
+      confirm: options.confirm,
+      nodeVersion: options.nodeVersion,
+      cwd
+    });
+
+    return { code, stdout, stderr };
+  } finally {
+    if (createdTempCwd) {
+      try {
+        await fs.rm(createdTempCwd, { recursive: true, force: true });
+      } catch {}
+    }
+  }
 }
 
 function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, tarballContent = null } = {}) {
@@ -178,6 +206,7 @@ test('pin guard: no default install path uses latest or -U', async () => {
     const hermesCalls = [];
     const hermesHome = path.join(tempDir, '.hermes');
     const hermesRes = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome, '--json'], {
+      cwd: tempDir,
       env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'test-token' },
       fetch: discoveryFetch(),
       spawn: spawnStub(hermesCalls)
@@ -195,14 +224,16 @@ test('pin guard: no default install path uses latest or -U', async () => {
 
     // 3. Skill default install
     const skillCalls = [];
+    const skillTarget = path.join(tempDir, 'xmemo-skill');
     const mockSkillReport = {
       package: '@xmemo/skill',
       skillVersion: PINNED_SKILL_VERSION,
-      target: path.resolve('xmemo-skill'),
+      target: skillTarget,
       dryRun: true,
       installed: false
     };
     const skillRes = await invoke(['skill', 'install', '--dry-run', '--json'], {
+      cwd: tempDir,
       env: { HOME: tempDir },
       spawn: spawnStub(skillCalls, { code: 0, stdout: JSON.stringify(mockSkillReport) })
     });
@@ -284,6 +315,7 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
     // 1. Dry run exits without running
     const dryCalls = [];
     const dryRes = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome, '--dry-run'], {
+      cwd: tempDir,
       env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'test-token' },
       fetch: discoveryFetch(),
       spawn: spawnStub(dryCalls)
@@ -297,6 +329,7 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
     // 2. Real run with hermes CLI available prints exact command before executing
     const realCalls = [];
     const realRes = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome], {
+      cwd: tempDir,
       env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'test-token' },
       fetch: discoveryFetch(),
       spawn: spawnStub(realCalls)
@@ -311,6 +344,7 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
     // 3. Fallback when hermes binary is absent: uses pip install hermes-xmemo==pinned
     const pipCalls = [];
     const pipRes = await invoke(['setup', 'hermes', '--url', 'https://api.example.test', '--hermes-home', hermesHome], {
+      cwd: tempDir,
       env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'test-token' },
       fetch: discoveryFetch(),
       spawn: (command, args, options) => {
@@ -343,49 +377,57 @@ test('setup hermes: prints exact command before running, uses hermes-xmemo==pinn
 });
 
 test('skill install: defaults to pinned version, allows explicit --version latest, and prints command', async () => {
-  const calls = [];
-  const mockReport = {
-    package: '@xmemo/skill',
-    skillVersion: PINNED_SKILL_VERSION,
-    target: path.resolve('xmemo-skill'),
-    dryRun: true,
-    installed: false
-  };
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-pinned-skill-'));
+  const targetDir = path.join(tempDir, 'xmemo-skill');
+  try {
+    const calls = [];
+    const mockReport = {
+      package: '@xmemo/skill',
+      skillVersion: PINNED_SKILL_VERSION,
+      target: targetDir,
+      dryRun: true,
+      installed: false
+    };
 
-  // 1. Default install uses pinned version and prints command in human-readable mode
-  const res1 = await invoke(['skill', 'install', '--dry-run'], {
-    spawn: spawnStub(calls, { code: 0, stdout: JSON.stringify(mockReport) })
-  });
-  assert.equal(res1.code, 0);
-  assert.match(res1.stdout, new RegExp(`Would run: .*@xmemo/skill@${PINNED_SKILL_VERSION}`));
-  assert.match(res1.stdout, new RegExp(`Source: npm \\(@xmemo/skill@${PINNED_SKILL_VERSION}\\)`));
-  assert.equal(calls.length, 2);
-  assert.ok(calls[0].args.includes(`@xmemo/skill@${PINNED_SKILL_VERSION}`));
-  assert.ok(calls[1].args.includes('--offline'));
-  assert.ok(calls[1].args.includes('--package'));
+    // 1. Default install uses pinned version and prints command in human-readable mode
+    const res1 = await invoke(['skill', 'install', '--dry-run'], {
+      cwd: tempDir,
+      spawn: spawnStub(calls, { code: 0, stdout: JSON.stringify(mockReport) })
+    });
+    assert.equal(res1.code, 0);
+    assert.match(res1.stdout, new RegExp(`Would run: .*@xmemo/skill@${PINNED_SKILL_VERSION}`));
+    assert.match(res1.stdout, new RegExp(`Source: npm \\(@xmemo/skill@${PINNED_SKILL_VERSION}\\)`));
+    assert.equal(calls.length, 2);
+    assert.ok(calls[0].args.includes(`@xmemo/skill@${PINNED_SKILL_VERSION}`));
+    assert.ok(calls[1].args.includes('--offline'));
+    assert.ok(calls[1].args.includes('--package'));
 
-  // 2. Explicit --version latest is accepted and passes latest
-  const latestCalls = [];
-  const mockLatestReport = {
-    package: '@xmemo/skill',
-    skillVersion: '1.2.0',
-    target: path.resolve('xmemo-skill'),
-    dryRun: true,
-    installed: false
-  };
-  const resLatest = await invoke(['skill', 'install', '--version', 'latest', '--dry-run', '--json'], {
-    spawn: spawnStub(latestCalls, { code: 0, stdout: JSON.stringify(mockLatestReport) })
-  });
-  assert.equal(resLatest.code, 0);
-  const latestReport = JSON.parse(resLatest.stdout);
-  assert.equal(latestReport.spec, 'latest');
-  assert.equal(latestCalls.length, 3);
-  assert.ok(latestCalls[0].args.includes('view'));
-  assert.ok(latestCalls[0].args.includes('@xmemo/skill@latest'));
-  assert.ok(latestCalls[1].args.includes('pack'));
-  assert.ok(latestCalls[1].args.includes('@xmemo/skill@latest'));
-  assert.ok(latestCalls[2].args.includes('exec'));
-  assert.ok(latestCalls[2].args.includes('--offline'));
+    // 2. Explicit --version latest is accepted and passes latest
+    const latestCalls = [];
+    const mockLatestReport = {
+      package: '@xmemo/skill',
+      skillVersion: '1.2.0',
+      target: targetDir,
+      dryRun: true,
+      installed: false
+    };
+    const resLatest = await invoke(['skill', 'install', '--version', 'latest', '--dry-run', '--json'], {
+      cwd: tempDir,
+      spawn: spawnStub(latestCalls, { code: 0, stdout: JSON.stringify(mockLatestReport) })
+    });
+    assert.equal(resLatest.code, 0);
+    const latestReport = JSON.parse(resLatest.stdout);
+    assert.equal(latestReport.spec, 'latest');
+    assert.equal(latestCalls.length, 3);
+    assert.ok(latestCalls[0].args.includes('view'));
+    assert.ok(latestCalls[0].args.includes('@xmemo/skill@latest'));
+    assert.ok(latestCalls[1].args.includes('pack'));
+    assert.ok(latestCalls[1].args.includes('@xmemo/skill@latest'));
+    assert.ok(latestCalls[2].args.includes('exec'));
+    assert.ok(latestCalls[2].args.includes('--offline'));
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('skill integrity verification: compute and verify integrity with fail-closed behavior', async () => {
@@ -558,85 +600,93 @@ test('skill install default path verifies tarball against PINNED_SKILL_INTEGRITY
 });
 
 test('skill install explicit --version queries registry dist.integrity and verifies downloaded tarball', async () => {
-  const customVersion = '1.2.0';
-  const customTarball = Buffer.from('content for custom version 1.2.0');
-  const customIntegrity = computeTarballIntegrity(customTarball);
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-pinned-custom-ver-'));
+  const targetDir = path.join(tempDir, 'xmemo-skill');
+  try {
+    const customVersion = '1.2.0';
+    const customTarball = Buffer.from('content for custom version 1.2.0');
+    const customIntegrity = computeTarballIntegrity(customTarball);
 
-  // 1. Matched registry integrity succeeds
-  const successCalls = [];
-  const mockReport = {
-    package: '@xmemo/skill',
-    skillVersion: customVersion,
-    target: path.resolve('xmemo-skill'),
-    dryRun: false,
-    installed: true
-  };
+    // 1. Matched registry integrity succeeds
+    const successCalls = [];
+    const mockReport = {
+      package: '@xmemo/skill',
+      skillVersion: customVersion,
+      target: targetDir,
+      dryRun: false,
+      installed: true
+    };
 
-  const resSuccess = await invoke(['skill', 'install', '--version', customVersion, '--json'], {
-    spawn: (command, args, options) => {
-      successCalls.push({ command, args, options });
-      const child = new EventEmitter();
-      child.stdout = new EventEmitter();
-      child.stderr = new EventEmitter();
-      queueMicrotask(() => {
-        if (args.includes('view')) {
-          child.stdout.emit('data', JSON.stringify(customIntegrity));
-          child.emit('close', 0);
-        } else if (args.includes('pack')) {
-          const destIdx = args.indexOf('--pack-destination');
-          const destDir = args[destIdx + 1];
-          const tgzPath = path.join(destDir, `xmemo-skill-${customVersion}.tgz`);
-          fsSync.writeFileSync(tgzPath, customTarball);
-          child.stdout.emit('data', JSON.stringify([{ filename: `xmemo-skill-${customVersion}.tgz` }]));
-          child.emit('close', 0);
-        } else {
-          child.stdout.emit('data', JSON.stringify(mockReport));
-          child.emit('close', 0);
-        }
-      });
-      return child;
-    }
-  });
+    const resSuccess = await invoke(['skill', 'install', '--version', customVersion, '--json'], {
+      cwd: tempDir,
+      spawn: (command, args, options) => {
+        successCalls.push({ command, args, options });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          if (args.includes('view')) {
+            child.stdout.emit('data', JSON.stringify(customIntegrity));
+            child.emit('close', 0);
+          } else if (args.includes('pack')) {
+            const destIdx = args.indexOf('--pack-destination');
+            const destDir = args[destIdx + 1];
+            const tgzPath = path.join(destDir, `xmemo-skill-${customVersion}.tgz`);
+            fsSync.writeFileSync(tgzPath, customTarball);
+            child.stdout.emit('data', JSON.stringify([{ filename: `xmemo-skill-${customVersion}.tgz` }]));
+            child.emit('close', 0);
+          } else {
+            child.stdout.emit('data', JSON.stringify(mockReport));
+            child.emit('close', 0);
+          }
+        });
+        return child;
+      }
+    });
 
-  assert.equal(resSuccess.code, 0);
-  assert.equal(successCalls.length, 3);
-  assert.ok(successCalls[0].args.includes('view'), 'First call must query registry dist.integrity');
-  assert.ok(successCalls[0].args.includes(`@xmemo/skill@${customVersion}`));
-  assert.ok(successCalls[1].args.includes('pack'), 'Second call must pack tarball');
-  assert.ok(successCalls[2].args.includes('exec'), 'Third call must execute installer');
-  assert.ok(successCalls[2].args.includes('--offline'));
+    assert.equal(resSuccess.code, 0);
+    assert.equal(successCalls.length, 3);
+    assert.ok(successCalls[0].args.includes('view'), 'First call must query registry dist.integrity');
+    assert.ok(successCalls[0].args.includes(`@xmemo/skill@${customVersion}`));
+    assert.ok(successCalls[1].args.includes('pack'), 'Second call must pack tarball');
+    assert.ok(successCalls[2].args.includes('exec'), 'Third call must execute installer');
+    assert.ok(successCalls[2].args.includes('--offline'));
 
-  // 2. Tampered tarball mismatching registry integrity fails closed
-  const failCalls = [];
-  const tamperedTarball = Buffer.from('corrupted custom tarball');
-  const resFail = await invoke(['skill', 'install', '--version', customVersion, '--json'], {
-    spawn: (command, args, options) => {
-      failCalls.push({ command, args, options });
-      const child = new EventEmitter();
-      child.stdout = new EventEmitter();
-      child.stderr = new EventEmitter();
-      queueMicrotask(() => {
-        if (args.includes('view')) {
-          child.stdout.emit('data', JSON.stringify(customIntegrity));
-          child.emit('close', 0);
-        } else if (args.includes('pack')) {
-          const destIdx = args.indexOf('--pack-destination');
-          const destDir = args[destIdx + 1];
-          const tgzPath = path.join(destDir, `xmemo-skill-${customVersion}.tgz`);
-          fsSync.writeFileSync(tgzPath, tamperedTarball);
-          child.stdout.emit('data', JSON.stringify([{ filename: `xmemo-skill-${customVersion}.tgz` }]));
-          child.emit('close', 0);
-        } else {
-          child.stdout.emit('data', JSON.stringify(mockReport));
-          child.emit('close', 0);
-        }
-      });
-      return child;
-    }
-  });
+    // 2. Tampered tarball mismatching registry integrity fails closed
+    const failCalls = [];
+    const tamperedTarball = Buffer.from('corrupted custom tarball');
+    const resFail = await invoke(['skill', 'install', '--version', customVersion, '--json'], {
+      cwd: tempDir,
+      spawn: (command, args, options) => {
+        failCalls.push({ command, args, options });
+        const child = new EventEmitter();
+        child.stdout = new EventEmitter();
+        child.stderr = new EventEmitter();
+        queueMicrotask(() => {
+          if (args.includes('view')) {
+            child.stdout.emit('data', JSON.stringify(customIntegrity));
+            child.emit('close', 0);
+          } else if (args.includes('pack')) {
+            const destIdx = args.indexOf('--pack-destination');
+            const destDir = args[destIdx + 1];
+            const tgzPath = path.join(destDir, `xmemo-skill-${customVersion}.tgz`);
+            fsSync.writeFileSync(tgzPath, tamperedTarball);
+            child.stdout.emit('data', JSON.stringify([{ filename: `xmemo-skill-${customVersion}.tgz` }]));
+            child.emit('close', 0);
+          } else {
+            child.stdout.emit('data', JSON.stringify(mockReport));
+            child.emit('close', 0);
+          }
+        });
+        return child;
+      }
+    });
 
-  assert.equal(resFail.code, 2);
-  assert.match(resFail.stderr, /Tarball integrity mismatch/);
-  assert.equal(failCalls.length, 2, 'Installer must not be executed when integrity mismatches');
+    assert.equal(resFail.code, 2);
+    assert.match(resFail.stderr, /Tarball integrity mismatch/);
+    assert.equal(failCalls.length, 2, 'Installer must not be executed when integrity mismatches');
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 });
 

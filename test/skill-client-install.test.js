@@ -68,9 +68,13 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
             } catch {}
           }
           callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.35.tgz' }]);
+        } else if (command === 'openclaw') {
+          callStdout = 'Installed @xmemo/xmemo successfully.\n';
         } else if (args.includes('install')) {
           const targetIdx = args.indexOf('--target');
-          const targetPath = targetIdx !== -1 ? args[targetIdx + 1] : path.resolve('xmemo-skill');
+          const targetPath = (targetIdx !== -1 && args[targetIdx + 1])
+            ? args[targetIdx + 1]
+            : fsSync.mkdtempSync(path.join(os.tmpdir(), 'xmemo-skill-stub-'));
           // Fake child installer writing minimal valid skill files
           try {
             fsSync.mkdirSync(path.join(targetPath, 'scripts'), { recursive: true });

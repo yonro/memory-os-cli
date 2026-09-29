@@ -24,7 +24,7 @@ function makeIo(fetch, env = {}) {
   };
 }
 
-test('CLI-MEMORY-UX P1-1: isDocumentStub detects document stubs via metadata and content prefix', () => {
+test('isDocumentStub detects document stubs via metadata and content prefix', () => {
   assert.equal(isDocumentStub({ metadata: { document_ref: 'doc-123' } }), true);
   assert.equal(isDocumentStub({ metadata: JSON.stringify({ document_ref: 'doc-123' }) }), true);
   assert.equal(isDocumentStub({ content: 'Document-backed memory: Design Doc' }), true);
@@ -32,7 +32,7 @@ test('CLI-MEMORY-UX P1-1: isDocumentStub detects document stubs via metadata and
   assert.equal(isDocumentStub(null), false);
 });
 
-test('CLI-MEMORY-UX P1-1: memory search adds document_backed and next_command in JSON, full document line in human mode', async () => {
+test('memory search adds document_backed and next_command in JSON, full document line in human mode', async () => {
   const items = [
     { memory_id: 'mem-stub-1', path: 'docs/spec', content: 'Document-backed memory: Arch Spec', metadata: { document_ref: 'doc-1' } },
     { memory_id: 'mem-regular-2', path: 'notes/meeting', content: 'Met with team today' }
@@ -56,7 +56,7 @@ test('CLI-MEMORY-UX P1-1: memory search adds document_backed and next_command in
   assert.doesNotMatch(ioHuman.stdout.value, /Full document: xmemo memory read mem-regular-2/);
 });
 
-test('CLI-MEMORY-UX P1-1: memory search --expand-documents expands up to 3 stubs, truncates at 20000 chars, tolerates errors', async () => {
+test('memory search --expand-documents expands up to 3 stubs, truncates at 20000 chars, tolerates errors', async () => {
   const items = [
     { memory_id: 'mem-1', content: 'Document-backed memory: Doc 1', metadata: { document_ref: 'doc-1' } },
     { memory_id: 'mem-2', content: 'Document-backed memory: Doc 2', metadata: { document_ref: 'doc-2' } },
@@ -114,7 +114,7 @@ test('CLI-MEMORY-UX P1-1: memory search --expand-documents expands up to 3 stubs
   assert.equal(results[3].next_command, 'xmemo memory read mem-4');
 });
 
-test('CLI-MEMORY-UX P1-1: context recall supports --expand-documents and stubs', async () => {
+test('context recall supports --expand-documents and stubs', async () => {
   const items = [
     { memory_id: 'mem-stub', content: 'Document-backed memory: Stub', metadata: { document_ref: 'doc-stub' } }
   ];
@@ -137,11 +137,11 @@ test('CLI-MEMORY-UX P1-1: context recall supports --expand-documents and stubs',
   assert.equal(envelope.data.items[0].content, 'Expanded recall doc');
 });
 
-test('CLI-MEMORY-UX P1-2: DEFAULT_DEVICE_LOGIN_SCOPES includes knowledge:read', () => {
+test('DEFAULT_DEVICE_LOGIN_SCOPES includes knowledge:read', () => {
   assert.ok(DEFAULT_DEVICE_LOGIN_SCOPES.includes('knowledge:read'));
 });
 
-test('CLI-MEMORY-UX P1-2: context recall --include-knowledge emits warning when knowledge was skipped', async () => {
+test('context recall --include-knowledge emits warning when knowledge was skipped', async () => {
   const ioHuman = makeIo(async (url) => {
     return new Response(JSON.stringify({
       items: [{ memory_id: 'm1', content: 'Memory content' }],
@@ -166,7 +166,7 @@ test('CLI-MEMORY-UX P1-2: context recall --include-knowledge emits warning when 
   assert.ok(envelope.meta.warnings.some((w) => /Knowledge (?:search|retrieval) was skipped/.test(w)));
 });
 
-test('CLI-MEMORY-UX P2-3: Human mode formatting for memory list, memory add, state, snapshot, cloud-skill', async () => {
+test('human mode formatting for memory list, memory add, state, snapshot, cloud-skill', async () => {
   // 1. memory list
   const ioList = makeIo(async () => new Response(JSON.stringify({
     memories: [
@@ -233,7 +233,7 @@ test('CLI-MEMORY-UX P2-3: Human mode formatting for memory list, memory add, sta
   assert.doesNotMatch(ioSkill.stdout.value, /^\{/m);
 });
 
-test('CLI-MEMORY-UX P3-7: Empty memory search hint suggests query refinement, not --path or --bucket', async () => {
+test('empty memory search hint suggests query refinement, not --path or --bucket', async () => {
   const io = makeIo(async () => new Response(JSON.stringify([]), { status: 200 }));
   const code = await run(['memory', 'search', 'nonexistent_query'], io);
   assert.equal(code, 0);
@@ -242,7 +242,7 @@ test('CLI-MEMORY-UX P3-7: Empty memory search hint suggests query refinement, no
   assert.doesNotMatch(io.stdout.value, /--bucket/);
 });
 
-test('CLI-MEMORY-UX P3-8: restart restore error specifies --snapshot-id <id> or --state-key <key>', async () => {
+test('restart restore error specifies --snapshot-id <id> or --state-key <key>', async () => {
   const io = makeIo(async () => new Response('{}', { status: 200 }));
   const code = await run(['restart', 'restore', '--preview'], io);
   assert.equal(code, 2);
@@ -250,14 +250,14 @@ test('CLI-MEMORY-UX P3-8: restart restore error specifies --snapshot-id <id> or 
   assert.doesNotMatch(io.stderr.value, /source_session_id/);
 });
 
-test('CLI-MEMORY-UX P3-9: doctor --smoke plainly states smoke supports only --client codex', async () => {
+test('doctor --smoke plainly states smoke supports only --client codex', async () => {
   const io = makeIo(async () => new Response('{}', { status: 200 }));
   const code = await run(['doctor', '--smoke'], io);
   assert.equal(code, 2);
   assert.match(io.stderr.value, /Smoke currently supports only --client codex\./);
 });
 
-test('CLI-MEMORY-UX P3-a: isClientMcpConfigured accurately detects server config in JSON, TOML, and YAML', async () => {
+test('isClientMcpConfigured accurately detects server config in JSON, TOML, and YAML', async () => {
   const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-status-mcp-'));
   const cursorDir = path.join(tempHome, '.cursor');
   await fs.mkdir(cursorDir, { recursive: true });
@@ -286,7 +286,7 @@ test('CLI-MEMORY-UX P3-a: isClientMcpConfigured accurately detects server config
   assert.match(ioConfigured.stdout.value, /MCP: configured/);
 });
 
-test('CLI-MEMORY-UX P3-b: status plugin line for MCP-kind plugins displays n/a (uses MCP)', async () => {
+test('status plugin line for MCP-kind plugins displays n/a (uses MCP)', async () => {
   const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-status-plugin-'));
   const env = {
     HOME: tempHome,
@@ -301,7 +301,7 @@ test('CLI-MEMORY-UX P3-b: status plugin line for MCP-kind plugins displays n/a (
   assert.match(io.stdout.value, /Plugin: n\/a \(uses MCP\)/);
 });
 
-test('CLI-MEMORY-UX Rev-323fadd0 P1: recall with live-shaped document stub (id != memory_id, document_id, no metadata.document_ref)', async () => {
+test('recall with live-shaped document stub (id != memory_id, document_id, no metadata.document_ref)', async () => {
   const recallItems = [
     {
       id: 'recall-row-999',
@@ -381,7 +381,7 @@ test('CLI-MEMORY-UX Rev-323fadd0 P1: recall with live-shaped document stub (id !
   assert.equal(item.content, expandedText);
 });
 
-test('CLI-MEMORY-UX Rev-323fadd0 P1: memory delete and restore endpoints', async () => {
+test('memory delete and restore endpoints', async () => {
   let deleteBody = null;
   let deleteCalled = false;
   let restoreCalled = false;
@@ -427,25 +427,25 @@ test('CLI-MEMORY-UX Rev-323fadd0 P1: memory delete and restore endpoints', async
   assert.match(io404.stderr.value, /restore is available through MCP restore_memory/i);
 });
 
-test('CLI-MEMORY-UX Rev-323fadd0 P2: state restore human output unwraps live-shaped data.result payload', async () => {
+test('state restore human output unwraps live-shaped data.result payload', async () => {
   const io = makeIo(async () => new Response(JSON.stringify({
     ok: true,
     result: {
-      state_key: 'cli-e2e-20260929040817',
+      state_key: 'test-state-20260929040817',
       version: 4,
       expires_at: '2026-10-01T12:00:00Z',
-      content: 'cli e2e state working memory content'
+      content: 'state working memory content'
     }
   }), { status: 200 }));
 
-  const code = await run(['state', 'restore', 'cli-e2e-20260929040817'], io);
+  const code = await run(['state', 'restore', 'test-state-20260929040817'], io);
   assert.equal(code, 0);
-  assert.match(io.stdout.value, /Restored state: key=cli-e2e-20260929040817, version=4, expiry=2026-10-01T12:00:00Z/);
-  assert.match(io.stdout.value, /cli e2e state working memory content/);
+  assert.match(io.stdout.value, /Restored state: key=test-state-20260929040817, version=4, expiry=2026-10-01T12:00:00Z/);
+  assert.match(io.stdout.value, /state working memory content/);
   assert.doesNotMatch(io.stdout.value, /key=active_task/);
 });
 
-test('CLI-MEMORY-UX Rev-323fadd0 P2: context recall --include-knowledge warns on real live response lacking knowledge', async () => {
+test('context recall --include-knowledge warns on real live response lacking knowledge', async () => {
   // Live response: token without knowledge:read returns regular memory items with no knowledge keys at all
   const livePayload = {
     context_text: 'Regular memory note content',
@@ -466,7 +466,7 @@ test('CLI-MEMORY-UX Rev-323fadd0 P2: context recall --include-knowledge warns on
   assert.ok(envelope.meta.warnings.some((w) => /Knowledge search was skipped/.test(w)));
 });
 
-test('CLI-MEMORY-UX Rev-323fadd0 P3: cloud-skill list prints asset_status and publication status', async () => {
+test('cloud-skill list prints asset_status and publication status', async () => {
   const io = makeIo(async () => new Response(JSON.stringify({
     skills: [
       { name: 'XMemo Helper', slug: 'xmemo-helper', asset_status: 'active', published_revision_id: 'rev-42' },
@@ -481,8 +481,8 @@ test('CLI-MEMORY-UX Rev-323fadd0 P3: cloud-skill list prints asset_status and pu
   assert.match(io.stdout.value, /- Draft Skill \(draft-skill\) · active \(draft\)/);
 });
 
-// Rev-10eae569 / b23a67c5 reviewer findings tests
-test('CLI-MEMORY-UX Rev-10eae569 P1: memory restore sends JSON body and formats FastAPI 422 detail array', async () => {
+// Error formatting and confirmation handling
+test('memory restore sends JSON body and formats FastAPI 422 detail array', async () => {
   let sentBody = null;
   const io = makeIo(async (url, init) => {
     const parsed = new URL(url);
@@ -511,7 +511,7 @@ test('CLI-MEMORY-UX Rev-10eae569 P1: memory restore sends JSON body and formats 
   assert.doesNotMatch(io422.stderr.value, /\[object Object\]/);
 });
 
-test('CLI-MEMORY-UX Rev-10eae569 P3: non-TTY confirmation messages for memory delete and restore without --yes', async () => {
+test('non-TTY confirmation messages for memory delete and restore without --yes', async () => {
   // Non-TTY memory delete
   const ioDel = makeIo(async () => new Response('{}', { status: 200 }));
   const codeDel = await run(['memory', 'delete', 'mem-123'], ioDel);
@@ -525,7 +525,7 @@ test('CLI-MEMORY-UX Rev-10eae569 P3: non-TTY confirmation messages for memory de
   assert.match(ioRes.stderr.value, /Confirmation required to restore memory mem-123; rerun with --yes\./);
 });
 
-test('CLI-MEMORY-UX Rev-10eae569 P2: context recall --expand-documents renders expanded document text in human mode', async () => {
+test('context recall --expand-documents renders expanded document text in human mode', async () => {
   const items = [
     { memory_id: 'mem-doc-1', content: 'Document-backed memory: Design Doc', metadata: { document_ref: 'doc-1' } }
   ];
@@ -547,7 +547,7 @@ test('CLI-MEMORY-UX Rev-10eae569 P2: context recall --expand-documents renders e
   assert.match(io.stdout.value, /This is the full expanded design document content/);
 });
 
-test('CLI-MEMORY-UX Rev-10eae569 P3: memory list human mode prints More: --offset <N>', async () => {
+test('memory list human mode prints More: --offset <N>', async () => {
   const io = makeIo(async () => {
     return new Response(JSON.stringify({
       memories: [
@@ -564,7 +564,7 @@ test('CLI-MEMORY-UX Rev-10eae569 P3: memory list human mode prints More: --offse
   assert.doesNotMatch(io.stdout.value, /Next cursor:/);
 });
 
-test('CLI-MEMORY-UX Rev-10eae569 P1: formatErrorDetail formats FastAPI detail arrays into clean text', () => {
+test('formatErrorDetail formats FastAPI detail arrays into clean text', () => {
   assert.equal(formatErrorDetail(null), '');
   assert.equal(formatErrorDetail('simple error'), 'simple error');
   assert.equal(formatErrorDetail([{ type: 'missing', loc: ['body'], msg: 'Field required' }]), 'body: Field required');
@@ -575,7 +575,7 @@ test('CLI-MEMORY-UX Rev-10eae569 P1: formatErrorDetail formats FastAPI detail ar
   assert.equal(formatErrorDetail({ message: 'Custom object error' }), 'Custom object error');
 });
 
-test('CLI-MEMORY-UX Rev-9dba0f2f P2: context recall --expand-documents renders expanded document text for live-shaped stub in human mode', async () => {
+test('context recall --expand-documents renders expanded document text for live-shaped stub in human mode', async () => {
   const recallItems = [
     {
       id: 'recall-row-111',
@@ -610,7 +610,7 @@ test('CLI-MEMORY-UX Rev-9dba0f2f P2: context recall --expand-documents renders e
   assert.doesNotMatch(io.stdout.value, /Full document: xmemo memory read/);
 });
 
-test('CLI-MEMORY-UX Rev-9dba0f2f P3: state restore human output omits version= when absent', async () => {
+test('state restore human output omits version= when absent', async () => {
   const io = makeIo(async () => {
     return new Response(JSON.stringify({
       state_key: 'session_cache',
@@ -625,7 +625,7 @@ test('CLI-MEMORY-UX Rev-9dba0f2f P3: state restore human output omits version= w
   assert.doesNotMatch(io.stdout.value, /version=/);
 });
 
-test('CLI-MEMORY-UX Rev-9dba0f2f P3: memory restore 403 with restore scope missing provides exact login command', async () => {
+test('memory restore 403 with restore scope missing provides exact login command', async () => {
   const io = makeIo(async () => {
     return new Response(JSON.stringify({
       detail: 'memory:restore scope required'
