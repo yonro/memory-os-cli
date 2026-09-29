@@ -165,6 +165,17 @@ test('positioning: forbidden claims and superlatives are absent from metadata fi
     }
   }
 
+  const productDocFiles = ['overview.md', 'capabilities.md', 'integrations.md'];
+  for (const docFile of productDocFiles) {
+    const docPath = path.join(repoRoot, 'docs', 'product', docFile);
+    if (fs.existsSync(docPath)) {
+      inspectedFields.push({
+        source: `docs/product/${docFile}`,
+        text: fs.readFileSync(docPath, 'utf8')
+      });
+    }
+  }
+
   const forbiddenPatterns = [
     { name: 'marketing superlatives', regex: /\b(?:revolutionary|industry-leading|the best|#1)\b/i },
     { name: 'connectors claim', regex: /\bconnectors\b/i },
@@ -349,5 +360,80 @@ test('positioning: README first-screen Beyond MCP links use dedicated docs pages
         `${item.name} Beyond MCP must link to dedicated docs page "https://docs.xmemo.dev${docPath}"`
       );
     }
+  }
+});
+
+test('positioning: docs/product capabilities matrix dynamic facts are valid and within 120 days', () => {
+  const capPath = path.join(repoRoot, 'docs', 'product', 'capabilities.md');
+  assert.equal(fs.existsSync(capPath), true, 'docs/product/capabilities.md must exist');
+  const content = fs.readFileSync(capPath, 'utf8');
+
+  const lines = content.split(/\r?\n/);
+  const tableRows = lines.filter((l) => l.startsWith('|') && !l.includes('---') && !l.includes('Capability | Status'));
+  assert.ok(tableRows.length >= 10, 'capabilities.md must contain capability table rows');
+
+  const dateRegex = /As of (\d{4}-\d{2}-\d{2}), source: docs\.xmemo\.dev/;
+  const now = Date.now();
+  const maxAgeMs = 120 * 24 * 60 * 60 * 1000;
+
+  for (const row of tableRows) {
+    const match = row.match(dateRegex);
+    assert.ok(
+      match,
+      `Every row in capabilities.md must carry an "As of <YYYY-MM-DD>, source: docs.xmemo.dev" verification mark. Offending row: ${row}`
+    );
+    const dateStr = match[1];
+    const rowDate = new Date(`${dateStr}T00:00:00Z`);
+    assert.ok(!Number.isNaN(rowDate.getTime()), `Invalid date "${dateStr}" in row: ${row}`);
+
+    assert.ok(
+      rowDate.getTime() <= now + 24 * 60 * 60 * 1000,
+      `Date "${dateStr}" in capabilities.md cannot be in the future`
+    );
+
+    const ageMs = now - rowDate.getTime();
+    assert.ok(
+      ageMs <= maxAgeMs,
+      `Date "${dateStr}" in capabilities.md is older than 120 days (${Math.floor(ageMs / (24 * 60 * 60 * 1000))} days)`
+    );
+
+    assert.match(
+      row,
+      /https:\/\/docs\.xmemo\.dev\/?/,
+      `Row must contain a link to docs.xmemo.dev: ${row}`
+    );
+  }
+});
+
+test('positioning: docs/product pages exist and conform to scope invariants', () => {
+  const expectedPages = ['overview.md', 'capabilities.md', 'integrations.md'];
+  for (const page of expectedPages) {
+    const fullPath = path.join(repoRoot, 'docs', 'product', page);
+    assert.equal(fs.existsSync(fullPath), true, `docs/product/${page} must exist`);
+    const content = fs.readFileSync(fullPath, 'utf8');
+
+    assert.match(
+      content,
+      /https:\/\/docs\.xmemo\.dev\/?/,
+      `docs/product/${page} must link to docs.xmemo.dev`
+    );
+
+    assert.doesNotMatch(
+      content,
+      /https:\/\/xmemo\.dev\/docs\b|xmemo\.dev\/product\/docs\b/,
+      `docs/product/${page} must not link to old docs URLs`
+    );
+
+    assert.doesNotMatch(
+      content,
+      /\b\d+\s+tools\b/i,
+      `docs/product/${page} must not hardcode dynamic tool counts`
+    );
+
+    assert.doesNotMatch(
+      content,
+      /\b(?:per-day|per-ip)\b/i,
+      `docs/product/${page} must not hardcode dynamic quotas or limits`
+    );
   }
 });
