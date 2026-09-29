@@ -156,12 +156,22 @@ test('positioning: forbidden claims and superlatives are absent from metadata fi
     }
   }
 
+  const readmeCnPath = path.join(repoRoot, 'README_CN.md');
+  if (fs.existsSync(readmeCnPath)) {
+    const readmeCnContent = fs.readFileSync(readmeCnPath, 'utf8');
+    const beyondMcpCnMatch = readmeCnContent.match(/## 超越 MCP\r?\n([\s\S]*?)(?=\r?\n## )/);
+    if (beyondMcpCnMatch) {
+      inspectedFields.push({ source: 'README_CN.md 超越 MCP', text: beyondMcpCnMatch[1] });
+    }
+  }
+
   const forbiddenPatterns = [
     { name: 'marketing superlatives', regex: /\b(?:revolutionary|industry-leading|the best|#1)\b/i },
     { name: 'connectors claim', regex: /\bconnectors\b/i },
     { name: 'AI notes service', regex: /\bAI notes service\b/i },
     { name: 'unsupported certification / GA claim', regex: /\b(?:certified|GA ready)\b/i },
-    { name: 'SDK claim', regex: /\bTypeScript SDK\b|\bMemoryOSClient\b/i }
+    { name: 'SDK claim', regex: /\bTypeScript SDK\b|\bMemoryOSClient\b/i },
+    { name: 'invented scope names', regex: /\b(?:read:state|write:state|read:memory|write:memory)\b/i }
   ];
 
   for (const field of inspectedFields) {
@@ -220,6 +230,76 @@ test('positioning: markdown first-screen block validation (for updated README / 
     const h1 = lines.find((l) => l.startsWith('# '));
     if (h1 && !h1.includes('MCP Server')) {
       assert.match(h1, /^# XMemo\b/, 'When updated, MCP-README H1 must start with "# XMemo"');
+    }
+  }
+});
+
+test('positioning: README first-screen Beyond MCP links use dedicated docs pages', () => {
+  const readmes = [
+    { name: 'README.md', path: path.join(repoRoot, 'README.md'), beyondHeader: '## Beyond MCP' },
+    { name: 'README_CN.md', path: path.join(repoRoot, 'README_CN.md'), beyondHeader: '## 超越 MCP' }
+  ];
+
+  for (const item of readmes) {
+    if (!fs.existsSync(item.path)) continue;
+    const content = fs.readFileSync(item.path, 'utf8');
+    const cliHeaderIndex = content.search(/## XMemo CLI\b/);
+    assert.ok(cliHeaderIndex > 0, `${item.name} must contain "## XMemo CLI" section`);
+    const firstScreen = content.slice(0, cliHeaderIndex);
+
+    const beyondRegex = new RegExp(`${item.beyondHeader}\\r?\\n([\\s\\S]*?)(?=\\r?\\n## )`);
+    const beyondMatch = content.match(beyondRegex);
+    assert.ok(beyondMatch, `${item.name} must contain "${item.beyondHeader}" section`);
+    const beyondSection = beyondMatch[1];
+
+    assert.doesNotMatch(
+      beyondSection,
+      /\b(?:read:state|write:state|read:memory|write:memory)\b/i,
+      `${item.name} Beyond MCP must not contain invented scope names`
+    );
+
+    assert.doesNotMatch(
+      beyondSection,
+      /https:\/\/docs\.xmemo\.dev\/docs\/quickstart\b/,
+      `${item.name} Beyond MCP must link to dedicated docs pages, not generic /docs/quickstart`
+    );
+
+    const docsLinks = [...firstScreen.matchAll(/https:\/\/docs\.xmemo\.dev[^\s)"]*/g)].map((m) => m[0]);
+    for (const link of docsLinks) {
+      assert.doesNotMatch(
+        link,
+        /\/docs\/quickstart\b/,
+        `${item.name} first-screen link "${link}" must not be /docs/quickstart`
+      );
+    }
+
+    const requiredDocsPaths = [
+      '/docs/tools/remember',
+      '/docs/tools/recall-context',
+      '/docs/guides/resume-and-handoff',
+      '/docs/concepts/projects',
+      '/docs/tools/todos',
+      '/docs/concepts/provenance-attribution',
+      '/docs/concepts/agent-identity',
+      '/docs/concepts/scopes',
+      '/docs/concepts/governance-retention',
+      '/docs/connect/openclaw',
+      '/docs/connect/hermes',
+      '/docs/connect/deepseek-harness',
+      '/docs/skills/quickstart',
+      '/docs/concepts/cloud-skills',
+      '/docs/concepts/dream-reflection',
+      '/docs/capabilities/teams',
+      '/docs/concepts/memory-model',
+      '/docs/mcp/overview',
+      '/docs/api/authentication'
+    ];
+
+    for (const docPath of requiredDocsPaths) {
+      assert.ok(
+        beyondSection.includes(`https://docs.xmemo.dev${docPath}`),
+        `${item.name} Beyond MCP must link to dedicated docs page "https://docs.xmemo.dev${docPath}"`
+      );
     }
   }
 });

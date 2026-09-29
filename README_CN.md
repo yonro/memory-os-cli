@@ -33,15 +33,15 @@ XMemo 云端托管服务的具体实现属于私有代码库，不在此公开�
 MCP 是 XMemo 的一种接入界面，而非产品的边界。XMemo 在多种工具与运行时之间提供持久、可跨智能体共享的核心能力：
 
 - **[持久记忆 (Persistent Memory)](https://docs.xmemo.dev/docs/tools/remember)**：在不同会话间存储、检索、浏览与软删除持久事实、用户偏好与运维知识。
-- **[上下文召回 (Context Recall)](https://docs.xmemo.dev/docs/quickstart)**：按需召回精准上下文，支持 Token 预算控制与文档挂载展开。
-- **[会话连续性与工作状态 (Session Continuity)](https://docs.xmemo.dev/docs/quickstart)**：重启快照（Restart Snapshot）与状态存取，支持智能体跨进程与跨会话无缝恢复工作。
-- **[项目上下文与决策记录 (Project Context & Decisions)](https://docs.xmemo.dev/docs/quickstart)**：维护项目级事实、待办事项、决策心路历程与审计历史。
-- **[智能体身份与溯源 (Agent Identity & Provenance)](https://docs.xmemo.dev/docs/api/authentication)**：通过智能体实例身份区分记忆归属与来源，避免凭据混淆。
-- **[权限治理 (Governed Access)](https://docs.xmemo.dev/docs/api/authentication)**：细粒度 Token 作用域管控（`read:memory`、`write:memory`、`read:state`、`write:state`）。
-- **原生插件与技能 (Native Integrations & Skill)**：为 [OpenClaw](https://docs.xmemo.dev/docs/mcp/overview)、[Hermes](https://docs.xmemo.dev/docs/mcp/overview)、[XMemo Skill](https://clawhub.ai/skill/xmemo) 与 [DeepSeek DSH](https://docs.xmemo.dev/docs/mcp/overview) 提供专有集成支持（已发布且通过试点验证，集成成熟度为 Preview）。
-- **统一访问方式**：支持通过 [Model Context Protocol (MCP)](https://docs.xmemo.dev/docs/mcp/overview)、本地命令行 CLI（`xmemo`）与公开 REST API 接口连接。
+- **[上下文召回 (Context Recall)](https://docs.xmemo.dev/docs/tools/recall-context)**：按需召回精准上下文，支持 Token 预算控制与文档挂载展开。
+- **[会话连续性与工作状态 (Session Continuity)](https://docs.xmemo.dev/docs/guides/resume-and-handoff)**：重启快照（Restart Snapshot）与状态存取，支持智能体跨进程与跨会话无缝恢复工作。
+- **[项目上下文与决策记录 (Project Context & Decisions)](https://docs.xmemo.dev/docs/concepts/projects)**：在智能体工作流中维护项目级持久事实、[待办事项 (TODOs)](https://docs.xmemo.dev/docs/tools/todos) 与关键决策记录。
+- **[智能体身份与溯源 (Agent Identity & Provenance)](https://docs.xmemo.dev/docs/concepts/provenance-attribution)**：通过[智能体实例归属 (Agent Attribution)](https://docs.xmemo.dev/docs/concepts/agent-identity) 追踪单条记忆记录的作者与来源，避免凭据混淆。
+- **[权限治理 (Governed Access)](https://docs.xmemo.dev/docs/concepts/scopes)**：Scoped Tokens 细粒度权限控制、客户端 OAuth 支持、软/硬删除以及敏感记忆治理（参见[数据治理机制](https://docs.xmemo.dev/docs/concepts/governance-retention)）。
+- **原生插件与技能 (Native Integrations & Skill)**：为 [OpenClaw](https://docs.xmemo.dev/docs/connect/openclaw)、[Hermes](https://docs.xmemo.dev/docs/connect/hermes)、[XMemo Skill](https://docs.xmemo.dev/docs/skills/quickstart)（[ClawHub](https://clawhub.ai/skill/xmemo)）与 [DeepSeek DSH](https://docs.xmemo.dev/docs/connect/deepseek-harness) 提供专有集成支持（已发布且通过试点验证，集成成熟度为 Preview）。
+- **统一访问方式**：支持通过 [Model Context Protocol (MCP)](https://docs.xmemo.dev/docs/mcp/overview)、本地命令行 CLI（`xmemo`）与公开 [REST API](https://docs.xmemo.dev/docs/api/authentication) 接口连接。
 
-*预览功能（受支持账户可用或研发演进中）*：[云端技能 (Cloud Skills)](https://docs.xmemo.dev/docs/quickstart)、[Dream 记忆整理](https://docs.xmemo.dev/docs/quickstart) 与 [团队协作空间 (Team Workspaces)](https://docs.xmemo.dev/docs/quickstart)。
+*预览功能：[云端技能 (Cloud Skills)](https://docs.xmemo.dev/docs/concepts/cloud-skills)；[Dream 记忆整理](https://docs.xmemo.dev/docs/concepts/dream-reflection)（默认关闭）；[团队空间 (Teams)](https://docs.xmemo.dev/docs/capabilities/teams)（商业版计划尚未推出）。[知识库 (Knowledge Bases)](https://docs.xmemo.dev/docs/concepts/memory-model) 在账户开通时可用。*
 
 ## XMemo CLI
 

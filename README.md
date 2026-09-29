@@ -33,15 +33,15 @@ The hosted service implementation is private.
 MCP is one access surface of XMemo, not the product boundary. XMemo provides a persistent, governed memory operating layer across AI tools and agents:
 
 - **[Persistent Memory](https://docs.xmemo.dev/docs/tools/remember)**: store, search, list, and soft-delete durable facts, preferences, and operational knowledge across sessions.
-- **[Context Recall](https://docs.xmemo.dev/docs/quickstart)**: retrieve focused, relevant context on demand with token-budget controls and document expansions.
-- **[Session Continuity & Working State](https://docs.xmemo.dev/docs/quickstart)**: restart snapshots and state save/restore so agents resume context across process restarts.
-- **[Project Context & Decisions](https://docs.xmemo.dev/docs/quickstart)**: track project-scoped facts, reminders, decisions, and audit history.
-- **[Agent Identity & Provenance](https://docs.xmemo.dev/docs/api/authentication)**: track authorship and origin per memory record via agent instance attribution without conflating credentials.
-- **[Governed Access](https://docs.xmemo.dev/docs/api/authentication)**: fine-grained token scopes (`read:memory`, `write:memory`, `read:state`, `write:state`).
-- **Native Integrations & Skill**: dedicated integration for [OpenClaw](https://docs.xmemo.dev/docs/mcp/overview), [Hermes](https://docs.xmemo.dev/docs/mcp/overview), [XMemo Skill](https://clawhub.ai/skill/xmemo), and [DeepSeek DSH](https://docs.xmemo.dev/docs/mcp/overview) (available, released and pilot-tested; integration maturity Preview).
-- **Access Surfaces**: unified via [Model Context Protocol](https://docs.xmemo.dev/docs/mcp/overview), the local CLI (`xmemo`), and the public REST API surface.
+- **[Context Recall](https://docs.xmemo.dev/docs/tools/recall-context)**: retrieve focused, relevant context on demand with token-budget controls and document expansions.
+- **[Session Continuity & Working State](https://docs.xmemo.dev/docs/guides/resume-and-handoff)**: restart snapshots and state save/restore so agents resume context across process restarts.
+- **[Project Context & Decisions](https://docs.xmemo.dev/docs/concepts/projects)**: track project-scoped facts, [TODOs](https://docs.xmemo.dev/docs/tools/todos), and durable decisions across agent workflows.
+- **[Agent Identity & Provenance](https://docs.xmemo.dev/docs/concepts/provenance-attribution)**: track authorship and origin per memory record via [agent instance attribution](https://docs.xmemo.dev/docs/concepts/agent-identity) without conflating credentials.
+- **[Governed Access](https://docs.xmemo.dev/docs/concepts/scopes)**: scoped tokens, OAuth where the client supports it, soft/hard deletion and sensitive-memory handling ([governance details](https://docs.xmemo.dev/docs/concepts/governance-retention)).
+- **Native Integrations & Skill**: dedicated integration for [OpenClaw](https://docs.xmemo.dev/docs/connect/openclaw), [Hermes](https://docs.xmemo.dev/docs/connect/hermes), [XMemo Skill](https://docs.xmemo.dev/docs/skills/quickstart) ([ClawHub](https://clawhub.ai/skill/xmemo)), and [DeepSeek DSH](https://docs.xmemo.dev/docs/connect/deepseek-harness) (available, released and pilot-tested; integration maturity Preview).
+- **Access Surfaces**: unified via [Model Context Protocol](https://docs.xmemo.dev/docs/mcp/overview), the local CLI (`xmemo`), and the public [REST API](https://docs.xmemo.dev/docs/api/authentication).
 
-*Preview features (available on supported accounts or in development)*: [Cloud Skills](https://docs.xmemo.dev/docs/quickstart), [Dream Consolidation](https://docs.xmemo.dev/docs/quickstart), and [Team Workspaces](https://docs.xmemo.dev/docs/quickstart).
+*Preview: [Cloud Skills](https://docs.xmemo.dev/docs/concepts/cloud-skills); [Dream](https://docs.xmemo.dev/docs/concepts/dream-reflection) (off by default); [Teams](https://docs.xmemo.dev/docs/capabilities/teams) (Business plan not yet available). [Knowledge Bases](https://docs.xmemo.dev/docs/concepts/memory-model) are available where enabled for the account.*
 
 ## XMemo CLI
 
