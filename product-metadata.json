@@ -1,0 +1,9 @@
+{
+  "name": "XMemo",
+  "category": "User-owned Memory OS for AI agents",
+  "description": "XMemo is a user-owned Memory OS for AI agents: persistent memory, project context and session continuity with agent identity, provenance and governed access, shared across AI clients through MCP, the CLI and a public REST API surface.",
+  "docsUrl": "https://docs.xmemo.dev/",
+  "mcpUrl": "https://xmemo.dev/mcp",
+  "repositoryUrl": "https://github.com/yonro/memory-os-cli",
+  "packageName": "@xmemo/client"
+}
