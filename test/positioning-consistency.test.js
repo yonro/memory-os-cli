@@ -224,14 +224,39 @@ test('positioning: markdown first-screen block validation (for updated README / 
   }
 
   const mcpReadmePath = path.join(repoRoot, 'MCP-README.md');
-  if (fs.existsSync(mcpReadmePath)) {
-    const content = fs.readFileSync(mcpReadmePath, 'utf8');
-    const lines = content.split(/\r?\n/);
-    const h1 = lines.find((l) => l.startsWith('# '));
-    if (h1 && !h1.includes('MCP Server')) {
-      assert.match(h1, /^# XMemo\b/, 'When updated, MCP-README H1 must start with "# XMemo"');
-    }
-  }
+  assert.equal(fs.existsSync(mcpReadmePath), true, 'MCP-README.md must exist');
+  const mcpContent = fs.readFileSync(mcpReadmePath, 'utf8');
+  const mcpLines = mcpContent.split(/\r?\n/);
+  const mcpH1 = mcpLines.find((l) => l.startsWith('# '));
+  assert.ok(mcpH1, 'MCP-README.md must contain an H1 heading');
+  assert.match(mcpH1, /^# XMemo\b/, 'MCP-README H1 must start with "# XMemo"');
+
+  const mcpFirstScreenText = mcpLines.slice(0, 40).join('\n');
+  assert.match(
+    mcpFirstScreenText,
+    new RegExp(productMeta.category, 'i'),
+    'MCP-README first screen must contain canonical category phrase'
+  );
+  assert.match(
+    mcpFirstScreenText,
+    /https:\/\/docs\.xmemo\.dev\/?/,
+    'MCP-README first screen must link to docs.xmemo.dev'
+  );
+
+  const mcpReadmeCnPath = path.join(repoRoot, 'MCP-README_CN.md');
+  assert.equal(fs.existsSync(mcpReadmeCnPath), true, 'MCP-README_CN.md must exist');
+  const mcpCnContent = fs.readFileSync(mcpReadmeCnPath, 'utf8');
+  const mcpCnLines = mcpCnContent.split(/\r?\n/);
+  const mcpCnH1 = mcpCnLines.find((l) => l.startsWith('# '));
+  assert.ok(mcpCnH1, 'MCP-README_CN.md must contain an H1 heading');
+  assert.match(mcpCnH1, /^# XMemo\b/, 'MCP-README_CN H1 must start with "# XMemo"');
+
+  const mcpFirstScreenCnText = mcpCnLines.slice(0, 40).join('\n');
+  assert.match(
+    mcpFirstScreenCnText,
+    /https:\/\/docs\.xmemo\.dev\/?/,
+    'MCP-README_CN first screen must link to docs.xmemo.dev'
+  );
 });
 
 test('positioning: README first-screen Beyond MCP links use dedicated docs pages', () => {
@@ -290,7 +315,7 @@ test('positioning: README first-screen Beyond MCP links use dedicated docs pages
       '/docs/concepts/cloud-skills',
       '/docs/concepts/dream-reflection',
       '/docs/capabilities/teams',
-      '/docs/concepts/memory-model',
+      '/docs/concepts/knowledge-bases',
       '/docs/mcp/overview',
       '/docs/api/authentication'
     ];

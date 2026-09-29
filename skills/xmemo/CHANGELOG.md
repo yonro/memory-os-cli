@@ -85,7 +85,7 @@
 
 - Document in `SKILL.md` that `remember --file` follows symbolic links and requires the resolved target to be a regular file.
 - Document 64 KiB input size limit for `auth add --from-stdin` in `SKILL.md` and `references/troubleshooting.md`.
-- Document LF-clean ClawHub publishing instructions using GitHub Release tarball extractions in `docs/xmemo-skill-release.md`.
+- Document LF-clean ClawHub publishing instructions using GitHub Release tarball extractions in `docs/maintainers/xmemo-skill-release.md`.
 - Document credential lifetime characteristics and symptom/repair steps for file-backed credentials in `SKILL.md` and `references/troubleshooting.md`, clarifying that local credential files store no access-token expiry.
 
 ## 1.1.26

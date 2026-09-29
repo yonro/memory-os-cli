@@ -1,5 +1,7 @@
 # XMemo MCP 配置教程
 
+> 📖 **官方完整接入文档**：[https://docs.xmemo.dev/docs/mcp/overview](https://docs.xmemo.dev/docs/mcp/overview)
+
 ## 快速开始（3 步）
 
 ### 第 1 步：获取 XMemo Token
@@ -42,6 +44,8 @@ set XMEMO_AGENT_INSTANCE_ID=random-guid-here
 
 ### Kimi Code
 
+> 官方文档：[XMemo MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
+
 配置文件：`~/.kimi-code/mcp.json`
 
 ```json
@@ -64,6 +68,8 @@ set XMEMO_AGENT_INSTANCE_ID=random-guid-here
 ---
 
 ### Kiro
+
+> 官方文档：[Kiro 接入指南](https://docs.xmemo.dev/docs/mcp/kiro)
 
 配置文件：`~/.kiro/settings/mcp.json`
 
@@ -93,6 +99,8 @@ xmemo doctor --client kiro --fix --auth key
 ---
 
 ### Claude Desktop
+
+> 官方文档：[XMemo MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
 
 配置文件：`%APPDATA%\Claude\claude_desktop_config.json` (Windows) 或 `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
@@ -127,6 +135,8 @@ Claude Desktop 的 CLI 配置路径使用 `mcp-remote` + `XMEMO_KEY`；它不属
 
 ### Cursor
 
+> 官方文档：[Cursor 接入指南](https://docs.xmemo.dev/docs/mcp/cursor)
+
 配置文件：`~/.cursor/mcp.json`
 
 ```json
@@ -150,6 +160,8 @@ Cursor 的 CLI 配置使用 `XMEMO_KEY` Bearer Token；只有 Cursor marketplace
 
 ### Copilot CLI
 
+> 官方文档：[Copilot CLI 接入指南](https://docs.xmemo.dev/docs/mcp/copilot-cli)
+
 Copilot CLI 需要本地代理（因为它不支持远程 HTTP 直接连接）：
 
 ```bash
@@ -169,6 +181,8 @@ xmemo mcp proxy
 ---
 
 ### Gemini CLI
+
+> 官方文档：[Gemini CLI 接入指南](https://docs.xmemo.dev/docs/mcp/gemini)
 
 配置文件：`~/.gemini/settings.json`
 
@@ -192,6 +206,8 @@ Gemini CLI 使用 OAuth 认证，无需手动配置 token。
 
 ### Grok (xAI)
 
+> 官方文档：[XMemo MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
+
 配置文件：`~/.grok/config.toml`
 
 ```toml
@@ -207,6 +223,8 @@ bearer_token_env_var = "XMEMO_KEY"
 ---
 
 ### Antigravity 2.0
+
+> 官方文档：[XMemo MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
 
 配置文件：`~/.antigravity2/mcp.json`
 
@@ -230,6 +248,8 @@ Antigravity 2.0 支持 OAuth，首次使用时会自动打开浏览器完成授�
 
 ### Devin Desktop (formerly Windsurf) / Cline
 
+> 官方文档：[Windsurf 接入指南](https://docs.xmemo.dev/docs/mcp/windsurf) · [MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
+
 这些客户端使用 Bearer Token。不同版本的配置键可能不同，推荐用对应的 CLI ID 生成配置：`xmemo setup windsurf`（或别名 `xmemo setup devin-desktop`）或 `xmemo setup cline`。
 
 ```json
@@ -250,9 +270,13 @@ Antigravity 2.0 支持 OAuth，首次使用时会自动打开浏览器完成授�
 
 ### Trae / Trae Solo / Zed
 
+> 官方文档：[XMemo MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
+
 这些客户端由 CLI 配置为 `mcp-remote` + `XMEMO_KEY`，不要复制上面的直连 HTTP 示例。运行 `xmemo setup trae`、`xmemo setup trae-solo` 或 `xmemo setup zed`，并在启动客户端的同一环境中设置 `XMEMO_KEY`。
 
 ### Qwen
+
+> 官方文档：[XMemo MCP 概览](https://docs.xmemo.dev/docs/mcp/overview)
 
 Qwen 使用 MCP OAuth，无需在 MCP 配置中写入 `XMEMO_KEY`：
 
@@ -346,4 +370,4 @@ xmemo mcp profile codex
 
 ---
 
-*配置遇到问题？提交 Issue 到 [GitHub](https://github.com/yonro/memory-os-cli/issues) 或联系 support@xmemo.dev*
+*配置遇到问题？参考官方 [故障排查指南](https://docs.xmemo.dev/docs/troubleshooting)，或提交 Issue 到 [GitHub](https://github.com/yonro/memory-os-cli/issues) 或联系 support@xmemo.dev*
