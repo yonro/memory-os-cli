@@ -33,7 +33,7 @@
     "`xmemo setup <client>` plans and asks once; `--yes` applies; `--dry-run` previews without applying.",
     "Use `xmemo doctor` and `xmemo status` to diagnose a connection before changing configuration.",
     "`xmemo uninstall` removes only XMemo-owned entries and marker-scoped behavior profiles; unrelated MCP servers, credentials, and device identity are left intact.",
-    "Use only XMemo commands, flags, tools, SDK helpers, parameters, scopes, and endpoints that are explicitly documented. Never invent XMemo APIs, tool names, or CLI flags.",
+    "Use only XMemo commands, flags, MCP tools, parameters, scopes and REST endpoints that are explicitly documented. Never invent XMemo APIs, tool names, or CLI flags.",
     "Store durable and reusable context in XMemo, such as project facts, decisions, preferences, corrections, and handoff information; avoid transient conversation noise.",
     "Preserve documented project, memory scope, provenance, and attribution semantics when saving or retrieving context.",
     "Prefer the current canonical XMemo developer documentation at https://docs.xmemo.dev/docs/quickstart over old examples, marketing pages, third-party snippets, or deprecated configuration.",
