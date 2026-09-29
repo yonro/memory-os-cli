@@ -378,10 +378,10 @@ test('Principle 3: Plan runner executes steps sequentially, prompts [y/N] once, 
 });
 
 // -----------------------------------------------------------------------------
-// Reviewer Findings 1-5 End-to-End Verification Scenarios
+// End-to-End Command Model Verification Scenarios
 // -----------------------------------------------------------------------------
 
-test('Reviewer Finding 1: skill install target resolution uses calling-agent env when --client omitted', async () => {
+test('skill install target resolution uses calling-agent env when --client omitted', async () => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-target-'));
   try {
     const { io, getStdout } = createMockIo({
@@ -401,7 +401,7 @@ test('Reviewer Finding 1: skill install target resolution uses calling-agent env
   }
 });
 
-test('Reviewer Finding 1: skill install target resolution detects single installed client when --client omitted', async () => {
+test('skill install target resolution detects single installed client when --client omitted', async () => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-detect-'));
   try {
     await fs.mkdir(path.join(tmpHome, '.codex'), { recursive: true });
@@ -421,7 +421,7 @@ test('Reviewer Finding 1: skill install target resolution detects single install
   }
 });
 
-test('Reviewer Finding 1: skill install with multiple detected clients fails cleanly asking for --client or --all', async () => {
+test('skill install with multiple detected clients fails cleanly asking for --client or --all', async () => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-multi-'));
   try {
     await fs.mkdir(path.join(tmpHome, '.codex'), { recursive: true });
@@ -441,7 +441,7 @@ test('Reviewer Finding 1: skill install with multiple detected clients fails cle
   }
 });
 
-test('Reviewer Finding 1: skill install with no clients detected fails cleanly asking for --client <id> or --dir <path>', async () => {
+test('skill install with no clients detected fails cleanly asking for --client <id> or --dir <path>', async () => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-none-'));
   try {
     const { io, getStderr } = createMockIo({
@@ -459,7 +459,7 @@ test('Reviewer Finding 1: skill install with no clients detected fails cleanly a
   }
 });
 
-test('Reviewer Finding 2 & 3: setup cursor prompts once; cancel leaves files untouched; confirm writes; rerun is idempotent', async () => {
+test('setup cursor prompts once; cancel leaves files untouched; confirm writes; rerun is idempotent', async () => {
   const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-setup-home-'));
   const tmpWorkspace = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-setup-ws-'));
   try {
@@ -505,7 +505,7 @@ test('Reviewer Finding 2 & 3: setup cursor prompts once; cancel leaves files unt
   }
 });
 
-test('Reviewer Finding 4: setup openclaw defaults to plugin and skill; --no-skill skips skill', async () => {
+test('setup openclaw defaults to plugin and skill; --no-skill skips skill', async () => {
   const { io: ioDry, getStdout: getStdoutDry } = createMockIo();
   const codeDry = await run(['setup', 'openclaw', '--url', 'https://api.example.test', '--dry-run'], ioDry);
   assert.equal(codeDry, 0);
@@ -521,7 +521,7 @@ test('Reviewer Finding 4: setup openclaw defaults to plugin and skill; --no-skil
   assert.doesNotMatch(outNoSkill, /openclaw skills install/);
 });
 
-test('Reviewer Finding 5: skill install --dry-run without npm on PATH produces plan and exits 0', async () => {
+test('skill install --dry-run without npm on PATH produces plan and exits 0', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-no-npm-'));
   try {
     const { io, getStdout } = createMockIo({

@@ -26,7 +26,7 @@ function makeIo(fetch, env = {}) {
 }
 
 // 1. Path Normalization Unit Tests
-test('CLI-DOGFOOD 1-1: normalizeMemoryPath handles edge cases, [ROOT] prefix, spaces, and casing', () => {
+test('normalizeMemoryPath handles edge cases, [ROOT] prefix, spaces, and casing', () => {
   assert.equal(normalizeMemoryPath('[ROOT]/projects/xmemo/Plans'), 'projects/xmemo/plans');
   assert.equal(normalizeMemoryPath('Projects / Xmemo / Plans'), 'projects/xmemo/plans');
   assert.equal(normalizeMemoryPath('projects/xmemo/plans'), 'projects/xmemo/plans');
@@ -38,7 +38,7 @@ test('CLI-DOGFOOD 1-1: normalizeMemoryPath handles edge cases, [ROOT] prefix, sp
   assert.equal(normalizeMemoryPath(undefined), '');
 });
 
-test('CLI-DOGFOOD 1-2: matchesPathPrefix handles normalized matching and --exact-path', () => {
+test('matchesPathPrefix handles normalized matching and --exact-path', () => {
   assert.equal(matchesPathPrefix('[ROOT]/projects/xmemo/Plans.md', 'projects/xmemo'), true);
   assert.equal(matchesPathPrefix('Projects / Xmemo / Plans.md', '[ROOT]/projects/xmemo'), true);
   assert.equal(matchesPathPrefix('projects/other/doc.md', 'projects/xmemo'), false);
@@ -50,7 +50,7 @@ test('CLI-DOGFOOD 1-2: matchesPathPrefix handles normalized matching and --exact
 });
 
 // 2. Schema Unification & ID Stability Unit Tests
-test('CLI-DOGFOOD 2-1: unifyMemoryItem preserves id and provides stable memory_id reference', () => {
+test('unifyMemoryItem preserves id and provides stable memory_id reference', () => {
   // Case A: item with existing id (e.g. from list) without verified memory_id
   const itemWithId = { id: 'list-id-123', path: 'proj/a', content: 'hello', createdAt: '2026-09-28' };
   const unifiedA = unifyMemoryItem(itemWithId, { score: null });
@@ -82,24 +82,24 @@ test('CLI-DOGFOOD 2-1: unifyMemoryItem preserves id and provides stable memory_i
 });
 
 // 3. Search Boost Reranking Unit Tests
-test('CLI-DOGFOOD 3-1: rerankSearchResults prioritizes exact phrase then keyword hits with stable tiebreaking', () => {
+test('rerankSearchResults prioritizes exact phrase then keyword hits with stable tiebreaking', () => {
   const items = [
     { id: '1', content: 'general notes about architecture' },
-    { id: '2', content: 'detailed devflow dogfood testing specification' },
-    { id: '3', content: 'dogfood testing is important' },
+    { id: '2', content: 'detailed memory testing specification' },
+    { id: '3', content: 'memory testing is important' },
     { id: '4', content: 'random entry' }
   ];
 
-  // Search with exact phrase "devflow dogfood"
-  const reranked = rerankSearchResults(items, { exact: 'devflow dogfood', keyword: 'dogfood testing' });
+  // Search with exact phrase "detailed memory testing"
+  const reranked = rerankSearchResults(items, { exact: 'detailed memory testing', keyword: 'testing specification' });
   assert.equal(reranked[0].id, '2'); // exact phrase match
-  assert.equal(reranked[1].id, '3'); // 2 keyword hits ('dogfood', 'testing')
+  assert.equal(reranked[1].id, '3'); // 1 keyword hit ('testing')
   assert.equal(reranked[2].id, '1'); // 0 keyword hits, but original index 0
   assert.equal(reranked[3].id, '4'); // 0 keyword hits, original index 3
 });
 
 // 4. Schema Unification in CLI: search, list, recall
-test('CLI-DOGFOOD 4-1: memory search produces unified schema with data.items, data.results, and data[0]', async () => {
+test('memory search produces unified schema with data.items, data.results, and data[0]', async () => {
   const io = makeIo(async (url) => {
     assert.equal(new URL(url).pathname, '/api/v1/recall');
     return new Response(JSON.stringify({
@@ -132,7 +132,7 @@ test('CLI-DOGFOOD 4-1: memory search produces unified schema with data.items, da
   assert.equal(envelope.data.coverage.memory, true);
 });
 
-test('CLI-DOGFOOD 4-2: context recall produces unified schema with data.items, data.memories, and data[0]', async () => {
+test('context recall produces unified schema with data.items, data.memories, and data[0]', async () => {
   const io = makeIo(async (url) => {
     assert.equal(new URL(url).pathname, '/api/v1/recall/context');
     return new Response(JSON.stringify({
@@ -158,7 +158,7 @@ test('CLI-DOGFOOD 4-2: context recall produces unified schema with data.items, d
   assert.equal(envelope.data[0].memory_id, 'm-recall-1');
 });
 
-test('CLI-DOGFOOD 4-3: memory list produces unified schema with data.items, data.memories, data.total, and data[0]', async () => {
+test('memory list produces unified schema with data.items, data.memories, data.total, and data[0]', async () => {
   const io = makeIo(async (url) => {
     assert.equal(new URL(url).pathname, '/v1/memories');
     return new Response(JSON.stringify({
@@ -188,7 +188,7 @@ test('CLI-DOGFOOD 4-3: memory list produces unified schema with data.items, data
 });
 
 // 5. Memory List Filters & Path Normalization
-test('CLI-DOGFOOD 5-1: memory list --project maps to normalized projects/<name> prefix', async () => {
+test('memory list --project maps to normalized projects/<name> prefix', async () => {
   let requestedPrefix = null;
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -201,7 +201,7 @@ test('CLI-DOGFOOD 5-1: memory list --project maps to normalized projects/<name> 
   assert.equal(requestedPrefix, 'projects/demo');
 });
 
-test('CLI-DOGFOOD 5-2: memory list --exact-path keeps literal prefix and disables normalization', async () => {
+test('memory list --exact-path keeps literal prefix and disables normalization', async () => {
   let requestedPrefix = null;
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -214,7 +214,7 @@ test('CLI-DOGFOOD 5-2: memory list --exact-path keeps literal prefix and disable
   assert.equal(requestedPrefix, '[ROOT]/Projects/Demo');
 });
 
-test('CLI-DOGFOOD 5-3: memory list falls back to bounded paging and client matching when fast try returns 0', async () => {
+test('memory list falls back to bounded paging and client matching when fast try returns 0', async () => {
   let requestCount = 0;
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -241,27 +241,27 @@ test('CLI-DOGFOOD 5-3: memory list falls back to bounded paging and client match
   assert.equal(envelope.data.items[0].id, '1');
 });
 
-test('CLI-DOGFOOD 5-4: memory list --query and --type filter results client-side', async () => {
+test('memory list --query and --type filter results client-side', async () => {
   const io = makeIo(async () => {
     return new Response(JSON.stringify({
       memories: [
-        { id: '1', path: 'a', content: 'important dogfood note', memory_type: 'working' },
+        { id: '1', path: 'a', content: 'important feature note', memory_type: 'working' },
         { id: '2', path: 'b', content: 'unrelated note', memory_type: 'working' },
-        { id: '3', path: 'c', content: 'dogfood note in fact memory', memory_type: 'fact' }
+        { id: '3', path: 'c', content: 'feature note in fact memory', memory_type: 'fact' }
       ],
       total: 3
     }), { status: 200 });
   });
 
   // Filter by query and type
-  const code = await run(['memory', 'list', '--query', 'dogfood', '--type', 'working', '--json'], io);
+  const code = await run(['memory', 'list', '--query', 'feature', '--type', 'working', '--json'], io);
   assert.equal(code, 0);
   const envelope = JSON.parse(io.stdout.value);
   assert.equal(envelope.data.items.length, 1);
   assert.equal(envelope.data.items[0].id, '1');
 });
 
-test('CLI-DOGFOOD 5-5: memory list rejects conflicting options', async () => {
+test('memory list rejects conflicting options', async () => {
   const ioA = makeIo(async () => new Response('{}', { status: 200 }));
   const codeA = await run(['memory', 'list', '--path-prefix', 'a', '--project', 'b', '--json'], ioA);
   assert.notEqual(codeA, 0);
@@ -274,7 +274,7 @@ test('CLI-DOGFOOD 5-5: memory list rejects conflicting options', async () => {
 });
 
 // 6. Memory List Auto-Paging (--all)
-test('CLI-DOGFOOD 6-1: memory list --all auto-pages with page size 100 up to cap and reports progress on stderr in human mode', async () => {
+test('memory list --all auto-pages with page size 100 up to cap and reports progress on stderr in human mode', async () => {
   let callCount = 0;
   const ioHuman = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -310,18 +310,18 @@ test('CLI-DOGFOOD 6-1: memory list --all auto-pages with page size 100 up to cap
 });
 
 // 7. Search Boost CLI Execution
-test('CLI-DOGFOOD 7-1: memory search --keyword and --exact apply deterministic client reranking', async () => {
+test('memory search --keyword and --exact apply deterministic client reranking', async () => {
   const io = makeIo(async () => {
     return new Response(JSON.stringify({
       results: [
         { memory_id: 'm1', content: 'contains only testing keyword' },
-        { memory_id: 'm2', content: 'contains the exact phrase for dogfood here' },
-        { memory_id: 'm3', content: 'contains both dogfood and testing keywords' }
+        { memory_id: 'm2', content: 'contains the exact phrase for feature testing here' },
+        { memory_id: 'm3', content: 'contains both feature and testing keywords' }
       ]
     }), { status: 200 });
   });
 
-  const code = await run(['memory', 'search', 'test', '--keyword', 'dogfood testing', '--exact', 'exact phrase for dogfood', '--json'], io);
+  const code = await run(['memory', 'search', 'test', '--keyword', 'feature testing', '--exact', 'exact phrase for feature testing', '--json'], io);
   assert.equal(code, 0);
   const envelope = JSON.parse(io.stdout.value);
   assert.equal(envelope.data.items[0].memory_id, 'm2'); // exact phrase
@@ -330,7 +330,7 @@ test('CLI-DOGFOOD 7-1: memory search --keyword and --exact apply deterministic c
 });
 
 // 8. EPIPE Safety
-test('CLI-DOGFOOD 8-1: writeLine suppresses EPIPE cleanly', () => {
+test('writeLine suppresses EPIPE cleanly', () => {
   const brokenStream = {
     write() {
       const err = new Error('broken pipe');
@@ -341,8 +341,8 @@ test('CLI-DOGFOOD 8-1: writeLine suppresses EPIPE cleanly', () => {
   assert.doesNotThrow(() => writeLine(brokenStream, 'test'));
 });
 
-// 9. Reviewer-Requested Edge Cases (P1 & P2)
-test('CLI-DOGFOOD 9-1: exact literal [ROOT]/projects/xmemo/Plans hits server first without fallback', async () => {
+// 9. Edge Cases & Resilience
+test('exact literal [ROOT]/projects/xmemo/Plans hits server first without fallback', async () => {
   let requestedPrefix = null;
   let callCount = 0;
   const io = makeIo(async (url) => {
@@ -364,7 +364,7 @@ test('CLI-DOGFOOD 9-1: exact literal [ROOT]/projects/xmemo/Plans hits server fir
   assert.equal(envelope.data.items[0].id, 'plan-1');
 });
 
-test('CLI-DOGFOOD 9-2: adaptive pagination halves on RESPONSE_TOO_LARGE down to 25', async () => {
+test('adaptive pagination halves on RESPONSE_TOO_LARGE down to 25', async () => {
   const limitsAttempted = [];
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -391,7 +391,7 @@ test('CLI-DOGFOOD 9-2: adaptive pagination halves on RESPONSE_TOO_LARGE down to 
   assert.equal(envelope.data.items.length, 25);
 });
 
-test('CLI-DOGFOOD 9-3: 2300-item account paging retrieves target beyond first page', async () => {
+test('2300-item account paging retrieves target beyond first page', async () => {
   let calls = 0;
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -420,7 +420,7 @@ test('CLI-DOGFOOD 9-3: 2300-item account paging retrieves target beyond first pa
   assert.equal(envelope.data.items[0].id, 'target-item');
 });
 
-test('CLI-DOGFOOD 9-4: memory list --type matches item.metadata.memory_type', async () => {
+test('memory list --type matches item.metadata.memory_type', async () => {
   const io = makeIo(async () => {
     return new Response(JSON.stringify({
       memories: [
@@ -439,7 +439,7 @@ test('CLI-DOGFOOD 9-4: memory list --type matches item.metadata.memory_type', as
   assert.equal(envelope.data.items[0].id, '1');
 });
 
-test('CLI-DOGFOOD Rev-9dba0f2f P2: buildServerPrefixVariants generates expected clean and [ROOT]/ variants', () => {
+test('buildServerPrefixVariants generates expected clean and [ROOT]/ variants', () => {
   const v1 = buildServerPrefixVariants('/projects/xmemo/plans');
   assert.ok(v1.includes('projects/xmemo/plans'));
   assert.ok(v1.includes('[ROOT]/projects/xmemo/plans'));
@@ -456,7 +456,7 @@ test('CLI-DOGFOOD Rev-9dba0f2f P2: buildServerPrefixVariants generates expected 
   assert.ok(v3.includes('projects/xmemo/Plans'));
 });
 
-test('CLI-DOGFOOD Rev-9dba0f2f P2: leading slash /projects/xmemo/plans hits server variant with 0 scan requests', async () => {
+test('leading slash /projects/xmemo/plans hits server variant with 0 scan requests', async () => {
   const queries = [];
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -480,7 +480,7 @@ test('CLI-DOGFOOD Rev-9dba0f2f P2: leading slash /projects/xmemo/plans hits serv
   assert.equal(envelope.data.items[0].id, 'hit-1');
 });
 
-test('CLI-DOGFOOD Rev-9dba0f2f P2: spaced prefix Projects / Xmemo / Plans hits server variant with 0 scan requests', async () => {
+test('spaced prefix Projects / Xmemo / Plans hits server variant with 0 scan requests', async () => {
   const queries = [];
   const io = makeIo(async (url) => {
     const parsed = new URL(url);
@@ -504,7 +504,7 @@ test('CLI-DOGFOOD Rev-9dba0f2f P2: spaced prefix Projects / Xmemo / Plans hits s
   assert.equal(envelope.data.items[0].id, 'hit-2');
 });
 
-test('CLI-DOGFOOD Rev-9dba0f2f P3: --exact-path executes exactly one literal server query and zero scans', async () => {
+test('--exact-path executes exactly one literal server query and zero scans', async () => {
   let callCount = 0;
   let requestedPrefix = null;
   const io = makeIo(async (url) => {

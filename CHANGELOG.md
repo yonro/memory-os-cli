@@ -7,14 +7,14 @@ All notable changes to the XMemo CLI client will be documented in this file.
 ## [0.4.188] - 2026-09-29
 
 ### Added
-- **Dogfood CLI Enhancements (CLI-DOGFOOD)**:
+- **Memory List and Search Improvements**:
   - **Schema Unification**: Standardized `data.items` across `xmemo memory search`, `xmemo memory list`, and `xmemo context recall`. Every item includes consistent attributes: `id`, `memory_id`, `path`, `content`, `created_at`, and `score` (similarity score for search, context score for recall, null for list). Preserves existing `id` on list items while ensuring `memory_id` is the stable reference. Full backward compatibility maintained for `data.results` (search), `data.memories` (list/recall), and numeric property access `data[0..n]`.
   - **Path Normalization**: Added robust path normalization (`normalizeMemoryPath`) and prefix matching (`matchesPathPrefix`) for `xmemo memory list`. Automatically handles case-insensitivity, leading/trailing slashes, whitespace around slashes, and `[ROOT]/` stripping. Fast server-side prefix try first, falling back to bounded paging and client-side matching when 0 server results match. Added `--project <name>` shorthand (`projects/<name>`) and `--exact-path` for literal matching.
   - **Memory List Filters & Auto-Paging**: Added `--query`/`--filter <text>` for substring searching over content and path, `--type <memory_type>` for memory type filtering, and `--all` for automatic multi-page retrieval (page size 500, hard cap 10,000 items with warning in `meta.warnings`, and stderr progress in human mode).
   - **Search Boost Reranking**: Added `--keyword <words...>` and `--exact <phrase>` to `xmemo memory search` with deterministic client-side reranking (exact phrase matches first, followed by keyword occurrence count, preserving stable original order on ties).
   - **EPIPE Safety**: Safe handling for `EPIPE` errors on `stdout` and `stderr` in bin entry and line writers, exiting cleanly with status code 0 when downstream readers (e.g. `head`, `less`) close the pipe.
   - **Memory Soft-Delete & Restore**: Added `xmemo memory delete <id> [--reason <text>] [--yes]` calling `POST /v1/memories/<id>/forget` with `[y/N]` confirmation, and `xmemo memory restore <id> [--yes]` calling `POST /v1/memories/<id>/restore` with clear guidance to MCP `restore_memory` if unavailable via REST.
-- **Elegant Command Model (CLI-DESIGN v2)**:
+- **Unified Command Model**:
   - **Unified Resource Grammar**: Standardized all component operations on `xmemo <resource> <action>` (`mcp`, `plugin`, `skill`, `profile`) with canonical actions `install`, `remove`, `status` (plus `list`/`info` for plugins and `update` for skills).
   - **Unified Target Resolver**: Smart client resolution across commands prioritizing explicit `--client <id>` / `--all`, calling agent environment (`CLAUDECODE` -> `claude-code`, Codex session -> `codex`), and auto-detected locally installed clients.
   - **Plan, Confirm Once, Apply Engine (`PlanRunner`)**: Atomic planning and execution engine displaying full unified plan previews, single confirmation prompt `[y/N]`, stop-on-first-failure, idempotency detection, and full `--dry-run`, `--yes`, and `--json` support.
@@ -27,7 +27,7 @@ All notable changes to the XMemo CLI client will be documented in this file.
 ### Changed
 - **Concise Human-Mode Command Output**: Replaced raw JSON dumps across `memory list` (one line per memory with path, ID, preview), `memory add` ("Saved memory <id> at <path>"), `state save/restore` (unwrapping nested `data.result` to show key, version, expiry, and content bounded to 2000 chars), `restart snapshot` (snapshot ID, expiry, item counts), and `cloud-skill list` (name, slug, asset_status with publication state). `--json` structure remains unchanged.
 - **English Next Action Guidance & Help Schema**: Standardized all `nextAction` strings in error classifiers and client exceptions as well as all command option descriptions in `help-schema.js` to clean English.
-- **Top-Level Help Alignment**: Aligned main `xmemo help` with CLI-DESIGN v2 grammar (`<resource> <install|remove|status>`, `status [<client>...|--all]`, `setup [<client>...]`, `uninstall [<client>...]`).
+- **Top-Level Help Alignment**: Aligned main `xmemo help` with unified command grammar (`<resource> <install|remove|status>`, `status [<client>...|--all]`, `setup [<client>...]`, `uninstall [<client>...]`).
 - **Backward-Compatible Command Aliases**: Kept `mcp add` (alias for `mcp install`), `profile uninstall` (alias for `profile remove`), and `skill remove` / `uninstall` (alias for `skill remove`) with helpful one-line stderr hints in interactive terminal mode while preserving clean JSON mode output.
 - **Relocated Client Diagnostics**: Moved client-specific doctor implementations (`codexDoctor`, `kiroDoctor`) into dedicated `src/diagnostics/` modules, eliminating command-layer couplings.
 

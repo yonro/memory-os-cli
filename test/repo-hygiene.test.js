@@ -81,3 +81,61 @@ test('repo-hygiene: no tracked text files contain internal paths or scripts', ()
 
   assert.deepEqual(violations, [], `Found tracked text files containing forbidden strings: ${JSON.stringify(violations, null, 2)}`);
 });
+
+const FORBIDDEN_INTERNAL_MARKERS = [
+  { name: 'CLI internal tasks', regex: /\bCLI-(DOGFOOD|MEMORY-UX|DESIGN)\b/ },
+  { name: 'Review revision markers', regex: /\bRev-[0-9a-f]{8}\b/ },
+  { name: 'INBOX task codes', regex: /\bINBOX-\d{8}/ },
+  { name: 'TID task markers', regex: /\bTID:/ },
+  { name: 'Reviewer-requested markers', regex: /reviewer-requested/i },
+  { name: 'DevFlow references', regex: /\bdevflow\b/i }
+];
+
+const TEST_NAME_REVIEW_UUID_REGEX = /(?:test|it|describe)\s*\(\s*['"`][^'"`]*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+test('repo-hygiene: no tracked files contain internal development markers', () => {
+  const output = execSync('git ls-files', { encoding: 'utf-8' });
+  const files = output.split(/\r?\n/).map((f) => f.trim()).filter(Boolean);
+
+  const violations = [];
+
+  for (const file of files) {
+    const normalized = file.replace(/\\/g, '/');
+
+    // Only this test itself is excluded from checking internal markers
+    if (normalized === 'test/repo-hygiene.test.js') {
+      continue;
+    }
+
+    const fullPath = path.resolve(process.cwd(), file);
+    if (!fs.existsSync(fullPath)) continue;
+
+    const buffer = fs.readFileSync(fullPath);
+    if (isBinary(buffer)) continue;
+
+    const content = buffer.toString('utf-8');
+    const lines = content.split(/\r?\n/);
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Allow the existing devflow-lifecycle hook line in .gitignore
+      if (normalized === '.gitignore' && /\.github\/hooks\/devflow-lifecycle\.json/.test(line)) {
+        continue;
+      }
+
+      for (const marker of FORBIDDEN_INTERNAL_MARKERS) {
+        if (marker.regex.test(line)) {
+          violations.push({ file, line: i + 1, marker: marker.name, snippet: line.trim() });
+        }
+      }
+
+      if (TEST_NAME_REVIEW_UUID_REGEX.test(line)) {
+        violations.push({ file, line: i + 1, marker: 'review-request UUID in test name', snippet: line.trim() });
+      }
+    }
+  }
+
+  assert.deepEqual(violations, [], `Found tracked files containing internal development markers: ${JSON.stringify(violations, null, 2)}`);
+});
+
