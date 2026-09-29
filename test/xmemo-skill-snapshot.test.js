@@ -225,7 +225,7 @@ function createMockServer() {
         return;
       }
 
-      if (pathname === '/v1/agents/register') {
+      if (pathname === '/v1/agents/temporary-register') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           temporary_token: 'mos_anon_golden',

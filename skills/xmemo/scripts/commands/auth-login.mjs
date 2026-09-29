@@ -126,9 +126,10 @@ export async function handleAuthLogin(ctx) {
     try {
       const limits = await fetchTemporaryLimits(options.baseUrl, options.timeoutMs);
       const installation_fingerprint = await getInstallationFingerprint();
-      const res = await makeHttpRequest(options.baseUrl, '/v1/agents/register', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, '/v1/agents/temporary-register', 'POST', {
         entry_type: 'skill',
         client_name: 'xmemo-skill',
+        requested_scopes: ['read:temporary_memory', 'write:temporary_memory'],
         client_version: skillVersion,
         installation_fingerprint,
         runtime: `node ${process.version}`,

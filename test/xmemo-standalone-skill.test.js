@@ -900,8 +900,9 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.match(register.stdout, /bind\?code=claim_1/);
     assert.doesNotMatch(register.stdout, /temp_token_secret/);
     assert.match(register.stderr, /unencrypted/i);
-    assert.equal(testServer.requests.at(-1).url, '/v1/agents/register');
+    assert.equal(testServer.requests.at(-1).url, '/v1/agents/temporary-register');
     assert.equal(testServer.requests.at(-1).body.entry_type, 'skill');
+    assert.deepEqual(testServer.requests.at(-1).body.requested_scopes, ['read:temporary_memory', 'write:temporary_memory']);
     assert.equal(testServer.requests.at(-1).body.metadata.registration_reason, 'unattended');
     const stored = JSON.parse(await fs.readFile(path.join(homeDir, '.xmemo', 'skill-credentials.json'), 'utf8'));
     assert.equal(stored.credential_type, 'temporary');
