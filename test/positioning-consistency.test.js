@@ -147,6 +147,15 @@ test('positioning: forbidden claims and superlatives are absent from metadata fi
     { source: 'context7.json description', text: c7.description }
   ];
 
+  const readmePath = path.join(repoRoot, 'README.md');
+  if (fs.existsSync(readmePath)) {
+    const readmeContent = fs.readFileSync(readmePath, 'utf8');
+    const beyondMcpMatch = readmeContent.match(/## Beyond MCP\r?\n([\s\S]*?)(?=\r?\n## )/);
+    if (beyondMcpMatch) {
+      inspectedFields.push({ source: 'README.md Beyond MCP', text: beyondMcpMatch[1] });
+    }
+  }
+
   const forbiddenPatterns = [
     { name: 'marketing superlatives', regex: /\b(?:revolutionary|industry-leading|the best|#1)\b/i },
     { name: 'connectors claim', regex: /\bconnectors\b/i },
@@ -168,13 +177,40 @@ test('positioning: forbidden claims and superlatives are absent from metadata fi
 
 test('positioning: markdown first-screen block validation (for updated README / MCP-README)', () => {
   const readmePath = path.join(repoRoot, 'README.md');
-  if (fs.existsSync(readmePath)) {
-    const content = fs.readFileSync(readmePath, 'utf8');
-    const lines = content.split(/\r?\n/);
-    const h1 = lines.find((l) => l.startsWith('# '));
-    if (h1 && !h1.includes('XMemo CLI')) {
-      assert.match(h1, /^# XMemo\b/, 'When updated, README H1 must start with "# XMemo"');
-    }
+  assert.equal(fs.existsSync(readmePath), true, 'README.md must exist');
+  const readmeContent = fs.readFileSync(readmePath, 'utf8');
+  const readmeLines = readmeContent.split(/\r?\n/);
+  const readmeH1 = readmeLines.find((l) => l.startsWith('# '));
+  assert.ok(readmeH1, 'README.md must contain an H1 heading');
+  assert.match(readmeH1, /^# XMemo\b/, 'README H1 must start with "# XMemo"');
+
+  const firstScreenLines = readmeLines.slice(0, 60);
+  const firstScreenText = firstScreenLines.join('\n');
+  assert.match(
+    firstScreenText,
+    new RegExp(productMeta.category, 'i'),
+    'README first screen must contain canonical category phrase'
+  );
+  assert.match(
+    firstScreenText,
+    /https:\/\/docs\.xmemo\.dev\/?/,
+    'README first screen must link to docs.xmemo.dev'
+  );
+
+  const readmeCnPath = path.join(repoRoot, 'README_CN.md');
+  if (fs.existsSync(readmeCnPath)) {
+    const readmeCnContent = fs.readFileSync(readmeCnPath, 'utf8');
+    const readmeCnLines = readmeCnContent.split(/\r?\n/);
+    const readmeCnH1 = readmeCnLines.find((l) => l.startsWith('# '));
+    assert.ok(readmeCnH1, 'README_CN.md must contain an H1 heading');
+    assert.match(readmeCnH1, /^# XMemo\b/, 'README_CN H1 must start with "# XMemo"');
+
+    const firstScreenCnText = readmeCnLines.slice(0, 60).join('\n');
+    assert.match(
+      firstScreenCnText,
+      /https:\/\/docs\.xmemo\.dev\/?/,
+      'README_CN first screen must link to docs.xmemo.dev'
+    );
   }
 
   const mcpReadmePath = path.join(repoRoot, 'MCP-README.md');

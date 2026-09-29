@@ -1,29 +1,49 @@
-# XMemo CLI
+# XMemo: Memory OS for AI Agents
 
 [![XMemo logo](./docs/assets/logo.png)](https://xmemo.dev)
-
-**为每一个 AI 智能体打造的私有统一记忆层。**
-
-通过一个生产就绪的命令行工具，在各类编辑器、CLI 与自主智能体之间完成 XMemo 的安装、认证、诊断与无缝连接。
 
 [![CI](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@xmemo/client)
 [![Skill version](https://img.shields.io/github/v/release/yonro/memory-os-cli?filter=skill-v*&label=skill&style=flat-square)](https://clawhub.ai/skill/xmemo)
-[![npm downloads](https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/@xmemo/client)
 [![Node.js version](https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/@xmemo/client)
 [![MIT license](https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license)](./LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/yonro/memory-os-cli?style=flat-square&logo=github&label=stars)](https://github.com/yonro/memory-os-cli)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-2563eb?style=flat-square)](https://modelcontextprotocol.io/)
-[![XMemo Cloud](https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square)](https://xmemo.dev)
-[![Privacy first](https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white)](#默认安全隐私原则)
 [![MCP Badge](https://lobehub.com/badge/mcp/yonro-memory-os-cli?style=flat)](https://lobehub.com/mcp/yonro-memory-os-cli)
 [![Glama quality score](https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg)](https://glama.ai/mcp/servers/yonro/memory-os-cli)
 
-[English](README.md) · [简体中文](README_CN.md)
+XMemo 是专为 AI 智能体打造的用户私有记忆操作系统（User-owned Memory OS）：提供跨会话持久记忆、项目上下文与工作状态连续性，具备智能体身份归属、数据溯源与细粒度访问治理，通过 MCP、CLI 以及公开 REST API 接口供各类 AI 客户端共享。
 
-[快速开始](#快速开始) · [集成列表](#支持的客户端集成) · [连接模式](#连接模式) · [插件系统](#智能体插件) · [命令大全](#命令参考) · [版本说明](#版本说明) · [安全与隐私](#默认安全隐私原则)
+[English](README.md) · [简体中文](README_CN.md) | [完整文档](https://docs.xmemo.dev/) · [托管版 MCP](https://xmemo.dev/mcp)
+
+[快速开始](#快速开始) · [本仓库包含内容](#本仓库包含内容) · [超越-mcp](#超越-mcp) · [集成列表](#支持的客户端集成) · [连接模式](#连接模式) · [插件系统](#智能体插件) · [命令大全](#命令参考) · [版本说明](#版本说明) · [安全与隐私](#默认安全隐私原则)
 
 ---
+
+## 本仓库包含内容
+
+- **[`@xmemo/client`](https://www.npmjs.com/package/@xmemo/client)**：官方 `xmemo` CLI 工具，提供初始化配置、环境诊断、智能体行为规范与记忆交互命令。
+- **MCP 分发**：托管版 Streamable HTTP 配置（`https://xmemo.dev/mcp`）与本地 `xmemo-mcp` stdio 服务端。
+- **XMemo Skill 与原生集成**：面向智能体平台的 `skills/xmemo` 技能包与原生插件索引（`src/plugins/index.json`）。
+- **市场与注册表元数据**：MCP Registry（`server.json`）、LobeHub（`lhm.plugin.json`）与上下文规则（`context7.json`）的规范化描述符。
+
+XMemo 云端托管服务的具体实现属于私有代码库，不在此公开分发。
+
+## 超越 MCP
+
+MCP 是 XMemo 的一种接入界面，而非产品的边界。XMemo 在多种工具与运行时之间提供持久、可跨智能体共享的核心能力：
+
+- **[持久记忆 (Persistent Memory)](https://docs.xmemo.dev/docs/tools/remember)**：在不同会话间存储、检索、浏览与软删除持久事实、用户偏好与运维知识。
+- **[上下文召回 (Context Recall)](https://docs.xmemo.dev/docs/quickstart)**：按需召回精准上下文，支持 Token 预算控制与文档挂载展开。
+- **[会话连续性与工作状态 (Session Continuity)](https://docs.xmemo.dev/docs/quickstart)**：重启快照（Restart Snapshot）与状态存取，支持智能体跨进程与跨会话无缝恢复工作。
+- **[项目上下文与决策记录 (Project Context & Decisions)](https://docs.xmemo.dev/docs/quickstart)**：维护项目级事实、待办事项、决策心路历程与审计历史。
+- **[智能体身份与溯源 (Agent Identity & Provenance)](https://docs.xmemo.dev/docs/api/authentication)**：通过智能体实例身份区分记忆归属与来源，避免凭据混淆。
+- **[权限治理 (Governed Access)](https://docs.xmemo.dev/docs/api/authentication)**：细粒度 Token 作用域管控（`read:memory`、`write:memory`、`read:state`、`write:state`）。
+- **原生插件与技能 (Native Integrations & Skill)**：为 [OpenClaw](https://docs.xmemo.dev/docs/mcp/overview)、[Hermes](https://docs.xmemo.dev/docs/mcp/overview)、[XMemo Skill](https://clawhub.ai/skill/xmemo) 与 [DeepSeek DSH](https://docs.xmemo.dev/docs/mcp/overview) 提供专有集成支持（已发布且通过试点验证，集成成熟度为 Preview）。
+- **统一访问方式**：支持通过 [Model Context Protocol (MCP)](https://docs.xmemo.dev/docs/mcp/overview)、本地命令行 CLI（`xmemo`）与公开 REST API 接口连接。
+
+*预览功能（受支持账户可用或研发演进中）*：[云端技能 (Cloud Skills)](https://docs.xmemo.dev/docs/quickstart)、[Dream 记忆整理](https://docs.xmemo.dev/docs/quickstart) 与 [团队协作空间 (Team Workspaces)](https://docs.xmemo.dev/docs/quickstart)。
+
+## XMemo CLI
 
 `@xmemo/client` 是将各类 AI 工具连接到 [XMemo](https://xmemo.dev) 的官方控制面。它让配置具备可重现性，防止敏感凭据硬编码进项目文件，并为所有受支持的客户端提供统一、持久且用户私有的记忆接入路径。
 
@@ -282,8 +302,10 @@ xmemo skill install --client claude-code --project
 # 一键为所有已检测到的受支持智能体安装
 xmemo skill install --all
 
-# 默认安装至当前目录 (./xmemo-skill)
+# 自动解析检测到的受支持智能体并安装（或通过 --client <id> 指定）
 xmemo skill install
+
+# 安装至指定的自定义目录
 xmemo skill install --dir ./custom-skill-dir
 
 # 非交互式直接执行（跳过 [y/N] 确认提示）
