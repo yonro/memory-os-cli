@@ -865,17 +865,17 @@ own trusted publisher entry on npmjs.com.
 
 ## Documentation and support
 
-Canonical service documentation lives at [xmemo.dev/docs](https://xmemo.dev/docs/quickstart).
+Canonical service documentation lives at [docs.xmemo.dev](https://docs.xmemo.dev/docs/quickstart).
 This repository documents the client; the pages below document the hosted service
 it connects to.
 
 | | |
 | --- | --- |
-| **Quickstart** | [xmemo.dev/docs/quickstart](https://xmemo.dev/docs/quickstart) |
-| **MCP overview and per-client setup** | [xmemo.dev/docs/mcp/overview](https://xmemo.dev/docs/mcp/overview) |
-| **Tool reference** (`remember`, `recall`, `search`, …) | [xmemo.dev/docs/tools/remember](https://xmemo.dev/docs/tools/remember) |
-| **REST API** | [xmemo.dev/docs/api/authentication](https://xmemo.dev/docs/api/authentication) |
-| **Troubleshooting** | [xmemo.dev/docs/troubleshooting](https://xmemo.dev/docs/troubleshooting) |
+| **Quickstart** | [docs.xmemo.dev/docs/quickstart](https://docs.xmemo.dev/docs/quickstart) |
+| **MCP overview and per-client setup** | [docs.xmemo.dev/docs/mcp/overview](https://docs.xmemo.dev/docs/mcp/overview) |
+| **Tool reference** (`remember`, `recall`, `search`, …) | [docs.xmemo.dev/docs/tools/remember](https://docs.xmemo.dev/docs/tools/remember) |
+| **REST API** | [docs.xmemo.dev/docs/api/authentication](https://docs.xmemo.dev/docs/api/authentication) |
+| **Troubleshooting** | [docs.xmemo.dev/docs/troubleshooting](https://docs.xmemo.dev/docs/troubleshooting) |
 | **Machine-readable index** | [xmemo.dev/llms.txt](https://xmemo.dev/llms.txt) |
 
 - [XMemo](https://xmemo.dev)

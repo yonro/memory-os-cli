@@ -159,7 +159,7 @@ test('doctor --discovery runs discovery checks and legacy discovery emits deprec
     protocol: 'xmemo-discovery-v1',
     service: 'memory-os',
     urls: {
-      docs: 'https://xmemo.dev/docs',
+      docs: 'https://docs.xmemo.dev',
       mcp: 'https://xmemo.dev/mcp'
     },
     clients: ['cursor', 'codex']
