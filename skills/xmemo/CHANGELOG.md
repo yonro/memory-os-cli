@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Send temporary registration fallback to `/v1/agents/temporary-register` with explicit temporary read and write scopes; formal device login is unchanged.
+
 ## 1.1.35
 
 ### Added
