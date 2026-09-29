@@ -1,7 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
-  "projectTitle": "XMemo CLI",
-  "description": "Official CLI and MCP setup helper for XMemo (@xmemo/client). Connects editors, CLIs, and autonomous agents to a private memory layer while keeping credentials out of project files.",
+  "projectTitle": "XMemo (public client and MCP distribution)",
+  "description": "XMemo is a user-owned Memory OS for AI agents: persistent memory, project context and session continuity with agent identity, provenance and governed access, shared across AI clients through MCP, the CLI and a public REST API surface.",
   "branch": "main",
   "folders": [],
   "excludeFolders": [
@@ -14,7 +14,8 @@
     ".worktrees",
     ".progress",
     ".tmp-mcp-test",
-    "docs/assets"
+    "docs/assets",
+    "docs/maintainers"
   ],
   "excludeFiles": [
     "package-lock.json",
@@ -29,13 +30,13 @@
     "Treat X-Memory-OS-Agent-ID and XMEMO_AGENT_INSTANCE_ID as attribution identifiers, not authentication credentials.",
     "Keep XMEMO_AGENT_INSTANCE_ID stable for the same local installation or autonomous runner; generate a different value for a different local agent profile.",
     "Prefer `xmemo mcp add <client> --write` over hand-editing a client config file, so the stable instance identity is generated correctly.",
-    "`xmemo setup` is dry-run by default; configuration is only written when --write or --yes is passed.",
+    "`xmemo setup <client>` plans and asks once; `--yes` applies; `--dry-run` previews without applying.",
     "Use `xmemo doctor` and `xmemo status` to diagnose a connection before changing configuration.",
     "`xmemo uninstall` removes only XMemo-owned entries and marker-scoped behavior profiles; unrelated MCP servers, credentials, and device identity are left intact.",
     "Use only XMemo commands, flags, tools, SDK helpers, parameters, scopes, and endpoints that are explicitly documented. Never invent XMemo APIs, tool names, or CLI flags.",
     "Store durable and reusable context in XMemo, such as project facts, decisions, preferences, corrections, and handoff information; avoid transient conversation noise.",
     "Preserve documented project, memory scope, provenance, and attribution semantics when saving or retrieving context.",
-    "Prefer the current canonical XMemo developer documentation at https://xmemo.dev/docs/quickstart over old examples, marketing pages, third-party snippets, or deprecated configuration.",
+    "Prefer the current canonical XMemo developer documentation at https://docs.xmemo.dev/docs/quickstart over old examples, marketing pages, third-party snippets, or deprecated configuration.",
     "This repository is the public client. The XMemo service repository is private; do not link to it."
   ]
 }

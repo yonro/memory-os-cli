@@ -151,4 +151,53 @@ test('repo-hygiene: no stray test directories left in working tree', () => {
   }
 });
 
+const FORBIDDEN_DEPRECATED_DOCS_URLS = [
+  { name: 'Deprecated docs URL (https://xmemo.dev/docs)', regex: /https:\/\/xmemo\.dev\/docs/i },
+  { name: 'Deprecated product docs URL (xmemo.dev/product/docs)', regex: /xmemo\.dev\/product\/docs/i }
+];
+
+const ALLOWLISTED_DOCS_REDIRECT_TEST_FILES = new Set([
+  // Reserved for future explicit redirect tests, e.g. 'test/redirects.test.js'
+]);
+
+test('repo-hygiene: no tracked files contain deprecated docs URLs (use docs.xmemo.dev instead)', () => {
+  const output = execSync('git ls-files', { encoding: 'utf-8' });
+  const files = output.split(/\r?\n/).map((f) => f.trim()).filter(Boolean);
+
+  const violations = [];
+
+  for (const file of files) {
+    const normalized = file.replace(/\\/g, '/');
+
+    // This test itself and allowlisted redirect tests are excluded
+    if (normalized === 'test/repo-hygiene.test.js' || ALLOWLISTED_DOCS_REDIRECT_TEST_FILES.has(normalized)) {
+      continue;
+    }
+
+    const fullPath = path.resolve(process.cwd(), file);
+    if (!fs.existsSync(fullPath)) continue;
+
+    const buffer = fs.readFileSync(fullPath);
+    if (isBinary(buffer)) continue;
+
+    const content = buffer.toString('utf-8');
+    const lines = content.split(/\r?\n/);
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const pattern of FORBIDDEN_DEPRECATED_DOCS_URLS) {
+        if (pattern.regex.test(line)) {
+          violations.push({ file, line: i + 1, marker: pattern.name, snippet: line.trim() });
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    violations,
+    [],
+    `Found tracked files containing deprecated docs URLs: ${JSON.stringify(violations, null, 2)}`
+  );
+});
+
 

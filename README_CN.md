@@ -806,15 +806,15 @@ CLI 工具包与托管 MCP 服务保持独立的版本管理轨道：
 
 ## 文档与技术支持
 
-权威官方文档请访问 [xmemo.dev/docs](https://xmemo.dev/docs/quickstart)。本仓库聚焦于客户端本身，云服务相关指南可参考：
+权威官方文档请访问 [docs.xmemo.dev](https://docs.xmemo.dev/docs/quickstart)。本仓库聚焦于客户端本身，云服务相关指南可参考：
 
 | | |
 | --- | --- |
-| **快速起步** | [xmemo.dev/docs/quickstart](https://xmemo.dev/docs/quickstart) |
-| **MCP 概览与各客户端指南** | [xmemo.dev/docs/mcp/overview](https://xmemo.dev/docs/mcp/overview) |
-| **工具规范** (`remember`, `recall`, `search`, …) | [xmemo.dev/docs/tools/remember](https://xmemo.dev/docs/tools/remember) |
-| **REST API 文档** | [xmemo.dev/docs/api/authentication](https://xmemo.dev/docs/api/authentication) |
-| **常见问题排查** | [xmemo.dev/docs/troubleshooting](https://xmemo.dev/docs/troubleshooting) |
+| **快速起步** | [docs.xmemo.dev/docs/quickstart](https://docs.xmemo.dev/docs/quickstart) |
+| **MCP 概览与各客户端指南** | [docs.xmemo.dev/docs/mcp/overview](https://docs.xmemo.dev/docs/mcp/overview) |
+| **工具规范** (`remember`, `recall`, `search`, …) | [docs.xmemo.dev/docs/tools/remember](https://docs.xmemo.dev/docs/tools/remember) |
+| **REST API 文档** | [docs.xmemo.dev/docs/api/authentication](https://docs.xmemo.dev/docs/api/authentication) |
+| **常见问题排查** | [docs.xmemo.dev/docs/troubleshooting](https://docs.xmemo.dev/docs/troubleshooting) |
 | **AI 可读索引** | [xmemo.dev/llms.txt](https://xmemo.dev/llms.txt) |
 
 - [XMemo 官网](https://xmemo.dev)
