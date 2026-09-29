@@ -32,6 +32,7 @@ test('positioning: server.json metadata aligns with product-metadata and satisfi
 
   assert.equal(typeof server.description, 'string');
   assert.match(server.description, new RegExp(productMeta.category, 'i'), 'server.json description must contain canonical category');
+  assert.match(server.description, /public REST/i, 'server.json description must mention "public REST" when describing REST surface');
   assert.ok(
     server.description.length <= 100,
     `server.json description length (${server.description.length}) must not exceed MCP Registry schema maxLength (100)`
@@ -82,6 +83,7 @@ test('positioning: lhm.plugin.json metadata aligns with product-metadata', () =>
   assert.equal(plugin.name, productMeta.name, 'lhm.plugin.json name must be XMemo');
   assert.notEqual(plugin.name, 'XMemo CLI', 'lhm.plugin.json name must not be XMemo CLI');
   assert.match(plugin.description, new RegExp(productMeta.category, 'i'), 'lhm.plugin.json description must contain canonical category');
+  assert.match(plugin.description, /public REST/i, 'lhm.plugin.json description must mention "public REST" when describing REST surface');
   assert.equal(plugin.cloudEndpoint, productMeta.mcpUrl);
 
   const requiredTags = ['memory-os', 'agent-memory', 'mcp'];

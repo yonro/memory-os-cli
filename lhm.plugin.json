@@ -1,7 +1,7 @@
 {
   "identifier": "yonro-memory-os-cli",
   "name": "XMemo",
-  "description": "User-owned Memory OS for AI agents: persistent memory, context and governance via MCP and REST.",
+  "description": "User-owned Memory OS for AI agents: persistent, governed memory via MCP and a public REST API.",
   "author": "yonro",
   "authorUrl": "https://github.com/yonro",
   "homepage": "https://xmemo.dev/product/mcp",
