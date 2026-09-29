@@ -106,7 +106,7 @@ export async function handleAuthLogin(ctx) {
     return;
   }
 
-  // 1b. LIMITED NO-ACCOUNT-START REGISTRATION (explicit fallback only)
+  // Explicit temporary fallback.
   if (command === 'register') {
     const reason = flags.reason;
     if (!['unattended', 'declined'].includes(reason)) {
