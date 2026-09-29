@@ -1,4 +1,4 @@
-# XMemo MCP Server
+# XMemo MCP Interface
 
 > **User-owned Memory OS for AI agents: persistent, governed memory via the Model Context Protocol.**
 
@@ -19,7 +19,7 @@ Whether using Claude, Cursor, Copilot, Gemini, Kimi, Grok, Antigravity, or other
 - **Persistent Memory**: Decisions, preferences, and operational facts endure across sessions and process boundaries.
 - **Governed Access**: Scoped tokens, client OAuth support, soft and hard deletion, and sensitive memory protection ([governance details](https://docs.xmemo.dev/docs/concepts/governance-retention)).
 - **Cross-Client Continuity**: Record once, access across AI tools (Copilot, Claude, Cursor, Gemini, IDEs, and CLI).
-- **Privacy First**: User-owned data, zero telemetry, no plaintext tokens written to configuration files.
+- **Privacy by Default**: The CLI and xmemo-mcp stdio proxy send no telemetry, and generated configs reference XMEMO_KEY instead of embedding plaintext tokens ([data boundary details](https://docs.xmemo.dev/docs/security/data-boundary)).
 - **Hosted Streamable HTTP & Local Stdio**: Connect directly to hosted Streamable HTTP (`https://xmemo.dev/mcp`) or run the local `xmemo-mcp` stdio proxy.
 
 ---
@@ -198,7 +198,7 @@ Detailed setup instructions and client-specific options are documented at:
 
 ## Privacy & Security
 
-- **Zero Telemetry**: Neither the CLI nor the MCP service collects analytics or telemetry.
+- **No Client Telemetry**: The CLI and `xmemo-mcp` stdio proxy send no telemetry or analytics; generated configs reference `${XMEMO_KEY}` instead of embedding tokens. Service-side data handling details are documented in [Data Boundary](https://docs.xmemo.dev/docs/security/data-boundary).
 - **Credential Protection**: Configuration files refer to environment variables (e.g. `${XMEMO_KEY}`) rather than plaintext secrets.
 - **Specification-Accurate Authentication**: Only clients marked as MCP OAuth use browser flows; other clients read Bearer tokens from environment variables.
 - **Device Attribution**: `XMEMO_AGENT_INSTANCE_ID` is a non-sensitive device UUID used for origin attribution without exposing personal data.

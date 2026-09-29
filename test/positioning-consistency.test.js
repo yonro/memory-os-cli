@@ -230,6 +230,15 @@ test('positioning: markdown first-screen block validation (for updated README / 
   const mcpH1 = mcpLines.find((l) => l.startsWith('# '));
   assert.ok(mcpH1, 'MCP-README.md must contain an H1 heading');
   assert.match(mcpH1, /^# XMemo\b/, 'MCP-README H1 must start with "# XMemo"');
+  assert.doesNotMatch(mcpH1, /MCP Server$/i, 'MCP-README H1 must not end in "MCP Server"');
+
+  const mcpFirstParagraph = mcpLines.find((l) => l.trim().length > 0 && !l.startsWith('#'));
+  assert.ok(mcpFirstParagraph, 'MCP-README must contain a first paragraph');
+  assert.match(
+    mcpFirstParagraph,
+    new RegExp(productMeta.category, 'i'),
+    'MCP-README first paragraph must contain canonical category phrase'
+  );
 
   const mcpFirstScreenText = mcpLines.slice(0, 40).join('\n');
   assert.match(
@@ -250,8 +259,22 @@ test('positioning: markdown first-screen block validation (for updated README / 
   const mcpCnH1 = mcpCnLines.find((l) => l.startsWith('# '));
   assert.ok(mcpCnH1, 'MCP-README_CN.md must contain an H1 heading');
   assert.match(mcpCnH1, /^# XMemo\b/, 'MCP-README_CN H1 must start with "# XMemo"');
+  assert.doesNotMatch(mcpCnH1, /MCP Server$/i, 'MCP-README_CN H1 must not end in "MCP Server"');
+
+  const mcpCnFirstParagraph = mcpCnLines.find((l) => l.trim().length > 0 && !l.startsWith('#'));
+  assert.ok(mcpCnFirstParagraph, 'MCP-README_CN must contain a first paragraph');
+  assert.match(
+    mcpCnFirstParagraph,
+    /Memory OS/i,
+    'MCP-README_CN first paragraph must contain "Memory OS"'
+  );
 
   const mcpFirstScreenCnText = mcpCnLines.slice(0, 40).join('\n');
+  assert.match(
+    mcpFirstScreenCnText,
+    /Memory OS/i,
+    'MCP-README_CN first screen must contain "Memory OS"'
+  );
   assert.match(
     mcpFirstScreenCnText,
     /https:\/\/docs\.xmemo\.dev\/?/,

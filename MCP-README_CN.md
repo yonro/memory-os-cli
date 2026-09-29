@@ -1,4 +1,4 @@
-# XMemo MCP Server
+# XMemo MCP 接入
 
 > **面向 AI 智能体的用户私有 Memory OS，通过 MCP 为大模型提供持久化、受治理的长期记忆。**
 
@@ -19,7 +19,7 @@ XMemo 是一个面向 AI 智能体的**用户私有 Memory OS (User-owned Memory
 - **持久化记忆 (Persistent Memory)**：AI 的决策、偏好与项目事实在会话与重启之间保持持久，不再随上下文窗口关闭而消失。
 - **权限与数据治理 (Governed Access)**：细粒度 Token 作用域管控、客户端 OAuth 支持、软/硬删除机制以及敏感记忆治理。
 - **跨客户端连续性 (Cross-Client Continuity)**：一次记录，处处可用（Copilot、Claude、Cursor、Gemini、IDE 与 CLI）。
-- **隐私优先 (Privacy First)**：用户完全拥有记忆数据，零遥测，不将明文 Token 写入配置文件。
+- **默认隐私 (Privacy by Default)**：CLI 与 `xmemo-mcp` stdio 代理不发送任何遥测数据，生成的配置文件引用 `XMEMO_KEY` 而非硬编码明文 Token（详见[数据边界与安全](https://docs.xmemo.dev/docs/security/data-boundary)）。
 - **托管 HTTP 与本地代理**：支持直接连接 Hosted Streamable HTTP (`https://xmemo.dev/mcp`)，或使用本地 `xmemo-mcp` stdio 代理。
 
 ---
@@ -198,7 +198,7 @@ xmemo-mcp
 
 ## 隐私与安全
 
-- **无遥测**：CLI 和 MCP 服务均不发送任何遥测、埋点或分析数据。
+- **客户端无遥测**：CLI 与 `xmemo-mcp` stdio 代理不发送任何遥测、埋点或使用情况分析数据；服务端数据处理规范请参见[数据边界与安全](https://docs.xmemo.dev/docs/security/data-boundary)。
 - **Token 安全**：生成的配置文件仅引用环境变量（如 `${XMEMO_KEY}`），从不硬编码真实 Token。
 - **认证方式以规范为准**：仅标明 MCP OAuth 的客户端走浏览器授权；其余客户端通过环境变量读取 Bearer Token。
 - **设备级标识**：`XMEMO_AGENT_INSTANCE_ID` 为非敏感设备唯一标识符，用于归因与审计，不暴露个人信息。
