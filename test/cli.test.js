@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import fsSync, { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { run } from '../src/cli.js';
-import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defaultWindsurfConfigPath } from '../src/mcp/identity/paths.js';
 
@@ -29,72 +29,79 @@ test('help documents privacy defaults', async () => {
 });
 
 test('skill install delegates to @xmemo/skill npm package', async () => {
-  const calls = [];
-  const mockChildOutput = JSON.stringify({
-    package: '@xmemo/skill',
-    skillVersion: '1.1.25',
-    target: path.resolve('xmemo-skill-test'),
-    dryRun: true,
-    force: false,
-    replaced: false,
-    installed: false,
-    networkUsed: false,
-    tokenSent: false
-  });
-  const result = await invoke(['skill', 'install', '--dry-run', '--target', 'xmemo-skill-test', '--json'], {
-    spawn: spawnStub(calls, { code: 0, stdout: mockChildOutput })
-  });
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-skill-test-'));
+  const targetDir = path.join(tempDir, 'xmemo-skill-test');
+  try {
+    const calls = [];
+    const mockChildOutput = JSON.stringify({
+      package: '@xmemo/skill',
+      skillVersion: '1.1.25',
+      target: targetDir,
+      dryRun: true,
+      force: false,
+      replaced: false,
+      installed: false,
+      networkUsed: false,
+      tokenSent: false
+    });
+    const result = await invoke(['skill', 'install', '--dry-run', '--target', targetDir, '--json'], {
+      cwd: tempDir,
+      spawn: spawnStub(calls, { code: 0, stdout: mockChildOutput })
+    });
 
-  assert.equal(result.code, 0);
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].options.shell, false);
-  assert.equal(calls[1].options.shell, false);
+    assert.equal(result.code, 0);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].options.shell, false);
+    assert.equal(calls[1].options.shell, false);
 
-  const packDest = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
-  const expectedPackArgs = [
-    'pack',
-    '@xmemo/skill@1.1.35',
-    '--pack-destination',
-    packDest,
-    '--json'
-  ];
-  if (process.platform === 'win32') {
-    assert.equal(calls[0].command, process.execPath);
-    assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
-    assert.deepEqual(calls[0].args.slice(1), expectedPackArgs);
-  } else {
-    assert.equal(calls[0].command, 'npm');
-    assert.deepEqual(calls[0].args, expectedPackArgs);
+    const packDest = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
+    const expectedPackArgs = [
+      'pack',
+      '@xmemo/skill@1.1.35',
+      '--pack-destination',
+      packDest,
+      '--json'
+    ];
+    if (process.platform === 'win32') {
+      assert.equal(calls[0].command, process.execPath);
+      assert.match(calls[0].args[0], /npm-cli\.(m)?js$/);
+      assert.deepEqual(calls[0].args.slice(1), expectedPackArgs);
+    } else {
+      assert.equal(calls[0].command, 'npm');
+      assert.deepEqual(calls[0].args, expectedPackArgs);
+    }
+
+    const tgzPackage = calls[1].args[calls[1].args.indexOf('--package') + 1];
+    const expectedExecArgs = [
+      'exec',
+      '--offline',
+      '--package',
+      tgzPackage,
+      '--',
+      'xmemo-skill',
+      'install',
+      '--target',
+      targetDir,
+      '--dry-run',
+      '--json'
+    ];
+    if (process.platform === 'win32') {
+      assert.equal(calls[1].command, process.execPath);
+      assert.match(calls[1].args[0], /npm-cli\.(m)?js$/);
+      assert.deepEqual(calls[1].args.slice(1), expectedExecArgs);
+    } else {
+      assert.equal(calls[1].command, 'npm');
+      assert.deepEqual(calls[1].args, expectedExecArgs);
+    }
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.installed, false);
+    assert.equal(report.networkUsed, true);
+    assert.equal(report.source, 'npm');
+    assert.equal(report.spec, '1.1.35');
+    assert.equal(report.tokenSent, false);
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
   }
-
-  const tgzPackage = calls[1].args[calls[1].args.indexOf('--package') + 1];
-  const expectedExecArgs = [
-    'exec',
-    '--offline',
-    '--package',
-    tgzPackage,
-    '--',
-    'xmemo-skill',
-    'install',
-    '--target',
-    path.resolve('xmemo-skill-test'),
-    '--dry-run',
-    '--json'
-  ];
-  if (process.platform === 'win32') {
-    assert.equal(calls[1].command, process.execPath);
-    assert.match(calls[1].args[0], /npm-cli\.(m)?js$/);
-    assert.deepEqual(calls[1].args.slice(1), expectedExecArgs);
-  } else {
-    assert.equal(calls[1].command, 'npm');
-    assert.deepEqual(calls[1].args, expectedExecArgs);
-  }
-  const report = JSON.parse(result.stdout);
-  assert.equal(report.installed, false);
-  assert.equal(report.networkUsed, true);
-  assert.equal(report.source, 'npm');
-  assert.equal(report.spec, '1.1.35');
-  assert.equal(report.tokenSent, false);
 });
 
 test('update dry-run documents npm global install command', async () => {
@@ -471,12 +478,17 @@ test('non-interactive browser login requires explicit plaintext consent', async 
 });
 
 test('auth-status is a compatibility alias for auth status', async () => {
-  const env = { XMEMO_KEY: 'mem_os_test_token_1234567890' };
-  const canonical = await invoke(['auth', 'status', '--json'], { env });
-  const alias = await invoke(['auth-status', '--json'], { env });
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'auth-status-alias-'));
+  try {
+    const env = { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'mem_os_test_token_1234567890' };
+    const canonical = await invoke(['auth', 'status', '--json'], { env });
+    const alias = await invoke(['auth-status', '--json'], { env });
 
-  assert.equal(alias.code, canonical.code);
-  assert.deepEqual(JSON.parse(alias.stdout), JSON.parse(canonical.stdout));
+    assert.equal(alias.code, canonical.code);
+    assert.deepEqual(JSON.parse(alias.stdout), JSON.parse(canonical.stdout));
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 });
 
 test('mcp codex config references env var without leaking token value', async () => {
@@ -1213,6 +1225,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
   await fs.mkdir(traeSoloConfigDir, { recursive: true });
   
   const result = await invoke(['setup', '--all', '--write', '--url', 'https://api.example.test', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -1635,6 +1648,7 @@ url = "https://other.test/mcp"
 `);
 
   const result = await invoke(['setup', 'codex', '--url', 'https://api.example.test', '--yes', '--force'], {
+    cwd: tempDir,
     env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token-that-must-not-leak' },
     fetch: discoveryFetch()
   });
@@ -1724,8 +1738,10 @@ test('uninstall hermes reports manual-edit-required for flow-style YAML', async 
 test('setup cursor prompt cancels with n or Enter leaving all files untouched', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-cursor-cancel-'));
   const result = await invoke(['setup', 'cursor', '--url', 'https://api.example.test'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
+      USERPROFILE: tempDir,
       XMEMO_KEY: 'secret-token-that-must-not-leak'
     },
     fetch: discoveryFetch(),
@@ -2032,22 +2048,28 @@ test('setup gemini no-profile writes config but skips behavior profile', async (
 
 test('setup gemini in project context targets GEMINI.md', async () => {
   const mockHome = path.join(os.tmpdir(), 'gemini-unified-home-path');
+  const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gemini-project-dir-'));
   await fs.mkdir(mockHome, { recursive: true });
+  await fs.mkdir(path.join(projectDir, '.git'), { recursive: true });
   
-  const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--dry-run', '--json'], {
-    env: {
-      HOME: mockHome,
-      USERPROFILE: mockHome,
-      XMEMO_KEY: 'secret-token-that-must-not-leak'
-    },
-    fetch: discoveryFetch()
-  });
+  try {
+    const result = await invoke(['setup', 'gemini', '--url', 'https://api.example.test', '--dry-run', '--json'], {
+      cwd: projectDir,
+      env: {
+        HOME: mockHome,
+        USERPROFILE: mockHome,
+        XMEMO_KEY: 'secret-token-that-must-not-leak'
+      },
+      fetch: discoveryFetch()
+    });
 
-  assert.equal(result.code, 0);
-  const plan = JSON.parse(result.stdout);
-  assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(process.cwd(), 'GEMINI.md'));
-  
-  await fs.rm(mockHome, { recursive: true, force: true });
+    assert.equal(result.code, 0);
+    const plan = JSON.parse(result.stdout);
+    assert.equal(plan.selectedClient.behaviorProfile.targetPath, path.join(projectDir, 'GEMINI.md'));
+  } finally {
+    await fs.rm(mockHome, { recursive: true, force: true });
+    await fs.rm(projectDir, { recursive: true, force: true });
+  }
 });
 
 test('setup antigravity shorthand writes oauth serverUrl config and profile with --yes', async () => {
@@ -2369,6 +2391,7 @@ test('setup kimi-code --force overwrites existing config', async () => {
   );
 
   const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--json'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -2381,6 +2404,7 @@ test('setup kimi-code --force overwrites existing config', async () => {
   assert.match(result.stderr, /already contains/);
 
   const forceResult = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--json', '--force'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -2403,6 +2427,7 @@ test('setup kimi-code --force overwrites existing config', async () => {
 test('setup kimi-code prints bearerTokenEnvVar guidance without leaking token', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-kimi-code-text-'));
   const result = await invoke(['setup', 'kimi', '--url', 'https://api.example.test', '--yes'], {
+    cwd: tempDir,
     env: {
       HOME: tempDir,
       USERPROFILE: tempDir,
@@ -2422,10 +2447,12 @@ test('codex setup writes env-referenced config and smoke validates it', async ()
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-codex-'));
   const env = {
     HOME: tempDir,
+    USERPROFILE: tempDir,
     MEMORY_OS_CONFIG_HOME: tempDir,
     XMEMO_KEY: 'secret-token-that-must-not-leak'
   };
   const setup = await invoke(['setup', '--url', 'https://api.example.test', '--client', 'codex', '--write', '--json'], {
+    cwd: tempDir,
     env,
     fetch: discoveryFetch()
   });
@@ -2638,20 +2665,49 @@ async function invoke(args, options = {}) {
     stdin.isTTY = options.isTTY;
   }
 
-  const code = await run(args, {
-    cwd: options.cwd,
-    env: options.env ?? {},
-    stdin,
-    stdout: { write: (chunk) => { stdout += chunk; } },
-    stderr: { write: (chunk) => { stderr += chunk; } },
-    fetch: options.fetch,
-    spawn: options.spawn,
-    sleep: options.sleep,
-    confirm: options.confirm,
-    nodeVersion: options.nodeVersion
-  });
+  let createdTempCwd = null;
+  let cwd = options.cwd;
+  if (!cwd) {
+    if (options.env?.HOME && fsSync.existsSync(options.env.HOME)) {
+      cwd = options.env.HOME;
+    } else if (options.env?.USERPROFILE && fsSync.existsSync(options.env.USERPROFILE)) {
+      cwd = options.env.USERPROFILE;
+    } else {
+      createdTempCwd = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-cli-cwd-'));
+      cwd = createdTempCwd;
+    }
+  }
 
-  return { code, stdout, stderr };
+  const env = { ...(options.env ?? {}) };
+  if (!env.HOME) env.HOME = cwd;
+  if (!env.USERPROFILE) env.USERPROFILE = cwd;
+
+  const defaultSpawn = (command, args) => {
+    throw new Error(`Unexpected real subprocess spawned in test: ${command} ${args?.join(' ')}`);
+  };
+
+  try {
+    const code = await run(args, {
+      cwd,
+      env,
+      stdin,
+      stdout: { write: (chunk) => { stdout += chunk; } },
+      stderr: { write: (chunk) => { stderr += chunk; } },
+      fetch: options.fetch,
+      spawn: options.spawn ?? defaultSpawn,
+      sleep: options.sleep,
+      confirm: options.confirm,
+      nodeVersion: options.nodeVersion
+    });
+
+    return { code, stdout, stderr };
+  } finally {
+    if (createdTempCwd) {
+      try {
+        await fs.rm(createdTempCwd, { recursive: true, force: true });
+      } catch {}
+    }
+  }
 }
 
 function devicePendingResponse() {
@@ -2847,7 +2903,7 @@ test('mcp add and setup support windsurf and devin-desktop alias, writing server
   assert.equal(pDevin.tokenEnvVar, 'XMEMO_KEY');
 
   // 3. mcp add devin-desktop --write writes to new devin path
-  const rWrite = await invoke(['mcp', 'add', 'devin-desktop', '--write', '--force'], { env });
+  const rWrite = await invoke(['mcp', 'add', 'devin-desktop', '--write', '--force'], { cwd: tmpBase, env });
   assert.equal(rWrite.code, 0, rWrite.stderr);
   const expectedNewPath = defaultWindsurfConfigPath(env);
   const writtenContent = JSON.parse(await fs.readFile(expectedNewPath, 'utf8'));
@@ -2860,6 +2916,7 @@ test('mcp add and setup support windsurf and devin-desktop alias, writing server
   const tmpSetup = path.join(tmpBase, 'setup-test');
   const setupEnv = { HOME: tmpSetup, USERPROFILE: tmpSetup, XMEMO_KEY: 'test-secret-key-1234' };
   const rSetup = await invoke(['setup', '--client', 'devin-desktop', '--write', '--force'], {
+    cwd: tmpSetup,
     env: setupEnv,
     fetch: discoveryFetch()
   });
@@ -2875,6 +2932,7 @@ test('mcp add and setup support windsurf and devin-desktop alias, writing server
   await fs.mkdir(path.join(tmpLegacy, '.codeium', 'windsurf'), { recursive: true });
   const legacyEnv = { HOME: tmpLegacy, USERPROFILE: tmpLegacy, XMEMO_KEY: 'test-secret-key-1234' };
   const rLegacySetup = await invoke(['setup', 'windsurf', '--write', '--force'], {
+    cwd: tmpLegacy,
     env: legacyEnv,
     fetch: discoveryFetch()
   });
@@ -2886,11 +2944,12 @@ test('mcp add and setup support windsurf and devin-desktop alias, writing server
   assert.equal(legacyContent.mcpServers.XMemo.headers['X-Memory-OS-Agent-ID'], 'windsurf');
 
   // 6. Bare 'devin' alias is rejected as unknown client (only 'devin-desktop' is supported)
-  const rDevinBare = await invoke(['mcp', 'add', 'devin', '--json'], { env });
+  const rDevinBare = await invoke(['mcp', 'add', 'devin', '--json'], { cwd: tmpBase, env });
   assert.equal(rDevinBare.code, 2);
   assert.match(rDevinBare.stderr, /Supported MCP setup command/);
 
   const rSetupDevin = await invoke(['setup', '--client', 'devin', '--write'], {
+    cwd: tmpBase,
     env,
     fetch: discoveryFetch()
   });
