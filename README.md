@@ -369,7 +369,7 @@ openclaw skills install @xmemo/xmemo --version 1.1.35
 > [!TIP]
 > **Prompt for your AI Agent** (copy and paste directly into Claude Code, Codex, or another agent):
 > ```text
-> Install the standalone XMemo Skill into your skills directory: run the installer from https://xmemo.dev/skill/install (on Windows, https://xmemo.dev/skill/install.ps1) with XMEMO_SKILL_DIR set to your skills directory plus /xmemo-memory. Run the doctor command it prints to verify the installation, then reload your skills and follow the Skill's first-run steps. Follow your normal safety checks and do not use elevated privileges.
+> Install the XMemo Skill: run `curl -fsSL https://xmemo.dev/skill/install | sh` (on Windows PowerShell: `irm https://xmemo.dev/skill/install.ps1 | iex`). The script auto-detects your agent's skills directory. Run the printed doctor command to verify, reload your skills, and follow the first-run guide without elevated privileges.
 > ```
 
 **Target resolution precedence (first match wins)**:
