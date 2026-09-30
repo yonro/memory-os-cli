@@ -366,6 +366,12 @@ openclaw skills install @xmemo/xmemo --version 1.1.35
 # $env:XMEMO_SKILL_AGENT="codex"; irm https://xmemo.dev/skill/install.ps1 | iex
 ```
 
+> [!TIP]
+> **Prompt for your AI Agent** (copy and paste directly into Claude Code, Codex, or another agent):
+> ```text
+> Install the standalone XMemo Skill into your skills directory: run the installer from https://xmemo.dev/skill/install (on Windows, https://xmemo.dev/skill/install.ps1) with XMEMO_SKILL_DIR set to your skills directory plus /xmemo-memory. Run the doctor command it prints to verify the installation, then reload your skills and follow the Skill's first-run steps. Follow your normal safety checks and do not use elevated privileges.
+> ```
+
 **Target resolution precedence (first match wins)**:
 1. `XMEMO_SKILL_DIR`: Installs to the specified directory.
 2. `XMEMO_SKILL_AGENT=claude-code|codex`: Installs to the explicit agent's skills directory (`openclaw` redirects to `openclaw skills install xmemo`).
@@ -902,12 +908,3 @@ it connects to.
 ## License
 
 [MIT](./LICENSE) © 2025–2026 Yonro
-
-### Repairing an existing Kiro MCP configuration
-
-Run `xmemo doctor --client kiro --json` to inspect local configuration without network requests.
-Use `xmemo doctor --client kiro --fix` to migrate recognized legacy proxy configurations to native
-HTTP OAuth, or add `--auth key` for native HTTP with `Bearer ${XMEMO_KEY}`. Repairs create a
-backup, retain unrelated servers and client preferences, and never copy credentials into the
-replacement. Reload Kiro and verify a real tool call afterwards; a configuration pass is not an
-authentication or token-refresh result. Fresh installs use `xmemo setup kiro [--auth oauth|key]`.
