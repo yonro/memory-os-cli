@@ -38,10 +38,10 @@ MCP 是 XMemo 的一种接入界面，而非产品的边界。XMemo 在多种工
 - **[项目上下文与决策记录 (Project Context & Decisions)](https://docs.xmemo.dev/docs/concepts/projects)**：在智能体工作流中维护项目级持久事实、[待办事项 (TODOs)](https://docs.xmemo.dev/docs/tools/todos) 与关键决策记录。
 - **[智能体身份与溯源 (Agent Identity & Provenance)](https://docs.xmemo.dev/docs/concepts/provenance-attribution)**：通过[智能体实例归属 (Agent Attribution)](https://docs.xmemo.dev/docs/concepts/agent-identity) 追踪单条记忆记录的作者与来源，避免凭据混淆。
 - **[权限治理 (Governed Access)](https://docs.xmemo.dev/docs/concepts/scopes)**：Scoped Tokens 细粒度权限控制、客户端 OAuth 支持、软/硬删除以及敏感记忆治理（参见[数据治理机制](https://docs.xmemo.dev/docs/concepts/governance-retention)）。
-- **原生插件与技能 (Native Integrations & Skill)**：为 [OpenClaw](https://docs.xmemo.dev/docs/connect/openclaw)、[Hermes](https://docs.xmemo.dev/docs/connect/hermes)、[XMemo Skill](https://docs.xmemo.dev/docs/skills/quickstart)（[ClawHub](https://clawhub.ai/skill/xmemo)）与 [DeepSeek DSH](https://docs.xmemo.dev/docs/connect/deepseek-harness) 提供专有集成支持（已发布且通过试点验证，集成成熟度为 Preview）。
+- **原生插件与技能 (Native Integrations & Skill)**：为 [OpenClaw](https://docs.xmemo.dev/docs/connect/openclaw)、[Hermes](https://docs.xmemo.dev/docs/connect/hermes)、[XMemo Skill](https://docs.xmemo.dev/docs/skills/quickstart)（[ClawHub](https://clawhub.ai/skill/xmemo)）与 [DeepSeek DSH](https://docs.xmemo.dev/docs/connect/deepseek-harness) 提供专有集成支持（可用、已发布且通过试点验证，集成成熟度为 Preview）。
 - **统一访问方式**：支持通过 [Model Context Protocol (MCP)](https://docs.xmemo.dev/docs/mcp/overview)、本地命令行 CLI（`xmemo`）与公开 [REST API](https://docs.xmemo.dev/docs/api/authentication) 接口连接。
 
-*预览功能：[云端技能 (Cloud Skills)](https://docs.xmemo.dev/docs/concepts/cloud-skills)；[Dream 记忆整理](https://docs.xmemo.dev/docs/concepts/dream-reflection)（默认关闭）；[团队空间 (Teams)](https://docs.xmemo.dev/docs/capabilities/teams)（商业版计划尚未推出）。[知识库 (Knowledge Bases)](https://docs.xmemo.dev/docs/concepts/memory-model) 在账户开通时可用。*
+*预览功能：[云端技能 (Cloud Skills)](https://docs.xmemo.dev/docs/concepts/cloud-skills)；[Dream 记忆整理](https://docs.xmemo.dev/docs/concepts/dream-reflection)（默认关闭）；[团队空间 (Teams)](https://docs.xmemo.dev/docs/capabilities/teams)（商业版计划尚未推出）。[知识库 (Knowledge Bases)](https://docs.xmemo.dev/docs/concepts/knowledge-bases) 在账户开通时可用。*
 
 ## XMemo CLI
 

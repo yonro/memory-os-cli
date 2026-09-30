@@ -89,7 +89,7 @@ test('CLI release and recovery workflows use OIDC trusted publishing with zero N
 });
 
 test('Skill release documentation explicitly specifies --latest for GitHub Release creation', async () => {
-  const docPath = path.join(repoRoot, 'docs/xmemo-skill-release.md');
+  const docPath = path.join(repoRoot, 'docs/maintainers/xmemo-skill-release.md');
   const doc = await readFile(docPath, 'utf8');
 
   assert.match(doc, /gh release create skill-v/);

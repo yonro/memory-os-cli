@@ -41,7 +41,7 @@ MCP is one access surface of XMemo, not the product boundary. XMemo provides a p
 - **Native Integrations & Skill**: dedicated integration for [OpenClaw](https://docs.xmemo.dev/docs/connect/openclaw), [Hermes](https://docs.xmemo.dev/docs/connect/hermes), [XMemo Skill](https://docs.xmemo.dev/docs/skills/quickstart) ([ClawHub](https://clawhub.ai/skill/xmemo)), and [DeepSeek DSH](https://docs.xmemo.dev/docs/connect/deepseek-harness) (available, released and pilot-tested; integration maturity Preview).
 - **Access Surfaces**: unified via [Model Context Protocol](https://docs.xmemo.dev/docs/mcp/overview), the local CLI (`xmemo`), and the public [REST API](https://docs.xmemo.dev/docs/api/authentication).
 
-*Preview: [Cloud Skills](https://docs.xmemo.dev/docs/concepts/cloud-skills); [Dream](https://docs.xmemo.dev/docs/concepts/dream-reflection) (off by default); [Teams](https://docs.xmemo.dev/docs/capabilities/teams) (Business plan not yet available). [Knowledge Bases](https://docs.xmemo.dev/docs/concepts/memory-model) are available where enabled for the account.*
+*Preview: [Cloud Skills](https://docs.xmemo.dev/docs/concepts/cloud-skills); [Dream](https://docs.xmemo.dev/docs/concepts/dream-reflection) (off by default); [Teams](https://docs.xmemo.dev/docs/capabilities/teams) (Business plan not yet available). [Knowledge Bases](https://docs.xmemo.dev/docs/concepts/knowledge-bases) are available where enabled for the account.*
 
 ## XMemo CLI
 
