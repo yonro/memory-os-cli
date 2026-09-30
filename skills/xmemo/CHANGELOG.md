@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Streamline the first-run unencrypted credential storage disclosure in SKILL.md by removing the inline managed secret store alternative mention.
+
 ## 1.1.37
 
 ### Changed

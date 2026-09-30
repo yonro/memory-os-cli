@@ -536,7 +536,7 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /Ask once in the user's language/);
   assert.match(skill, /XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself\. Sign in to get started\?/);
   assert.match(skill, /Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup\./);
-  assert.match(skill, /separately disclose local unencrypted credential storage and the managed XMEMO_KEY alternative/);
+  assert.match(skill, /separately disclose local unencrypted credential storage/);
   assert.match(skill, /request affirmative confirmation/);
   assert.match(skill, /If declined at either prompt, do not start login or create temporary access/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
@@ -550,6 +550,8 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /Do not explain runtime selection/);
   assert.ok(!skill.includes('## Use XMemo in every session (optional)'), 'SKILL.md must not include full every-session section');
   assert.ok(!skill.includes('云记忆库'), 'SKILL.md must not include localized non-English template');
+  assert.ok(!skill.includes('from a managed secret store instead'), 'SKILL.md must not include managed secret store alternative in step 2 disclosure');
+  assert.ok(!skill.includes('and the managed XMEMO_KEY alternative'), 'SKILL.md must not include managed XMEMO_KEY alternative in step 2');
 });
 
 test('references/agent-profile.md specifies one-time opt-in profile rules for AGENTS.md / CLAUDE.md', async () => {
