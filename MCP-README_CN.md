@@ -1,6 +1,6 @@
 # XMemo MCP 接入
 
-> **面向 AI 智能体的用户私有 Memory OS，通过 MCP 为大模型提供持久化、受治理的长期记忆。**
+> 面向 AI 智能体的用户私有 Memory OS。通过 MCP 客户端连接 XMemo 托管的 MCP 服务（`https://xmemo.dev/mcp`），或在本地运行 `xmemo-mcp` stdio 服务。
 
 [![MCP Badge](https://lobehub.com/badge/mcp-full/yonro-memory-os-cli?theme=light)](https://lobehub.com/mcp/yonro-memory-os-cli)
 

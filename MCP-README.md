@@ -1,6 +1,6 @@
 # XMemo MCP Interface
 
-> **User-owned Memory OS for AI agents: persistent, governed memory via the Model Context Protocol.**
+> User-owned Memory OS for AI agents. Connect any MCP client to XMemo's hosted MCP server at `https://xmemo.dev/mcp`, or run the local `xmemo-mcp` stdio server.
 
 [![MCP Badge](https://lobehub.com/badge/mcp-full/yonro-memory-os-cli?theme=light)](https://lobehub.com/mcp/yonro-memory-os-cli)
 
