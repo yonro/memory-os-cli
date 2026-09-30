@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Update first-run sign-in guidance in SKILL.md to use the canonical English onboarding template ("XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself. Sign in to get started?") and require a separate unencrypted-storage disclosure before initiating login.
+
 ## 1.1.36
 
 ### Fixed
