@@ -1,40 +1,53 @@
-# XMemo CLI
+# XMemo: Memory OS for AI Agents
 
 [![XMemo logo](./docs/assets/logo.png)](https://xmemo.dev)
-
-**One private memory layer for every AI agent.**
-
-Install, authenticate, diagnose, and connect XMemo across editors,
-CLIs, and autonomous agents from one production-ready command line.
 
 [![CI](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yonro/memory-os-cli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@xmemo/client)
 [![Skill version](https://img.shields.io/github/v/release/yonro/memory-os-cli?filter=skill-v*&label=skill&style=flat-square)](https://clawhub.ai/skill/xmemo)
-[![npm downloads](https://img.shields.io/npm/dm/@xmemo/client?style=flat-square&logo=npm&logoColor=white&label=downloads)](https://www.npmjs.com/package/@xmemo/client)
 [![Node.js version](https://img.shields.io/node/v/@xmemo/client?style=flat-square&logo=nodedotjs&logoColor=white&label=node)](https://www.npmjs.com/package/@xmemo/client)
 [![MIT license](https://img.shields.io/npm/l/@xmemo/client?style=flat-square&label=license)](./LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/yonro/memory-os-cli?style=flat-square&logo=github&label=stars)](https://github.com/yonro/memory-os-cli)
 [![MCP compatible](https://img.shields.io/badge/MCP-compatible-2563eb?style=flat-square)](https://modelcontextprotocol.io/)
-[![XMemo Cloud](https://img.shields.io/badge/XMemo-Cloud-7c3aed?style=flat-square)](https://xmemo.dev)
-[![Privacy first](https://img.shields.io/badge/privacy-first-334155?style=flat-square&logo=shield&logoColor=white)](#security-by-default)
 [![MCP Badge](https://lobehub.com/badge/mcp/yonro-memory-os-cli?style=flat)](https://lobehub.com/mcp/yonro-memory-os-cli)
 [![Glama quality score](https://glama.ai/mcp/servers/yonro/memory-os-cli/badges/score.svg)](https://glama.ai/mcp/servers/yonro/memory-os-cli)
 
-[English](README.md) · [简体中文](README_CN.md)
+XMemo is a user-owned Memory OS for AI agents: persistent memory, project context and session continuity with agent identity, provenance and governed access, shared across AI clients through MCP, the CLI and a public REST API surface.
 
-[Quick start](#quick-start) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Plugins](#agent-plugins) · [Commands](#command-reference) · [Versioning](#versioning) · [Security](#security-by-default)
+[English](README.md) · [简体中文](README_CN.md) | [Documentation](https://docs.xmemo.dev/) · [Hosted MCP](https://xmemo.dev/mcp)
+
+[Quick start](#quick-start) · [What this repo contains](#what-this-repository-contains) · [Beyond MCP](#beyond-mcp) · [Integrations](#supported-integrations) · [Connection modes](#connection-modes) · [Plugins](#agent-plugins) · [Commands](#command-reference) · [Versioning](#versioning) · [Security](#security-by-default)
 
 ---
 
-`@xmemo/client` is the official control plane for connecting AI tools to
-[XMemo](https://xmemo.dev). It makes setup repeatable, keeps credentials out of
-project files, and gives every supported client a consistent path to durable,
-user-owned memory.
+## What this repository contains
 
-The package is deliberately small: the CLI runtime, safe client configuration,
-behavior profiles, XMemo skills, and marketplace metadata. Server code,
-databases, deployment files, logs, and internal operations remain outside the
-npm distribution.
+- **[`@xmemo/client`](https://www.npmjs.com/package/@xmemo/client)**: the official `xmemo` CLI for setup, diagnostics, behavior profiles, and memory commands.
+- **MCP distribution**: hosted Streamable HTTP configuration (`https://xmemo.dev/mcp`) and the local `xmemo-mcp` stdio server.
+- **XMemo Skill & native integrations**: `skills/xmemo` for agent platforms and the native plugin index (`src/plugins/index.json`).
+- **Marketplace and registry metadata**: canonical descriptors for MCP Registry (`server.json`), LobeHub (`lhm.plugin.json`), and AI agents (`context7.json`).
+
+The hosted service implementation is private.
+
+## Beyond MCP
+
+MCP is one access surface of XMemo, not the product boundary. XMemo provides a persistent, governed memory operating layer across AI tools and agents:
+
+- **[Persistent Memory](https://docs.xmemo.dev/docs/tools/remember)**: store, search, list, and soft-delete durable facts, preferences, and operational knowledge across sessions.
+- **[Context Recall](https://docs.xmemo.dev/docs/tools/recall-context)**: retrieve focused, relevant context on demand with token-budget controls and document expansions.
+- **[Session Continuity & Working State](https://docs.xmemo.dev/docs/guides/resume-and-handoff)**: restart snapshots and state save/restore so agents resume context across process restarts.
+- **[Project Context & Decisions](https://docs.xmemo.dev/docs/concepts/projects)**: track project-scoped facts, [TODOs](https://docs.xmemo.dev/docs/tools/todos), and durable decisions across agent workflows.
+- **[Agent Identity & Provenance](https://docs.xmemo.dev/docs/concepts/provenance-attribution)**: track authorship and origin per memory record via [agent instance attribution](https://docs.xmemo.dev/docs/concepts/agent-identity) without conflating credentials.
+- **[Governed Access](https://docs.xmemo.dev/docs/concepts/scopes)**: scoped tokens, OAuth where the client supports it, soft/hard deletion and sensitive-memory handling ([governance details](https://docs.xmemo.dev/docs/concepts/governance-retention)).
+- **Native Integrations & Skill**: dedicated integration for [OpenClaw](https://docs.xmemo.dev/docs/connect/openclaw), [Hermes](https://docs.xmemo.dev/docs/connect/hermes), [XMemo Skill](https://docs.xmemo.dev/docs/skills/quickstart) ([ClawHub](https://clawhub.ai/skill/xmemo)), and [DeepSeek DSH](https://docs.xmemo.dev/docs/connect/deepseek-harness) (available, released and pilot-tested; integration maturity Preview).
+- **Access Surfaces**: unified via [Model Context Protocol](https://docs.xmemo.dev/docs/mcp/overview), the local CLI (`xmemo`), and the public [REST API](https://docs.xmemo.dev/docs/api/authentication).
+
+*Preview: [Cloud Skills](https://docs.xmemo.dev/docs/concepts/cloud-skills); [Dream](https://docs.xmemo.dev/docs/concepts/dream-reflection) (off by default); [Teams](https://docs.xmemo.dev/docs/capabilities/teams) (Business plan not yet available). [Knowledge Bases](https://docs.xmemo.dev/docs/concepts/memory-model) are available where enabled for the account.*
+
+## XMemo CLI
+
+`@xmemo/client` is the official control plane for connecting AI tools to [XMemo](https://xmemo.dev). It makes setup repeatable, keeps credentials out of project files, and gives every supported client a consistent path to durable, user-owned memory.
+
+The package is deliberately small: the CLI runtime, safe client configuration, behavior profiles, XMemo skills, and marketplace metadata. Server code, databases, deployment files, logs, and internal operations remain outside the npm distribution.
 
 ## Architecture
 
@@ -304,8 +317,10 @@ xmemo skill install --client claude-code --project
 # Install for all detected supported clients
 xmemo skill install --all
 
-# Default install into current directory (./xmemo-skill)
+# Automatically resolve detected client(s) (or specify --client <id>)
 xmemo skill install
+
+# Install into a custom directory path
 xmemo skill install --dir ./custom-skill-dir
 
 # Non-interactive install (skips [y/N] prompt)

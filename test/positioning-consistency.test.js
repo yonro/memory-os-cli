@@ -147,12 +147,31 @@ test('positioning: forbidden claims and superlatives are absent from metadata fi
     { source: 'context7.json description', text: c7.description }
   ];
 
+  const readmePath = path.join(repoRoot, 'README.md');
+  if (fs.existsSync(readmePath)) {
+    const readmeContent = fs.readFileSync(readmePath, 'utf8');
+    const beyondMcpMatch = readmeContent.match(/## Beyond MCP\r?\n([\s\S]*?)(?=\r?\n## )/);
+    if (beyondMcpMatch) {
+      inspectedFields.push({ source: 'README.md Beyond MCP', text: beyondMcpMatch[1] });
+    }
+  }
+
+  const readmeCnPath = path.join(repoRoot, 'README_CN.md');
+  if (fs.existsSync(readmeCnPath)) {
+    const readmeCnContent = fs.readFileSync(readmeCnPath, 'utf8');
+    const beyondMcpCnMatch = readmeCnContent.match(/## 超越 MCP\r?\n([\s\S]*?)(?=\r?\n## )/);
+    if (beyondMcpCnMatch) {
+      inspectedFields.push({ source: 'README_CN.md 超越 MCP', text: beyondMcpCnMatch[1] });
+    }
+  }
+
   const forbiddenPatterns = [
     { name: 'marketing superlatives', regex: /\b(?:revolutionary|industry-leading|the best|#1)\b/i },
     { name: 'connectors claim', regex: /\bconnectors\b/i },
     { name: 'AI notes service', regex: /\bAI notes service\b/i },
     { name: 'unsupported certification / GA claim', regex: /\b(?:certified|GA ready)\b/i },
-    { name: 'SDK claim', regex: /\bTypeScript SDK\b|\bMemoryOSClient\b/i }
+    { name: 'SDK claim', regex: /\bTypeScript SDK\b|\bMemoryOSClient\b/i },
+    { name: 'invented scope names', regex: /\b(?:read:state|write:state|read:memory|write:memory)\b/i }
   ];
 
   for (const field of inspectedFields) {
@@ -168,13 +187,40 @@ test('positioning: forbidden claims and superlatives are absent from metadata fi
 
 test('positioning: markdown first-screen block validation (for updated README / MCP-README)', () => {
   const readmePath = path.join(repoRoot, 'README.md');
-  if (fs.existsSync(readmePath)) {
-    const content = fs.readFileSync(readmePath, 'utf8');
-    const lines = content.split(/\r?\n/);
-    const h1 = lines.find((l) => l.startsWith('# '));
-    if (h1 && !h1.includes('XMemo CLI')) {
-      assert.match(h1, /^# XMemo\b/, 'When updated, README H1 must start with "# XMemo"');
-    }
+  assert.equal(fs.existsSync(readmePath), true, 'README.md must exist');
+  const readmeContent = fs.readFileSync(readmePath, 'utf8');
+  const readmeLines = readmeContent.split(/\r?\n/);
+  const readmeH1 = readmeLines.find((l) => l.startsWith('# '));
+  assert.ok(readmeH1, 'README.md must contain an H1 heading');
+  assert.match(readmeH1, /^# XMemo\b/, 'README H1 must start with "# XMemo"');
+
+  const firstScreenLines = readmeLines.slice(0, 60);
+  const firstScreenText = firstScreenLines.join('\n');
+  assert.match(
+    firstScreenText,
+    new RegExp(productMeta.category, 'i'),
+    'README first screen must contain canonical category phrase'
+  );
+  assert.match(
+    firstScreenText,
+    /https:\/\/docs\.xmemo\.dev\/?/,
+    'README first screen must link to docs.xmemo.dev'
+  );
+
+  const readmeCnPath = path.join(repoRoot, 'README_CN.md');
+  if (fs.existsSync(readmeCnPath)) {
+    const readmeCnContent = fs.readFileSync(readmeCnPath, 'utf8');
+    const readmeCnLines = readmeCnContent.split(/\r?\n/);
+    const readmeCnH1 = readmeCnLines.find((l) => l.startsWith('# '));
+    assert.ok(readmeCnH1, 'README_CN.md must contain an H1 heading');
+    assert.match(readmeCnH1, /^# XMemo\b/, 'README_CN H1 must start with "# XMemo"');
+
+    const firstScreenCnText = readmeCnLines.slice(0, 60).join('\n');
+    assert.match(
+      firstScreenCnText,
+      /https:\/\/docs\.xmemo\.dev\/?/,
+      'README_CN first screen must link to docs.xmemo.dev'
+    );
   }
 
   const mcpReadmePath = path.join(repoRoot, 'MCP-README.md');
@@ -184,6 +230,76 @@ test('positioning: markdown first-screen block validation (for updated README / 
     const h1 = lines.find((l) => l.startsWith('# '));
     if (h1 && !h1.includes('MCP Server')) {
       assert.match(h1, /^# XMemo\b/, 'When updated, MCP-README H1 must start with "# XMemo"');
+    }
+  }
+});
+
+test('positioning: README first-screen Beyond MCP links use dedicated docs pages', () => {
+  const readmes = [
+    { name: 'README.md', path: path.join(repoRoot, 'README.md'), beyondHeader: '## Beyond MCP' },
+    { name: 'README_CN.md', path: path.join(repoRoot, 'README_CN.md'), beyondHeader: '## 超越 MCP' }
+  ];
+
+  for (const item of readmes) {
+    if (!fs.existsSync(item.path)) continue;
+    const content = fs.readFileSync(item.path, 'utf8');
+    const cliHeaderIndex = content.search(/## XMemo CLI\b/);
+    assert.ok(cliHeaderIndex > 0, `${item.name} must contain "## XMemo CLI" section`);
+    const firstScreen = content.slice(0, cliHeaderIndex);
+
+    const beyondRegex = new RegExp(`${item.beyondHeader}\\r?\\n([\\s\\S]*?)(?=\\r?\\n## )`);
+    const beyondMatch = content.match(beyondRegex);
+    assert.ok(beyondMatch, `${item.name} must contain "${item.beyondHeader}" section`);
+    const beyondSection = beyondMatch[1];
+
+    assert.doesNotMatch(
+      beyondSection,
+      /\b(?:read:state|write:state|read:memory|write:memory)\b/i,
+      `${item.name} Beyond MCP must not contain invented scope names`
+    );
+
+    assert.doesNotMatch(
+      beyondSection,
+      /https:\/\/docs\.xmemo\.dev\/docs\/quickstart\b/,
+      `${item.name} Beyond MCP must link to dedicated docs pages, not generic /docs/quickstart`
+    );
+
+    const docsLinks = [...firstScreen.matchAll(/https:\/\/docs\.xmemo\.dev[^\s)"]*/g)].map((m) => m[0]);
+    for (const link of docsLinks) {
+      assert.doesNotMatch(
+        link,
+        /\/docs\/quickstart\b/,
+        `${item.name} first-screen link "${link}" must not be /docs/quickstart`
+      );
+    }
+
+    const requiredDocsPaths = [
+      '/docs/tools/remember',
+      '/docs/tools/recall-context',
+      '/docs/guides/resume-and-handoff',
+      '/docs/concepts/projects',
+      '/docs/tools/todos',
+      '/docs/concepts/provenance-attribution',
+      '/docs/concepts/agent-identity',
+      '/docs/concepts/scopes',
+      '/docs/concepts/governance-retention',
+      '/docs/connect/openclaw',
+      '/docs/connect/hermes',
+      '/docs/connect/deepseek-harness',
+      '/docs/skills/quickstart',
+      '/docs/concepts/cloud-skills',
+      '/docs/concepts/dream-reflection',
+      '/docs/capabilities/teams',
+      '/docs/concepts/memory-model',
+      '/docs/mcp/overview',
+      '/docs/api/authentication'
+    ];
+
+    for (const docPath of requiredDocsPaths) {
+      assert.ok(
+        beyondSection.includes(`https://docs.xmemo.dev${docPath}`),
+        `${item.name} Beyond MCP must link to dedicated docs page "https://docs.xmemo.dev${docPath}"`
+      );
     }
   }
 });
