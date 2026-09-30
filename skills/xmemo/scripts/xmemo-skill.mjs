@@ -60,7 +60,7 @@ import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
 import { handleProfile, armRecallNote } from './commands/profile.mjs';
 
-const SKILL_VERSION = '1.1.36';
+const SKILL_VERSION = '1.1.37';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));

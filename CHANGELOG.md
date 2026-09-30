@@ -4,6 +4,11 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.189] - 2026-09-30
+
+### Changed
+- Documentation and package metadata update: public repository positioning alignment, canonical docs URL migration to docs.xmemo.dev, and registry description synchronization. Zero runtime, binary, or CLI code changes.
+
 ## [0.4.188] - 2026-09-29
 
 ### Added
