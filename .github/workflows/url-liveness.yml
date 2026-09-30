@@ -1,0 +1,41 @@
+name: URL Liveness
+
+on:
+  schedule:
+    # Run once daily at 06:00 UTC (scheduled non-blocking check)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-urls:
+    name: Check Canonical Documentation and Endpoint Liveness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe canonical documentation and well-known endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          urls=(
+            "https://docs.xmemo.dev/"
+            "https://docs.xmemo.dev/docs/quickstart"
+            "https://xmemo.dev/.well-known/memory-os.json"
+          )
+          failed=0
+          for url in "${urls[@]}"; do
+            echo "Probing $url ..."
+            status=$(curl -s -o /dev/null -w "%{http_code}" -L --connect-timeout 10 --max-time 30 -A "xmemo-url-liveness-check" "$url" || echo "000")
+            if [ "$status" != "200" ]; then
+              echo "::error::Liveness probe failed for $url (HTTP status $status, expected 200)"
+              failed=1
+            else
+              echo "  -> HTTP 200 OK"
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more canonical URLs failed liveness verification."
+            exit 1
+          fi
+          echo "All canonical URLs verified live and returning HTTP 200."
