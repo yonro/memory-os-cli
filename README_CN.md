@@ -351,6 +351,12 @@ openclaw skills install @xmemo/xmemo --version 1.1.35
 # $env:XMEMO_SKILL_AGENT="codex"; irm https://xmemo.dev/skill/install.ps1 | iex
 ```
 
+> [!TIP]
+> **面向 AI 智能体的安装 Prompt**（可直接复制并发送给 Claude Code、Codex 或其他智能体）：
+> ```text
+> 请将 XMemo Skill 安装到你的环境中：执行 `curl -fsSL https://xmemo.dev/skill/install | sh`（Windows PowerShell 执行 `irm https://xmemo.dev/skill/install.ps1 | iex`）。安装脚本会自动识别你的智能体类型并安装到标准 skills 目录。安装完成后运行输出的 doctor 命令进行健康诊断，重载 skills 并遵循首次运行引导（无需提升权限）。
+> ```
+
 **目标解析优先级（命中首项生效）**：
 1. `XMEMO_SKILL_DIR`：安装至指定的显式目录。
 2. `XMEMO_SKILL_AGENT=claude-code|codex`：显式指定智能体安装目标（`openclaw` 会输出指引并提示运行 `openclaw skills install xmemo`）。
@@ -848,8 +854,3 @@ CLI 工具包与托管 MCP 服务保持独立的版本管理轨道：
 ## 开源协议
 
 [MIT](./LICENSE) © 2025–2026 Yonro
-
-### 修复现有 Kiro MCP 配置
-
-运行 `xmemo doctor --client kiro --json` 可以在无需网络请求的情况下检查本地配置。
-使用 `xmemo doctor --client kiro --fix` 可将识别到的旧版代理配置平滑迁移为原生 HTTP OAuth；或附带 `--auth key` 切换为携带 `Bearer ${XMEMO_KEY}` 的原生 HTTP 模式。修复过程会自动创建备份，保留无关服务器与客户端偏好，且绝不将密钥写入替换内容中。修复完成后请重启 Kiro 并发起一次真实的工具调用以完成验证。全新安装请使用 `xmemo setup kiro [--auth oauth|key]`。
