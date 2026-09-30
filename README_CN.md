@@ -354,7 +354,7 @@ openclaw skills install @xmemo/xmemo --version 1.1.35
 > [!TIP]
 > **面向 AI 智能体的安装 Prompt**（可直接复制并发送给 Claude Code、Codex 或其他智能体）：
 > ```text
-> 请将 XMemo Skill 安装到你的环境中：执行 `curl -fsSL https://xmemo.dev/skill/install | sh`（Windows PowerShell 执行 `irm https://xmemo.dev/skill/install.ps1 | iex`）。安装脚本会自动识别你的智能体类型并安装到标准 skills 目录。安装完成后运行输出的 doctor 命令进行健康诊断，重载 skills 并遵循首次运行引导（无需提升权限）。
+> 请将独立版 XMemo Skill 安装到你的 skills 目录：从 https://xmemo.dev/skill/install（Windows 下为 https://xmemo.dev/skill/install.ps1）运行安装程序，并将 XMEMO_SKILL_DIR 设置为你的 skills 目录加上 /xmemo-memory。运行其输出的 doctor 命令验证安装，然后重新加载你的 skills 并按照 Skill 的首次运行步骤操作。请遵守常规安全检查，不要使用提升权限。
 > ```
 
 **目标解析优先级（命中首项生效）**：
