@@ -121,15 +121,16 @@ xmemo doctor --client kiro --fix --auth key
         "X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}"
       ],
       "env": {
-        "XMEMO_KEY": "${env:XMEMO_KEY}",
-        "XMEMO_AGENT_INSTANCE_ID": "${XMEMO_AGENT_INSTANCE_ID}"
+        "XMEMO_AGENT_INSTANCE_ID": "xmemo-<由 xmemo setup 生成>"
       }
     }
   }
 }
 ```
 
-Claude Desktop 的 CLI 配置路径使用 `mcp-remote` + `XMEMO_KEY`；它不属于本仓库 CLI 标记的 MCP OAuth 客户端。推荐运行 `xmemo setup claude-desktop` 生成配置。
+**推荐：不用 Key，直接添加自定义连接器。** 在 Claude 中打开 Customize › Connectors › Add custom connector，名称填 `XMemo`，URL 填 `https://xmemo.dev/mcp`，按提示完成 OAuth 授权即可（Claude 网页版与桌面版通用）。
+
+如果坚持用上面的 `mcp-remote` 配置，请运行 `xmemo setup claude-desktop` 生成（会写入真实的实例 ID）。注意：Claude Desktop 不会展开 `env` 中的 `${env:...}`，写进去只会变成字面文本，所以 `env` 里不要放 `XMEMO_KEY`；`mcp-remote` 会从继承的环境中解析 `${XMEMO_KEY}`。从 Dock / 开始菜单启动的 Claude Desktop 读不到 shell profile 里的变量，需要让应用本身能看到 `XMEMO_KEY`。
 
 ---
 
