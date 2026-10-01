@@ -452,7 +452,12 @@ export const CLIENT_REGISTRY = [
         removeJsonClientMcpConfig('claude-desktop', configPath, options),
       section: 'mcpServers',
       serverKind: 'mcp-remote-command',
-      authentication: 'env-bearer'
+      authentication: 'env-bearer',
+      // Claude Desktop starts from the Dock or Start menu, not a shell, so a key
+      // exported in a shell profile never reaches mcp-remote. Point at the OAuth
+      // connector path that needs no key.
+      credentialHint: (mcpUrl) =>
+        `Claude Desktop does not read your shell profile; make ${TOKEN_ENV_VAR} visible to the app itself, or skip the key and add XMemo in Claude > Customize > Connectors > Add custom connector (URL ${mcpUrl}, OAuth).`
     },
     profile: null,
     skillDir: null,

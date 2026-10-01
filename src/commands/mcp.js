@@ -357,6 +357,7 @@ export async function mcpCommand(args, io) {
     } else {
       writeLine(io.stdout, `Token value was not written. ${client.label} will read ${TOKEN_ENV_VAR} from the environment.`);
     }
+    writeCredentialHint(io, client, mcpUrl);
     writeLine(io.stdout, `Agent instance ID stored outside git: ${identity.path}`);
     return 0;
   }
@@ -372,6 +373,7 @@ export async function mcpCommand(args, io) {
     } else {
       writeLine(io.stdout, `Set ${TOKEN_ENV_VAR} in your user environment or secret manager. The token value is not included here.`);
     }
+    writeCredentialHint(io, client, mcpUrl);
     writeLine(io.stdout, `${AGENT_INSTANCE_ENV_VAR} must be stable per local ${client.label} install; run ${COMMAND_NAME} mcp add ${target} --write to generate it automatically.`);
     return 0;
   }
@@ -393,3 +395,8 @@ export async function mcpCommand(args, io) {
   return 0;
 }
 
+function writeCredentialHint(io, client, mcpUrl) {
+  if (typeof client.mcp?.credentialHint === 'function') {
+    writeLine(io.stdout, client.mcp.credentialHint(mcpUrl));
+  }
+}

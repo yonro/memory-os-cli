@@ -23,14 +23,24 @@ import { agentInstanceIdentityPath } from '../identity/device.js';
 
 export function codexTomlSnippet(mcpUrl, identity) {
   const agentId = identity?.agentId ?? 'codex';
-  const agentInstanceId = identity?.agentInstanceId ?? `\${${AGENT_INSTANCE_ENV_VAR}}`;
-  return `[mcp_servers.${MCP_SERVER_NAME}]
+  const head = `[mcp_servers.${MCP_SERVER_NAME}]
 url = "${escapeTomlString(mcpUrl)}"
 bearer_token_env_var = "${TOKEN_ENV_VAR}"
 
 [mcp_servers.${MCP_SERVER_NAME}.http_headers]
 ${AGENT_ID_HEADER} = "${escapeTomlString(agentId)}"
-${AGENT_INSTANCE_HEADER} = "${escapeTomlString(agentInstanceId)}"
+`;
+  const agentInstanceId = identity?.agentInstanceId;
+  if (agentInstanceId && agentInstanceId !== `\${${AGENT_INSTANCE_ENV_VAR}}`) {
+    return `${head}${AGENT_INSTANCE_HEADER} = "${escapeTomlString(agentInstanceId)}"
+`;
+  }
+  // Without a generated ID (or with envReferenceIdentity's placeholder), read it
+  // from the environment: Codex sends http_headers values verbatim, so a
+  // "\${...}" placeholder there would be literal.
+  return `${head}
+[mcp_servers.${MCP_SERVER_NAME}.env_http_headers]
+${AGENT_INSTANCE_HEADER} = "${AGENT_INSTANCE_ENV_VAR}"
 `;
 }
 

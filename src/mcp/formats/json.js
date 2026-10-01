@@ -248,8 +248,11 @@ function mcpRemoteCommandJsonServerConfig(mcpUrl, identity) {
       '--header',
       `${AGENT_INSTANCE_HEADER}:\${${AGENT_INSTANCE_ENV_VAR}}`
     ],
+    // No XMEMO_KEY entry here: neither Claude Desktop nor Claude Code expands
+    // "${env:...}" in an env value, so it would reach mcp-remote as literal text
+    // (the same unsupported_key_interpolation the Kiro doctor reports).
+    // mcp-remote resolves ${XMEMO_KEY} above from the environment it inherits.
     env: {
-      [TOKEN_ENV_VAR]: `\${env:${TOKEN_ENV_VAR}}`,
       [AGENT_INSTANCE_ENV_VAR]: identity.agentInstanceId
     }
   };

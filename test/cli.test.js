@@ -502,6 +502,9 @@ test('mcp codex config references env var without leaking token value', async ()
   assert.equal(result.code, 0);
   assert.match(result.stdout, /bearer_token_env_var = "XMEMO_KEY"/);
   assert.match(result.stdout, /url = "https:\/\/api\.example\.test\/mcp"/);
+  // Codex sends http_headers verbatim, so the instance ID must come via env_http_headers.
+  assert.match(result.stdout, /\[mcp_servers\.XMemo\.env_http_headers\]\nX-Memory-OS-Agent-Instance-ID = "XMEMO_AGENT_INSTANCE_ID"/);
+  assert.doesNotMatch(result.stdout, /\$\{/);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -893,6 +896,29 @@ test('mcp opencode config can be merged into a user-scoped json file', async () 
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
 
+test('mcp claude-desktop points at the OAuth connector and keeps XMEMO_KEY out of env', async () => {
+  const result = await invoke(['mcp', 'add', 'claude-desktop', '--url', 'https://api.example.test'], {
+    env: {
+      HOME: '/tmp/example-home',
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Customize > Connectors > Add custom connector \(URL https:\/\/api\.example\.test\/mcp, OAuth\)/);
+  assert.doesNotMatch(result.stdout, /\$\{env:XMEMO_KEY\}/);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+});
+
+test('mcp cursor prints no Claude Desktop credential hint', async () => {
+  const result = await invoke(['mcp', 'add', 'cursor', '--url', 'https://api.example.test'], {
+    env: { HOME: '/tmp/example-home' }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /Add custom connector/);
+});
+
 test('mcp claude-code config passes token and agent headers to mcp-remote', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-claude-code-'));
   const configPath = path.join(tempDir, '.claude.json');
@@ -919,7 +945,7 @@ test('mcp claude-code config passes token and agent headers to mcp-remote', asyn
     '--header',
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
-  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, undefined);
   assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
@@ -1297,7 +1323,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
     '--header',
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
-  assert.equal(traeConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.equal(traeConfig.mcpServers.XMemo.env.XMEMO_KEY, undefined);
   assert.match(traeConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
 
   const traeSoloConfig = JSON.parse(await fs.readFile(path.join(traeSoloConfigDir, 'mcp.json'), 'utf8'));
@@ -1313,7 +1339,7 @@ test('setup --all auto-detects and configures all local clients', async () => {
     '--header',
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
-  assert.equal(traeSoloConfig.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.equal(traeSoloConfig.mcpServers.XMemo.env.XMEMO_KEY, undefined);
   assert.match(traeSoloConfig.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
 
   const claudeCodeConfig = JSON.parse(await fs.readFile(path.join(tempDir, '.claude.json'), 'utf8'));
@@ -2222,7 +2248,7 @@ test('setup trae shorthand writes config by default', async () => {
     '--header',
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
-  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, undefined);
   assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
@@ -2263,7 +2289,7 @@ test('setup trae-solo shorthand writes config by default', async () => {
     '--header',
     'X-Memory-OS-Agent-Instance-ID:${XMEMO_AGENT_INSTANCE_ID}'
   ]);
-  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, '${env:XMEMO_KEY}');
+  assert.equal(config.mcpServers.XMemo.env.XMEMO_KEY, undefined);
   assert.match(config.mcpServers.XMemo.env.XMEMO_AGENT_INSTANCE_ID, /^xmemo-/);
   assert.doesNotMatch(JSON.stringify(config), /secret-token-that-must-not-leak/);
 });
