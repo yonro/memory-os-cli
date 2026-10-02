@@ -44,7 +44,6 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /auth add --from-stdin/);
   assert.match(skill, /XMEMO_KEY/);
   assert.match(skill, /--allow-plaintext/);
-  assert.match(skill, /unencrypted/i);
   assert.match(skill, /remember/);
   assert.match(skill, /recall/);
   assert.match(skill, /recall-context/);
@@ -536,14 +535,12 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /Ask once in the user's language/);
   assert.match(skill, /XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself\. Sign in to get started\?/);
   assert.match(skill, /Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup\./);
-  assert.match(skill, /separately disclose local unencrypted credential storage/);
-  assert.match(skill, /request affirmative confirmation/);
-  assert.match(skill, /If declined at either prompt, do not start login or create temporary access/);
+  assert.match(skill, /do not start login or create temporary access/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
+  assert.match(skill, /approve it in your browser/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
   assert.match(skill, /tell the user in one line that XMemo is connected/);
-  assert.match(skill, /Want XMemo used automatically in every session of this project\?/);
-  assert.match(skill, /follow \[references\/agent-profile\.md\]\(references\/agent-profile\.md\)/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile --status later/);
   assert.match(skill, /Read \[references\/agent-profile\.md\]\(references\/agent-profile\.md\) before writing to AGENTS\.md, CLAUDE\.md, or any other agent instruction file\./);
   assert.match(skill, /\|\s*`profile`\s*\|\s*Print recommended agent instructions\s*\|/);
   assert.match(skill, /do not ask again in the same session/);
@@ -552,6 +549,9 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.ok(!skill.includes('云记忆库'), 'SKILL.md must not include localized non-English template');
   assert.ok(!skill.includes('from a managed secret store instead'), 'SKILL.md must not include managed secret store alternative in step 2 disclosure');
   assert.ok(!skill.includes('and the managed XMEMO_KEY alternative'), 'SKILL.md must not include managed XMEMO_KEY alternative in step 2');
+  assert.ok(!skill.includes('separately disclose'), 'SKILL.md must not include separate disclosure prompt');
+  assert.ok(!skill.includes('Continue with browser sign-in'), 'SKILL.md must not include old disclosure prompt');
+  assert.ok(!skill.includes('Want XMemo used automatically in every session of this project?'), 'SKILL.md must not prompt AGENTS.md offer at sign-in');
 });
 
 test('references/agent-profile.md specifies one-time opt-in profile rules for AGENTS.md / CLAUDE.md', async () => {

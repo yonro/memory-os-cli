@@ -9,30 +9,24 @@ Give your agent durable memory that survives across sessions, projects, and tool
 
 ## First Successful Run
 
-After ClawHub installs this Skill, run these commands from the Skill root to verify connectivity and authenticate:
-
-1. Check public service reachability:
-   ```text
-   node scripts/xmemo-skill.mjs doctor --anonymous
-   ```
-2. For account-backed memory, prefer an `XMEMO_KEY` supplied by a managed
-   secret store. When a command fails with "No XMemo credential found" (exit code 2), follow First-run sign-in below:
-   ```text
-   node scripts/xmemo-skill.mjs login --allow-plaintext
-   ```
-3. Confirm the credential before running memory operations:
-   ```text
-   node scripts/xmemo-skill.mjs auth status --verify
-   ```
+After ClawHub installs this Skill, follow First-run sign-in below:
 
 ### First-run sign-in (keep it short)
 
 When no credential exists, follow this exact sequence:
 1. Ask once in the user's language using this canonical first-message template (translate when addressing the user in another language, but keep the template in English): "XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself. Sign in to get started?" Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup.
-2. On yes: before invoking login, separately disclose local unencrypted credential storage, and request affirmative confirmation (e.g. "Signing in opens a browser page; afterwards the token is saved unencrypted on this computer. Continue with browser sign-in?"). If declined at either prompt, do not start login or create temporary access; continue the original task. On affirmative confirmation, run `node scripts/xmemo-skill.mjs login --allow-plaintext` and show only the verification URL, the one-time code, and "approve it in your browser" — nothing else.
-3. When login finishes: run `node scripts/xmemo-skill.mjs auth status --verify` and tell the user in one line that XMemo is connected. In the same message, if the project does not already contain a `## XMemo memory` section, add one short offer in the user's language (yes / later / don't ask again), e.g. "Want XMemo used automatically in every session of this project? I can add a short XMemo section to AGENTS.md (yes / later / don't ask again)." If the user says yes, follow [references/agent-profile.md](references/agent-profile.md); on later or don't ask again, record the answer with `node scripts/xmemo-skill.mjs profile --status later|never`, then continue the original task.
-4. On no: continue the original task without XMemo; do not ask again in the same session unless the user brings it up.
+2. On yes: run `node scripts/xmemo-skill.mjs login --allow-plaintext` directly so output is visible while the command is waiting (for example a background task or streaming shell). As soon as the verification URL and one-time code appear, show only those plus "approve it in your browser" — nothing else. Then wait for the command to exit. A short tool timeout must not kill it before approval or expiry.
+3. When login succeeds: run `node scripts/xmemo-skill.mjs auth status --verify`, tell the user in one line that XMemo is connected, and continue the original task. Silently run `node scripts/xmemo-skill.mjs profile --status later` with no user prompt, so the existing recall re-offer turns on.
+4. On no: do not start login or create temporary access; continue the original task without XMemo; do not ask again in the same session unless the user brings it up.
 5. Do not explain runtime selection, doctor details, secret-store setup, or other features during sign-in unless the user asks.
+
+### Diagnostics and Advanced Setup
+
+For troubleshooting or non-interactive environments:
+- Check public service reachability: `node scripts/xmemo-skill.mjs doctor --anonymous`
+- For account-backed memory, prefer an `XMEMO_KEY` supplied by a managed
+   secret store (see [references/auth-setup.md](references/auth-setup.md)).
+- Inspect or verify credentials: `node scripts/xmemo-skill.mjs auth status --verify`
 
 If a command fails, follow its printed next action and read [references/troubleshooting.md](references/troubleshooting.md).
 
