@@ -58,7 +58,7 @@ export function writeOfferState(state) {
   }
 }
 
-export function recordOfferAnswer(status) {
+export function recordOfferAnswer(status, options = {}) {
   if (!STATUSES.includes(status)) {
     const err = new Error(`Invalid status: '${status}'. Allowed values: ${STATUSES.join(', ')}.`);
     err.exitCode = 1;
@@ -66,6 +66,9 @@ export function recordOfferAnswer(status) {
   }
 
   const state = readOfferState();
+  if (options?.ifUnset && state.status !== null) {
+    return { ...state, unchanged: true };
+  }
   if (status === 'later') {
     if (state.status !== 'later' || !state.offers) {
       state.offers = 1;

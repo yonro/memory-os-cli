@@ -540,7 +540,7 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /approve it in your browser/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
   assert.match(skill, /tell the user in one line that XMemo is connected/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile --status later/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile --status later --if-unset/);
   assert.match(skill, /Read \[references\/agent-profile\.md\]\(references\/agent-profile\.md\) before writing to AGENTS\.md, CLAUDE\.md, or any other agent instruction file\./);
   assert.match(skill, /\|\s*`profile`\s*\|\s*Print recommended agent instructions\s*\|/);
   assert.match(skill, /do not ask again in the same session/);

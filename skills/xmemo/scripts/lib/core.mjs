@@ -145,7 +145,7 @@ export const COMMAND_FLAGS = {
   login: new Set(),
   register: new Set(['reason']),
   logout: new Set(),
-  profile: new Set(['status']),
+  profile: new Set(['status', 'if-unset', 'if_unset']),
   doctor: new Set(),
   read: new Set(['id', 'offset', 'limit', 'bucket', 'scope']),
   update: new Set(['id', 'content', 'path', 'metadata', 'bucket', 'scope']),
