@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.1.39
+
 ### Added
 
 - Add `--if-unset` flag to `profile --status later` to prevent re-running sign-in from overwriting an existing user status choice.
