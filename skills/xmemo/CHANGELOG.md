@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add `--if-unset` flag to `profile --status later` to prevent re-running sign-in from overwriting an existing user status choice.
+
+### Changed
+
+- Streamline the first-run sign-in flow in SKILL.md to a single canonical prompt followed by non-blocking browser approval and a one-line connection confirmation, silently initializing profile status with `--if-unset` for subsequent recall re-offers.
+
 ## 1.1.38
 
 ### Changed

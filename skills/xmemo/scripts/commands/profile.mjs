@@ -27,15 +27,25 @@ export function getProfileInstructions(command = SCRIPT_COMMAND) {
 
 export async function handleProfile(ctx) {
   const { flags } = ctx || {};
+  const ifUnset = Boolean(flags?.['if-unset'] || flags?.if_unset);
   if (flags?.status !== undefined) {
     const rawStatus = String(flags.status).trim();
     if (!STATUSES.includes(rawStatus)) {
       console.error(`Invalid status: '${flags.status}'. Allowed values: ${STATUSES.join(', ')}.`);
       process.exit(EXIT_CODE.USER_ERROR);
     }
-    recordOfferAnswer(rawStatus);
+    const result = recordOfferAnswer(rawStatus, { ifUnset });
+    if (result?.unchanged) {
+      console.log(`Unchanged: ${result.status}`);
+      process.exit(EXIT_CODE.SUCCESS);
+    }
     console.log(`Recorded: ${rawStatus}`);
     process.exit(EXIT_CODE.SUCCESS);
+  }
+
+  if (ifUnset) {
+    console.error('--if-unset requires --status.');
+    process.exit(EXIT_CODE.USER_ERROR);
   }
 
   console.log(getProfileInstructions());

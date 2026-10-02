@@ -350,6 +350,127 @@ test('failing recall prints no note and preserves exit code', async () => {
   }
 });
 
+test('guarded profile --status later --if-unset records later when unset, and emits note on 5th recall', async () => {
+  const tempHome = path.join(os.tmpdir(), `xmemo-test-profile-ifunset-unset-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(tempHome, { recursive: true });
+  const mock = await createMockServer();
+
+  try {
+    const env = {
+      HOME: tempHome,
+      USERPROFILE: tempHome,
+      XMEMO_KEY: 'test-secret-token',
+    };
+
+    // (a) unset state + --if-unset -> sets status: 'later', offers: 1
+    const res = await runSkill(['profile', '--status', 'later', '--if-unset'], env);
+    assert.equal(res.code, 0);
+    assert.equal(res.stdout.trim(), 'Recorded: later');
+
+    const statePath = path.join(tempHome, '.xmemo', 'profile-offer.json');
+    const parsedState = JSON.parse(await readFile(statePath, 'utf8'));
+    assert.equal(parsedState.status, 'later');
+    assert.equal(parsedState.offers, 1);
+    assert.equal(parsedState.recalls, 0);
+
+    // Recalls 1 to 4: no note on stderr
+    for (let i = 1; i <= 4; i++) {
+      const recallRes = await runSkill(['recall', '--query', `test query ${i}`, '--base-url', mock.baseUrl], env);
+      assert.equal(recallRes.code, 0);
+      assert.equal(recallRes.stderr.includes('Note: XMemo recall has been used'), false, `Recall ${i} should not emit a note`);
+    }
+
+    // 5th recall: note emitted on stderr
+    const recall5 = await runSkill(['recall', '--query', 'test query 5', '--base-url', mock.baseUrl], env);
+    assert.equal(recall5.code, 0);
+    assert.match(recall5.stderr, /Note: XMemo recall has been used 5 times on this computer\./);
+  } finally {
+    await mock.close();
+    await rm(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('guarded profile --status later --if-unset leaves never status unchanged with zero notes over 6+ recalls', async () => {
+  const tempHome = path.join(os.tmpdir(), `xmemo-test-profile-ifunset-never-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(tempHome, { recursive: true });
+  const mock = await createMockServer();
+
+  try {
+    const env = {
+      HOME: tempHome,
+      USERPROFILE: tempHome,
+      XMEMO_KEY: 'test-secret-token',
+    };
+
+    // User previously selected never
+    const neverRes = await runSkill(['profile', '--status', 'never'], env);
+    assert.equal(neverRes.code, 0);
+    assert.equal(neverRes.stdout.trim(), 'Recorded: never');
+
+    // (b) never state + --if-unset -> remains never, prints Unchanged: never
+    const guardedRes = await runSkill(['profile', '--status', 'later', '--if-unset'], env);
+    assert.equal(guardedRes.code, 0);
+    assert.equal(guardedRes.stdout.trim(), 'Unchanged: never');
+
+    const statePath = path.join(tempHome, '.xmemo', 'profile-offer.json');
+    const stateAfter = JSON.parse(await readFile(statePath, 'utf8'));
+    assert.equal(stateAfter.status, 'never');
+
+    // 6+ recalls: zero notes emitted
+    for (let i = 1; i <= 8; i++) {
+      const recallRes = await runSkill(['recall', '--query', `test query ${i}`, '--base-url', mock.baseUrl], env);
+      assert.equal(recallRes.code, 0);
+      assert.equal(recallRes.stderr.includes('Note: XMemo recall has been used'), false, `Recall ${i} on never status must not emit note`);
+    }
+  } finally {
+    await mock.close();
+    await rm(tempHome, { recursive: true, force: true });
+  }
+});
+
+test('guarded profile --status later --if-unset leaves existing later status unchanged when offers reached max', async () => {
+  const tempHome = path.join(os.tmpdir(), `xmemo-test-profile-ifunset-max-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(tempHome, { recursive: true });
+  const mock = await createMockServer();
+
+  try {
+    const env = {
+      HOME: tempHome,
+      USERPROFILE: tempHome,
+      XMEMO_KEY: 'test-secret-token',
+    };
+
+    // Set initial state with status later and offers = 3 (MAX_OFFERS)
+    const dotXmemo = path.join(tempHome, '.xmemo');
+    await mkdir(dotXmemo, { recursive: true });
+    const initialState = {
+      status: 'later',
+      recalls: 15,
+      offers: 3,
+      lastOfferRecalls: 10,
+    };
+    await writeFile(path.join(dotXmemo, 'profile-offer.json'), JSON.stringify(initialState, null, 2), 'utf8');
+
+    // (c) later state with offers=3 + --if-unset -> unchanged, prints Unchanged: later
+    const guardedRes = await runSkill(['profile', '--status', 'later', '--if-unset'], env);
+    assert.equal(guardedRes.code, 0);
+    assert.equal(guardedRes.stdout.trim(), 'Unchanged: later');
+
+    const stateAfter = JSON.parse(await readFile(path.join(dotXmemo, 'profile-offer.json'), 'utf8'));
+    assert.deepEqual(stateAfter, initialState);
+
+    // Recalls should emit NO new note
+    for (let i = 16; i <= 22; i++) {
+      const recallRes = await runSkill(['recall', '--query', `test query ${i}`, '--base-url', mock.baseUrl], env);
+      assert.equal(recallRes.code, 0);
+      assert.equal(recallRes.stderr.includes('Note: XMemo recall has been used'), false, `Recall ${i} must not emit note after MAX_OFFERS`);
+    }
+  } finally {
+    await mock.close();
+    await rm(tempHome, { recursive: true, force: true });
+  }
+});
+
 test('size-cap test: all skills/xmemo modules and references strictly <= 12 KiB (12,288 bytes)', async () => {
   const skillsDir = path.join(repoRoot, 'skills', 'xmemo');
 
