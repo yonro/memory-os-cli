@@ -4,6 +4,16 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.190] - 2026-10-02
+
+### Added
+- Claude Desktop Custom Connector Hint: `mcp add claude-desktop` prints a setup hint pointing to the Claude Desktop custom connector using OAuth (`Customize > Connectors > Add custom connector (URL https://.../mcp, OAuth)`).
+
+### Fixed
+- Client MCP Config Environment Placeholders:
+  - `mcp-remote` client configs (Claude Desktop, Claude Code, Trae, Trae Solo) no longer write `XMEMO_KEY: "${env:XMEMO_KEY}"` into `env`, allowing `mcp-remote` to inherit `XMEMO_KEY` directly from the parent environment without passing literal unexpanded template strings.
+  - Codex TOML configuration print path now places the agent instance ID in `[mcp_servers.XMemo.env_http_headers]` as `XMEMO_AGENT_INSTANCE_ID` instead of outputting literal `${XMEMO_AGENT_INSTANCE_ID}` in `http_headers`.
+
 ## [0.4.189] - 2026-09-30
 
 ### Changed
