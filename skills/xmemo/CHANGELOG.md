@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.1.40
+
 ### Changed
 
 - Clarify the first-run sign-in template in SKILL.md to explain that using XMemo requires an account, and that new users can create an account while existing users can sign in via the browser.
