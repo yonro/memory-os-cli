@@ -9,7 +9,7 @@ For other operations and guides, see:
 - [runtime-operations.md](runtime-operations.md) for the command matrix, execution details, output safety, and exit codes.
 - [troubleshooting.md](troubleshooting.md) for step-by-step diagnosis and repair.
 
-## Ledger Bookkeeping (`ledger-list`, `ledger-summary`, `expense-add`)
+## Ledger Bookkeeping (`ledger-list`, `ledger-summary`, `expense-add`, `expense-delete`)
 
 - `expense-add` is a **WRITE** operation backed by `POST /v1/skill/operations`
   (`operation: "expense-add"`, requiring `ledger:write` scope). It sends transaction
@@ -17,14 +17,27 @@ For other operations and guides, see:
   server-assigned transaction ID. If the user explicitly requested recording the
   transaction, run it directly; if the agent suggested or inferred it, confirm
   item, amount, and currency with the user before execution.
+- `expense-delete` (alias: `ledger-delete`) is a confirmed **WRITE** operation
+  backed by `POST /v1/skill/operations` (`operation: "expense-delete"`, sending
+  `arguments: { "id": "<transaction-id>" }`). It soft-deletes a ledger transaction
+  by the transaction ID returned by `ledger-list`, removing it from active
+  `ledger-list` results and `ledger-summary` monthly totals. It requires explicit
+  confirmation (`expense-delete --id <transaction-id> --confirm`); omitting
+  `--confirm` exits with code 1 (`confirmation_required`) before issuing any HTTP
+  request. On the server, `expense-delete` enforces both `ledger:read` and the
+  memory delete gate (`memory:delete` or `memory:write`, advertised in discovery
+  `scope_requirements` as `["memory:delete", "ledger:read"]`; `ledger:write` alone
+  is rejected with HTTP 403, and `forget --id <memory-id> --confirm` remains the
+  direct memory soft-delete command for backing memory records).
 - `ledger-list` is a strictly read-only query backed by
   `POST /v1/skill/operations` (`operation: "ledger-list"`, requiring
   `ledger:read` scope). It retrieves financial and expense transactions without
   any write or delete capabilities; `ledger-list` only reads and lists records.
-  Deleting or voiding a transaction is a separate operation that requires
-  explicit confirmation (`forget --id <id> --confirm`) and a delete-capable
-  scope (for example `memory:delete`; see the forget section for the full list).
-  It accepts `--limit <n>`, `--offset <n>`,
+  Deleting or voiding a transaction is a separate operation (`expense-delete --id <transaction-id> --confirm`,
+  or `forget --id <memory-id> --confirm` on the backing memory record) that requires
+  explicit confirmation and a delete-capable scope (`memory:delete` plus `ledger:read`
+  for `expense-delete`; see [command-details.md](command-details.md) for the full
+  `forget` scope list). `ledger-list` accepts `--limit <n>`, `--offset <n>`,
   `--currency <code>`, `--from <date>` (`date_from`), `--to <date>` (`date_to`),
   `--category <name>`, `--min-amount <n>`, `--max-amount <n>`, and `--type <type>`
   (`transaction_type`). As a convenience, `--month <YYYY-MM>` can be specified to

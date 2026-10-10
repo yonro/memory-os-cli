@@ -1405,6 +1405,82 @@ test('skill script expense-add command calls /v1/skill/operations with operation
   await testServer.stop();
 });
 
+test('expense-delete and ledger-delete require confirmation, dispatch only { id }, and handle 404 not_found', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  try {
+    // 1. Missing --confirm fails locally (JSON and terminal) with zero HTTP requests
+    const missingJson = await runScript(['expense-delete', '--id', 'tx-1', '--json'], {
+      baseUrl, env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(missingJson.code, 1);
+    const missingPayload = JSON.parse(missingJson.stdout);
+    assert.equal(missingPayload.ok, false);
+    assert.equal(missingPayload.error.code, 'confirmation_required');
+    assert.equal(missingPayload.error.target_id, 'tx-1');
+
+    const missingTerm = await runScript(['ledger-delete', '--id', 'tx-1'], {
+      baseUrl, env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(missingTerm.code, 1);
+    assert.match(missingTerm.stderr, /Confirmation required to delete ledger transaction 'tx-1'/);
+    assert.equal(testServer.requests.length, 0);
+
+    // 2. Confirmed expense-delete sends exact { id: 'tx-1' } (no confirm flag in arguments)
+    testServer.setResponse({
+      ok: true,
+      operation: 'expense-delete',
+      result: { transaction_id: 'tx-1', id: 'mem-vec-1', memory_id: 'mem-1', status: 'deleted' }
+    });
+    const successJson = await runScript(['expense-delete', '--id', 'tx-1', '--confirm', '--json'], {
+      baseUrl, env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(successJson.code, 0);
+    assert.equal(testServer.requests.length, 1);
+    assert.equal(testServer.requests[0].body.operation, 'expense-delete');
+    assert.deepEqual(testServer.requests[0].body.arguments, { id: 'tx-1' });
+
+    // 3. Confirmed ledger-delete alias dispatches operation 'expense-delete' with { id: 'tx-2' }
+    testServer.setResponse({
+      ok: true,
+      operation: 'expense-delete',
+      result: { transaction_id: 'tx-2', id: 'mem-vec-2', memory_id: 'mem-2', status: 'deleted' }
+    });
+    const successAliasTerm = await runScript(['ledger-delete', '--id', 'tx-2', '--confirm'], {
+      baseUrl, env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(successAliasTerm.code, 0);
+    assert.match(successAliasTerm.stdout, /✅ Expense deleted\.\nID: tx-2/);
+    assert.equal(testServer.requests.length, 2);
+    assert.equal(testServer.requests[1].body.operation, 'expense-delete');
+    assert.deepEqual(testServer.requests[1].body.arguments, { id: 'tx-2' });
+
+    // 4. Non-existent ID (404 not_found) returns clear error envelope and exit code 1
+    testServer.setResponse({
+      ok: false,
+      error: { code: 'not_found', message: 'Ledger transaction not found' }
+    }, 404);
+    const notFoundJson = await runScript(['expense-delete', '--id', '00000000-0000-4000-8000-000000000001', '--confirm', '--json'], {
+      baseUrl, env: { XMEMO_KEY: 'secret-token-key' }
+    });
+    assert.equal(notFoundJson.code, 1);
+    const notFoundPayload = JSON.parse(notFoundJson.stdout);
+    assert.equal(notFoundPayload.ok, false);
+    assert.equal(notFoundPayload.error.code, 'not_found');
+
+    // 5. Command-specific --help for both expense-delete and ledger-delete
+    const helpCanonical = await runScript(['expense-delete', '--help']);
+    assert.equal(helpCanonical.code, 0);
+    assert.match(helpCanonical.stdout, /expense-delete --id <transaction_id> --confirm/);
+    const helpAlias = await runScript(['ledger-delete', '--help']);
+    assert.equal(helpAlias.code, 0);
+    assert.match(helpAlias.stdout, /ledger-delete --id <transaction_id> --confirm \(alias\)/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
 test('skill script auth status verification checks endpoint', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();

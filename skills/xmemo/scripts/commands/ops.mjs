@@ -170,8 +170,16 @@ export async function handleOps(ctx) {
 
   // Normalize commands for operations mapping
   let opName = command;
+  if ((command === 'expense-delete' || command === 'ledger-delete') && !flags.confirm) {
+    const msg = `Confirmation required to delete ledger transaction '${flags.id}'. Pass --confirm to proceed.`;
+    if (options.json) console.log(safeJson({ ok: false, error: { code: 'confirmation_required', message: msg, target_id: flags.id } }));
+    else console.error(`Error: ${msg}\nTarget: ${sanitizeTerminalText(flags.id)}`);
+    process.exit(EXIT_CODE.USER_ERROR);
+  }
   if (command === 'save-state' || command === 'state-save') opName = 'state-save';
   if (command === 'restore-state' || command === 'state-restore') opName = 'state-restore';
+  if (command === 'expense-delete' || command === 'ledger-delete') opName = 'expense-delete';
+  const opArgs = opName === 'expense-delete' ? { id: flags.id } : flags;
 
   try {
     const discovery = command === 'doctor' && options.json
@@ -180,7 +188,7 @@ export async function handleOps(ctx) {
     // Dispatches operation query to XMemo API over HTTPS with Bearer authorization.
     const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
       operation: opName,
-      arguments: flags,
+      arguments: opArgs,
     }, {
       'Authorization': `Bearer ${token}`
     }, options.timeoutMs);
@@ -240,6 +248,9 @@ export async function handleOps(ctx) {
       }
     } else if (opName === 'expense-add') {
       console.log(`✅ Expense recorded.\nID: ${sanitizeTerminalText(extractId(data.result))}`);
+    } else if (opName === 'expense-delete') {
+      const id = data.result?.transaction_id || flags.id || extractId(data.result);
+      console.log(`✅ Expense deleted.\nID: ${sanitizeTerminalText(id)}`);
     } else if (opName === 'todo-add') {
       const id = extractId(data.result);
       console.log(`✅ TODO added.${id ? `\nID: ${sanitizeTerminalText(id)}` : ''}`);

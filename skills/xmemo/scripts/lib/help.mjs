@@ -125,6 +125,14 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'expense-add --item <text> --amount <number> --currency <code>',
     desc: 'Record an expense transaction in the ledger',
   },
+  'expense-delete': {
+    usage: 'expense-delete --id <transaction_id> --confirm',
+    desc: 'Soft-delete a ledger transaction by ID with confirmation (alias: ledger-delete)',
+  },
+  'ledger-delete': {
+    usage: 'ledger-delete --id <transaction_id> --confirm (alias)',
+    aliasOf: 'expense-delete',
+  },
   doctor: {
     usage: 'doctor [--anonymous]',
     desc: 'Inspect runtime health, credentials, and connectivity',
