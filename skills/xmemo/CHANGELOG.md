@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## 1.1.41
+
+### Added
+
+- Add confirmed `expense-delete` (and `ledger-delete` alias) for soft-deleting ledger transactions by their `ledger-list` transaction ID via `/v1/skill/operations`.
+- Align standalone command help, ledger reference documentation, and troubleshooting guidance with `expense-delete` (`ledger-delete` alias) and read-after-update output behavior.
+
 ## 1.1.40
 
 ### Changed

@@ -134,6 +134,7 @@ If this fails:
 | `--explain must be true or false` | A boolean parameter used another spelling | Pass the literal `true` or `false` |
 | `Method not found` | Server does not expose the requested operation | Server-side capability gap |
 | `Knowledge requested but unavailable` | Knowledge runtime is disabled, the credential lacks `knowledge:read`, or the current owner/scope is unsupported | Check `auth status --verify`, reauthorize the formal credential if the scope is missing, then retry `recall-context --include_knowledge true`; do not attempt unauthorized scope expansion or inspect another owner |
+| `read` after `update` appears to lack `Content:` header in piped shells or shows stale text | Non-TTY stdout defaults to `--json` (`content` field in JSON rather than `Content:` terminal header), or brief read-after-write propagation lag | Pass `--terminal` to force human `Content:` formatting in non-TTY subshells, or inspect `.content` in `--json` output and retry `read --id <id>` once if needed |
 
 ## Security reminders
 

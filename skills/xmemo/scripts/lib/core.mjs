@@ -138,7 +138,7 @@ export const REST_COMMANDS = new Set([
   'overview', 'activity', 'stats',
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'restart-snapshot', 'restart-restore', 'recall-context',
-  'todo-add', 'todo-list', 'todo-done', 'expense-add', 'doctor',
+  'todo-add', 'todo-list', 'todo-done', 'expense-add', 'expense-delete', 'ledger-delete', 'doctor',
 ]);
 
 export const COMMAND_FLAGS = {
@@ -169,6 +169,8 @@ export const COMMAND_FLAGS = {
   'todo-list': new Set(['bucket', 'scope', 'status']),
   'todo-done': new Set(['id', 'todo_id', 'note']),
   'expense-add': new Set(['item', 'amount', 'currency', 'transaction_date', 'date', 'path', 'bucket', 'scope']),
+  'expense-delete': new Set(['id', 'confirm']),
+  'ledger-delete': new Set(['id', 'confirm']),
 };
 
 export const AUTH_FLAGS = {

@@ -33,6 +33,7 @@ For other operations and guides, see:
 | `todo-list` | List TODO items |
 | `todo-done` | Mark a TODO done |
 | `expense-add` | Record a ledger expense (write operation, requires `ledger:write` scope; confirm with user when agent-inferred) |
+| `expense-delete` / `ledger-delete` | Soft-delete a ledger transaction by `ledger-list` transaction ID via `POST /v1/skill/operations` (requires `--confirm`, `memory:delete`, and `ledger:read` scopes) |
 | `doctor` | Check service health and auth status; add `--anonymous` to omit credentials |
 | `auth status` / `auth-status` | Show local auth state; add `--verify` for server validation |
 | `auth claim-status` / `auth claim-confirm` / `auth claim-deny` | Inspect, approve, or reject the two-phase temporary bind |

@@ -140,7 +140,7 @@ export function validateCommandInput(command, subcommand, positionals, options, 
   const required = {
     read: ['id'], update: ['id'], forget: ['id'], remember: ['content|file'],
     recall: ['query'], search: ['query'], 'recall-context': ['query'],
-    'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'],
+    'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'], 'expense-delete': ['id'], 'ledger-delete': ['id'],
   };
   for (const requirement of required[command] || []) {
     const alternatives = requirement.split('|');

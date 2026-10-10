@@ -146,6 +146,12 @@ node scripts/xmemo-skill.mjs expense-add --item "team lunch" --amount 42.5 --cur
 
 Requires `ledger:write` scope. Record user-requested transactions directly; if agent-inferred, confirm item, amount, and currency first.
 
+`expense-delete` (alias: `ledger-delete`) is a confirmed **WRITE** operation that soft-deletes a ledger transaction by its `ledger-list` transaction ID (`--confirm` required; requires `memory:delete` and `ledger:read` scopes on the server, as `ledger:write` alone is not sufficient):
+
+```text
+node scripts/xmemo-skill.mjs expense-delete --id <transaction-id> --confirm
+```
+
 Query transactions and monthly summaries (strictly read-only, requiring `ledger:read` scope):
 
 ```text
@@ -184,6 +190,7 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `todo-list` | List active action items |
 | `todo-done --id <todo_id>` | Mark action item done |
 | `expense-add --item <text> --amount <n> --currency <code>` | Record expense in ledger (WRITE) |
+| `expense-delete --id <transaction-id> --confirm` | Soft-delete ledger transaction (alias: `ledger-delete`) |
 | `ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>]` | List ledger records (read-only) |
 | `ledger-summary [--months <n>] [--currency <code>]` | Monthly ledger totals (read-only) |
 | `overview` | Account memory and storage |
