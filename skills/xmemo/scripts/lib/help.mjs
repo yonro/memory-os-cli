@@ -41,6 +41,10 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
     desc: 'Read a memory by ID with optional character pagination',
   },
+  relationships: {
+    usage: 'relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]',
+    desc: 'List links by memory_id from recall/search --json (not row id); use --json to paginate',
+  },
   update: {
     usage: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
     desc: 'Update an existing memory content, path, or metadata',
@@ -48,6 +52,10 @@ export const COMMAND_USAGE_REGISTRY = {
   forget: {
     usage: 'forget --id <id> [--reason <text>] --confirm',
     desc: 'Soft-delete a memory by ID with confirmation',
+  },
+  restore: {
+    usage: 'restore --id <id> --confirm [--reason <text>]',
+    desc: 'Restore a soft-deleted memory by ID (matches forget --id)',
   },
   'ledger-list': {
     usage: 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',

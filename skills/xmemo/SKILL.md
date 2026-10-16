@@ -181,8 +181,10 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `recall --query <text> [--limit <n>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc\|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--expand-documents] [--compact]` | Recall memories by query and optional time filters |
 | `search --query <text> [--limit <n>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc\|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--expand-documents] [--compact]` | Search memories by query and optional time filters |
 | `read --id <id> [--offset <n>] [--limit <n>]` | Read memory or full document by ID |
+| `relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]` | List read-only relationships by logical `memory_id` from recall/search `--json`; use `--json` to get `relationship_id` values for pagination |
 | `update --id <id> [--content <text>] [--path <path>] [--metadata <json>]` | Update memory by ID |
 | `forget --id <id> --confirm [--reason <text>]` | Soft-delete record |
+| `restore --id <id> --confirm [--reason <text>]` | Restore a soft-deleted memory by ID (matches `forget --id`) |
 | `recall-context --query <text> [--include_knowledge <true\|false>] [--max_items <n>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc\|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--hypothetical_answer <text>]` | Bounded prompt context with optional time filters and query expansion |
 | `save-state --key <key> [--content <text>] [--ttl_seconds <n>]` | Save task state (alias: `state-save`) |
 | `restore-state --key <key>` | Restore task state (alias: `state-restore`) |

@@ -152,7 +152,7 @@ async function main() {
 
   // 5. Formal credential commands
   const authCtx = { ...ctx, credential, token };
-  if (['restart-snapshot', 'restart-restore', 'recall-context', 'read', 'update', 'forget', 'remember', 'recall', 'search'].includes(command)) {
+  if (['restart-snapshot', 'restart-restore', 'recall-context', 'read', 'relationships', 'restore', 'update', 'forget', 'remember', 'recall', 'search'].includes(command)) {
     await handleMemory(authCtx);
     return;
   }

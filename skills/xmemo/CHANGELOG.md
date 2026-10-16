@@ -7,6 +7,12 @@
 ### Added
 
 - Add RFC 3339 time filters to standalone `recall`, `search`, and `recall-context`, including local timestamp and ordering validation.
+- Add read-only relationships lookup by logical `memory_id`, with optional `relationship_id` cursor pagination and fail-closed UUID/limit validation.
+- Add `restore --id <id> --confirm [--reason <text>]` to restore soft-deleted memories, matching `forget --id` semantics.
+
+### Changed
+
+- Document that time-filtered `recall` and `search` use direct REST JSON responses, while unfiltered requests retain the skill-operation response envelope.
 
 ## 1.1.41
 

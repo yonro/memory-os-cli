@@ -16,6 +16,7 @@ import {
 } from './bounded-read.mjs';
 
 const TIME_FILTER_COMMANDS = new Set(['recall', 'search', 'recall-context']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIME_FILTER_ALIASES = [
   ['time-order', 'time_order'],
   ['owner-timezone', 'owner_timezone'],
@@ -206,8 +207,16 @@ export function validateCommandInput(command, subcommand, positionals, options, 
 
   validateTimeFilters(command, flags);
 
+  if (command === 'relationships') {
+    for (const key of ['id', 'cursor']) {
+      if (flags[key] !== undefined && !UUID_PATTERN.test(String(flags[key]))) {
+        throw new Error(`--${key} must be a UUID.`);
+      }
+    }
+  }
+
   const required = {
-    read: ['id'], update: ['id'], forget: ['id'], remember: ['content|file'],
+    read: ['id'], relationships: ['id'], update: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
     recall: ['query'], search: ['query'], 'recall-context': ['query'],
     'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'], 'expense-delete': ['id'], 'ledger-delete': ['id'],
   };

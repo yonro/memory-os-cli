@@ -58,6 +58,120 @@ test('skill script recall-context calls the bounded direct REST endpoint', async
   }
 });
 
+test('relationships reads owner-scoped edges via GET and preserves the raw JSON response', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const rootId = '550e8400-e29b-41d4-a716-446655440000';
+  const outboundId = '550e8400-e29b-41d4-a716-446655440001';
+  const inboundId = '550e8400-e29b-41d4-a716-446655440002';
+  const cursor = '550e8400-e29b-41d4-a716-446655440003';
+  const nextCursor = '550e8400-e29b-41d4-a716-446655440004';
+  const env = { XMEMO_KEY: 'secret-token-key' };
+
+  try {
+    testServer.setResponse({
+      contract_version: 'personal-memory-relationships-v1',
+      items: [
+        {
+          relationship_id: '550e8400-e29b-41d4-a716-446655440010',
+          from_memory_id: rootId, to_memory_id: outboundId, edge_kind: 'supports', version: 2,
+        },
+        {
+          relationship_id: '550e8400-e29b-41d4-a716-446655440011',
+          from_memory_id: inboundId, to_memory_id: rootId, edge_kind: 'references', version: 1,
+        },
+      ],
+      next_cursor: nextCursor,
+    });
+    const terminal = await runScript([
+      'relationships', '--id', rootId, '--limit', '2', '--cursor', cursor, '--terminal',
+    ], { baseUrl, env });
+    assert.equal(terminal.code, 0);
+    assert.match(terminal.stdout, new RegExp(`supports \\| target: ${outboundId} \\| version: 2`));
+    assert.match(terminal.stdout, new RegExp(`references \\| target: ${inboundId} \\| version: 1`));
+    assert.match(terminal.stdout, new RegExp(`Next cursor: ${nextCursor}`));
+
+    const request = testServer.requests[0];
+    assert.equal(request.url, `/v1/memories/${rootId}/relationships?limit=2&cursor=${cursor}`);
+    assert.equal(request.method, 'GET');
+    assert.equal(request.body, null);
+    assert.equal(request.headers.authorization, 'Bearer secret-token-key');
+
+    const rawBody = {
+      contract_version: 'personal-memory-relationships-v1',
+      items: [],
+    };
+    testServer.setResponse(rawBody);
+    const json = await runScript(['relationships', '--id', rootId, '--json'], { baseUrl, env });
+    assert.equal(json.code, 0);
+    assert.deepEqual(JSON.parse(json.stdout), rawBody);
+    assert.equal(testServer.requests[1].url, `/v1/memories/${rootId}/relationships`);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('relationships maps server detail codes for 404, 422, and 503 responses', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const rootId = '550e8400-e29b-41d4-a716-446655440000';
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const cases = [
+    [404, { detail: { code: 'NotFound' } }, EXIT_CODE.USER_ERROR, 'not_found'],
+    [422, { detail: { code: 'InvalidArgument' } }, EXIT_CODE.USER_ERROR, 'invalid_argument'],
+    [503, { detail: { code: 'Unavailable' } }, EXIT_CODE.SERVER_ERROR, 'service_unavailable'],
+  ];
+
+  try {
+    for (const [status, body, expectedExit, expectedCode] of cases) {
+      testServer.setResponse(body, status);
+      const result = await runScript(['relationships', '--id', rootId, '--json'], { baseUrl, env });
+      assert.equal(result.code, expectedExit, `HTTP ${status}`);
+      const payload = JSON.parse(result.stdout);
+      assert.equal(payload.error.code, expectedCode, `HTTP ${status}`);
+      if (status === 404) {
+        assert.match(payload.error.message, /logical memory_id/);
+        const terminalResult = await runScript(['relationships', '--id', rootId, '--terminal'], { baseUrl, env });
+        assert.equal(terminalResult.code, EXIT_CODE.USER_ERROR);
+        assert.match(terminalResult.stderr, /Memory was not found or is not visible/);
+        assert.match(terminalResult.stderr, /logical memory_id/);
+      }
+    }
+    assert.equal(testServer.requests.length, cases.length + 1);
+    assert.ok(testServer.requests.every((request) => request.method === 'GET'));
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('relationships rejects invalid UUIDs and limits before making requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const rootId = '550e8400-e29b-41d4-a716-446655440000';
+  const invalidCalls = [
+    [['--id', 'not-a-uuid'], /--id must be a UUID/],
+    [['--id', rootId, '--cursor', 'bad-cursor'], /--cursor must be a UUID/],
+    [['--id', rootId, '--limit', '0'], /--limit must be between 1 and 100/],
+    [['--id', rootId, '--limit', '101'], /--limit must be between 1 and 100/],
+    [['--id', rootId, '--limit', '1.5'], /--limit must be a positive integer/],
+    [[], /relationships requires --id/],
+  ];
+
+  try {
+    for (const [args, expectedError] of invalidCalls) {
+      const result = await runScript(['relationships', ...args], {
+        baseUrl,
+        env: { XMEMO_KEY: 'secret-token-key' },
+      });
+      assert.equal(result.code, EXIT_CODE.USER_ERROR, args.join(' '));
+      assert.match(result.stderr, expectedError);
+    }
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
 test('skill time filters reach formal recall, search, and recall-context requests', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
@@ -67,36 +181,58 @@ test('skill time filters reach formal recall, search, and recall-context request
   const referenceTime = '2026-10-16T09:30:00.123456Z';
 
   try {
-    testServer.setResponse({ ok: true, result: { results: [] } });
+    testServer.setResponse({
+      results: [{ id: 'filtered_recall_1', path: 'projects/time', content: 'filtered recall result' }],
+      result_count: 1,
+      response_metadata: 'preserved',
+    });
     const recall = await runScript([
-      'recall', '--query', 'time-bounded recall', '--since', since, '--until', until,
-      '--time-order', 'desc', '--owner-timezone', 'Asia/Tokyo', '--reference-time', referenceTime, '--json'
+      'recall', '--query', 'time-bounded & recall + punctuation', '--limit', '3', '--threshold', '0.7',
+      '--path', 'projects/time filter', '--bucket', 'work', '--scope', 'private', '--team_id', 'team-1',
+      '--memory_type', 'episodic', '--explain', 'false', '--prefer_working', 'false',
+      '--since', since, '--until', until, '--time-order', 'desc', '--owner-timezone', 'Asia/Tokyo',
+      '--reference-time', referenceTime, '--expand-documents', '--json'
     ], { baseUrl, env });
     assert.equal(recall.code, 0);
-    assert.deepEqual(testServer.requests.at(-1).body, {
-      operation: 'recall',
-      arguments: {
-        query: 'time-bounded recall', since, until, time_order: 'desc',
-        owner_timezone: 'Asia/Tokyo', reference_time: referenceTime,
-      },
+    const recallPayload = JSON.parse(recall.stdout);
+    assert.equal(recallPayload.response_metadata, 'preserved');
+    assert.equal(recallPayload.results[0].id, 'filtered_recall_1');
+    const recallRequest = testServer.requests.at(-1);
+    assert.equal(recallRequest.method, 'GET');
+    const recallUrl = new URL(recallRequest.url, 'http://test');
+    assert.equal(recallUrl.pathname, '/v1/recall');
+    assert.equal(recallRequest.headers.authorization, 'Bearer secret-token-key');
+    assert.equal(recallRequest.body, null);
+    assert.deepEqual(Object.fromEntries(recallUrl.searchParams), {
+      query: 'time-bounded & recall + punctuation', limit: '3', threshold: '0.7',
+      path: 'projects/time filter', bucket: 'work', scope: 'private', team_id: 'team-1',
+      memory_type: 'episodic', explain: 'false', prefer_working: 'false', since, until,
+      time_order: 'desc', owner_timezone: 'Asia/Tokyo', reference_time: referenceTime,
     });
 
     const searchSince = '2026-10-16T00:00:00Z';
     const searchUntil = '2026-10-17T09:00:00+09:00';
     const searchReferenceTime = '2026-10-16T00:00:00-07:00';
-    testServer.setResponse({ ok: true, result: { results: [] } });
+    testServer.setResponse({
+      results: [{ id: 'filtered_search_1', path: 'projects/time', content: 'filtered search result' }],
+      result_count: 1,
+    });
     const search = await runScript([
       'search', '--query', 'time-bounded search', '--since', searchSince, '--until', searchUntil,
-      '--time_order', 'asc', '--owner_timezone', 'America/Los_Angeles',
-      '--reference_time', searchReferenceTime, '--json'
+      '--time_order', 'asc', '--owner_timezone', 'America/Los_Angeles', '--reference_time', searchReferenceTime,
     ], { baseUrl, env });
     assert.equal(search.code, 0);
-    assert.deepEqual(testServer.requests.at(-1).body, {
-      operation: 'search',
-      arguments: {
-        query: 'time-bounded search', since: searchSince, until: searchUntil, time_order: 'asc',
-        owner_timezone: 'America/Los_Angeles', reference_time: searchReferenceTime,
-      },
+    assert.match(search.stdout, /ID: filtered_search_1/);
+    assert.match(search.stdout, /filtered search result/);
+    const searchRequest = testServer.requests.at(-1);
+    assert.equal(searchRequest.method, 'GET');
+    const searchUrl = new URL(searchRequest.url, 'http://test');
+    assert.equal(searchUrl.pathname, '/v1/memories/search');
+    assert.equal(searchRequest.headers.authorization, 'Bearer secret-token-key');
+    assert.equal(searchRequest.body, null);
+    assert.deepEqual(Object.fromEntries(searchUrl.searchParams), {
+      query: 'time-bounded search', since: searchSince, until: searchUntil, time_order: 'asc',
+      owner_timezone: 'America/Los_Angeles', reference_time: searchReferenceTime,
     });
 
     const contextSince = '2026-10-16T00:00:00+09:00';
@@ -115,6 +251,41 @@ test('skill time filters reach formal recall, search, and recall-context request
       owner_timezone: 'Asia/Tokyo', reference_time: contextReferenceTime,
       hypothetical_answer: 'A concise temporal summary.',
     });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('each formal recall/search time filter alone uses its direct GET endpoint', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const filters = [
+    ['since', '2030-01-01T00:00:00Z'],
+    ['until', '2030-01-02T00:00:00Z'],
+    ['time_order', 'asc'],
+    ['owner_timezone', 'Asia/Tokyo'],
+    ['reference_time', '2030-01-01T12:00:00Z'],
+  ];
+
+  try {
+    for (const command of ['recall', 'search']) {
+      for (const [key, value] of filters) {
+        testServer.setResponse({ results: [] });
+        const result = await runScript([
+          command, '--query', `single-filter-${key}`, `--${key}`, value, '--json',
+        ], { baseUrl, env });
+        assert.equal(result.code, 0, `${command} --${key}`);
+        const request = testServer.requests.at(-1);
+        assert.equal(request.method, 'GET', `${command} --${key} method`);
+        const requestUrl = new URL(request.url, 'http://test');
+        assert.equal(requestUrl.pathname, command === 'search' ? '/v1/memories/search' : '/v1/recall', `${command} --${key} endpoint`);
+        assert.equal(request.headers.authorization, 'Bearer secret-token-key', `${command} --${key} auth`);
+        assert.equal(request.body, null);
+        assert.equal(requestUrl.searchParams.get(key), value, `${command} --${key} value`);
+        assert.equal(requestUrl.searchParams.get('query'), `single-filter-${key}`);
+      }
+    }
   } finally {
     await testServer.stop();
   }
@@ -527,7 +698,10 @@ test('skill script accepts wrapped recall, search, and TODO list payloads', asyn
     assert.equal(recallRes.code, 0);
     assert.match(recallRes.stdout, /ID: recall_1/);
     assert.match(recallRes.stdout, /truncated/);
-    assert.deepEqual(testServer.requests.at(-1).body, {
+    const recallRequest = testServer.requests.at(-1);
+    assert.equal(recallRequest.method, 'POST');
+    assert.equal(recallRequest.url, '/v1/skill/operations');
+    assert.deepEqual(recallRequest.body, {
       operation: 'recall', arguments: { query: 'test' },
     });
 
@@ -535,7 +709,10 @@ test('skill script accepts wrapped recall, search, and TODO list payloads', asyn
     const searchRes = await runScript(['search', '--query', 'test'], { baseUrl, env });
     assert.equal(searchRes.code, 0);
     assert.match(searchRes.stdout, /ID: search_1/);
-    assert.deepEqual(testServer.requests.at(-1).body, {
+    const searchRequest = testServer.requests.at(-1);
+    assert.equal(searchRequest.method, 'POST');
+    assert.equal(searchRequest.url, '/v1/skill/operations');
+    assert.deepEqual(searchRequest.body, {
       operation: 'search', arguments: { query: 'test' },
     });
 

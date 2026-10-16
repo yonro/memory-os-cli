@@ -133,7 +133,7 @@ export function exitCodeForError(err) {
 }
 
 export const REST_COMMANDS = new Set([
-  'read', 'update', 'forget',
+  'read', 'relationships', 'restore', 'update', 'forget',
   'ledger-list', 'ledger-summary',
   'overview', 'activity', 'stats',
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
@@ -148,6 +148,8 @@ export const COMMAND_FLAGS = {
   profile: new Set(['status', 'if-unset', 'if_unset']),
   doctor: new Set(),
   read: new Set(['id', 'offset', 'limit', 'bucket', 'scope']),
+  relationships: new Set(['id', 'limit', 'cursor']),
+  restore: new Set(['id', 'reason', 'confirm']),
   update: new Set(['id', 'content', 'path', 'metadata', 'bucket', 'scope']),
   forget: new Set(['id', 'reason', 'confirm']),
   'ledger-list': new Set(['limit', 'offset', 'currency', 'from', 'to', 'category', 'min-amount', 'max-amount', 'type', 'month']),
