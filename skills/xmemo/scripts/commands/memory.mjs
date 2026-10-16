@@ -347,6 +347,14 @@ export async function handleMemory(ctx) {
     try {
       const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
+      if (res.statusCode === 404) {
+        let errData = null;
+        try { errData = parseJsonResponse(res, 'Restore request'); } catch {}
+        const code = 'not_found';
+        const msg = `Memory '${flags.id}' not found or not deleted/visible.`;
+        outputRestError(code, msg, options, errData, EXIT_CODE.USER_ERROR);
+      }
+
       const data = handleRestError(res, {
         notFoundMessage: `Memory '${flags.id}' not found or not deleted/visible.`,
         context: 'Restore request',

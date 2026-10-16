@@ -55,7 +55,7 @@ export const COMMAND_USAGE_REGISTRY = {
   },
   restore: {
     usage: 'restore --id <id> --confirm [--reason <text>]',
-    desc: 'Restore a soft-deleted memory by ID (matches forget --id)',
+    desc: 'Restore by row ID or logical memory_id; tenant-scoped tokens require row ID',
   },
   'ledger-list': {
     usage: 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',

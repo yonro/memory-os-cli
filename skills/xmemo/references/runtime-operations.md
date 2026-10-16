@@ -115,9 +115,12 @@ Terminal output omits `relationship_id`, so use `--json` for manual pagination.
 The current endpoint does not return a `next_cursor` field.
 
 `restore --id <id> --confirm [--reason <text>]` restores a previously soft-deleted
-memory record. The `--id` parameter accepts the same memory ID used by `forget --id`
-and returned by `remember`. `--confirm` is required. If the token lacks the
-`memory:restore` scope, an authentication hint is shown directing to re-login.
+memory record. The ID may be a physical row `id` or logical `memory_id`. With a
+tenant-scoped credential, use the physical row `id` because the restore scope
+precheck does not resolve logical IDs. `forget` echoes the supplied ID, and
+ledger transaction IDs are not restore targets. `--confirm` is required. If the
+token lacks the `memory:restore` scope, an authentication hint is shown directing
+to re-login.
 
 For formal `recall` and `search`, requests without time filters use the
 `POST /v1/skill/operations` envelope. Supplying any time filter routes to the

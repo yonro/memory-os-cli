@@ -172,6 +172,123 @@ test('relationships rejects invalid UUIDs and limits before making requests', as
   }
 });
 
+test('restore sends POST /v1/memories/{id}/restore with reason, respects --confirm, and returns formatted terminal output and raw JSON', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const memoryId = '550e8400-e29b-41d4-a716-446655440000';
+  const physicalId = '650e8400-e29b-41d4-a716-446655440001';
+
+  try {
+    const rawResponse = {
+      id: physicalId,
+      memory_id: memoryId,
+      status: 'active',
+      version: 4,
+      restored_at: '2026-10-17T00:00:00Z',
+    };
+    testServer.setResponse(rawResponse);
+
+    const terminal = await runScript([
+      'restore', '--id', physicalId, '--confirm', '--reason', '  Mistakenly forgotten  ', '--terminal',
+    ], { baseUrl, env });
+    assert.equal(terminal.code, 0);
+    assert.equal(terminal.stdout, `✅ Memory restored: ${physicalId}\n`);
+
+    assert.equal(testServer.requests.length, 1);
+    const terminalReq = testServer.requests[0];
+    assert.equal(terminalReq.method, 'POST');
+    assert.equal(terminalReq.url, `/v1/memories/${physicalId}/restore`);
+    assert.deepEqual(terminalReq.body, { reason: 'Mistakenly forgotten' });
+    assert.equal(terminalReq.headers.authorization, 'Bearer secret-token-key');
+
+    const json = await runScript([
+      'restore', '--id', memoryId, '--confirm', '--json',
+    ], { baseUrl, env });
+    assert.equal(json.code, 0);
+    assert.deepEqual(JSON.parse(json.stdout), rawResponse);
+
+    assert.equal(testServer.requests.length, 2);
+    const jsonReq = testServer.requests[1];
+    assert.equal(jsonReq.method, 'POST');
+    assert.equal(jsonReq.url, `/v1/memories/${memoryId}/restore`);
+    assert.deepEqual(jsonReq.body, {});
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('restore rejects call without --confirm locally with zero network requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const memoryId = '550e8400-e29b-41d4-a716-446655440000';
+
+  try {
+    const terminal = await runScript(['restore', '--id', memoryId, '--terminal'], { baseUrl, env });
+    assert.equal(terminal.code, EXIT_CODE.USER_ERROR);
+    assert.match(terminal.stderr, /Confirmation required to restore memory/);
+    assert.match(terminal.stderr, new RegExp(memoryId));
+
+    const json = await runScript(['restore', '--id', memoryId, '--json'], { baseUrl, env });
+    assert.equal(json.code, EXIT_CODE.USER_ERROR);
+    const parsed = JSON.parse(json.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.error.code, 'confirmation_required');
+    assert.equal(parsed.error.target_id, memoryId);
+
+    const missingId = await runScript(['restore', '--confirm'], { baseUrl, env });
+    assert.equal(missingId.code, EXIT_CODE.USER_ERROR);
+    assert.match(missingId.stderr, /restore requires --id/);
+
+    const explicitFalse = await runScript(['restore', '--id', memoryId, '--confirm', 'false'], { baseUrl, env });
+    assert.equal(explicitFalse.code, EXIT_CODE.USER_ERROR);
+    assert.match(explicitFalse.stderr, /Confirmation required to restore memory/);
+
+    const metadata = await runScript(['restore', '--id', memoryId, '--confirm', '--metadata', '{}'], { baseUrl, env });
+    assert.equal(metadata.code, EXIT_CODE.USER_ERROR);
+
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('restore maps 404 not found and 403 scope errors correctly', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const memoryId = '550e8400-e29b-41d4-a716-446655440000';
+
+  try {
+    testServer.setResponse({ ok: false, error: { code: 'not_found', message: 'Not found' } }, 404);
+    const terminal404 = await runScript(['restore', '--id', memoryId, '--confirm', '--terminal'], { baseUrl, env });
+    assert.equal(terminal404.code, EXIT_CODE.USER_ERROR);
+    assert.match(terminal404.stderr, /Memory '550e8400-e29b-41d4-a716-446655440000' not found or not deleted\/visible/);
+
+    const json404 = await runScript(['restore', '--id', memoryId, '--confirm', '--json'], { baseUrl, env });
+    assert.equal(json404.code, EXIT_CODE.USER_ERROR);
+    const parsed404 = JSON.parse(json404.stdout);
+    assert.equal(parsed404.ok, false);
+    assert.equal(parsed404.error.code, 'not_found');
+    assert.match(parsed404.error.message, /not found or not deleted\/visible/);
+
+    testServer.setResponse({ ok: false, error: { code: 'forbidden', message: 'Scope missing' } }, 403);
+    const terminal403 = await runScript(['restore', '--id', memoryId, '--confirm', '--terminal'], { baseUrl, env });
+    assert.equal(terminal403.code, EXIT_CODE.AUTH_ERROR);
+    assert.match(terminal403.stderr, /Re-authorization is required to explicitly grant the required scope/);
+    assert.match(terminal403.stderr, /auth status --verify/);
+
+    const json403 = await runScript(['restore', '--id', memoryId, '--confirm', '--json'], { baseUrl, env });
+    assert.equal(json403.code, EXIT_CODE.AUTH_ERROR);
+    const parsed403 = JSON.parse(json403.stdout);
+    assert.equal(parsed403.ok, false);
+    assert.equal(parsed403.error.code, 'forbidden');
+  } finally {
+    await testServer.stop();
+  }
+});
+
 test('skill time filters reach formal recall, search, and recall-context requests', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
