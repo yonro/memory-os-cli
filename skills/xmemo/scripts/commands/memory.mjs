@@ -76,6 +76,12 @@ export async function handleMemory(ctx) {
         limit: flags.limit,
         prefer_working: flags.prefer_working === undefined ? true : flags.prefer_working,
         include_knowledge: flags.include_knowledge,
+        since: flags.since,
+        until: flags.until,
+        time_order: flags.time_order,
+        owner_timezone: flags.owner_timezone,
+        reference_time: flags.reference_time,
+        hypothetical_answer: flags.hypothetical_answer,
       }).filter(([, v]) => v !== undefined)
     );
     try {

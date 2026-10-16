@@ -58,6 +58,96 @@ test('skill script recall-context calls the bounded direct REST endpoint', async
   }
 });
 
+test('skill time filters reach formal recall, search, and recall-context requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const since = '2026-10-16T00:00:00.1234Z';
+  const until = '2026-10-16T00:00:00.1235Z';
+  const referenceTime = '2026-10-16T09:30:00.123456Z';
+
+  try {
+    testServer.setResponse({ ok: true, result: { results: [] } });
+    const recall = await runScript([
+      'recall', '--query', 'time-bounded recall', '--since', since, '--until', until,
+      '--time-order', 'desc', '--owner-timezone', 'Asia/Tokyo', '--reference-time', referenceTime, '--json'
+    ], { baseUrl, env });
+    assert.equal(recall.code, 0);
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      operation: 'recall',
+      arguments: {
+        query: 'time-bounded recall', since, until, time_order: 'desc',
+        owner_timezone: 'Asia/Tokyo', reference_time: referenceTime,
+      },
+    });
+
+    const searchSince = '2026-10-16T00:00:00Z';
+    const searchUntil = '2026-10-17T09:00:00+09:00';
+    const searchReferenceTime = '2026-10-16T00:00:00-07:00';
+    testServer.setResponse({ ok: true, result: { results: [] } });
+    const search = await runScript([
+      'search', '--query', 'time-bounded search', '--since', searchSince, '--until', searchUntil,
+      '--time_order', 'asc', '--owner_timezone', 'America/Los_Angeles',
+      '--reference_time', searchReferenceTime, '--json'
+    ], { baseUrl, env });
+    assert.equal(search.code, 0);
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      operation: 'search',
+      arguments: {
+        query: 'time-bounded search', since: searchSince, until: searchUntil, time_order: 'asc',
+        owner_timezone: 'America/Los_Angeles', reference_time: searchReferenceTime,
+      },
+    });
+
+    const contextSince = '2026-10-16T00:00:00+09:00';
+    const contextUntil = '2026-10-16T12:00:00-04:00';
+    const contextReferenceTime = '2026-10-16T11:00:00+09:00';
+    testServer.setResponse({ ok: true, context_text: '', items: [] });
+    const context = await runScript([
+      'recall-context', '--query', 'time-bounded context', '--since', contextSince,
+      '--until', contextUntil, '--time-order', 'desc', '--owner-timezone', 'Asia/Tokyo',
+      '--reference-time', contextReferenceTime, '--hypothetical-answer', 'A concise temporal summary.', '--json'
+    ], { baseUrl, env });
+    assert.equal(context.code, 0);
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      query: 'time-bounded context', path: '%', bucket: '%', memory_type: 'auto', status: 'active',
+      prefer_working: true, since: contextSince, until: contextUntil, time_order: 'desc',
+      owner_timezone: 'Asia/Tokyo', reference_time: contextReferenceTime,
+      hypothetical_answer: 'A concise temporal summary.',
+    });
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill time filters reject invalid input before making requests', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  const invalidCalls = [
+    ['recall', ['--time-order', 'newest'], /--time_order must be desc or asc/],
+    ['search', ['--since', '2026-10-16T00:00:00'], /RFC 3339 timestamp with a timezone offset/],
+    ['recall', ['--until', '2026-10-16T00:00:00'], /RFC 3339 timestamp with a timezone offset/],
+    ['recall-context', ['--since', '2026-02-30T00:00:00Z'], /RFC 3339 timestamp with a timezone offset/],
+    ['recall-context', ['--since', '2026-10-16T09:00:00+09:00', '--until', '2026-10-16T00:00:00Z'], /--until must be later than --since/],
+    ['recall-context', ['--since', '2026-10-16T10:00:00Z', '--until', '2026-10-16T09:00:00Z'], /--until must be later than --since/],
+    ['recall-context', ['--future-field', 'value'], /Unknown option for recall-context: --future-field/],
+    ['recall', ['--hypothetical_answer', 'not supported here'], /Unknown option for recall: --hypothetical_answer/],
+    ['search', ['--time_order', 'desc', '--time-order', 'asc'], /Cannot specify both --time_order and --time-order/],
+  ];
+
+  try {
+    for (const [command, args, expectedError] of invalidCalls) {
+      const result = await runScript([command, '--query', 'validation only', ...args], { baseUrl, env });
+      assert.equal(result.code, EXIT_CODE.USER_ERROR, `${command} ${args.join(' ')}`);
+      assert.match(result.stderr, expectedError);
+    }
+    assert.equal(testServer.requests.length, 0);
+  } finally {
+    await testServer.stop();
+  }
+});
+
 test('skill script opts recall-context into Knowledge only when requested', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
@@ -437,11 +527,17 @@ test('skill script accepts wrapped recall, search, and TODO list payloads', asyn
     assert.equal(recallRes.code, 0);
     assert.match(recallRes.stdout, /ID: recall_1/);
     assert.match(recallRes.stdout, /truncated/);
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      operation: 'recall', arguments: { query: 'test' },
+    });
 
     testServer.setResponse({ ok: true, result: { results: [{ id: 'search_1', path: 'projects/test', content: 'result' }] } });
     const searchRes = await runScript(['search', '--query', 'test'], { baseUrl, env });
     assert.equal(searchRes.code, 0);
     assert.match(searchRes.stdout, /ID: search_1/);
+    assert.deepEqual(testServer.requests.at(-1).body, {
+      operation: 'search', arguments: { query: 'test' },
+    });
 
     testServer.setResponse({ ok: true, result: { todos: [{ id: 'todo_1', content: 'ship the fix', status: 'open' }] } });
     const todoListRes = await runScript(['todo-list'], { baseUrl, env });
@@ -502,6 +598,14 @@ test('skill script exposes usage and preserves non-JSON server diagnostics', asy
   const contextHelp = await runScript(['recall-context', '--help']);
   assert.equal(contextHelp.code, 0);
   assert.match(contextHelp.stdout, /--include_knowledge <true\|false>/);
+  assert.match(contextHelp.stdout, /--hypothetical_answer <text>/);
+  assert.match(contextHelp.stdout, /--time_order <desc\|asc>/);
+
+  const searchHelp = await runScript(['search', '--help']);
+  assert.equal(searchHelp.code, 0);
+  assert.match(searchHelp.stdout, /--since <RFC3339>/);
+  assert.match(searchHelp.stdout, /--owner_timezone <IANA>/);
+  assert.match(searchHelp.stdout, /--reference_time <RFC3339>/);
 
   const changelog = await fs.readFile(path.join(repoRoot, 'skills/xmemo/CHANGELOG.md'), 'utf8');
   const latestRelease = changelog.match(/^##\s*(\d+\.\d+\.\d+)\s*$/m)?.[1];
@@ -933,12 +1037,49 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.equal(recall.code, 0);
     assert.match(recall.stdout, /temporary result/);
     assert.match(testServer.requests.at(-1).url, /^\/v1\/recall\?query=temporary/);
+    const recallParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
+    for (const key of ['since', 'until', 'time_order', 'owner_timezone', 'reference_time']) {
+      assert.equal(recallParams.has(key), false, `omitted recall option ${key}`);
+    }
+
+    const filteredSince = '2026-10-16T00:00:00+09:00';
+    const filteredUntil = '2026-10-17T00:00:00Z';
+    const filteredReference = '2026-10-16T09:00:00+09:00';
+    testServer.setResponse({ results: [{ id: 'temporary_memory_3', path: 'scratch', content: 'filtered recall result' }] });
+    const filteredRecall = await runScript([
+      'recall', '--query', 'temporary', '--since', filteredSince, '--until', filteredUntil,
+      '--time-order', 'desc', '--owner-timezone', 'Asia/Tokyo', '--reference-time', filteredReference,
+    ], { baseUrl, homeDir, env: {} });
+    assert.equal(filteredRecall.code, 0);
+    const filteredRecallParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
+    assert.equal(filteredRecallParams.get('since'), filteredSince);
+    assert.equal(filteredRecallParams.get('until'), filteredUntil);
+    assert.equal(filteredRecallParams.get('time_order'), 'desc');
+    assert.equal(filteredRecallParams.get('owner_timezone'), 'Asia/Tokyo');
+    assert.equal(filteredRecallParams.get('reference_time'), filteredReference);
 
     testServer.setResponse({ results: [{ id: 'temporary_memory_2', path: 'scratch', content: 'temporary search result' }] });
     const search = await runScript(['search', '--query', 'temporary', '--explain', 'false'], { baseUrl, homeDir, env: {} });
     assert.equal(search.code, 0);
     assert.match(search.stdout, /temporary search result/);
     assert.match(testServer.requests.at(-1).url, /^\/v1\/memories\/search\?query=temporary.*explain=false/);
+    const searchParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
+    for (const key of ['since', 'until', 'time_order', 'owner_timezone', 'reference_time']) {
+      assert.equal(searchParams.has(key), false, `omitted search option ${key}`);
+    }
+
+    testServer.setResponse({ results: [{ id: 'temporary_memory_4', path: 'scratch', content: 'filtered search result' }] });
+    const filteredSearch = await runScript([
+      'search', '--query', 'temporary', '--since', filteredSince, '--until', filteredUntil,
+      '--time_order', 'asc', '--owner_timezone', 'Asia/Tokyo', '--reference_time', filteredReference,
+    ], { baseUrl, homeDir, env: {} });
+    assert.equal(filteredSearch.code, 0);
+    const filteredSearchParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
+    assert.equal(filteredSearchParams.get('since'), filteredSince);
+    assert.equal(filteredSearchParams.get('until'), filteredUntil);
+    assert.equal(filteredSearchParams.get('time_order'), 'asc');
+    assert.equal(filteredSearchParams.get('owner_timezone'), 'Asia/Tokyo');
+    assert.equal(filteredSearchParams.get('reference_time'), filteredReference);
 
     const unsupported = await runScript(['todo-list'], { baseUrl, homeDir, env: {} });
     assert.notEqual(unsupported.code, 0);

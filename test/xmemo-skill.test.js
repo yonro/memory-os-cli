@@ -48,6 +48,13 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /recall/);
   assert.match(skill, /recall-context/);
   assert.match(skill, /--include_knowledge true/);
+  assert.match(skill, /--since <RFC3339>/);
+  assert.match(skill, /--until <RFC3339>/);
+  assert.match(skill, /--time_order <desc[|]asc>/);
+  assert.match(skill, /--owner_timezone <IANA>/);
+  assert.match(skill, /--reference_time <RFC3339>/);
+  assert.match(skill, /--hypothetical_answer <text>/);
+  assert.match(skill, /`until` must be later than `since`/);
   assert.match(skill, /knowledge:read/);
   assert.match(skill, /not retroactive/i);
   assert.match(skill, /search/);

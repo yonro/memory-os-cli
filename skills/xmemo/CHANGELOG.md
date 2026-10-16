@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.42
+
+### Added
+
+- Add RFC 3339 time filters to standalone `recall`, `search`, and `recall-context`, including local timestamp and ordering validation.
+
 ## 1.1.41
 
 ### Added
