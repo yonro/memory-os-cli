@@ -27,6 +27,8 @@ When the user chooses "later" or "don't ask again" during first-run sign-in or a
 4. The guidance note itself counts as an offer, ensuring no more than 3 offers are ever made in total.
 5. After "never" or when no status is recorded, recall never prints a guidance note.
 
+The bare `profile` command only prints the recommended block; `profile --status later|never` writes the local offer-state file described above.
+
 ## Generating the Profile Block (`profile`)
 
 To generate the recommended instruction block, run the print-only `profile` command from the Skill root:
