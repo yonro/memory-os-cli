@@ -366,8 +366,8 @@ jobs:
           pkg_version="$(node -p 'JSON.parse(require("fs").readFileSync("dist/npm-skill/package.json", "utf8")).version')"
           echo "Verifying publication and provenance for @xmemo/skill@$pkg_version..."
 
-          # Registry propagation can take ~4 minutes; retry up to 5 minutes (300 seconds)
-          deadline=$((SECONDS + 300))
+          # Registry propagation can take around 10 minutes; retry up to 15 minutes (900 seconds)
+          deadline=$((SECONDS + 900))
           verified=false
 
           while (( SECONDS < deadline )); do
