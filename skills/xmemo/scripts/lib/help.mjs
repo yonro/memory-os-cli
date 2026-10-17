@@ -41,6 +41,10 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'read --id <id> [--offset <n>] [--limit <n>] [--bucket <bucket>] [--scope <scope>]',
     desc: 'Read a memory by ID with optional character pagination',
   },
+  relationships: {
+    usage: 'relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]',
+    desc: 'List links by memory_id from recall/search --json (not row id); use --json to paginate',
+  },
   update: {
     usage: 'update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>]',
     desc: 'Update an existing memory content, path, or metadata',
@@ -48,6 +52,10 @@ export const COMMAND_USAGE_REGISTRY = {
   forget: {
     usage: 'forget --id <id> [--reason <text>] --confirm',
     desc: 'Soft-delete a memory by ID with confirmation',
+  },
+  restore: {
+    usage: 'restore --id <id> --confirm [--reason <text>]',
+    desc: 'Restore by row ID or logical memory_id; tenant-scoped tokens require row ID',
   },
   'ledger-list': {
     usage: 'ledger-list [--month <YYYY-MM>] [--from <date>] [--to <date>] [--currency <code>] [--category <name>] [--type <type>] [--min-amount <n>] [--max-amount <n>] [--limit <n>] [--offset <n>]',
@@ -74,15 +82,15 @@ export const COMMAND_USAGE_REGISTRY = {
     desc: 'Save a memory from text, stdin, or file',
   },
   recall: {
-    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--expand-documents] [--compact]',
+    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--expand-documents] [--compact]',
     desc: 'Recall memories matching a query',
   },
   search: {
-    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--expand-documents] [--compact]',
+    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--expand-documents] [--compact]',
     desc: 'Search memories matching a query',
   },
   'recall-context': {
-    usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>]',
+    usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--hypothetical_answer <text>]',
     desc: 'Read-only bounded Memory context; opt into Knowledge with true',
   },
   'save-state': {

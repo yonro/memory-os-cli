@@ -60,7 +60,7 @@ import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
 import { handleProfile, armRecallNote } from './commands/profile.mjs';
 
-const SKILL_VERSION = '1.1.41';
+const SKILL_VERSION = '1.1.42';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
@@ -152,7 +152,7 @@ async function main() {
 
   // 5. Formal credential commands
   const authCtx = { ...ctx, credential, token };
-  if (['restart-snapshot', 'restart-restore', 'recall-context', 'read', 'update', 'forget', 'remember', 'recall', 'search'].includes(command)) {
+  if (['restart-snapshot', 'restart-restore', 'recall-context', 'read', 'relationships', 'restore', 'update', 'forget', 'remember', 'recall', 'search'].includes(command)) {
     await handleMemory(authCtx);
     return;
   }

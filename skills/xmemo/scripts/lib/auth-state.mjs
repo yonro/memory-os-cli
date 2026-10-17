@@ -201,7 +201,7 @@ export async function requestTemporaryMemoryOperation(command, options, flags, c
     res = await makeHttpRequest(options.baseUrl, '/v1/remember', 'POST', body, headers, options.timeoutMs);
   } else {
     const params = new URLSearchParams({ query: flags.query || '', limit: String(flags.limit || 5) });
-    for (const key of ['threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working']) {
+    for (const key of ['threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working', 'since', 'until', 'time_order', 'owner_timezone', 'reference_time']) {
       if (flags[key] !== undefined) params.set(key, String(flags[key]));
     }
     const apiPath = command === 'search' ? '/v1/memories/search' : '/v1/recall';

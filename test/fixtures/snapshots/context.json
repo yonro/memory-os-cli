@@ -75,7 +75,7 @@
       "--help"
     ],
     "code": 0,
-    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--hypothetical_answer <text>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
     "stderr": "",
     "httpRequests": []
   }

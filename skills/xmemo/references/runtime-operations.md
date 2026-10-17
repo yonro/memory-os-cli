@@ -14,8 +14,10 @@ For other operations and guides, see:
 | Skill script | Purpose |
 |--------------|---------|
 | `read` | Read a specific memory by ID with minimal projection and optional character pagination |
+| `relationships` | Read owner-scoped Memory links via `GET /v1/memories/{memory_id}/relationships` (requires a read-scoped, owner-bound credential) |
 | `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
 | `forget` | Soft-delete a memory or ledger transaction via `POST /v1/memories/{id}/forget` (requires delete scope and explicit `--confirm`) |
+| `restore` | Restore a soft-deleted memory via `POST /v1/memories/{id}/restore` (matches `forget --id`, requires `memory:restore` scope and explicit `--confirm`) |
 | `ledger-list` | List financial/expense transactions via `POST /v1/skill/operations` (operation: `ledger-list`, requires `ledger:read` scope) |
 | `ledger-summary` | Retrieve monthly transaction summary via `POST /v1/skill/operations` (operation: `ledger-summary`, requires `ledger:read` scope) |
 | `overview` | Display account-level memory count, storage, and token consumption via `POST /v1/skill/operations` (operation: `overview`, requires `memory:read` scope) |
@@ -99,6 +101,33 @@ Human-readable output removes terminal control sequences. For the exact accepted
 parameters of any command, run
 `node scripts/xmemo-skill.mjs <command> --help`; use `--version` to identify the
 runtime and `--timeout-ms <ms>` to bound each network request.
+
+`relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]`
+lists active relationships where the requested memory is either endpoint. Pass
+the logical `memory_id` (the `memory_id` field in recall/search `--json` output,
+not the row `id`). Terminal output shows each edge kind, the other memory ID, and relationship
+version. The JSON response preserves the server body (`contract_version` and
+`items`). Results are ordered by ascending `relationship_id`. The cursor is an
+exclusive boundary: the endpoint returns rows with a `relationship_id` greater
+than the supplied UUID. To request the next page, pass the last returned item's
+`relationship_id`; this is a boundary value, not an opaque continuation token.
+Terminal output omits `relationship_id`, so use `--json` for manual pagination.
+The current endpoint does not return a `next_cursor` field.
+
+`restore --id <id> --confirm [--reason <text>]` restores a previously soft-deleted
+memory record. The ID may be a physical row `id` or logical `memory_id`. With a
+tenant-scoped credential, use the physical row `id` because the restore scope
+precheck does not resolve logical IDs. `forget` echoes the supplied ID, and
+ledger transaction IDs are not restore targets. `--confirm` is required. If the
+token lacks the `memory:restore` scope, an authentication hint is shown directing
+to re-login.
+
+For formal `recall` and `search`, requests without time filters use the
+`POST /v1/skill/operations` envelope. Supplying any time filter routes to the
+direct REST read endpoint (`GET /v1/recall` or `GET /v1/memories/search`);
+`--json` then prints that endpoint's raw response shape (for example,
+`results` and `coverage`) instead of the skill-operation envelope (`ok`,
+`operation`, `result`, and `response_budget`).
 
 ## Setup and Repair
 

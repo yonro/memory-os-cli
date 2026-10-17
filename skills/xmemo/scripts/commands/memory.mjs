@@ -6,7 +6,9 @@ import {
   apiErrorMessage, outputRestError, handleRestError, outputJsonFailure,
   safeJson, sanitizeTerminalText, formatMemoryContent, describeError, extractRecord,
 } from '../lib/api.mjs';
+import { RECALL_SEARCH_TIME_FILTER_KEYS, RECALL_SEARCH_QUERY_KEYS } from '../lib/time-filters.mjs';
 import { printAuthErrorHint } from '../lib/auth-hint.mjs';
+import { handleMemoryLifecycle } from './memory-lifecycle.mjs';
 
 function reqSuffix(data) {
   const reqId = extractRequestId(data);
@@ -24,6 +26,10 @@ function failRequest(data, statusCode, prefix, options) {
 
 export async function handleMemory(ctx) {
   const { command, options, flags, token } = ctx;
+
+  if (['relationships', 'forget', 'restore'].includes(command)) {
+    return handleMemoryLifecycle(ctx);
+  }
 
   if (command === 'restart-snapshot' || command === 'restart-restore') {
     const endpoint = command === 'restart-snapshot' ? '/v1/restart/snapshot' : '/v1/restart/restore';
@@ -76,6 +82,12 @@ export async function handleMemory(ctx) {
         limit: flags.limit,
         prefer_working: flags.prefer_working === undefined ? true : flags.prefer_working,
         include_knowledge: flags.include_knowledge,
+        since: flags.since,
+        until: flags.until,
+        time_order: flags.time_order,
+        owner_timezone: flags.owner_timezone,
+        reference_time: flags.reference_time,
+        hypothetical_answer: flags.hypothetical_answer,
       }).filter(([, v]) => v !== undefined)
     );
     try {
@@ -201,53 +213,27 @@ export async function handleMemory(ctx) {
     }
   }
 
-  if (command === 'forget') {
-    if (!flags.confirm) {
-      const msg = `Confirmation required to forget memory or ledger record '${flags.id}'. Pass --confirm to proceed.`;
-      if (options.json) {
-        console.log(safeJson({ ok: false, error: { code: 'confirmation_required', message: msg, target_id: flags.id } }));
-      } else {
-        console.error(`Error: ${msg}\nTarget: ${sanitizeTerminalText(flags.id)}`);
-      }
-      process.exit(EXIT_CODE.USER_ERROR);
-    }
-
-    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/forget`;
-    const body = { mode: 'soft_delete' };
-    if (flags.reason !== undefined && String(flags.reason).trim() !== '') {
-      body.reason = String(flags.reason);
-    }
-
-    try {
-      const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
-
-      handleRestError(res, {
-        notFoundMessage: `Record '${flags.id}' not found.`,
-        context: 'Forget request',
-        options,
-      });
-
-      if (options.json) {
-        console.log(safeJson({ ok: true, id: flags.id, mode: 'soft_delete', forgotten: true }));
-        process.exit(EXIT_CODE.SUCCESS);
-      }
-
-      console.log(`✅ Record forgotten (soft-deleted).\nID: ${sanitizeTerminalText(flags.id)}`);
-      process.exit(EXIT_CODE.SUCCESS);
-    } catch (e) {
-      console.error('Forget failed:', describeError(e));
-      process.exit(exitCodeForError(e));
-    }
-  }
-
   if (command === 'remember' || command === 'recall' || command === 'search') {
     try {
-      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
-        operation: command, arguments: flags,
-      }, { Authorization: `Bearer ${token}` }, options.timeoutMs);
+      const useFilteredReadEndpoint = command !== 'remember'
+        && RECALL_SEARCH_TIME_FILTER_KEYS.some((key) => flags[key] !== undefined);
+      let endpoint = '/v1/skill/operations';
+      let method = 'POST';
+      let body = { operation: command, arguments: flags };
+      if (useFilteredReadEndpoint) {
+        const params = new URLSearchParams();
+        for (const key of RECALL_SEARCH_QUERY_KEYS) {
+          if (flags[key] !== undefined) params.set(key, String(flags[key]));
+        }
+        endpoint = `${command === 'search' ? '/v1/memories/search' : '/v1/recall'}?${params}`;
+        method = 'GET';
+        body = null;
+      }
+      const res = await makeHttpRequest(options.baseUrl, endpoint, method, body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
       const data = parseJsonResponse(res, `${command} request`);
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
+      const result = useFilteredReadEndpoint ? (data.result || data) : data.result;
       if (succeeded && (command === 'recall' || command === 'search')) {
         await processDocumentStubs(data.result || data, {
           expandDocuments: flags['expand-documents'] || flags.expand_documents,
@@ -263,7 +249,7 @@ export async function handleMemory(ctx) {
       }
 
       if (command === 'recall' || command === 'search') {
-        printMemoryResults(data.result, options.compact);
+        printMemoryResults(result, options.compact);
         process.exit(EXIT_CODE.SUCCESS);
       } else if (command === 'remember') {
         console.log(`✅ Saved to XMemo.\nID: ${sanitizeTerminalText(extractId(data.result))}`);

@@ -14,6 +14,12 @@ import {
   readStdinContent,
   readBoundedFile,
 } from './bounded-read.mjs';
+import {
+  normalizeTimeFilterAliases,
+  validateTimeFilters,
+} from './time-filters.mjs';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isStdoutTty() {
   const env = process.env;
@@ -122,6 +128,7 @@ export function parseArgs(args) {
 }
 
 export function validateCommandInput(command, subcommand, positionals, options, flags) {
+  normalizeTimeFilterAliases(command, flags);
   const expectedPositionals = command === 'auth' ? 2 : 1;
   if (positionals.length > expectedPositionals) {
     throw new Error(`Unexpected positional argument: ${positionals[expectedPositionals]}`);
@@ -137,8 +144,18 @@ export function validateCommandInput(command, subcommand, positionals, options, 
     if (!allowedFlags.has(key)) throw new Error(`Unknown option for ${command}${subcommand ? ` ${subcommand}` : ''}: --${key}`);
   }
 
+  validateTimeFilters(command, flags);
+
+  if (command === 'relationships') {
+    for (const key of ['id', 'cursor']) {
+      if (flags[key] !== undefined && !UUID_PATTERN.test(String(flags[key]))) {
+        throw new Error(`--${key} must be a UUID.`);
+      }
+    }
+  }
+
   const required = {
-    read: ['id'], update: ['id'], forget: ['id'], remember: ['content|file'],
+    read: ['id'], relationships: ['id'], update: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
     recall: ['query'], search: ['query'], 'recall-context': ['query'],
     'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'], 'expense-delete': ['id'], 'ledger-delete': ['id'],
   };
