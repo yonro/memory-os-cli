@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## 1.1.43
+
+### Changed
+
+- Correct the ClawHub release metadata to use the `XMemo Memory` display name.
+- Clarify that bare `profile` is print-only, while `profile --status later|never` writes local offer state.
+
 ## 1.1.42
 
 ### Added
