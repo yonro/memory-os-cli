@@ -10,12 +10,12 @@ All notable changes to the XMemo CLI client will be documented in this file.
 - **Time Filter Controls for Memory Search and Context Recall**:
   - Added temporal filter options (`--since`, `--until`, `--time-order`, `--owner-timezone`, `--reference-time`) to `xmemo memory search` and `xmemo context recall`.
   - Added `--hypothetical-answer` parameter to `xmemo context recall` for hypothetical document embedding retrieval.
-  - Implemented strict local fail-closed validation on client input before sending network requests: verifies ISO-8601 timestamps, valid IANA timezones and UTC offsets, and ensures `since` does not exceed `until`.
+  - Validated locally before any request: `--since`/`--until` must be RFC 3339 timestamps with a timezone offset, `--until` must be later than `--since`, and `--time-order` must be `desc` or `asc`; invalid input exits with code 2 and sends nothing.
 - **Temporal Axis and Query Modes**:
   - Added `--temporal-axis-mode` (`created_at`, `updated_at`, `split_filter_created_order_updated`) and `--query-mode` (`topic`, `activity_log`) to `xmemo memory search` and `xmemo context recall` (along with snake_case aliases `temporal_axis_mode` and `query_mode`).
   - Enforced fail-closed local validation when `query_mode` is `activity_log`, requiring both `--since` and `--until` boundaries with zero network requests if either is missing.
 - **MCP Static Discovery Schemas**:
-  - Updated static MCP tool declarations for `search_knowledge` (`recall`) and `recall_context` to expose temporal and semantic parameters (`since`, `until`, `time_order`, `owner_timezone`, `reference_time`, `temporal_axis_mode`, `query_mode`, and `hypothetical_answer`).
+  - Updated static MCP tool declarations for `recall` and `recall_context` (the static schemas shown when no token is configured) to expose temporal and semantic parameters (`since`, `until`, `time_order`, `owner_timezone`, `reference_time`, `temporal_axis_mode`, `query_mode`, and `hypothetical_answer`).
 
 ## [0.4.190] - 2026-10-02
 
