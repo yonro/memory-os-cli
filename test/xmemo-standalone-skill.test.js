@@ -383,6 +383,8 @@ test('each formal recall/search time filter alone uses its direct GET endpoint',
     ['time_order', 'asc'],
     ['owner_timezone', 'Asia/Tokyo'],
     ['reference_time', '2030-01-01T12:00:00Z'],
+    ['temporal_axis_mode', 'created_at'],
+    ['query_mode', 'topic'],
   ];
 
   try {
@@ -422,6 +424,13 @@ test('skill time filters reject invalid input before making requests', async () 
     ['recall-context', ['--future-field', 'value'], /Unknown option for recall-context: --future-field/],
     ['recall', ['--hypothetical_answer', 'not supported here'], /Unknown option for recall: --hypothetical_answer/],
     ['search', ['--time_order', 'desc', '--time-order', 'asc'], /Cannot specify both --time_order and --time-order/],
+    ['recall', ['--temporal_axis_mode', 'invalid_axis'], /--temporal_axis_mode must be created_at, updated_at, or split_filter_created_order_updated/],
+    ['search', ['--query_mode', 'invalid_mode'], /--query_mode must be topic or activity_log/],
+    ['recall', ['--query_mode', 'activity_log'], /--query_mode activity_log requires both --since and --until/],
+    ['search', ['--query_mode', 'activity_log', '--since', '2026-10-16T00:00:00Z'], /--query_mode activity_log requires both --since and --until/],
+    ['recall-context', ['--query_mode', 'activity_log', '--until', '2026-10-16T00:00:00Z'], /--query_mode activity_log requires both --since and --until/],
+    ['recall', ['--temporal_axis_mode', 'created_at', '--temporal-axis-mode', 'updated_at'], /Cannot specify both --temporal_axis_mode and --temporal-axis-mode/],
+    ['search', ['--query_mode', 'topic', '--query-mode', 'activity_log'], /Cannot specify both --query_mode and --query-mode/],
   ];
 
   try {
@@ -1332,7 +1341,7 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.match(recall.stdout, /temporary result/);
     assert.match(testServer.requests.at(-1).url, /^\/v1\/recall\?query=temporary/);
     const recallParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
-    for (const key of ['since', 'until', 'time_order', 'owner_timezone', 'reference_time']) {
+    for (const key of ['since', 'until', 'time_order', 'owner_timezone', 'reference_time', 'temporal_axis_mode', 'query_mode']) {
       assert.equal(recallParams.has(key), false, `omitted recall option ${key}`);
     }
 
@@ -1358,7 +1367,7 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.match(search.stdout, /temporary search result/);
     assert.match(testServer.requests.at(-1).url, /^\/v1\/memories\/search\?query=temporary.*explain=false/);
     const searchParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
-    for (const key of ['since', 'until', 'time_order', 'owner_timezone', 'reference_time']) {
+    for (const key of ['since', 'until', 'time_order', 'owner_timezone', 'reference_time', 'temporal_axis_mode', 'query_mode']) {
       assert.equal(searchParams.has(key), false, `omitted search option ${key}`);
     }
 
@@ -5248,6 +5257,59 @@ test('doctor --json discovery unavailable includes bounded errorDetail and retri
     assert.equal(p503.clientDiagnostics.discovery.errorDetail.length <= 200, true);
     assert.equal(p503.clientDiagnostics.discovery.errorDetail.length > 0, true);
     assert.match(p503.clientDiagnostics.discovery.errorDetail, /HTTP 503/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('skill script forwards temporal_axis_mode and query_mode on recall, search, and recall-context', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const env = { XMEMO_KEY: 'secret-token-key' };
+  try {
+    testServer.setResponse({ results: [{ id: 'mem_axis_1', content: 'axis result' }] });
+    const recall = await runScript([
+      'recall', '--query', 'test query',
+      '--temporal-axis-mode', 'split_filter_created_order_updated',
+      '--query-mode', 'topic',
+      '--json'
+    ], { baseUrl, env });
+    assert.equal(recall.code, 0);
+    const recallUrl = new URL(testServer.requests.at(-1).url, baseUrl);
+    assert.equal(recallUrl.searchParams.get('temporal_axis_mode'), 'split_filter_created_order_updated');
+    assert.equal(recallUrl.searchParams.get('query_mode'), 'topic');
+
+    testServer.setResponse({ results: [{ id: 'mem_act_1', content: 'activity result' }] });
+    const search = await runScript([
+      'search', '--query', 'activity query',
+      '--query_mode', 'activity_log',
+      '--since', '2026-10-16T00:00:00Z',
+      '--until', '2026-10-17T00:00:00Z',
+      '--temporal_axis_mode', 'updated_at',
+      '--json'
+    ], { baseUrl, env });
+    assert.equal(search.code, 0);
+    const searchUrl = new URL(testServer.requests.at(-1).url, baseUrl);
+    assert.equal(searchUrl.searchParams.get('query_mode'), 'activity_log');
+    assert.equal(searchUrl.searchParams.get('since'), '2026-10-16T00:00:00Z');
+    assert.equal(searchUrl.searchParams.get('until'), '2026-10-17T00:00:00Z');
+    assert.equal(searchUrl.searchParams.get('temporal_axis_mode'), 'updated_at');
+
+    testServer.setResponse({ ok: true, context_text: 'ctx', items: [] });
+    const context = await runScript([
+      'recall-context', '--query', 'context activity',
+      '--temporal-axis-mode', 'created_at',
+      '--query-mode', 'activity_log',
+      '--since', '2026-10-16T00:00:00Z',
+      '--until', '2026-10-17T00:00:00Z',
+      '--json'
+    ], { baseUrl, env });
+    assert.equal(context.code, 0);
+    const body = testServer.requests.at(-1).body;
+    assert.equal(body.temporal_axis_mode, 'created_at');
+    assert.equal(body.query_mode, 'activity_log');
+    assert.equal(body.since, '2026-10-16T00:00:00Z');
+    assert.equal(body.until, '2026-10-17T00:00:00Z');
   } finally {
     await testServer.stop();
   }

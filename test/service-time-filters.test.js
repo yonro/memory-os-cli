@@ -40,6 +40,8 @@ test('memory search without time filters leaves request unchanged', async () => 
   assert.equal(parsedUrl.searchParams.has('time_order'), false);
   assert.equal(parsedUrl.searchParams.has('owner_timezone'), false);
   assert.equal(parsedUrl.searchParams.has('reference_time'), false);
+  assert.equal(parsedUrl.searchParams.has('temporal_axis_mode'), false);
+  assert.equal(parsedUrl.searchParams.has('query_mode'), false);
 });
 
 test('context recall without time filters leaves request unchanged', async () => {
@@ -62,6 +64,8 @@ test('context recall without time filters leaves request unchanged', async () =>
   assert.equal(body.owner_timezone, undefined);
   assert.equal(body.reference_time, undefined);
   assert.equal(body.hypothetical_answer, undefined);
+  assert.equal(body.temporal_axis_mode, undefined);
+  assert.equal(body.query_mode, undefined);
 });
 
 test('memory search forwards time filter options to recall GET query', async () => {
@@ -78,6 +82,8 @@ test('memory search forwards time filter options to recall GET query', async () 
     '--time-order', 'desc',
     '--owner-timezone', 'Asia/Tokyo',
     '--reference-time', '2026-09-15T12:00:00Z',
+    '--temporal-axis-mode', 'split_filter_created_order_updated',
+    '--query-mode', 'topic',
     '--json'
   ], io);
 
@@ -91,6 +97,8 @@ test('memory search forwards time filter options to recall GET query', async () 
   assert.equal(parsedUrl.searchParams.get('time_order'), 'desc');
   assert.equal(parsedUrl.searchParams.get('owner_timezone'), 'Asia/Tokyo');
   assert.equal(parsedUrl.searchParams.get('reference_time'), '2026-09-15T12:00:00Z');
+  assert.equal(parsedUrl.searchParams.get('temporal_axis_mode'), 'split_filter_created_order_updated');
+  assert.equal(parsedUrl.searchParams.get('query_mode'), 'topic');
 });
 
 test('memory search accepts snake_case aliases for time filter options', async () => {
@@ -105,6 +113,8 @@ test('memory search accepts snake_case aliases for time filter options', async (
     '--time_order', 'asc',
     '--owner_timezone', 'UTC',
     '--reference_time', '2026-10-01T00:00:00Z',
+    '--temporal_axis_mode', 'created_at',
+    '--query_mode', 'topic',
     '--json'
   ], io);
 
@@ -114,6 +124,8 @@ test('memory search accepts snake_case aliases for time filter options', async (
   assert.equal(parsedUrl.searchParams.get('time_order'), 'asc');
   assert.equal(parsedUrl.searchParams.get('owner_timezone'), 'UTC');
   assert.equal(parsedUrl.searchParams.get('reference_time'), '2026-10-01T00:00:00Z');
+  assert.equal(parsedUrl.searchParams.get('temporal_axis_mode'), 'created_at');
+  assert.equal(parsedUrl.searchParams.get('query_mode'), 'topic');
 });
 
 test('memory search passes arbitrary reference-time string through without RFC 3339 constraint', async () => {
@@ -139,7 +151,9 @@ test('memory search reads time filter options from JSON input', async () => {
       until: '2026-08-15T00:00:00Z',
       time_order: 'desc',
       owner_timezone: 'America/New_York',
-      reference_time: '2026-08-20T00:00:00Z'
+      reference_time: '2026-08-20T00:00:00Z',
+      temporal_axis_mode: 'updated_at',
+      query_mode: 'topic'
     }));
 
     const calls = [];
@@ -158,6 +172,8 @@ test('memory search reads time filter options from JSON input', async () => {
     assert.equal(parsedUrl.searchParams.get('time_order'), 'desc');
     assert.equal(parsedUrl.searchParams.get('owner_timezone'), 'America/New_York');
     assert.equal(parsedUrl.searchParams.get('reference_time'), '2026-08-20T00:00:00Z');
+    assert.equal(parsedUrl.searchParams.get('temporal_axis_mode'), 'updated_at');
+    assert.equal(parsedUrl.searchParams.get('query_mode'), 'topic');
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
@@ -299,7 +315,7 @@ test('memory search rejects hypothetical-answer option', async () => {
   assert.match(JSON.parse(io.stdout.value).error.message, /Unsupported option: --hypothetical-answer/);
 });
 
-test('context recall forwards all 6 time filter fields in POST body', async () => {
+test('context recall forwards all 8 time filter fields in POST body', async () => {
   let request;
   const io = makeIo(async (url, init) => {
     request = { url, init };
@@ -314,6 +330,8 @@ test('context recall forwards all 6 time filter fields in POST body', async () =
     '--owner-timezone', 'Asia/Tokyo',
     '--reference-time', 'arbitrary reference time text',
     '--hypothetical-answer', 'A likely memory about project setup.',
+    '--temporal-axis-mode', 'updated_at',
+    '--query-mode', 'topic',
     '--json'
   ], io);
 
@@ -328,6 +346,8 @@ test('context recall forwards all 6 time filter fields in POST body', async () =
   assert.equal(body.owner_timezone, 'Asia/Tokyo');
   assert.equal(body.reference_time, 'arbitrary reference time text');
   assert.equal(body.hypothetical_answer, 'A likely memory about project setup.');
+  assert.equal(body.temporal_axis_mode, 'updated_at');
+  assert.equal(body.query_mode, 'topic');
 });
 
 test('context recall normalizes kebab-case input fields and removes them from body', async () => {
@@ -339,7 +359,9 @@ test('context recall normalizes kebab-case input fields and removes them from bo
       'time-order': 'asc',
       'owner-timezone': 'UTC',
       'reference-time': '2026-10-01T00:00:00Z',
-      'hypothetical-answer': 'Guiding hypothesis text.'
+      'hypothetical-answer': 'Guiding hypothesis text.',
+      'temporal-axis-mode': 'created_at',
+      'query-mode': 'topic'
     }));
 
     let request;
@@ -356,11 +378,15 @@ test('context recall normalizes kebab-case input fields and removes them from bo
     assert.equal(body.owner_timezone, 'UTC');
     assert.equal(body.reference_time, '2026-10-01T00:00:00Z');
     assert.equal(body.hypothetical_answer, 'Guiding hypothesis text.');
+    assert.equal(body.temporal_axis_mode, 'created_at');
+    assert.equal(body.query_mode, 'topic');
     // Kebab keys must be stripped for server Pydantic extra=forbid compatibility
     assert.equal(body['time-order'], undefined);
     assert.equal(body['owner-timezone'], undefined);
     assert.equal(body['reference-time'], undefined);
     assert.equal(body['hypothetical-answer'], undefined);
+    assert.equal(body['temporal-axis-mode'], undefined);
+    assert.equal(body['query-mode'], undefined);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
@@ -499,4 +525,224 @@ test('context recall rejects conflict between CLI option and input field', async
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test('memory search with query_mode activity_log succeeds when both since and until are supplied', async () => {
+  const calls = [];
+  const io = makeIo(async (url, init) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify([{ memory_id: 'mem-act-1', content: 'activity note' }]), { status: 200 });
+  });
+
+  const code = await run([
+    'memory', 'search', 'activity query',
+    '--query-mode', 'activity_log',
+    '--since', '2026-09-01T00:00:00Z',
+    '--until', '2026-09-02T00:00:00Z',
+    '--json'
+  ], io);
+
+  assert.equal(code, 0);
+  assert.equal(calls.length, 1);
+  const parsedUrl = new URL(calls[0].url);
+  assert.equal(parsedUrl.searchParams.get('query_mode'), 'activity_log');
+  assert.equal(parsedUrl.searchParams.get('since'), '2026-09-01T00:00:00Z');
+  assert.equal(parsedUrl.searchParams.get('until'), '2026-09-02T00:00:00Z');
+});
+
+test('memory search rejects invalid temporal_axis_mode value', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('[]'); });
+
+  const code = await run(['memory', 'search', 'query', '--temporal-axis-mode', 'invalid_axis', '--json'], io);
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--temporal_axis_mode must be created_at, updated_at, or split_filter_created_order_updated/);
+});
+
+test('memory search rejects invalid query_mode value', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('[]'); });
+
+  const code = await run(['memory', 'search', 'query', '--query-mode', 'invalid_mode', '--json'], io);
+  assert.equal(code, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode must be topic or activity_log/);
+});
+
+test('memory search rejects query_mode activity_log when since or until is missing', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('[]'); });
+
+  // Missing until
+  const code1 = await run([
+    'memory', 'search', 'query',
+    '--query-mode', 'activity_log',
+    '--since', '2026-09-01T00:00:00Z',
+    '--json'
+  ], io);
+  assert.equal(code1, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode activity_log requires both --since and --until/);
+
+  // Missing since
+  io.stdout.value = '';
+  const code2 = await run([
+    'memory', 'search', 'query',
+    '--query-mode', 'activity_log',
+    '--until', '2026-09-02T00:00:00Z',
+    '--json'
+  ], io);
+  assert.equal(code2, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode activity_log requires both --since and --until/);
+
+  // Missing both
+  io.stdout.value = '';
+  const code3 = await run([
+    'memory', 'search', 'query',
+    '--query-mode', 'activity_log',
+    '--json'
+  ], io);
+  assert.equal(code3, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode activity_log requires both --since and --until/);
+});
+
+test('memory search rejects simultaneous temporal_axis_mode and query_mode flag aliases', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('[]'); });
+
+  const code1 = await run([
+    'memory', 'search', 'query',
+    '--temporal_axis_mode', 'created_at',
+    '--temporal-axis-mode', 'updated_at',
+    '--json'
+  ], io);
+  assert.equal(code1, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /Cannot specify both --temporal_axis_mode and --temporal-axis-mode/);
+
+  io.stdout.value = '';
+  const code2 = await run([
+    'memory', 'search', 'query',
+    '--query_mode', 'topic',
+    '--query-mode', 'activity_log',
+    '--json'
+  ], io);
+  assert.equal(code2, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /Cannot specify both --query_mode and --query-mode/);
+});
+
+test('context recall with query_mode activity_log succeeds when both since and until are supplied', async () => {
+  let request;
+  const io = makeIo(async (url, init) => {
+    request = { url, init };
+    return new Response(JSON.stringify({ context_text: 'activity log context', items: [] }), { status: 200 });
+  });
+
+  const code = await run([
+    'context', 'recall', 'activity recall query',
+    '--query-mode', 'activity_log',
+    '--since', '2026-09-01T00:00:00Z',
+    '--until', '2026-09-02T00:00:00Z',
+    '--json'
+  ], io);
+
+  assert.equal(code, 0);
+  assert.ok(request);
+  const body = JSON.parse(request.init.body);
+  assert.equal(body.query_mode, 'activity_log');
+  assert.equal(body.since, '2026-09-01T00:00:00Z');
+  assert.equal(body.until, '2026-09-02T00:00:00Z');
+});
+
+test('context recall rejects query_mode activity_log when since or until is missing', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('{}'); });
+
+  // Missing until
+  const code1 = await run([
+    'context', 'recall', 'query',
+    '--query-mode', 'activity_log',
+    '--since', '2026-09-01T00:00:00Z',
+    '--json'
+  ], io);
+  assert.equal(code1, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode activity_log requires both --since and --until/);
+
+  // Missing since
+  io.stdout.value = '';
+  const code2 = await run([
+    'context', 'recall', 'query',
+    '--query-mode', 'activity_log',
+    '--until', '2026-09-02T00:00:00Z',
+    '--json'
+  ], io);
+  assert.equal(code2, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode activity_log requires both --since and --until/);
+
+  // Missing both
+  io.stdout.value = '';
+  const code3 = await run([
+    'context', 'recall', 'query',
+    '--query-mode', 'activity_log',
+    '--json'
+  ], io);
+  assert.equal(code3, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode activity_log requires both --since and --until/);
+});
+
+test('context recall rejects invalid temporal_axis_mode and query_mode values', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('{}'); });
+
+  const code1 = await run([
+    'context', 'recall', 'query',
+    '--temporal-axis-mode', 'wrong_axis',
+    '--json'
+  ], io);
+  assert.equal(code1, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--temporal_axis_mode must be created_at, updated_at, or split_filter_created_order_updated/);
+
+  io.stdout.value = '';
+  const code2 = await run([
+    'context', 'recall', 'query',
+    '--query-mode', 'wrong_mode',
+    '--json'
+  ], io);
+  assert.equal(code2, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /--query_mode must be topic or activity_log/);
+});
+
+test('context recall rejects simultaneous temporal_axis_mode and query_mode flag aliases', async () => {
+  let calls = 0;
+  const io = makeIo(async () => { calls += 1; return new Response('{}'); });
+
+  const code1 = await run([
+    'context', 'recall', 'query',
+    '--temporal_axis_mode', 'created_at',
+    '--temporal-axis-mode', 'updated_at',
+    '--json'
+  ], io);
+  assert.equal(code1, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /Cannot specify both --temporal_axis_mode and --temporal-axis-mode/);
+
+  io.stdout.value = '';
+  const code2 = await run([
+    'context', 'recall', 'query',
+    '--query_mode', 'topic',
+    '--query-mode', 'activity_log',
+    '--json'
+  ], io);
+  assert.equal(code2, 2);
+  assert.equal(calls, 0);
+  assert.match(JSON.parse(io.stdout.value).error.message, /Cannot specify both --query_mode and --query-mode/);
 });

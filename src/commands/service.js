@@ -651,6 +651,8 @@ async function contextRecall(args, io, context) {
   delete body['owner-timezone'];
   delete body['reference-time'];
   delete body['hypothetical-answer'];
+  delete body['temporal-axis-mode'];
+  delete body['query-mode'];
   const response = await context.client.request({ method: 'POST', path: '/api/v1/recall/context', body, sideEffect: false, retry: 'bounded' });
   const data = response?.data ?? response;
   const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.memories) ? data.memories : [];

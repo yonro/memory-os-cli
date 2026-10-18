@@ -9,7 +9,11 @@ export const TIME_FILTER_KNOWN_OPTIONS = Object.freeze([
   '--owner-timezone',
   '--owner_timezone',
   '--reference-time',
-  '--reference_time'
+  '--reference_time',
+  '--temporal-axis-mode',
+  '--temporal_axis_mode',
+  '--query-mode',
+  '--query_mode'
 ]);
 
 export const CONTEXT_RECALL_TIME_FILTER_KNOWN_OPTIONS = Object.freeze([
@@ -26,7 +30,11 @@ export const TIME_FILTER_INPUT_FIELDS = Object.freeze([
   'owner_timezone',
   'owner-timezone',
   'reference_time',
-  'reference-time'
+  'reference-time',
+  'temporal_axis_mode',
+  'temporal-axis-mode',
+  'query_mode',
+  'query-mode'
 ]);
 
 export const CONTEXT_RECALL_TIME_FILTER_INPUT_FIELDS = Object.freeze([
@@ -49,8 +57,27 @@ export const TIME_FILTER_CONFLICT_PAIRS = Object.freeze([
   ['--reference-time', 'reference_time'],
   ['--reference-time', 'reference-time'],
   ['--reference_time', 'reference_time'],
-  ['--reference_time', 'reference-time']
+  ['--reference_time', 'reference-time'],
+  ['--temporal-axis-mode', 'temporal_axis_mode'],
+  ['--temporal-axis-mode', 'temporal-axis-mode'],
+  ['--temporal_axis_mode', 'temporal_axis_mode'],
+  ['--temporal_axis_mode', 'temporal-axis-mode'],
+  ['--query-mode', 'query_mode'],
+  ['--query-mode', 'query-mode'],
+  ['--query_mode', 'query_mode'],
+  ['--query_mode', 'query-mode']
 ]);
+
+export const ALLOWED_TEMPORAL_AXIS_MODES = Object.freeze(new Set([
+  'created_at',
+  'updated_at',
+  'split_filter_created_order_updated'
+]));
+
+export const ALLOWED_QUERY_MODES = Object.freeze(new Set([
+  'topic',
+  'activity_log'
+]));
 
 export const CONTEXT_RECALL_TIME_FILTER_CONFLICT_PAIRS = Object.freeze([
   ...TIME_FILTER_CONFLICT_PAIRS,
@@ -107,6 +134,12 @@ export function extractTimeFilterValues(args, input, options = {}) {
   if (hasFlag(args, '--reference-time') && hasFlag(args, '--reference_time')) {
     throw new UsageError('Cannot specify both --reference_time and --reference-time.');
   }
+  if (hasFlag(args, '--temporal-axis-mode') && hasFlag(args, '--temporal_axis_mode')) {
+    throw new UsageError('Cannot specify both --temporal_axis_mode and --temporal-axis-mode.');
+  }
+  if (hasFlag(args, '--query-mode') && hasFlag(args, '--query_mode')) {
+    throw new UsageError('Cannot specify both --query_mode and --query-mode.');
+  }
   if (allowHypothetical && hasFlag(args, '--hypothetical-answer') && hasFlag(args, '--hypothetical_answer')) {
     throw new UsageError('Cannot specify both --hypothetical_answer and --hypothetical-answer.');
   }
@@ -120,6 +153,12 @@ export function extractTimeFilterValues(args, input, options = {}) {
   if (input?.['reference-time'] !== undefined && input?.reference_time !== undefined) {
     throw new UsageError('Cannot specify both reference_time and reference-time in input.');
   }
+  if (input?.['temporal-axis-mode'] !== undefined && input?.temporal_axis_mode !== undefined) {
+    throw new UsageError('Cannot specify both temporal_axis_mode and temporal-axis-mode in input.');
+  }
+  if (input?.['query-mode'] !== undefined && input?.query_mode !== undefined) {
+    throw new UsageError('Cannot specify both query_mode and query-mode in input.');
+  }
   if (allowHypothetical && input?.['hypothetical-answer'] !== undefined && input?.hypothetical_answer !== undefined) {
     throw new UsageError('Cannot specify both hypothetical_answer and hypothetical-answer in input.');
   }
@@ -129,9 +168,11 @@ export function extractTimeFilterValues(args, input, options = {}) {
   const timeOrder = optionValue(args, '--time-order') ?? optionValue(args, '--time_order') ?? input?.time_order ?? input?.['time-order'];
   const ownerTimezone = optionValue(args, '--owner-timezone') ?? optionValue(args, '--owner_timezone') ?? input?.owner_timezone ?? input?.['owner-timezone'];
   const referenceTime = optionValue(args, '--reference-time') ?? optionValue(args, '--reference_time') ?? input?.reference_time ?? input?.['reference-time'];
+  const temporalAxisMode = optionValue(args, '--temporal-axis-mode') ?? optionValue(args, '--temporal_axis_mode') ?? input?.temporal_axis_mode ?? input?.['temporal-axis-mode'];
+  const queryMode = optionValue(args, '--query-mode') ?? optionValue(args, '--query_mode') ?? input?.query_mode ?? input?.['query-mode'];
   const hypotheticalAnswer = allowHypothetical ? (optionValue(args, '--hypothetical-answer') ?? optionValue(args, '--hypothetical_answer') ?? input?.hypothetical_answer ?? input?.['hypothetical-answer']) : undefined;
 
-  validateTimeFilters({ since, until, timeOrder, ownerTimezone, referenceTime, hypotheticalAnswer }, options);
+  validateTimeFilters({ since, until, timeOrder, ownerTimezone, referenceTime, hypotheticalAnswer, temporalAxisMode, queryMode }, options);
 
   return {
     since: since !== null && since !== undefined ? String(since).trim() : undefined,
@@ -139,14 +180,37 @@ export function extractTimeFilterValues(args, input, options = {}) {
     time_order: timeOrder !== null && timeOrder !== undefined ? String(timeOrder).trim() : undefined,
     owner_timezone: ownerTimezone !== null && ownerTimezone !== undefined ? String(ownerTimezone).trim() : undefined,
     reference_time: referenceTime !== null && referenceTime !== undefined ? String(referenceTime).trim() : undefined,
+    temporal_axis_mode: temporalAxisMode !== null && temporalAxisMode !== undefined ? String(temporalAxisMode).trim() : undefined,
+    query_mode: queryMode !== null && queryMode !== undefined ? String(queryMode).trim() : undefined,
     hypothetical_answer: hypotheticalAnswer !== null && hypotheticalAnswer !== undefined ? String(hypotheticalAnswer).trim() : undefined
   };
 }
 
-export function validateTimeFilters({ since, until, timeOrder, ownerTimezone, referenceTime, hypotheticalAnswer }, options = {}) {
+export function validateTimeFilters({ since, until, timeOrder, ownerTimezone, referenceTime, hypotheticalAnswer, temporalAxisMode, queryMode }, options = {}) {
   if (timeOrder !== undefined && timeOrder !== null) {
     if (typeof timeOrder !== 'string' || !['desc', 'asc'].includes(timeOrder)) {
       throw new UsageError('--time_order must be desc or asc.');
+    }
+  }
+
+  if (temporalAxisMode !== undefined && temporalAxisMode !== null) {
+    if (typeof temporalAxisMode !== 'string' || !ALLOWED_TEMPORAL_AXIS_MODES.has(String(temporalAxisMode).trim())) {
+      throw new UsageError('--temporal_axis_mode must be created_at, updated_at, or split_filter_created_order_updated.');
+    }
+  }
+
+  if (queryMode !== undefined && queryMode !== null) {
+    if (typeof queryMode !== 'string' || !ALLOWED_QUERY_MODES.has(String(queryMode).trim())) {
+      throw new UsageError('--query_mode must be topic or activity_log.');
+    }
+  }
+
+  const effectiveQueryMode = queryMode !== null && queryMode !== undefined ? String(queryMode).trim() : undefined;
+  if (effectiveQueryMode === 'activity_log') {
+    const hasSince = since !== undefined && since !== null && String(since).trim() !== '';
+    const hasUntil = until !== undefined && until !== null && String(until).trim() !== '';
+    if (!hasSince || !hasUntil) {
+      throw new UsageError('--query_mode activity_log requires both --since and --until.');
     }
   }
 
