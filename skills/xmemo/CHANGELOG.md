@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## 1.1.44
+
 ### Added
 
 - Add `--temporal_axis_mode` (`created_at`, `updated_at`, `split_filter_created_order_updated`) and `--query_mode` (`topic`, `activity_log`) parameters and kebab-case aliases to standalone `recall`, `search`, and `recall-context`.

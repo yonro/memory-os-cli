@@ -4,6 +4,8 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.191] - 2026-10-18
+
 ### Added
 - Time filter and query mode options: Added `--temporal-axis-mode` (`created_at`, `updated_at`, `split_filter_created_order_updated`) and `--query-mode` (`topic`, `activity_log`) to `xmemo memory search` and `xmemo context recall` (along with snake_case aliases `temporal_axis_mode` and `query_mode`). Enforced fail-closed local validation when `query_mode` is `activity_log`, requiring both `--since` and `--until` boundaries with zero network requests.
 
