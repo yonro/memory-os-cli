@@ -45,6 +45,7 @@ import {
   processDocumentStubs,
   flushJsonAndExit,
 } from './document-stub.mjs';
+import { RECALL_SEARCH_QUERY_KEYS } from './time-filters.mjs';
 
 export { warnedCredentialOrigins, isSurrogateToken, isOpenClawSentinel, looksLikeOpenClawSentinel };
 
@@ -201,8 +202,8 @@ export async function requestTemporaryMemoryOperation(command, options, flags, c
     res = await makeHttpRequest(options.baseUrl, '/v1/remember', 'POST', body, headers, options.timeoutMs);
   } else {
     const params = new URLSearchParams({ query: flags.query || '', limit: String(flags.limit || 5) });
-    for (const key of ['threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working', 'since', 'until', 'time_order', 'owner_timezone', 'reference_time']) {
-      if (flags[key] !== undefined) params.set(key, String(flags[key]));
+    for (const key of RECALL_SEARCH_QUERY_KEYS) {
+      if (key !== 'query' && key !== 'limit' && flags[key] !== undefined) params.set(key, String(flags[key]));
     }
     const apiPath = command === 'search' ? '/v1/memories/search' : '/v1/recall';
     res = await makeHttpRequest(options.baseUrl, `${apiPath}?${params}`, 'GET', null, headers, options.timeoutMs);

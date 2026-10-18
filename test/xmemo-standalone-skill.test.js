@@ -1352,6 +1352,7 @@ test('skill script gates temporary registration and uses the temporary memory RE
     const filteredRecall = await runScript([
       'recall', '--query', 'temporary', '--since', filteredSince, '--until', filteredUntil,
       '--time-order', 'desc', '--owner-timezone', 'Asia/Tokyo', '--reference-time', filteredReference,
+      '--temporal-axis-mode', 'split_filter_created_order_updated', '--query-mode', 'topic',
     ], { baseUrl, homeDir, env: {} });
     assert.equal(filteredRecall.code, 0);
     const filteredRecallParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
@@ -1360,6 +1361,8 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.equal(filteredRecallParams.get('time_order'), 'desc');
     assert.equal(filteredRecallParams.get('owner_timezone'), 'Asia/Tokyo');
     assert.equal(filteredRecallParams.get('reference_time'), filteredReference);
+    assert.equal(filteredRecallParams.get('temporal_axis_mode'), 'split_filter_created_order_updated');
+    assert.equal(filteredRecallParams.get('query_mode'), 'topic');
 
     testServer.setResponse({ results: [{ id: 'temporary_memory_2', path: 'scratch', content: 'temporary search result' }] });
     const search = await runScript(['search', '--query', 'temporary', '--explain', 'false'], { baseUrl, homeDir, env: {} });
@@ -1375,6 +1378,7 @@ test('skill script gates temporary registration and uses the temporary memory RE
     const filteredSearch = await runScript([
       'search', '--query', 'temporary', '--since', filteredSince, '--until', filteredUntil,
       '--time_order', 'asc', '--owner_timezone', 'Asia/Tokyo', '--reference_time', filteredReference,
+      '--temporal_axis_mode', 'updated_at', '--query_mode', 'activity_log',
     ], { baseUrl, homeDir, env: {} });
     assert.equal(filteredSearch.code, 0);
     const filteredSearchParams = new URL(testServer.requests.at(-1).url, baseUrl).searchParams;
@@ -1383,6 +1387,8 @@ test('skill script gates temporary registration and uses the temporary memory RE
     assert.equal(filteredSearchParams.get('time_order'), 'asc');
     assert.equal(filteredSearchParams.get('owner_timezone'), 'Asia/Tokyo');
     assert.equal(filteredSearchParams.get('reference_time'), filteredReference);
+    assert.equal(filteredSearchParams.get('temporal_axis_mode'), 'updated_at');
+    assert.equal(filteredSearchParams.get('query_mode'), 'activity_log');
 
     const unsupported = await runScript(['todo-list'], { baseUrl, homeDir, env: {} });
     assert.notEqual(unsupported.code, 0);

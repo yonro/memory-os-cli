@@ -82,15 +82,15 @@ export const COMMAND_USAGE_REGISTRY = {
     desc: 'Save a memory from text, stdin, or file',
   },
   recall: {
-    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--expand-documents] [--compact]',
+    usage: 'recall --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--temporal_axis_mode <mode>] [--query_mode <mode>] [--expand-documents] [--compact]',
     desc: 'Recall memories matching a query',
   },
   search: {
-    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--expand-documents] [--compact]',
+    usage: 'search --query <text> [--limit <n>] [--explain <true|false>] [--prefer_working <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--temporal_axis_mode <mode>] [--query_mode <mode>] [--expand-documents] [--compact]',
     desc: 'Search memories matching a query',
   },
   'recall-context': {
-    usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--hypothetical_answer <text>]',
+    usage: 'recall-context --query <text> [--max_items <n>] [--max_tokens <n>] [--prefer_working <true|false>] [--include_knowledge <true|false>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--hypothetical_answer <text>] [--temporal_axis_mode <mode>] [--query_mode <mode>]',
     desc: 'Read-only bounded Memory context; opt into Knowledge with true',
   },
   'save-state': {
