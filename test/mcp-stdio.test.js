@@ -48,7 +48,7 @@ test('offline stdio tools/list exposes current full/free XMemo tools', async () 
   const tools = new Map(response.result.tools.map((tool) => [tool.name, tool]));
   const qualityTargets = {
     recall_context: {
-      parameterCount: 13,
+      parameterCount: 21,
       markers: ['Requires memory:read', 'use recall for lightweight answer', 'get_project_context']
     },
     add_expense: {
@@ -151,6 +151,256 @@ test('offline stdio rejects unknown resources with an MCP error', async () => {
   assert.match(response.error.message, /Resource not found/);
 });
 
+test('offline stdio tools/list defines 8 temporal and semantic parameters on recall and recall_context', async () => {
+  const response = await callStdioToolsList();
+  const tools = new Map(response.result.tools.map((tool) => [tool.name, tool]));
+
+  const recall = tools.get('recall');
+  const recallContext = tools.get('recall_context');
+
+  assert.ok(recall, 'recall tool must exist');
+  assert.ok(recallContext, 'recall_context tool must exist');
+
+  assert.equal(Object.keys(recall.inputSchema.properties).length, 9);
+  assert.deepEqual(recall.inputSchema.required, ['query']);
+
+  assert.equal(Object.keys(recallContext.inputSchema.properties).length, 21);
+  assert.deepEqual(recallContext.inputSchema.required, ['query']);
+
+  const expectedTemporalParams = {
+    since: {
+      type: 'string',
+      descriptionMatches: [/RFC 3339/, /timezone offset/]
+    },
+    until: {
+      type: 'string',
+      descriptionMatches: [/RFC 3339/, /until > since/]
+    },
+    time_order: {
+      type: 'string',
+      enum: ['desc', 'asc'],
+      descriptionMatches: [/Sort order/, /desc/, /asc/]
+    },
+    owner_timezone: {
+      type: 'string',
+      descriptionMatches: [/IANA timezone/]
+    },
+    reference_time: {
+      type: 'string',
+      descriptionMatches: [/ISO 8601/]
+    },
+    temporal_axis_mode: {
+      type: 'string',
+      enum: ['created_at', 'updated_at', 'split_filter_created_order_updated'],
+      descriptionMatches: [/temporal axis resolution policy/]
+    },
+    query_mode: {
+      type: 'string',
+      enum: ['topic', 'activity_log'],
+      descriptionMatches: [/activity_log/, /bounded/]
+    },
+    hypothetical_answer: {
+      type: 'string',
+      descriptionMatches: [/hypothetical answer/, /semantic expansion/]
+    }
+  };
+
+  for (const [toolName, tool] of [['recall', recall], ['recall_context', recallContext]]) {
+    for (const [paramName, spec] of Object.entries(expectedTemporalParams)) {
+      const prop = tool.inputSchema.properties[paramName];
+      assert.ok(prop, `${toolName} must have property ${paramName}`);
+      assert.equal(prop.type, spec.type, `${toolName}.${paramName} type`);
+      if (spec.enum) {
+        assert.deepEqual(prop.enum, spec.enum, `${toolName}.${paramName} enum`);
+      }
+      for (const pattern of spec.descriptionMatches) {
+        assert.match(prop.description, pattern, `${toolName}.${paramName} description match ${pattern}`);
+      }
+      assert.doesNotMatch(prop.description, /Input value for/i, `${toolName}.${paramName} must not contain placeholder`);
+    }
+  }
+});
+
+test('offline stdio tools/list leaves other 18 static tool schemas untouched', async () => {
+  const response = await callStdioToolsList();
+  const tools = new Map(response.result.tools.map((tool) => [tool.name, tool]));
+
+  const otherToolExpectations = {
+    get_mcp_identity: { propertyCount: 0, required: [] },
+    remember: { propertyCount: 2, required: ['content', 'path'] },
+    memory_stats: { propertyCount: 0, required: [] },
+    update_memory: { propertyCount: 3, required: ['memory_id'] },
+    explain_memory: { propertyCount: 2, required: ['memory_id'] },
+    restore_memory: { propertyCount: 2, required: ['memory_id'] },
+    add_expense: { propertyCount: 18, required: ['item', 'amount'] },
+    list_ledger_transactions: { propertyCount: 2, required: [] },
+    get_monthly_ledger_summary: { propertyCount: 1, required: [] },
+    forget: { propertyCount: 2, required: [] },
+    create_memory_todo: { propertyCount: 2, required: ['content'] },
+    list_memory_todos: { propertyCount: 2, required: [] },
+    complete_memory_todo: { propertyCount: 1, required: ['todo_id'] },
+    list_memory_versions: { propertyCount: 1, required: ['memory_id'] },
+    get_timeline: { propertyCount: 5, required: [] },
+    record_event: { propertyCount: 1, required: ['content'] },
+    update_state: { propertyCount: 9, required: [] },
+    get_project_context: { propertyCount: 11, required: ['project_id'] }
+  };
+
+  for (const [name, expected] of Object.entries(otherToolExpectations)) {
+    const tool = tools.get(name);
+    assert.ok(tool, `${name} must exist`);
+    assert.equal(
+      Object.keys(tool.inputSchema.properties).length,
+      expected.propertyCount,
+      `${name} propertyCount`
+    );
+    assert.deepEqual(tool.inputSchema.required, expected.required, `${name} required`);
+  }
+});
+
+test('stdio tools/call forwards parameters to remote without local validation', async () => {
+  const http = await import('node:http');
+  const receivedRequests = [];
+
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      const parsed = JSON.parse(body);
+      receivedRequests.push(parsed);
+
+      if (parsed.id === '__probe__') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: '__probe__',
+          result: { protocolVersion: '2024-11-05', serverInfo: { name: 'mock-xmemo' } }
+        }));
+        return;
+      }
+
+      if (parsed.method === 'tools/call') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: parsed.id,
+          result: { content: [{ type: 'text', text: 'ok' }] }
+        }));
+        return;
+      }
+
+      res.writeHead(404);
+      res.end();
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const mockUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    const toolCallParams = {
+      name: 'recall',
+      arguments: {
+        query: 'search term',
+        since: 'raw-arbitrary-string',
+        until: 'raw-arbitrary-end',
+        time_order: 'desc',
+        owner_timezone: 'Asia/Tokyo',
+        reference_time: 'arbitrary-ref',
+        temporal_axis_mode: 'split_filter_created_order_updated',
+        query_mode: 'activity_log',
+        hypothetical_answer: 'hypo text'
+      }
+    };
+
+    const [response] = await callStdio(
+      [
+        {
+          jsonrpc: '2.0',
+          id: 42,
+          method: 'tools/call',
+          params: toolCallParams
+        }
+      ],
+      {
+        XMEMO_KEY: 'test-mock-token',
+        XMEMO_URL: mockUrl
+      }
+    );
+
+    assert.equal(response.id, 42);
+    assert.deepEqual(response.result, { content: [{ type: 'text', text: 'ok' }] });
+
+    const callReq = receivedRequests.find((r) => r.method === 'tools/call');
+    assert.ok(callReq, 'remote must receive tools/call');
+    assert.deepEqual(callReq.params, toolCallParams, 'remote must receive exact params without local validation');
+  } finally {
+    server.close();
+  }
+});
+
+test('authenticated stdio tools/list prefers remote definitions over static fallback', async () => {
+  const http = await import('node:http');
+
+  const remoteTool = {
+    name: 'remote_custom_tool',
+    description: 'Provided by remote server',
+    inputSchema: { type: 'object', properties: {} }
+  };
+
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      const parsed = JSON.parse(body);
+      if (parsed.id === '__probe__') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: '__probe__',
+          result: { protocolVersion: '2024-11-05', serverInfo: { name: 'mock-xmemo' } }
+        }));
+        return;
+      }
+      if (parsed.method === 'tools/list') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: parsed.id,
+          result: { tools: [remoteTool] }
+        }));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  const mockUrl = `http://127.0.0.1:${port}`;
+
+  try {
+    const [response] = await callStdio(
+      [{ jsonrpc: '2.0', id: 99, method: 'tools/list', params: {} }],
+      {
+        XMEMO_KEY: 'test-mock-token',
+        XMEMO_URL: mockUrl
+      }
+    );
+
+    assert.equal(response.id, 99);
+    assert.deepEqual(response.result.tools, [remoteTool]);
+  } finally {
+    server.close();
+  }
+});
+
 async function callStdioToolsList() {
   const [response] = await callStdio([
     { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }
@@ -158,14 +408,15 @@ async function callStdioToolsList() {
   return response;
 }
 
-async function callStdio(requests) {
+async function callStdio(requests, envOverrides = {}) {
   const child = spawn(process.execPath, [path.join(root, 'bin', 'mcp-stdio.js')], {
     cwd: root,
     env: {
       ...process.env,
       XMEMO_KEY: '',
       MEMORY_OS_API_KEY: '',
-      MEMORY_OS_MCP_TOKEN: ''
+      MEMORY_OS_MCP_TOKEN: '',
+      ...envOverrides
     },
     stdio: ['pipe', 'pipe', 'pipe']
   });

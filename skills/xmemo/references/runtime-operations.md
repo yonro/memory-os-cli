@@ -123,7 +123,7 @@ token lacks the `memory:restore` scope, an authentication hint is shown directin
 to re-login.
 
 For formal `recall` and `search`, requests without time filters use the
-`POST /v1/skill/operations` envelope. Supplying any time filter routes to the
+`POST /v1/skill/operations` envelope. Supplying any time filter (including `--temporal_axis_mode` or `--query_mode`) routes to the
 direct REST read endpoint (`GET /v1/recall` or `GET /v1/memories/search`);
 `--json` then prints that endpoint's raw response shape (for example,
 `results` and `coverage`) instead of the skill-operation envelope (`ok`,

@@ -38,13 +38,52 @@ const STATIC_TOOL_DESCRIPTIONS = {
   get_project_context: "Read one authorized project's bounded context pack: state, TODOs, decisions, timeline, recent memories, and optional durable recall. Requires memory:read; it does not mutate project memories, and access is audit-logged. Use an exact project_id for a whole-project snapshot; otherwise use recall_context. max_items/max_tokens bound the whole pack; recent_hours affects only timeline; durable_query requires include_durable_context."
 };
 
+const STATIC_RECALL_TIME_SCHEMAS = {
+  since: {
+    type: 'string',
+    description: "RFC 3339 timestamp with timezone offset (e.g., '2026-09-01T00:00:00+09:00'). Trigger: Call this whenever the user query mentions any relative or absolute time constraint in any language (e.g., today, yesterday, last week, last month, recently, Aug 1, Aug 10 to Sep 1, since Monday, before Sep 15, in Q3). Model responsibility: You (the calling LLM) know current date and user local time, so you must convert natural language time expressions into absolute timestamps. Consequence: If omitted, the server falls back to heuristic guessing which may misinterpret timezone day boundaries or relative dates."
+  },
+  until: {
+    type: 'string',
+    description: "RFC 3339 timestamp with timezone offset (e.g., '2026-09-02T00:00:00+09:00'). When used with since, defines the half-open interval [since, until) with until > since (maximum 90 days span). Trigger: Pass when the user query specifies an end date or bounded window in any language (e.g., yesterday end of day, by Aug 10, Aug 10 to Sep 1). Model responsibility: Convert natural language end bounds into absolute timestamps with timezone offsets. Consequence: If omitted, the window is open-ended on the upper side or derived heuristically."
+  },
+  time_order: {
+    type: 'string',
+    enum: ['desc', 'asc'],
+    description: "Sort order for returned memories: 'desc' (newest first) or 'asc' (oldest first). Trigger: Pass 'desc' when the user asks for 'latest', 'recent', 'newest first', or recency, or 'asc' for chronological order ('oldest first') in any language. Model responsibility: Explicitly set desired temporal ordering when the user expresses recency intent. If omitted and since/until are omitted, default relevance ranking is used without temporal sorting."
+  },
+  owner_timezone: {
+    type: 'string',
+    description: "The user's real IANA timezone, such as Asia/Tokyo or America/Los_Angeles. Required for honest calendar periods; never guess UTC."
+  },
+  reference_time: {
+    type: 'string',
+    description: 'Optional ISO 8601 reference time snapshot for deterministic evaluation. Leave blank to use the real clock; setting this does not replace owner_timezone for calendar day boundaries.'
+  },
+  temporal_axis_mode: {
+    type: 'string',
+    enum: ['created_at', 'updated_at', 'split_filter_created_order_updated'],
+    description: "Optional temporal axis resolution policy: 'created_at' (Scheme A), 'updated_at' (Scheme B), or 'split_filter_created_order_updated' (Scheme C)."
+  },
+  query_mode: {
+    type: 'string',
+    enum: ['topic', 'activity_log'],
+    description: "Optional query intent: 'topic' (default) or 'activity_log'. Trigger: Set 'activity_log' for event feeds within a bounded [since, until) window; set 'topic' for topic retrieval. Model responsibility: 'activity_log' requires explicit bounded 'since' and 'until' timestamps. Consequence: 'activity_log' without bounds fails closed; explicit 'topic' blocks stream bypass."
+  },
+  hypothetical_answer: {
+    type: 'string',
+    description: 'Optional multilingual hypothetical answer or dense semantic expansion written by the calling LLM for this query.'
+  }
+};
+
 const STATIC_TOOL_SCHEMAS = {
   remember: {
     content: { type: 'string', description: 'Text body to save.' },
     path: { type: 'string', description: 'Category path, e.g. preferences, projects/xmemo.' }
   },
   recall: {
-    query: { type: 'string', description: 'Natural-language question or search text.' }
+    query: { type: 'string', description: 'Natural-language question or search text.' },
+    ...STATIC_RECALL_TIME_SCHEMAS
   },
   recall_context: {
     query: { type: 'string', description: 'Natural-language query used to rank memories for the context pack.' },
@@ -59,7 +98,8 @@ const STATIC_TOOL_SCHEMAS = {
     prefer_working: { type: 'boolean', default: true, description: 'True prioritizes active working/session-state signals.' },
     output_json: { type: 'boolean', default: false, description: 'True returns the full structured pack; false returns rendered context text.' },
     agent_id: { type: 'string', default: '', description: 'Optional client-supplied agent label for memory attribution.' },
-    agent_instance_id: { type: 'string', default: '', description: 'Optional stable, non-secret agent instance ID for per-client attribution.' }
+    agent_instance_id: { type: 'string', default: '', description: 'Optional stable, non-secret agent instance ID for per-client attribution.' },
+    ...STATIC_RECALL_TIME_SCHEMAS
   },
   update_memory: {
     memory_id: { type: 'string', description: 'Exact XMemo memory reference.' },

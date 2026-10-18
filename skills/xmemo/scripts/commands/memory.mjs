@@ -88,6 +88,8 @@ export async function handleMemory(ctx) {
         owner_timezone: flags.owner_timezone,
         reference_time: flags.reference_time,
         hypothetical_answer: flags.hypothetical_answer,
+        temporal_axis_mode: flags.temporal_axis_mode,
+        query_mode: flags.query_mode,
       }).filter(([, v]) => v !== undefined)
     );
     try {

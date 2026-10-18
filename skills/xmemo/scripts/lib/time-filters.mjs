@@ -5,9 +5,14 @@ const TIME_FILTER_ALIASES = [
   ['owner-timezone', 'owner_timezone'],
   ['reference-time', 'reference_time'],
   ['hypothetical-answer', 'hypothetical_answer'],
+  ['temporal-axis-mode', 'temporal_axis_mode'],
+  ['query-mode', 'query_mode'],
 ];
 
-export const RECALL_SEARCH_TIME_FILTER_KEYS = ['since', 'until', 'time_order', 'owner_timezone', 'reference_time'];
+export const RECALL_SEARCH_TIME_FILTER_KEYS = [
+  'since', 'until', 'time_order', 'owner_timezone', 'reference_time',
+  'temporal_axis_mode', 'query_mode',
+];
 export const RECALL_SEARCH_QUERY_KEYS = [
   'query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain',
   'prefer_working', ...RECALL_SEARCH_TIME_FILTER_KEYS,
@@ -62,6 +67,22 @@ export function validateTimeFilters(command, flags) {
   if (!TIME_FILTER_COMMANDS.has(command)) return;
   if (flags.time_order !== undefined && !['desc', 'asc'].includes(flags.time_order)) {
     throw new Error('--time_order must be desc or asc.');
+  }
+
+  if (flags.temporal_axis_mode !== undefined && !['created_at', 'updated_at', 'split_filter_created_order_updated'].includes(flags.temporal_axis_mode)) {
+    throw new Error('--temporal_axis_mode must be created_at, updated_at, or split_filter_created_order_updated.');
+  }
+
+  if (flags.query_mode !== undefined && !['topic', 'activity_log'].includes(flags.query_mode)) {
+    throw new Error('--query_mode must be topic or activity_log.');
+  }
+
+  if (flags.query_mode === 'activity_log') {
+    const hasSince = flags.since !== undefined && flags.since !== null && String(flags.since).trim() !== '';
+    const hasUntil = flags.until !== undefined && flags.until !== null && String(flags.until).trim() !== '';
+    if (!hasSince || !hasUntil) {
+      throw new Error('--query_mode activity_log requires both --since and --until.');
+    }
   }
 
   const since = flags.since === undefined ? undefined : parseRFC3339Instant(flags.since, '--since');

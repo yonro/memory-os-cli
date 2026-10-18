@@ -11,6 +11,15 @@ import { confirmRemoteAction } from '../api/confirmation.js';
 import { processDocumentStubs } from '../api/document-stub.js';
 import { memoryTransfer, prepareMemoryTransfer } from './memory-transfer.js';
 import { buildServerPrefixVariants, matchesPathPrefix, normalizeMemoryPath, unifyMemoryItem, rerankSearchResults } from '../api/memory-schema.js';
+import {
+  extractTimeFilterValues,
+  TIME_FILTER_KNOWN_OPTIONS,
+  CONTEXT_RECALL_TIME_FILTER_KNOWN_OPTIONS,
+  TIME_FILTER_INPUT_FIELDS,
+  CONTEXT_RECALL_TIME_FILTER_INPUT_FIELDS,
+  TIME_FILTER_CONFLICT_PAIRS,
+  CONTEXT_RECALL_TIME_FILTER_CONFLICT_PAIRS
+} from '../api/time-filters.js';
 
 export async function memoryCommand(args, io) {
   const subcommand = args[0] ?? 'help';
@@ -19,7 +28,7 @@ export async function memoryCommand(args, io) {
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `memory.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Memory commands:');
     writeLine(io.stdout, '  xmemo memory add --content <text> --path <path> [--bucket <name>] [--json]');
-    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--keyword <words>] [--exact <phrase>] [--json]');
+    writeLine(io.stdout, '  xmemo memory search <query> [--limit <n>] [--team <id>] [--expand-documents] [--keyword <words>] [--exact <phrase>] [--since <RFC3339>] [--until <RFC3339>] [--time-order <desc|asc>] [--owner-timezone <tz>] [--reference-time <RFC3339>] [--json]');
     writeLine(io.stdout, '  xmemo memory read <memory-id> [--team <id>] [--json]');
     writeLine(io.stdout, '  xmemo memory list [--path-prefix <prefix>] [--project <name>] [--exact-path] [--query <text>] [--type <type>] [--all] [--limit <n>] [--offset <n>] [--json]');
     writeLine(io.stdout, '  xmemo memory delete <memory-id> [--reason <text>] [--yes] [--json]');
@@ -49,7 +58,7 @@ export async function contextCommand(args, io) {
     if (subcommand !== 'help' && hasFlag(args, '--json') && writeServiceHelpSchema(io, `context.${subcommand}`)) return 0;
     if (subcommand !== 'help' && writeHumanServiceHelp(io, `context.${subcommand}`)) return 0;
     writeLine(io.stdout, 'Context commands:');
-    writeLine(io.stdout, '  xmemo context recall <query> [--max-tokens <n>] [--max-items <n>] [--include-knowledge] [--expand-documents] [--json]');
+    writeLine(io.stdout, '  xmemo context recall <query> [--max-tokens <n>] [--max-items <n>] [--include-knowledge] [--expand-documents] [--since <RFC3339>] [--until <RFC3339>] [--time-order <desc|asc>] [--owner-timezone <tz>] [--reference-time <RFC3339>] [--hypothetical-answer <text>] [--json]');
     return 0;
   }
   if (subcommand === 'recall') return await runServiceCommand('context.recall', args.slice(1), io, contextRecall, validateContextRecall);
@@ -554,20 +563,29 @@ async function validateMemoryList(args, io) {
 }
 
 async function memorySearch(args, io, context) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', ...TIME_FILTER_KNOWN_OPTIONS, '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact']], args);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact', ...TIME_FILTER_INPUT_FIELDS]);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact'], ...TIME_FILTER_CONFLICT_PAIRS], args);
   const queryArg = singlePositional(args, 'memory search');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('memory search requires a query.');
+  const timeFilters = extractTimeFilterValues(args, input, { allowHypotheticalAnswer: false });
   const rawLimit = optionValue(args, '--limit') ?? input?.limit;
   const keyword = optionValue(args, '--keyword') ?? input?.keyword;
   const exact = optionValue(args, '--exact') ?? input?.exact;
   const response = await context.client.request({
     method: 'GET', path: '/api/v1/recall', retry: 'bounded', sideEffect: false,
-    query: compact({ query, limit: rawLimit === undefined || rawLimit === null ? undefined : parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 }), team_id: optionValue(args, '--team') ?? input?.team_id, bucket: optionValue(args, '--bucket') ?? input?.bucket, path: optionValue(args, '--path') ?? input?.path, prefer_working: hasFlag(args, '--prefer-working') ? true : optionalBooleanInput(input, 'prefer_working') })
+    query: compact({
+      query,
+      limit: rawLimit === undefined || rawLimit === null ? undefined : parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 }),
+      team_id: optionValue(args, '--team') ?? input?.team_id,
+      bucket: optionValue(args, '--bucket') ?? input?.bucket,
+      path: optionValue(args, '--path') ?? input?.path,
+      prefer_working: hasFlag(args, '--prefer-working') ? true : optionalBooleanInput(input, 'prefer_working'),
+      ...timeFilters
+    })
   });
   const data = response?.data ?? response;
   const items = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : Array.isArray(data?.items) ? data.items : [];
@@ -592,10 +610,10 @@ async function memorySearch(args, io, context) {
 }
 
 async function validateMemorySearch(args, io) {
-  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--limit', '--team', '--bucket', '--path', '--prefer-working', '--expand-documents', '--keyword', '--exact', ...TIME_FILTER_KNOWN_OPTIONS, '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact']);
-  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact']], args);
+  assertNoUnknownInputFields(input, ['query', 'limit', 'team_id', 'bucket', 'path', 'prefer_working', 'expand_documents', 'keyword', 'exact', ...TIME_FILTER_INPUT_FIELDS]);
+  rejectInputFlagConflicts(input, [['--limit', 'limit'], ['--team', 'team_id'], ['--bucket', 'bucket'], ['--path', 'path'], ['--prefer-working', 'prefer_working'], ['--expand-documents', 'expand_documents'], ['--keyword', 'keyword'], ['--exact', 'exact'], ...TIME_FILTER_CONFLICT_PAIRS], args);
   const queryArg = singlePositional(args, 'memory search');
   if (queryArg && input?.query !== undefined) throw new UsageError('Search query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
@@ -604,17 +622,19 @@ async function validateMemorySearch(args, io) {
   if (rawLimit !== undefined && rawLimit !== null) parseIntegerInRange(rawLimit, '--limit', { min: 1, max: 5000 });
   optionalBooleanInput(input, 'prefer_working');
   optionalBooleanInput(input, 'expand_documents');
+  extractTimeFilterValues(args, input, { allowHypotheticalAnswer: false });
 }
 
 async function contextRecall(args, io, context) {
-  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', ...CONTEXT_RECALL_TIME_FILTER_KNOWN_OPTIONS, '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents']);
-  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents']], args);
+  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents', ...CONTEXT_RECALL_TIME_FILTER_INPUT_FIELDS]);
+  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents'], ...CONTEXT_RECALL_TIME_FILTER_CONFLICT_PAIRS], args);
   const queryArg = singlePositional(args, 'context recall');
   const query = queryArg ?? input?.query;
   if (queryArg && input?.query !== undefined) throw new UsageError('Context query cannot be supplied both positionally and in --input.');
   if (typeof query !== 'string' || !query.trim()) throw new UsageError('context recall requires a query.');
+  const timeFilters = extractTimeFilterValues(args, input, { allowHypotheticalAnswer: true });
   const includeKnowledge = hasFlag(args, '--include-knowledge') ? true : optionalBooleanInput(input, 'include_knowledge');
   const body = compact({
     ...input,
@@ -623,9 +643,16 @@ async function contextRecall(args, io, context) {
     max_tokens: optionalRange(optionValue(args, '--max-tokens') ?? input?.max_tokens, '--max-tokens', 1, 100000),
     max_items: optionalRange(optionValue(args, '--max-items') ?? input?.max_items, '--max-items', 1, 500),
     prefer_working: optionalBooleanInput(input, 'prefer_working'),
-    team_id: optionValue(args, '--team') ?? input?.team_id
+    team_id: optionValue(args, '--team') ?? input?.team_id,
+    ...timeFilters
   });
   delete body.expand_documents;
+  delete body['time-order'];
+  delete body['owner-timezone'];
+  delete body['reference-time'];
+  delete body['hypothetical-answer'];
+  delete body['temporal-axis-mode'];
+  delete body['query-mode'];
   const response = await context.client.request({ method: 'POST', path: '/api/v1/recall/context', body, sideEffect: false, retry: 'bounded' });
   const data = response?.data ?? response;
   const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.memories) ? data.memories : [];
@@ -693,10 +720,10 @@ async function contextRecall(args, io, context) {
 }
 
 async function validateContextRecall(args, io) {
-  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
+  assertKnownOptions(args, ['--include-knowledge', '--max-tokens', '--max-items', '--team', '--expand-documents', ...CONTEXT_RECALL_TIME_FILTER_KNOWN_OPTIONS, '--input', '--timeout-ms', '--base-url', '--url', '--allow-legacy-credential', '--json']);
   const input = await readJsonInput(args, io);
-  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents']);
-  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents']], args);
+  assertNoUnknownInputFields(input, ['query', 'include_knowledge', 'team_id', 'scope', 'limit', 'max_items', 'max_tokens', 'path', 'bucket', 'memory_type', 'status', 'threshold', 'prefer_working', 'expand_documents', ...CONTEXT_RECALL_TIME_FILTER_INPUT_FIELDS]);
+  rejectInputFlagConflicts(input, [['--team', 'team_id'], ['--include-knowledge', 'include_knowledge'], ['--max-tokens', 'max_tokens'], ['--max-items', 'max_items'], ['--expand-documents', 'expand_documents'], ...CONTEXT_RECALL_TIME_FILTER_CONFLICT_PAIRS], args);
   const queryArg = singlePositional(args, 'context recall');
   if (queryArg && input?.query !== undefined) throw new UsageError('Context query cannot be supplied both positionally and in --input.');
   const query = queryArg ?? input?.query;
@@ -706,6 +733,7 @@ async function validateContextRecall(args, io) {
   optionalBooleanInput(input, 'expand_documents');
   optionalRange(optionValue(args, '--max-tokens') ?? input?.max_tokens, '--max-tokens', 1, 100000);
   optionalRange(optionValue(args, '--max-items') ?? input?.max_items, '--max-items', 1, 500);
+  extractTimeFilterValues(args, input, { allowHypotheticalAnswer: true });
 }
 
 async function stateSave(args, io, context) {
@@ -837,7 +865,14 @@ async function runServiceCommand(command, args, io, handler, validate = null) {
 }
 
 function singlePositional(args, command) {
-  const optionsWithValue = new Set(['--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit', '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action', '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url', '--timeout-ms', '--deadline', '--keyword', '--exact', '--path-prefix', '--project', '--query', '--filter', '--type', '--offset', '--id', '--reason']);
+  const optionsWithValue = new Set([
+    '--input', '--content', '--path', '--bucket', '--scope', '--team', '--limit',
+    '--max-tokens', '--max-items', '--state-key', '--current-task', '--next-action',
+    '--blocked-reason', '--ttl-seconds', '--snapshot-id', '--base-url', '--url',
+    '--timeout-ms', '--deadline', '--keyword', '--exact', '--path-prefix',
+    '--project', '--query', '--filter', '--type', '--offset', '--id', '--reason',
+    ...CONTEXT_RECALL_TIME_FILTER_KNOWN_OPTIONS
+  ]);
   const values = [];
   let endOfOptions = false;
   for (let index = 0; index < args.length; index += 1) {
