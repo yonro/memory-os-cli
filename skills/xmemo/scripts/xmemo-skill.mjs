@@ -59,6 +59,7 @@ import { handleLedger } from './commands/ledger.mjs';
 import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
 import { handleProfile, armRecallNote } from './commands/profile.mjs';
+import { handleVersionCheck } from './lib/update-check.mjs';
 
 const SKILL_VERSION = '1.1.44';
 
@@ -76,7 +77,19 @@ async function main() {
     process.exit(EXIT_CODE.SUCCESS);
   }
 
-  if (options.version) {
+  if (options.version && !options.check && !flags.check && !command) {
+    console.log(SKILL_VERSION);
+    process.exit(EXIT_CODE.SUCCESS);
+  }
+
+  if (command === 'version' || (options.version && (options.check || flags.check))) {
+    options.baseUrl = normalizeBaseUrl(options.baseUrl);
+    options.timeoutMs = parsePositiveInteger(options.timeoutMs, '--timeout-ms', MAX_TIMEOUT_MS);
+    validateCommandInput('version', subcommand, positionals, options, flags);
+    if (options.check || flags.check) {
+      await handleVersionCheck({ options, skillVersion: SKILL_VERSION });
+      return;
+    }
     console.log(SKILL_VERSION);
     process.exit(EXIT_CODE.SUCCESS);
   }

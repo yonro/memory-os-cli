@@ -139,9 +139,11 @@ export const REST_COMMANDS = new Set([
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'expense-delete', 'ledger-delete', 'doctor',
+  'version',
 ]);
 
 export const COMMAND_FLAGS = {
+  version: new Set(['check']),
   login: new Set(),
   register: new Set(['reason']),
   logout: new Set(),

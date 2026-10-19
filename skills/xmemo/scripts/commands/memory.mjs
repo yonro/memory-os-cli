@@ -9,6 +9,7 @@ import {
 import { RECALL_SEARCH_TIME_FILTER_KEYS, RECALL_SEARCH_QUERY_KEYS } from '../lib/time-filters.mjs';
 import { printAuthErrorHint } from '../lib/auth-hint.mjs';
 import { handleMemoryLifecycle } from './memory-lifecycle.mjs';
+import { checkUpdate } from '../lib/update-check.mjs';
 
 function reqSuffix(data) {
   const reqId = extractRequestId(data);
@@ -69,27 +70,17 @@ export async function handleMemory(ctx) {
   if (command === 'recall-context') {
     const body = Object.fromEntries(
       Object.entries({
-        query: flags.query,
-        path: flags.path || '%',
-        bucket: flags.bucket || '%',
-        scope: flags.scope,
-        team_id: flags.team_id,
-        memory_type: flags.memory_type || 'auto',
+        query: flags.query, path: flags.path || '%', bucket: flags.bucket || '%',
+        scope: flags.scope, team_id: flags.team_id, memory_type: flags.memory_type || 'auto',
         status: flags.status || 'active',
         threshold: flags.threshold === undefined ? undefined : Number(flags.threshold),
-        max_items: flags.max_items,
-        max_tokens: flags.max_tokens,
-        limit: flags.limit,
+        max_items: flags.max_items, max_tokens: flags.max_tokens, limit: flags.limit,
         prefer_working: flags.prefer_working === undefined ? true : flags.prefer_working,
         include_knowledge: flags.include_knowledge,
-        since: flags.since,
-        until: flags.until,
-        time_order: flags.time_order,
-        owner_timezone: flags.owner_timezone,
-        reference_time: flags.reference_time,
+        since: flags.since, until: flags.until, time_order: flags.time_order,
+        owner_timezone: flags.owner_timezone, reference_time: flags.reference_time,
         hypothetical_answer: flags.hypothetical_answer,
-        temporal_axis_mode: flags.temporal_axis_mode,
-        query_mode: flags.query_mode,
+        temporal_axis_mode: flags.temporal_axis_mode, query_mode: flags.query_mode,
       }).filter(([, v]) => v !== undefined)
     );
     try {
@@ -97,6 +88,7 @@ export async function handleMemory(ctx) {
       const data = parseJsonResponse(res, 'Recall context request');
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
       if (options.json) {
+        if (succeeded) await checkUpdate(ctx);
         console.log(safeJson(data));
         process.exit(succeeded ? EXIT_CODE.SUCCESS : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode)));
       }
@@ -106,6 +98,7 @@ export async function handleMemory(ctx) {
       const items = Array.isArray(data.items) ? data.items.length : 0;
       const contextText = sanitizeTerminalText(data.context_text || '');
       console.log(`XMemo Context: ${items} item${items === 1 ? '' : 's'}\n${contextText || 'No matching memories found.'}`);
+      await checkUpdate(ctx);
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Recall context failed:', describeError(e));
@@ -243,6 +236,7 @@ export async function handleMemory(ctx) {
         });
       }
       if (options.json) {
+        if (succeeded && command === 'recall') await checkUpdate(ctx);
         return flushJsonAndExit(data, succeeded ? EXIT_CODE.SUCCESS : (exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode)));
       }
 
@@ -252,6 +246,7 @@ export async function handleMemory(ctx) {
 
       if (command === 'recall' || command === 'search') {
         printMemoryResults(result, options.compact);
+        if (command === 'recall') await checkUpdate(ctx);
         process.exit(EXIT_CODE.SUCCESS);
       } else if (command === 'remember') {
         console.log(`✅ Saved to XMemo.\nID: ${sanitizeTerminalText(extractId(data.result))}`);

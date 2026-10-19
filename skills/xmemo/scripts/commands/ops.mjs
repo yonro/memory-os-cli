@@ -23,6 +23,10 @@ import {
   printAuthErrorHint,
 } from '../lib/auth-hint.mjs';
 
+import {
+  checkUpdate,
+} from '../lib/update-check.mjs';
+
 function discoveryString(value) {
   if (typeof value !== 'string') return null;
   const sanitized = sanitizeTerminalText(value).trim();
@@ -148,6 +152,7 @@ export async function handleOps(ctx) {
         process.exit(exitCodeForErrorCode(data?.error?.code) ?? exitCodeForHttpStatus(res.statusCode));
       }
       if (options.json) {
+        await checkUpdate(ctx);
         console.log(safeJson(withDoctorDiagnostics(data, discovery, doctorNextAction({
           credential,
           anonymous: options.anonymous,
@@ -160,6 +165,7 @@ export async function handleOps(ctx) {
           ? ''
           : `\nNext: ${SCRIPT_COMMAND} login --allow-plaintext`;
         console.log(`XMemo Service Status: OK\nAuthentication: ${authentication}${nextStep}`);
+        await checkUpdate(ctx);
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
@@ -200,6 +206,9 @@ export async function handleOps(ctx) {
       const output = opName === 'doctor'
         ? withDoctorDiagnostics(data, discovery, doctorNextAction({ credential, anonymous: false }))
         : data;
+      if (succeeded && opName === 'doctor') {
+        await checkUpdate(ctx);
+      }
       console.log(safeJson(output));
       const failureExitCode = isDoctorAuthInvalid
         ? EXIT_CODE.AUTH_ERROR
@@ -222,6 +231,7 @@ export async function handleOps(ctx) {
       const isValid = !!data.result?.auth_valid;
       if (isValid) {
         console.log(`XMemo Service Status: OK\nAuthentication: Valid\nScopes: ${extractList(data.result?.scopes).join(', ')}`);
+        await checkUpdate(ctx);
       } else {
         console.log(`XMemo Service Status: OK\nAuthentication: Invalid`);
         process.exit(EXIT_CODE.AUTH_ERROR);
