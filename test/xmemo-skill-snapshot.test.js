@@ -543,7 +543,7 @@ const SNAPSHOT_CASES = [
   { id: 'read-help', group: 'direct-memory', args: ['read', '--help'] },
   { id: 'update-terminal', group: 'direct-memory', args: ['update', '--id', 'mem_golden_123', '--content', 'Updated content'], useAuth: true },
   { id: 'update-json', group: 'direct-memory', args: ['update', '--id', 'mem_golden_123', '--content', 'Updated content', '--json'], useAuth: true },
-  { id: 'update-error-missing-id', group: 'direct-memory', args: ['update', '--content', 'Updated content'], useAuth: true },
+  { id: 'update-error-missing-id', group: 'direct-memory', args: ['update'], useAuth: true },
   { id: 'update-help', group: 'direct-memory', args: ['update', '--help'] },
   { id: 'forget-terminal', group: 'direct-memory', args: ['forget', '--id', 'mem_golden_123', '--confirm'], useAuth: true },
   { id: 'forget-json', group: 'direct-memory', args: ['forget', '--id', 'mem_golden_123', '--confirm', '--json'], useAuth: true },

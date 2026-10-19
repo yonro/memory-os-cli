@@ -88,7 +88,7 @@ export function getChannelInstructions(channel, skillRoot, platform = process.pl
       fallback = isWindows
         ? '$env:XMEMO_SKILL_AGENT="claude-code"; $env:XMEMO_SKILL_FORCE="1"; irm https://xmemo.dev/skill/install.ps1 | iex'
         : 'curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code XMEMO_SKILL_FORCE=1 sh';
-      reloadHint = 'Restart Claude Code session or run /reload to reload skills.';
+      reloadHint = 'Restart your Claude Code session to reload the updated skill.';
       break;
     }
     case 'codex': {
@@ -96,29 +96,29 @@ export function getChannelInstructions(channel, skillRoot, platform = process.pl
       fallback = isWindows
         ? '$env:XMEMO_SKILL_AGENT="codex"; $env:XMEMO_SKILL_FORCE="1"; irm https://xmemo.dev/skill/install.ps1 | iex'
         : 'curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex XMEMO_SKILL_FORCE=1 sh';
-      reloadHint = 'Restart Codex session to reload skills.';
+      reloadHint = 'Restart your Codex session to reload the updated skill.';
       break;
     }
     case 'openclaw': {
-      primary = 'openclaw skills update @xmemo/xmemo';
+      primary = 'openclaw skills install @xmemo/xmemo --force';
       fallback = 'openclaw skills install @xmemo/xmemo';
-      reloadHint = 'Restart OpenClaw or run openclaw skills reload.';
+      reloadHint = 'Restart your OpenClaw session to reload the updated skill.';
       break;
     }
     case 'claude-code-project': {
       primary = 'xmemo skill update --client claude-code --project --yes';
       fallback = isWindows
-        ? '$env:XMEMO_SKILL_AGENT="claude-code"; $env:XMEMO_SKILL_FORCE="1"; $env:XMEMO_SKILL_PROJECT="1"; irm https://xmemo.dev/skill/install.ps1 | iex'
-        : 'curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code XMEMO_SKILL_FORCE=1 XMEMO_SKILL_PROJECT=1 sh';
-      reloadHint = 'Restart Claude Code session in this project to reload skills.';
+        ? `$env:XMEMO_SKILL_DIR="${skillRoot}"; $env:XMEMO_SKILL_FORCE="1"; irm https://xmemo.dev/skill/install.ps1 | iex`
+        : `curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_DIR="${skillRoot}" XMEMO_SKILL_FORCE=1 sh`;
+      reloadHint = 'Restart your Claude Code session in this project to reload the updated skill.';
       break;
     }
     case 'manual':
     default: {
       primary = GITHUB_RELEASE_ARCHIVE_URL;
       fallback = isWindows
-        ? `irm "${GITHUB_RELEASE_ARCHIVE_URL}" -OutFile xmemo-skill.tar.gz; tar -xzf xmemo-skill.tar.gz -C "${skillRoot}" --strip-components=1`
-        : `curl -fsSL -o xmemo-skill.tar.gz "${GITHUB_RELEASE_ARCHIVE_URL}" && tar -xzf xmemo-skill.tar.gz -C "${skillRoot}" --strip-components=1`;
+        ? `irm "${GITHUB_RELEASE_ARCHIVE_URL}" -OutFile xmemo-skill.tar.gz; tar -xzf xmemo-skill.tar.gz -C "${skillRoot}"`
+        : `curl -fsSL -o xmemo-skill.tar.gz "${GITHUB_RELEASE_ARCHIVE_URL}" && tar -xzf xmemo-skill.tar.gz -C "${skillRoot}"`;
       reloadHint = 'Restart your agent session to reload the updated skill.';
       break;
     }
@@ -138,7 +138,7 @@ export function getChannelInstructions(channel, skillRoot, platform = process.pl
   };
 }
 
-export async function handleUpdate(ctx) {
+export async function handleUpgrade(ctx) {
   const { options, skillVersion } = ctx;
   const isJson = Boolean(options.json);
 

@@ -149,6 +149,10 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'profile [--status <later|never>] [--if-unset]',
     desc: 'Print recommended instructions for project agent configuration, or record offer answer',
   },
+  upgrade: {
+    usage: 'upgrade',
+    desc: 'Print commands to update the XMemo Skill runtime',
+  },
 };
 
 export function buildTopLevelHelp() {
@@ -168,7 +172,6 @@ export function buildTopLevelHelp() {
       lines.push(`  ${entry.usage}`);
     }
   }
-  lines.push(`  ${'update'.padEnd(35)} Print commands to update the XMemo Skill runtime`);
   lines.push('');
   lines.push('Credential resolution:');
   lines.push('  XMEMO_KEY                          Preferred; never copied to the local credential file');
@@ -202,10 +205,6 @@ export function printUsage(command) {
 
   const entry = COMMAND_USAGE_REGISTRY[command];
   if (entry) {
-    if (command === 'update') {
-      console.log(`Usage:\n  ${SCRIPT_COMMAND} update ${commonOptions}\n  ${SCRIPT_COMMAND} ${entry.usage} ${commonOptions}`);
-      return;
-    }
     console.log(`Usage:\n  ${SCRIPT_COMMAND} ${entry.usage} ${commonOptions}`);
     if (command === 'logout') {
       console.log('\nXMEMO_KEY is externally managed and is not revoked unless --revoke-environment-token is explicitly passed.');

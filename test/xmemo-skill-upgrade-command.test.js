@@ -11,7 +11,7 @@ import {
   detectInstallChannel,
   getChannelInstructions,
   getSkillRoot,
-} from '../skills/xmemo/scripts/commands/update.mjs';
+} from '../skills/xmemo/scripts/commands/upgrade.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
@@ -103,7 +103,7 @@ test('getChannelInstructions produces correct commands and platform-specific fal
   assert.equal(ccLinux.primary, 'xmemo skill update --client claude-code --yes');
   assert.match(ccLinux.fallback, /curl -fsSL https:\/\/xmemo\.dev\/skill\/install/);
   assert.match(ccLinux.fallback, /XMEMO_SKILL_AGENT=claude-code/);
-  assert.match(ccLinux.reloadHint, /Restart Claude Code/);
+  assert.match(ccLinux.reloadHint, /Restart your Claude Code/);
   assert.match(ccLinux.reloadHint, /doctor --anonymous/);
 
   const ccWin = getChannelInstructions('claude-code', 'C:\\skills\\xmemo', 'win32');
@@ -115,7 +115,7 @@ test('getChannelInstructions produces correct commands and platform-specific fal
   const codexLinux = getChannelInstructions('codex', dummyRoot, 'linux');
   assert.equal(codexLinux.primary, 'xmemo skill update --client codex --yes');
   assert.match(codexLinux.fallback, /XMEMO_SKILL_AGENT=codex/);
-  assert.match(codexLinux.reloadHint, /Restart Codex/);
+  assert.match(codexLinux.reloadHint, /Restart your Codex/);
 
   const codexWin = getChannelInstructions('codex', 'C:\\skills\\xmemo', 'win32');
   assert.equal(codexWin.primary, 'xmemo skill update --client codex --yes');
@@ -123,28 +123,30 @@ test('getChannelInstructions produces correct commands and platform-specific fal
 
   // 3. openclaw
   const openclawInst = getChannelInstructions('openclaw', dummyRoot, 'linux');
-  assert.equal(openclawInst.primary, 'openclaw skills update @xmemo/xmemo');
+  assert.equal(openclawInst.primary, 'openclaw skills install @xmemo/xmemo --force');
   assert.equal(openclawInst.fallback, 'openclaw skills install @xmemo/xmemo');
-  assert.match(openclawInst.reloadHint, /Restart OpenClaw/);
+  assert.match(openclawInst.reloadHint, /Restart your OpenClaw session/);
 
   // 4. claude-code-project
   const ccProjectLinux = getChannelInstructions('claude-code-project', dummyRoot, 'linux');
   assert.equal(ccProjectLinux.primary, 'xmemo skill update --client claude-code --project --yes');
-  assert.match(ccProjectLinux.fallback, /XMEMO_SKILL_PROJECT=1/);
-  assert.match(ccProjectLinux.reloadHint, /Restart Claude Code session in this project/);
+  assert.match(ccProjectLinux.fallback, /XMEMO_SKILL_DIR/);
+  assert.match(ccProjectLinux.reloadHint, /Restart your Claude Code session in this project/);
 
   const ccProjectWin = getChannelInstructions('claude-code-project', 'C:\\proj\\.claude\\skills\\xmemo', 'win32');
   assert.equal(ccProjectWin.primary, 'xmemo skill update --client claude-code --project --yes');
-  assert.match(ccProjectWin.fallback, /\$env:XMEMO_SKILL_PROJECT="1"/);
+  assert.match(ccProjectWin.fallback, /\$env:XMEMO_SKILL_DIR/);
 
   // 5. manual
   const manualLinux = getChannelInstructions('manual', dummyRoot, 'linux');
   assert.match(manualLinux.primary, /https:\/\/github\.com\/yonro\/memory-os-cli\/releases\/latest\/download\/xmemo-skill\.tar\.gz/);
-  assert.match(manualLinux.fallback, /tar -xzf xmemo-skill\.tar\.gz/);
+  assert.match(manualLinux.fallback, /tar -xzf xmemo-skill\.tar\.gz -C/);
+  assert.equal(/--strip-components/.test(manualLinux.fallback), false);
   assert.match(manualLinux.reloadHint, /Restart your agent session/);
 
   const manualWin = getChannelInstructions('manual', 'C:\\custom\\xmemo', 'win32');
   assert.match(manualWin.fallback, /irm\s+"https:.*-OutFile\s+xmemo-skill\.tar\.gz/);
+  assert.equal(/--strip-components/.test(manualWin.fallback), false);
 });
 
 test('getSkillRoot resolves directory without crashing', () => {
@@ -153,7 +155,7 @@ test('getSkillRoot resolves directory without crashing', () => {
   assert.ok(root.includes('skills'));
 });
 
-test('update command terminal and json output with mock server', async () => {
+test('upgrade command terminal and json output with mock server', async () => {
   let discoveryRequests = 0;
   const server = http.createServer((req, res) => {
     if (req.url === '/.well-known/agent-discovery.json') {
@@ -179,7 +181,7 @@ test('update command terminal and json output with mock server', async () => {
 
   try {
     // 1. JSON mode
-    const jsonRes = await runSkill(['update', '--json', '--base-url', `http://127.0.0.1:${port}`]);
+    const jsonRes = await runSkill(['upgrade', '--json', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(jsonRes.code, 0);
     const parsed = JSON.parse(jsonRes.stdout);
     assert.equal(parsed.installed, '1.1.44');
@@ -191,7 +193,7 @@ test('update command terminal and json output with mock server', async () => {
     assert.ok(parsed.reload_hint.includes('doctor --anonymous'));
 
     // 2. Terminal mode
-    const termRes = await runSkill(['update', '--terminal', '--base-url', `http://127.0.0.1:${port}`]);
+    const termRes = await runSkill(['upgrade', '--terminal', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(termRes.code, 0);
     assert.match(termRes.stdout, /Installed version:\s+1\.1\.44/);
     assert.match(termRes.stdout, /Latest version:\s+1\.1\.45/);
@@ -217,7 +219,7 @@ test('latest fetch failure exits with code 0 and marks latest as unknown', async
 
   try {
     // 1. JSON mode under 500
-    const jsonRes = await runSkill(['update', '--json', '--base-url', `http://127.0.0.1:${port}`]);
+    const jsonRes = await runSkill(['upgrade', '--json', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(jsonRes.code, 0, 'Exit code must be 0 even when remote version fetch fails');
     const parsed = JSON.parse(jsonRes.stdout);
     assert.equal(parsed.installed, '1.1.44');
@@ -226,7 +228,7 @@ test('latest fetch failure exits with code 0 and marks latest as unknown', async
     assert.ok(parsed.commands.length >= 1);
 
     // 2. Terminal mode under 500
-    const termRes = await runSkill(['update', '--terminal', '--base-url', `http://127.0.0.1:${port}`]);
+    const termRes = await runSkill(['upgrade', '--terminal', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(termRes.code, 0);
     assert.match(termRes.stdout, /Latest version:\s+unknown/);
     assert.match(termRes.stdout, /Update available:\s+no/);
@@ -236,8 +238,8 @@ test('latest fetch failure exits with code 0 and marks latest as unknown', async
   }
 });
 
-test('update command performs zero child_process calls and never mutates cache file', async () => {
-  const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-update-cache-test-'));
+test('upgrade command performs zero child_process calls and never mutates cache file', async () => {
+  const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-upgrade-cache-test-'));
   try {
     const dotXmemo = path.join(tempHome, '.xmemo');
     const cacheFile = path.join(dotXmemo, 'skill-update-check.json');
@@ -250,19 +252,19 @@ test('update command performs zero child_process calls and never mutates cache f
     await fs.mkdir(dotXmemo, { recursive: true });
     await fs.writeFile(cacheFile, JSON.stringify(initialCache, null, 2) + '\n', 'utf8');
 
-    const res = await runSkill(['update', '--json'], { homeDir: tempHome });
+    const res = await runSkill(['upgrade', '--json'], { homeDir: tempHome });
     assert.equal(res.code, 0);
 
-    // Assert cache was NOT updated or touched by update command
+    // Assert cache was NOT updated or touched by upgrade command
     const afterContent = await fs.readFile(cacheFile, 'utf8');
     const parsed = JSON.parse(afterContent);
-    assert.deepEqual(parsed, initialCache, 'Cache file must remain completely unmutated by update command');
+    assert.deepEqual(parsed, initialCache, 'Cache file must remain completely unmutated by upgrade command');
 
-    // Static code inspection: update.mjs must not import or use child_process
-    const updateCode = await fs.readFile(path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'commands', 'update.mjs'), 'utf8');
-    assert.equal(/child_process/.test(updateCode), false, 'commands/update.mjs must never import child_process');
-    assert.equal(/exec|spawn|fork|execFile/.test(updateCode), false, 'commands/update.mjs must never call execution primitives');
-    assert.equal(/\b(writeFile|writeFileSync|unlink|unlinkSync|mkdir|mkdirSync)\b/.test(updateCode), false, 'commands/update.mjs must never perform write I/O');
+    // Static code inspection: upgrade.mjs must not import or use child_process
+    const upgradeCode = await fs.readFile(path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'commands', 'upgrade.mjs'), 'utf8');
+    assert.equal(/child_process/.test(upgradeCode), false, 'commands/upgrade.mjs must never import child_process');
+    assert.equal(/exec|spawn|fork|execFile/.test(upgradeCode), false, 'commands/upgrade.mjs must never call execution primitives');
+    assert.equal(/\b(writeFile|writeFileSync|unlink|unlinkSync|mkdir|mkdirSync)\b/.test(upgradeCode), false, 'commands/upgrade.mjs must never perform write I/O');
   } finally {
     await fs.rm(tempHome, { recursive: true, force: true }).catch(() => {});
   }

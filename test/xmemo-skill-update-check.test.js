@@ -306,7 +306,7 @@ test('recall emits stderr update notification when new version available, stdout
     // 1. Terminal recall
     const resTerm = await runSkill(['recall', '--query', 'architecture', '--terminal', '--base-url', mock.baseUrl], env);
     assert.equal(resTerm.code, 0);
-    assert.match(resTerm.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.45 is available \(installed 1\.1\.44\)\. Ask the user once before updating; run: node scripts\/xmemo-skill\.mjs update/);
+    assert.match(resTerm.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.45 is available \(installed 1\.1\.44\)\. Ask the user once before updating; run: node scripts\/xmemo-skill\.mjs upgrade/);
     assert.match(resTerm.stdout, /Design architecture note/);
 
     // 2. Cache inspection

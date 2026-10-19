@@ -172,7 +172,7 @@ export async function maybeCheckForSkillUpdate({ baseUrl, localVersion, timeoutM
 
     if (isDifferentVersion || isSevenDaysPassed) {
       console.error(
-        `XMEMO_UPDATE_AVAILABLE: XMemo Skill ${latestVersion} is available (installed ${localVersion}). Ask the user once before updating; run: node scripts/xmemo-skill.mjs update`
+        `XMEMO_UPDATE_AVAILABLE: XMemo Skill ${latestVersion} is available (installed ${localVersion}). Ask the user once before updating; run: node scripts/xmemo-skill.mjs upgrade`
       );
       await writeUpdateCheckCache(cachePath, {
         lastCheck: new Date(now).toISOString(),
