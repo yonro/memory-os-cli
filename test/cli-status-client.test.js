@@ -265,7 +265,7 @@ test('status codex with skill installed reports skill installed and version', as
   await fs.mkdir(codexSkillDir, { recursive: true });
   await fs.writeFile(
     path.join(codexSkillDir, 'package.json'),
-    JSON.stringify({ name: '@xmemo/skill', version: '1.1.35' }, null, 2),
+    JSON.stringify({ name: '@xmemo/skill', version: '1.1.44' }, null, 2),
     'utf8'
   );
 
@@ -278,7 +278,7 @@ test('status codex with skill installed reports skill installed and version', as
   const report = JSON.parse(jsonResult.stdout);
   assert.equal(report.clients[0].id, 'codex');
   assert.equal(report.clients[0].resources.skill.installed, true);
-  assert.equal(report.clients[0].resources.skill.version, '1.1.35');
+  assert.equal(report.clients[0].resources.skill.version, '1.1.44');
   assert.ok(report.clients[0].resources.skill.path.includes('xmemo-memory'));
 
   // Status codex human-readable
@@ -288,7 +288,7 @@ test('status codex with skill installed reports skill installed and version', as
   });
   assert.equal(humanResult.code, 0);
   assert.match(humanResult.stdout, /Codex \(codex\):/);
-  assert.match(humanResult.stdout, /Skill: installed 1\.1\.35/);
+  assert.match(humanResult.stdout, /Skill: installed 1\.1\.44/);
 });
 
 test('status with no client arguments and nothing detected reports service probes only', async (t) => {

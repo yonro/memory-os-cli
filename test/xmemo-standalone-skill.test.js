@@ -487,6 +487,7 @@ async function runScript(args, options = {}) {
       XMEMO_BASE_URL: options.baseUrl,
       XMEMO_KEY: options.env?.XMEMO_KEY,
       XMEMO_FORCE_TTY: forceTty,
+      XMEMO_NO_UPDATE_CHECK: '1',
       ...options.env,
     };
     if (!options.env || !('JARVIS_AUTHD_SOCK' in options.env)) {

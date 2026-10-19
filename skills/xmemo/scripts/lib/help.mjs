@@ -149,6 +149,10 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'profile [--status <later|never>] [--if-unset]',
     desc: 'Print recommended instructions for project agent configuration, or record offer answer',
   },
+  upgrade: {
+    usage: 'upgrade',
+    desc: 'Print commands to update the XMemo Skill runtime',
+  },
 };
 
 export function buildTopLevelHelp() {

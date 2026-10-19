@@ -471,6 +471,7 @@ async function runSnapshotScript(args, { baseUrl, homeDir, stdin, env = {} }) {
     childEnv.USERPROFILE = homeDir;
     childEnv.XMEMO_BASE_URL = baseUrl;
     childEnv.XMEMO_FORCE_TTY = '1';
+    childEnv.XMEMO_NO_UPDATE_CHECK = '1';
     Object.assign(childEnv, env);
 
     const child = spawn(process.execPath, [skillScript, ...args], {

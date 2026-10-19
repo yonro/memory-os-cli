@@ -664,6 +664,7 @@ test('skill read --id --json correctly decodes CJK response split across TCP chu
         env: {
           ...process.env,
           XMEMO_KEY: 'test-token-cjk',
+          XMEMO_NO_UPDATE_CHECK: '1',
         },
       });
 
@@ -713,6 +714,7 @@ test('profile command prints recommended agent instruction block with visible ma
           ...process.env,
           HOME: tempHome,
           USERPROFILE: tempHome,
+          XMEMO_NO_UPDATE_CHECK: '1',
         },
       });
 

@@ -1,43 +1,205 @@
 import fs from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PINNED_SKILL_VERSION, PINNED_OPENCLAW_SKILL_VERSION } from '../src/core/pins.js';
 
-const args = process.argv.slice(2);
-const tag = readTagArgument(args);
-const channel = readChannelArgument(args);
-const packageJson = await readJson('package.json');
-const packageLock = await readJson('package-lock.json');
-const server = await readJson('server.json');
-const marketplace = await readJson('lhm.plugin.json');
-const npmPackage = server.packages?.find((item) => item.identifier === packageJson.name);
+export function parseSemver(str) {
+  if (!str || typeof str !== 'string') return null;
+  const match = str.match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    prerelease: match[4] ?? null,
+    raw: str
+  };
+}
 
-const cliVersion = packageJson.version;
-const registryVersion = server.version;
-const cliMismatches = [
-  ['package-lock.json', packageLock.version],
-  ['package-lock.json packages[""].version', packageLock.packages?.['']?.version],
-  ['server.json npm package', npmPackage?.version]
-].filter(([, version]) => version !== cliVersion);
-const registryMismatches = [
-  ['lhm.plugin.json', marketplace.version]
-].filter(([, version]) => version !== registryVersion);
-
-const activeChecks = [
-  ...(channel !== 'mcp' ? [['CLI/npm', cliVersion, cliMismatches]] : []),
-  ...(channel !== 'cli' ? [['MCP Registry', registryVersion, registryMismatches]] : [])
-];
-
-if (activeChecks.some(([, , mismatches]) => mismatches.length)) {
-  for (const [scope, expectedVersion, mismatches] of activeChecks) {
-    reportMismatches(scope, expectedVersion, mismatches);
+export function compareSemver(a, b) {
+  const pa = typeof a === 'string' ? parseSemver(a) : a;
+  const pb = typeof b === 'string' ? parseSemver(b) : b;
+  if (!pa || !pb) {
+    const invalid = !pa ? a : b;
+    throw new Error(`Cannot compare invalid semver: ${JSON.stringify(invalid)}`);
   }
-  process.exitCode = 1;
-} else if (tag && !matchesReleaseTag(tag, channel, cliVersion, registryVersion)) {
-  console.error(
-    `Release tag mismatch: expected cli-v${cliVersion} for npm or mcp-v${registryVersion} for MCP Registry, found ${tag}`
-  );
-  process.exitCode = 1;
-} else {
+  if (pa.major !== pb.major) return pa.major - pb.major;
+  if (pa.minor !== pb.minor) return pa.minor - pb.minor;
+  if (pa.patch !== pb.patch) return pa.patch - pb.patch;
+  if (pa.prerelease && !pb.prerelease) return -1;
+  if (!pa.prerelease && pb.prerelease) return 1;
+  if (pa.prerelease && pb.prerelease) {
+    return pa.prerelease.localeCompare(pb.prerelease);
+  }
+  return 0;
+}
+
+export function getGitSkillTags() {
+  if (process.env.XMEMO_OVERRIDE_SKILL_TAGS) {
+    return process.env.XMEMO_OVERRIDE_SKILL_TAGS.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+  try {
+    const out = execFileSync('git', ['tag', '-l', 'skill-v*'], { encoding: 'utf8' });
+    return out.split(/\r?\n/).map((t) => t.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export function getLatestSkillTag(tagList) {
+  const tags = tagList ?? getGitSkillTags();
+  const valid = tags
+    .map((tag) => {
+      const version = tag.replace(/^skill-v/, '');
+      const semver = parseSemver(version);
+      return semver ? { tag, version, semver } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => compareSemver(a.semver, b.semver));
+
+  return valid.length > 0 ? valid[valid.length - 1] : null;
+}
+
+export function verifySkillPinGate({ pinnedVersion = PINNED_SKILL_VERSION, tagList, requireTags = false } = {}) {
+  const parsedPinned = parseSemver(pinnedVersion);
+  if (!parsedPinned) {
+    return {
+      ok: false,
+      pinnedVersion,
+      error: `CLI release gate failed: PINNED_SKILL_VERSION (${pinnedVersion}) in src/core/pins.js is not a valid semver.`
+    };
+  }
+
+  const latestTag = getLatestSkillTag(tagList);
+  if (!latestTag) {
+    if (requireTags) {
+      return {
+        ok: false,
+        pinnedVersion,
+        error: 'CLI release gate failed: No skill-v tags found in git repository. Cannot verify PINNED_SKILL_VERSION synchronization for release. Run git fetch --tags.'
+      };
+    }
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'no_skill_tags_found',
+      warning: 'Warning: No skill-v tags found in git repository; skill pin gate check was skipped. Fetch git tags with "git fetch --tags" to verify skill pin synchronization.'
+    };
+  }
+
+  if (!latestTag.semver) {
+    return {
+      ok: false,
+      pinnedVersion,
+      latestTag: latestTag.tag,
+      error: `CLI release gate failed: latest skill tag (${latestTag.tag}) has invalid semver (${latestTag.version}).`
+    };
+  }
+
+  let cmp;
+  try {
+    cmp = compareSemver(parsedPinned, latestTag.semver);
+  } catch (err) {
+    return {
+      ok: false,
+      pinnedVersion,
+      error: `CLI release gate failed: ${err.message}`
+    };
+  }
+
+  if (cmp < 0) {
+    return {
+      ok: false,
+      pinnedVersion,
+      latestTag: latestTag.tag,
+      latestVersion: latestTag.version,
+      error: `CLI release gate failed: PINNED_SKILL_VERSION (${pinnedVersion}) in src/core/pins.js is older than the latest skill tag (${latestTag.tag} -> ${latestTag.version}). Bump PINNED_SKILL_VERSION before releasing CLI.`
+    };
+  }
+  return {
+    ok: true,
+    pinnedVersion,
+    latestTag: latestTag.tag,
+    latestVersion: latestTag.version
+  };
+}
+
+export async function checkReleaseVersion(args = process.argv.slice(2)) {
+  const tag = readTagArgument(args);
+  const channel = readChannelArgument(args);
+  const isReleaseMode = Boolean(tag) ||
+    args.includes('--release') ||
+    args.includes('--require-tags') ||
+    process.env.npm_lifecycle_event === 'prepublishOnly';
+  const packageJson = await readJson('package.json');
+  const packageLock = await readJson('package-lock.json');
+  const server = await readJson('server.json');
+  const marketplace = await readJson('lhm.plugin.json');
+  const npmPackage = server.packages?.find((item) => item.identifier === packageJson.name);
+
+  const cliVersion = packageJson.version;
+  const registryVersion = server.version;
+  const cliMismatches = [
+    ['package-lock.json', packageLock.version],
+    ['package-lock.json packages[""].version', packageLock.packages?.['']?.version],
+    ['server.json npm package', npmPackage?.version]
+  ].filter(([, version]) => version !== cliVersion);
+  const registryMismatches = [
+    ['lhm.plugin.json', marketplace.version]
+  ].filter(([, version]) => version !== registryVersion);
+
+  const activeChecks = [
+    ...(channel !== 'mcp' ? [['CLI/npm', cliVersion, cliMismatches]] : []),
+    ...(channel !== 'cli' ? [['MCP Registry', registryVersion, registryMismatches]] : [])
+  ];
+
+  let hasErrors = false;
+
+  if (activeChecks.some(([, , mismatches]) => mismatches.length)) {
+    for (const [scope, expectedVersion, mismatches] of activeChecks) {
+      reportMismatches(scope, expectedVersion, mismatches);
+    }
+    hasErrors = true;
+  }
+
+  if (tag && !matchesReleaseTag(tag, channel, cliVersion, registryVersion)) {
+    console.error(
+      `Release tag mismatch: expected cli-v${cliVersion} for npm or mcp-v${registryVersion} for MCP Registry, found ${tag}`
+    );
+    hasErrors = true;
+  }
+
+  // CLI release gate: locked skill version in pins.js must not be older than the latest skill-v tag
+  if (channel !== 'mcp') {
+    const pinGateResult = verifySkillPinGate({ requireTags: isReleaseMode });
+    if (!pinGateResult.ok) {
+      console.error(pinGateResult.error);
+      hasErrors = true;
+    } else if (pinGateResult.skipped) {
+      if (pinGateResult.warning) {
+        console.warn(pinGateResult.warning);
+      }
+    } else if (pinGateResult.latestTag) {
+      console.log(`CLI pinned skill version is synchronized (${PINNED_SKILL_VERSION} >= ${pinGateResult.latestTag}).`);
+    }
+
+    if (PINNED_OPENCLAW_SKILL_VERSION !== PINNED_SKILL_VERSION) {
+      console.error(
+        `CLI release gate failed: PINNED_OPENCLAW_SKILL_VERSION (${PINNED_OPENCLAW_SKILL_VERSION}) does not match PINNED_SKILL_VERSION (${PINNED_SKILL_VERSION}).`
+      );
+      hasErrors = true;
+    }
+  }
+
+  if (hasErrors) {
+    process.exitCode = 1;
+    return false;
+  }
+
   if (channel !== 'mcp') console.log(`CLI/npm metadata is synchronized at ${cliVersion}.`);
   if (channel !== 'cli') console.log(`MCP Registry metadata is synchronized at ${registryVersion}.`);
+  return true;
 }
 
 function matchesReleaseTag(value, selectedChannel, cli, registry) {
@@ -83,4 +245,11 @@ async function readJson(file) {
     console.error(`Cannot read ${file}: ${error.message}`);
     process.exit(1);
   }
+}
+
+const isMain = process.argv[1] &&
+  path.resolve(fileURLToPath(import.meta.url)).toLowerCase() === path.resolve(process.argv[1]).toLowerCase();
+
+if (isMain) {
+  await checkReleaseVersion();
 }

@@ -29,6 +29,7 @@ For troubleshooting or non-interactive environments:
 - Inspect or verify credentials: `node scripts/xmemo-skill.mjs auth status --verify`
 
 If a command fails, follow its printed next action and read [references/troubleshooting.md](references/troubleshooting.md).
+When stderr reports `XMEMO_UPDATE_AVAILABLE: ...`, ask the user once whether to update; regardless of the answer, continue the current task and do not ask again.
 
 ## Runtime Selection
 
@@ -202,6 +203,8 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `stats [--scope <scope>] [--group-by <dims>] [--top-n <1..200>]` | Multidimensional memory stats |
 | `doctor [--anonymous]` | Diagnose runtime health |
 | `profile` | Print recommended agent instructions |
+| `version --check` | Check for Skill runtime updates |
+| `upgrade` | Print commands to update the XMemo Skill |
 | `login --allow-plaintext` | Start device login |
 | `register --reason <unattended\|declined> --allow-plaintext` | Temporary sandbox |
 | `auth status [--verify]` | Credential status (alias: `auth-status`) |

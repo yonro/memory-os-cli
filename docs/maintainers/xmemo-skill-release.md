@@ -4,6 +4,40 @@ This document contains internal maintainer procedures for testing and releasing 
 
 ---
 
+## Release Ordering: Skill First, CLI Second (发布顺序约束)
+
+When introducing updates that touch both the standalone skill (`skills/xmemo`) and the CLI (`@xmemo/client`), maintainers **must strictly follow the release sequence: Skill First, CLI Second** (先发 Skill，再发 CLI；严禁颠倒).
+
+### Why the Sequence Matters
+1. **SRI Integrity Pinning**: The CLI (`src/core/pins.js`) locks the exact standalone `@xmemo/skill` version (`PINNED_SKILL_VERSION`) along with its Subresource Integrity SHA-512 hash (`PINNED_SKILL_INTEGRITY`). This hash can only be authoritatively verified against the npm registry (`npm view @xmemo/skill@<version> dist.integrity`) and tarball after the skill has been published.
+2. **Release Gate Enforcement**: The CLI release check script (`scripts/check-release-version.mjs`) includes a mandatory release gate. In CLI release mode (`--channel cli --tag cli-v*`), it inspects the git repository's `skill-v*` tags. If `PINNED_SKILL_VERSION` is older than the latest `skill-v` tag in git, or if git tags cannot be resolved, the CLI release gate aborts with exit code 1.
+3. **OpenClaw Skill Synchronization**: `PINNED_OPENCLAW_SKILL_VERSION` must match `PINNED_SKILL_VERSION` byte-for-byte to prevent divergence across agent installers.
+
+### Canonical Release Workflow
+```
+[1. Release Skill]
+  PR on feat branch -> CI green -> merge to main
+  -> tag skill-v<version> on main -> GitHub Release (with --latest)
+  -> GitHub Actions publishes @xmemo/skill to npm, updates xmemo.dev, publishes to SkillHub
+  -> Publish to ClawHub with --owner xmemo --name "XMemo Memory"
+        │
+        ▼
+[2. Update CLI Pins]
+  Checkout new branch -> verify npm dist.integrity and tarball SHA-512
+  -> update PINNED_SKILL_VERSION, PINNED_OPENCLAW_SKILL_VERSION, and PINNED_SKILL_INTEGRITY in src/core/pins.js
+  -> update tests, docs, and changelog
+  -> run npm test, npm run lint, node scripts/verify-release-packaging.mjs
+        │
+        ▼
+[3. Release CLI]
+  PR on feat branch -> CI green -> merge to main
+  -> tag cli-v<version> on main -> GitHub Actions release.yml
+  -> check-release-version verifies PINNED_SKILL_VERSION >= latest skill-v tag
+  -> npm publish via OIDC provenance -> GitHub Release (with --latest=false)
+```
+
+---
+
 ## 1. Pre-Release Smoke Testing
 
 Before releasing or publishing changes to the XMemo skill, run the automated smoke test script to verify end-to-end command execution, exit code normalization, and `--json` envelope compliance against live or mock endpoints:

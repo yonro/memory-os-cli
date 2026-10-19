@@ -31,6 +31,7 @@ function runSkill(args, env = {}) {
       cwd: repoRoot,
       env: {
         ...process.env,
+        XMEMO_NO_UPDATE_CHECK: '1',
         ...env,
       },
     });
