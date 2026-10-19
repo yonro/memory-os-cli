@@ -16,6 +16,13 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
 
+const entrypointContent = await fs.readFile(skillScript, 'utf8');
+const versionMatch = entrypointContent.match(/const\s+SKILL_VERSION\s*=\s*['"]([^'"]+)['"]/);
+const CURRENT_SKILL_VERSION = versionMatch ? versionMatch[1] : '1.1.45';
+const semverParts = CURRENT_SKILL_VERSION.split('.').map(Number);
+const NEWER_SKILL_VERSION = `${semverParts[0]}.${semverParts[1]}.${semverParts[2] + 1}`;
+const NEWER_TAG = `skill-v${NEWER_SKILL_VERSION}`;
+
 function runSkill(args, { homeDir, env = {}, stdin } = {}) {
   return new Promise((resolve, reject) => {
     let stdout = '';
@@ -165,7 +172,7 @@ test('upgrade command terminal and json output with mock server', async () => {
       res.end(JSON.stringify({
         standalone_skill: {
           package: {
-            version: 'skill-v1.1.45',
+            version: NEWER_TAG,
           },
         },
       }));
@@ -184,8 +191,8 @@ test('upgrade command terminal and json output with mock server', async () => {
     const jsonRes = await runSkill(['upgrade', '--json', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(jsonRes.code, 0);
     const parsed = JSON.parse(jsonRes.stdout);
-    assert.equal(parsed.installed, '1.1.44');
-    assert.equal(parsed.latest, '1.1.45');
+    assert.equal(parsed.installed, CURRENT_SKILL_VERSION);
+    assert.equal(parsed.latest, NEWER_SKILL_VERSION);
     assert.equal(parsed.update_available, true);
     assert.equal(parsed.channel, 'manual');
     assert.ok(Array.isArray(parsed.commands));
@@ -195,8 +202,8 @@ test('upgrade command terminal and json output with mock server', async () => {
     // 2. Terminal mode
     const termRes = await runSkill(['upgrade', '--terminal', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(termRes.code, 0);
-    assert.match(termRes.stdout, /Installed version:\s+1\.1\.44/);
-    assert.match(termRes.stdout, /Latest version:\s+1\.1\.45/);
+    assert.match(termRes.stdout, new RegExp(`Installed version:\\s+${CURRENT_SKILL_VERSION.replace(/\\./g, '\\.')}`));
+    assert.match(termRes.stdout, new RegExp(`Latest version:\\s+${NEWER_SKILL_VERSION.replace(/\\./g, '\\.')}`));
     assert.match(termRes.stdout, /Update available:\s+yes/);
     assert.match(termRes.stdout, /Installation channel:\s+manual/);
     assert.match(termRes.stdout, /Recommended update command:/);
@@ -222,7 +229,7 @@ test('latest fetch failure exits with code 0 and marks latest as unknown', async
     const jsonRes = await runSkill(['upgrade', '--json', '--base-url', `http://127.0.0.1:${port}`]);
     assert.equal(jsonRes.code, 0, 'Exit code must be 0 even when remote version fetch fails');
     const parsed = JSON.parse(jsonRes.stdout);
-    assert.equal(parsed.installed, '1.1.44');
+    assert.equal(parsed.installed, CURRENT_SKILL_VERSION);
     assert.equal(parsed.latest, 'unknown');
     assert.equal(parsed.update_available, false);
     assert.ok(parsed.commands.length >= 1);
@@ -245,8 +252,8 @@ test('upgrade command performs zero child_process calls and never mutates cache 
     const cacheFile = path.join(dotXmemo, 'skill-update-check.json');
     const initialCache = {
       lastCheck: 1000,
-      latestVersion: '1.1.44',
-      notifiedVersion: '1.1.44',
+      latestVersion: CURRENT_SKILL_VERSION,
+      notifiedVersion: CURRENT_SKILL_VERSION,
       notifiedAt: 1000,
     };
     await fs.mkdir(dotXmemo, { recursive: true });

@@ -62,7 +62,7 @@ import { handleProfile, armRecallNote } from './commands/profile.mjs';
 import { handleVersionCheck } from './lib/update-check.mjs';
 import { handleUpgrade } from './commands/upgrade.mjs';
 
-const SKILL_VERSION = '1.1.44';
+const SKILL_VERSION = '1.1.45';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));

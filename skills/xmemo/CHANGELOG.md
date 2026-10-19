@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## 1.1.45
+
+### Added
+
+- Add Skill update check: automatically check for new versions on successful `recall`, `recall-context`, and `doctor` commands (anonymous, throttled to 24h checks and 7d version notifications), emitting a non-intrusive warning on stderr.
+- Add `version --check` command to check for Skill runtime updates on demand in terminal or JSON mode.
+- Add `upgrade` command: detect installation channel (`claude-code`, `codex`, `openclaw`, `claude-code-project`, or `manual`) and print recommended upgrade commands and fallbacks with zero subprocess execution and zero write operations.
+
 ## 1.1.44
 
 ### Added

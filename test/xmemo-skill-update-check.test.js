@@ -25,6 +25,15 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-skill.mjs');
 
+const entrypointContent = await readFile(skillScript, 'utf8');
+const versionMatch = entrypointContent.match(/const\s+SKILL_VERSION\s*=\s*['"]([^'"]+)['"]/);
+const CURRENT_SKILL_VERSION = versionMatch ? versionMatch[1] : '1.1.45';
+const currentSemver = parseSemver(CURRENT_SKILL_VERSION);
+const NEWER_SKILL_VERSION = `${currentSemver.major}.${currentSemver.minor}.${currentSemver.patch + 1}`;
+const NEWER_TAG = `skill-v${NEWER_SKILL_VERSION}`;
+const EVEN_NEWER_SKILL_VERSION = `${currentSemver.major}.${currentSemver.minor}.${currentSemver.patch + 2}`;
+const EVEN_NEWER_TAG = `skill-v${EVEN_NEWER_SKILL_VERSION}`;
+
 function runSkill(args, env = {}) {
   return new Promise((resolve, reject) => {
     // Clear CI and XMEMO_NO_UPDATE_CHECK from process.env unless explicitly provided
@@ -52,7 +61,7 @@ function runSkill(args, env = {}) {
 function createMockServer(options = {}) {
   const requests = [];
   const {
-    latestVersion = 'skill-v1.1.45',
+    latestVersion = NEWER_TAG,
     discoveryDelayMs = 0,
     discoveryStatus = 200,
     corruptDiscovery = false,
@@ -223,7 +232,7 @@ test('readUpdateCheckCache and writeUpdateCheckCache handle file I/O safely', as
 test('version --check succeeds and outputs installed/latest/update_available in terminal and json mode', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-ver-check-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.45' });
+  const mock = await createMockServer({ latestVersion: NEWER_TAG });
 
   try {
     const env = {
@@ -235,8 +244,8 @@ test('version --check succeeds and outputs installed/latest/update_available in 
     // Terminal mode with update available
     const resTerm = await runSkill(['version', '--check', '--terminal', '--base-url', mock.baseUrl], env);
     assert.equal(resTerm.code, 0);
-    assert.match(resTerm.stdout, /Installed:\s+1\.1\.44/);
-    assert.match(resTerm.stdout, /Latest:\s+1\.1\.45/);
+    assert.match(resTerm.stdout, new RegExp(`Installed:\\s+${CURRENT_SKILL_VERSION.replace(/\\./g, '\\.')}`));
+    assert.match(resTerm.stdout, new RegExp(`Latest:\\s+${NEWER_SKILL_VERSION.replace(/\\./g, '\\.')}`));
     assert.match(resTerm.stdout, /Update available:\s+yes/);
 
     // JSON mode with update available
@@ -244,8 +253,8 @@ test('version --check succeeds and outputs installed/latest/update_available in 
     assert.equal(resJson.code, 0);
     const parsed = JSON.parse(resJson.stdout);
     assert.deepEqual(parsed, {
-      installed: '1.1.44',
-      latest: '1.1.45',
+      installed: CURRENT_SKILL_VERSION,
+      latest: NEWER_SKILL_VERSION,
       update_available: true,
     });
 
@@ -293,7 +302,7 @@ test('version --check fails gracefully with non-zero exit code when server retur
 test('recall emits stderr update notification when new version available, stdout untouched, exit code 0', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-recall-upd-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.45' });
+  const mock = await createMockServer({ latestVersion: NEWER_TAG });
 
   try {
     const env = {
@@ -306,14 +315,14 @@ test('recall emits stderr update notification when new version available, stdout
     // 1. Terminal recall
     const resTerm = await runSkill(['recall', '--query', 'architecture', '--terminal', '--base-url', mock.baseUrl], env);
     assert.equal(resTerm.code, 0);
-    assert.match(resTerm.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.45 is available \(installed 1\.1\.44\)\. Ask the user once before updating; run: node scripts\/xmemo-skill\.mjs upgrade/);
+    assert.match(resTerm.stderr, new RegExp(`XMEMO_UPDATE_AVAILABLE: XMemo Skill ${NEWER_SKILL_VERSION.replace(/\\./g, '\\.')} is available \\(installed ${CURRENT_SKILL_VERSION.replace(/\\./g, '\\.')}\\)\\. Ask the user once before updating; run: node scripts/xmemo-skill\\.mjs upgrade`));
     assert.match(resTerm.stdout, /Design architecture note/);
 
     // 2. Cache inspection
     const cacheFile = path.join(tempHome, '.xmemo', 'skill-update-check.json');
     const cacheContent = JSON.parse(await readFile(cacheFile, 'utf8'));
-    assert.equal(cacheContent.latestVersion, '1.1.45');
-    assert.equal(cacheContent.notifiedVersion, '1.1.45');
+    assert.equal(cacheContent.latestVersion, NEWER_SKILL_VERSION);
+    assert.equal(cacheContent.notifiedVersion, NEWER_SKILL_VERSION);
     assert.ok(cacheContent.lastCheck);
     assert.ok(cacheContent.notifiedAt);
 
@@ -335,7 +344,7 @@ test('recall emits stderr update notification when new version available, stdout
 test('recall-context and doctor also perform update check on success', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-cmds-upd-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.45' });
+  const mock = await createMockServer({ latestVersion: NEWER_TAG });
 
   try {
     const env = {
@@ -348,7 +357,7 @@ test('recall-context and doctor also perform update check on success', async () 
     // doctor --anonymous
     const resDoctor = await runSkill(['doctor', '--anonymous', '--terminal', '--base-url', mock.baseUrl], env);
     assert.equal(resDoctor.code, 0);
-    assert.match(resDoctor.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.45 is available/);
+    assert.match(resDoctor.stderr, new RegExp(`XMEMO_UPDATE_AVAILABLE: XMemo Skill ${NEWER_SKILL_VERSION.replace(/\\./g, '\\.')} is available`));
 
     // doctor in json mode
     const cacheFile = path.join(tempHome, '.xmemo', 'skill-update-check.json');
@@ -356,7 +365,7 @@ test('recall-context and doctor also perform update check on success', async () 
 
     const resDoctorJson = await runSkill(['doctor', '--anonymous', '--json', '--base-url', mock.baseUrl], env);
     assert.equal(resDoctorJson.code, 0);
-    assert.match(resDoctorJson.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.45 is available/);
+    assert.match(resDoctorJson.stderr, new RegExp(`XMEMO_UPDATE_AVAILABLE: XMemo Skill ${NEWER_SKILL_VERSION.replace(/\\./g, '\\.')} is available`));
     const docParsed = JSON.parse(resDoctorJson.stdout);
     assert.equal(docParsed.ok, true);
 
@@ -364,7 +373,7 @@ test('recall-context and doctor also perform update check on success', async () 
     await rm(cacheFile, { force: true });
     const resCtxJson = await runSkill(['recall-context', '--query', 'architecture', '--json', '--base-url', mock.baseUrl], env);
     assert.equal(resCtxJson.code, 0);
-    assert.match(resCtxJson.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.45 is available/);
+    assert.match(resCtxJson.stderr, new RegExp(`XMEMO_UPDATE_AVAILABLE: XMemo Skill ${NEWER_SKILL_VERSION.replace(/\\./g, '\\.')} is available`));
     const ctxParsed = JSON.parse(resCtxJson.stdout);
     assert.equal(ctxParsed.ok, true);
   } finally {
@@ -376,7 +385,7 @@ test('recall-context and doctor also perform update check on success', async () 
 test('throttling: 24h suppresses requests; 7d suppresses duplicate notification for same version', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-throttle-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.45' });
+  const mock = await createMockServer({ latestVersion: NEWER_TAG });
 
   try {
     const env = {
@@ -422,7 +431,7 @@ test('throttling: 24h suppresses requests; 7d suppresses duplicate notification 
 test('notification re-triggers when version increments even if within 7 days', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-bump-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.46' });
+  const mock = await createMockServer({ latestVersion: EVEN_NEWER_TAG });
 
   try {
     const env = {
@@ -432,20 +441,20 @@ test('notification re-triggers when version increments even if within 7 days', a
       XMEMO_FORCE_TTY: '1',
     };
 
-    // Pre-populate cache: lastCheck was 25h ago, notifiedVersion was 1.1.45 (1 day ago)
+    // Pre-populate cache: lastCheck was 25h ago, notifiedVersion was NEWER_SKILL_VERSION (1 day ago)
     const cacheFile = path.join(tempHome, '.xmemo', 'skill-update-check.json');
     await mkdir(path.dirname(cacheFile), { recursive: true });
     await writeFile(cacheFile, JSON.stringify({
       lastCheck: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
-      latestVersion: '1.1.45',
-      notifiedVersion: '1.1.45',
+      latestVersion: NEWER_SKILL_VERSION,
+      notifiedVersion: NEWER_SKILL_VERSION,
       notifiedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     }, null, 2));
 
-    // When latest version becomes 1.1.46: notification MUST be emitted
+    // When latest version increments further: notification MUST be emitted
     const res = await runSkill(['recall', '--query', 'test', '--terminal', '--base-url', mock.baseUrl], env);
     assert.equal(res.code, 0);
-    assert.match(res.stderr, /XMEMO_UPDATE_AVAILABLE: XMemo Skill 1\.1\.46 is available/);
+    assert.match(res.stderr, new RegExp(`XMEMO_UPDATE_AVAILABLE: XMemo Skill ${EVEN_NEWER_SKILL_VERSION.replace(/\\./g, '\\.')} is available`));
   } finally {
     await mock.close();
     await rm(tempHome, { recursive: true, force: true }).catch(() => {});
@@ -455,7 +464,7 @@ test('notification re-triggers when version increments even if within 7 days', a
 test('XMEMO_NO_UPDATE_CHECK and CI completely suppress update check and cache', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-suppress-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.45' });
+  const mock = await createMockServer({ latestVersion: NEWER_TAG });
 
   try {
     // 1. With XMEMO_NO_UPDATE_CHECK=1
@@ -537,7 +546,7 @@ test('silent fault tolerance: network failure, 500, corrupt json, or corrupt cac
 test('other commands do not perform update checks', async () => {
   const tempHome = path.join(os.tmpdir(), `xmemo-test-nocmd-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(tempHome, { recursive: true });
-  const mock = await createMockServer({ latestVersion: 'skill-v1.1.45' });
+  const mock = await createMockServer({ latestVersion: NEWER_TAG });
 
   try {
     const env = {
@@ -572,7 +581,7 @@ test('online read-only smoke check against xmemo.dev (skipped in offline CI)', {
   const res = await runSkill(['version', '--check', '--json']);
   assert.equal(res.code, 0);
   const parsed = JSON.parse(res.stdout);
-  assert.equal(parsed.installed, '1.1.44');
+  assert.equal(parsed.installed, CURRENT_SKILL_VERSION);
   assert.equal(typeof parsed.latest, 'string');
   assert.equal(typeof parsed.update_available, 'boolean');
 });
