@@ -368,7 +368,9 @@
   "update-error-missing-id": {
     "id": "update-error-missing-id",
     "args": [
-      "update"
+      "update",
+      "--content",
+      "Updated content"
     ],
     "code": 1,
     "stdout": "",
@@ -382,7 +384,7 @@
       "--help"
     ],
     "code": 0,
-    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
+    "stdout": "Usage:\n  node scripts/xmemo-skill.mjs update [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n  node scripts/xmemo-skill.mjs update --id <id> [--content <text>] [--path <path>] [--metadata <json>] [--bucket <bucket>] [--scope <scope>] [--json] [--terminal] [--base-url <url>] [--timeout-ms <ms>]\n",
     "stderr": "",
     "httpRequests": []
   },

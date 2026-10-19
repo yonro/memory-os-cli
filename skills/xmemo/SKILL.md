@@ -204,6 +204,7 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `doctor [--anonymous]` | Diagnose runtime health |
 | `profile` | Print recommended agent instructions |
 | `version --check` | Check for Skill runtime updates |
+| `update` | Print commands to update the XMemo Skill |
 | `login --allow-plaintext` | Start device login |
 | `register --reason <unattended\|declined> --allow-plaintext` | Temporary sandbox |
 | `auth status [--verify]` | Credential status (alias: `auth-status`) |

@@ -159,10 +159,13 @@ export function validateCommandInput(command, subcommand, positionals, options, 
   }
 
   const required = {
-    read: ['id'], relationships: ['id'], update: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
+    read: ['id'], relationships: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
     recall: ['query'], search: ['query'], 'recall-context': ['query'],
     'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'], 'expense-delete': ['id'], 'ledger-delete': ['id'],
   };
+  if (command === 'update' && (flags.id !== undefined || flags.content !== undefined || flags.path !== undefined || flags.metadata !== undefined || flags.bucket !== undefined || flags.scope !== undefined)) {
+    required.update = ['id'];
+  }
   for (const requirement of required[command] || []) {
     const alternatives = requirement.split('|');
     if (!alternatives.some((key) => flags[key] !== undefined && String(flags[key]).trim())) {

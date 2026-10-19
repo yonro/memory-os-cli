@@ -60,6 +60,7 @@ import { handleAccount } from './commands/account.mjs';
 import { handleOps } from './commands/ops.mjs';
 import { handleProfile, armRecallNote } from './commands/profile.mjs';
 import { handleVersionCheck } from './lib/update-check.mjs';
+import { handleUpdate } from './commands/update.mjs';
 
 const SKILL_VERSION = '1.1.44';
 
@@ -126,6 +127,14 @@ async function main() {
   if (command === 'profile') {
     await handleProfile(ctx);
     return;
+  }
+
+  if (command === 'update') {
+    const isMemoryUpdate = Boolean(flags.id || flags.content || flags.path || flags.metadata || flags.bucket || flags.scope);
+    if (!isMemoryUpdate) {
+      await handleUpdate(ctx);
+      return;
+    }
   }
 
   // 2. Doctor anonymous check
