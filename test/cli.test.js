@@ -57,7 +57,7 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
     const packDest = calls[0].args[calls[0].args.indexOf('--pack-destination') + 1];
     const expectedPackArgs = [
       'pack',
-      '@xmemo/skill@1.1.35',
+      '@xmemo/skill@1.1.44',
       '--pack-destination',
       packDest,
       '--json'
@@ -97,7 +97,7 @@ test('skill install delegates to @xmemo/skill npm package', async () => {
     assert.equal(report.installed, false);
     assert.equal(report.networkUsed, true);
     assert.equal(report.source, 'npm');
-    assert.equal(report.spec, '1.1.35');
+    assert.equal(report.spec, '1.1.44');
     assert.equal(report.tokenSent, false);
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -1900,7 +1900,7 @@ test('setup openclaw installs native plugin and skill without hosted MCP by defa
   assert.equal(plan.selectedClient.status.connected, true);
   assert.deepEqual(calls.map((call) => call.args), [
     ['plugins', 'install', 'clawhub:@xmemo/openclaw-memory@1.0.18'],
-    ['skills', 'install', '@xmemo/xmemo', '--version', '1.1.35'],
+    ['skills', 'install', '@xmemo/xmemo', '--version', '1.1.44'],
     ['xmemo', 'status', '--json']
   ]);
 });
@@ -2758,14 +2758,14 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '' } = {}) {
         const destIdx = args.indexOf('--pack-destination');
         if (destIdx !== -1 && args[destIdx + 1]) {
           const destDir = args[destIdx + 1];
-          const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.35.fixture');
-          const tgzPath = path.join(destDir, 'xmemo-skill-1.1.35.tgz');
+          const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.44.fixture');
+          const tgzPath = path.join(destDir, 'xmemo-skill-1.1.44.tgz');
           try {
             const bytes = readFileSync(fixturePath);
             writeFileSync(tgzPath, bytes);
           } catch {}
         }
-        callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.35.tgz' }]);
+        callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.44.tgz' }]);
       }
       if (callStdout) {
         child.stdout.emit('data', callStdout);

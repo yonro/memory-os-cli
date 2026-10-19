@@ -24,7 +24,7 @@ export const PINNED_OPENCLAW_PLUGIN_VERSION = '1.0.18';
 export const PINNED_OPENCLAW_PLUGIN_SPEC = `clawhub:@xmemo/openclaw-memory@${PINNED_OPENCLAW_PLUGIN_VERSION}`;
 export const PINNED_OPENCLAW_PLUGIN_NAME = '@xmemo/openclaw-memory';
 
-export const PINNED_OPENCLAW_SKILL_VERSION = '1.1.35';
+export const PINNED_OPENCLAW_SKILL_VERSION = '1.1.44';
 export const PINNED_OPENCLAW_SKILL_NAME = '@xmemo/xmemo';
 export const PINNED_OPENCLAW_SKILL_SPEC = `${PINNED_OPENCLAW_SKILL_NAME}@${PINNED_OPENCLAW_SKILL_VERSION}`;
 
@@ -32,6 +32,6 @@ export const PINNED_HERMES_PLUGIN_VERSION = '1.1.3';
 export const PINNED_HERMES_CATALOG_ID = 'xmemo';
 export const HERMES_CATALOG_ID = PINNED_HERMES_CATALOG_ID;
 
-export const PINNED_SKILL_VERSION = '1.1.35';
-export const PINNED_SKILL_INTEGRITY = 'sha512-/MBclXYenR2TU2wHKuPnif7GcMs7AGKKiwp/RRNoMIGxGmAs7WGqjhgmPr7zwTpoRNMjI43HLXccFhRcC991Yg==';
+export const PINNED_SKILL_VERSION = '1.1.44';
+export const PINNED_SKILL_INTEGRITY = 'sha512-WlqPDElpc4oYcGHj5UvVQur2xz11c9owl4x1cfhQ/XUzphBkOR5xms5SQGw0tIuPYHFlFwk3e2K2QDO2OCNHog==';
 

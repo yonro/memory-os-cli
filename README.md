@@ -292,7 +292,7 @@ The CLI installs the verified XMemo Skill locally into agent skill folders or a 
   - **Codex**: `~/.codex/skills/xmemo-memory`
   - **OpenClaw**: `~/.openclaw/skills/xmemo-memory`
   - All other 21 clients remain `null` until officially documented.
-- Defaults to the pinned `@xmemo/skill@1.1.35` release from npm and verifies tarball integrity (sha512 SRI) before extraction.
+- Defaults to the pinned `@xmemo/skill@1.1.44` release from npm and verifies tarball integrity (sha512 SRI) before extraction.
 - Override version with `--version <semver>` or explicitly opt into the latest release via `--version latest`.
 - For air-gapped or offline installations, install from a local directory or packed tarball with `--from <dir|tgz>` (optional `--integrity <sha512>`).
 - Manage client skills with `skill status`, `skill update`, and `skill remove`.
@@ -359,7 +359,7 @@ curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=claude-code sh
 curl -fsSL https://xmemo.dev/skill/install | XMEMO_SKILL_AGENT=codex sh
 
 # OpenClaw: install via OpenClaw CLI
-openclaw skills install @xmemo/xmemo --version 1.1.35
+openclaw skills install @xmemo/xmemo --version 1.1.44
 
 # Windows (PowerShell):
 # $env:XMEMO_SKILL_AGENT="claude-code"; irm https://xmemo.dev/skill/install.ps1 | iex
