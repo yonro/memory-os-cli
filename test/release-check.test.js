@@ -19,10 +19,10 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json
 const CLI_VERSION = packageJson.version;
 
 test('check-release-version: parseSemver parses valid semver and rejects invalid strings', () => {
-  const v1 = parseSemver('1.1.44');
+  const v1 = parseSemver('1.1.45');
   assert.equal(v1.major, 1);
   assert.equal(v1.minor, 1);
-  assert.equal(v1.patch, 44);
+  assert.equal(v1.patch, 45);
   assert.equal(v1.prerelease, null);
 
   const v2 = parseSemver('v2.0.1-beta.2');
@@ -37,10 +37,10 @@ test('check-release-version: parseSemver parses valid semver and rejects invalid
 });
 
 test('check-release-version: compareSemver correctly orders semver numerically', () => {
-  assert.ok(compareSemver('1.1.44', '1.1.35') > 0);
-  assert.ok(compareSemver('1.1.35', '1.1.44') < 0);
-  assert.equal(compareSemver('1.1.44', '1.1.44'), 0);
-  assert.ok(compareSemver('1.1.44', '1.1.9') > 0, '1.1.44 must be greater than 1.1.9');
+  assert.ok(compareSemver('1.1.45', '1.1.35') > 0);
+  assert.ok(compareSemver('1.1.35', '1.1.45') < 0);
+  assert.equal(compareSemver('1.1.45', '1.1.45'), 0);
+  assert.ok(compareSemver('1.1.45', '1.1.9') > 0, '1.1.45 must be greater than 1.1.9');
   assert.ok(compareSemver('2.0.0', '1.9.99') > 0);
 });
 
@@ -48,34 +48,34 @@ test('check-release-version: getLatestSkillTag finds the highest semver skill ta
   const sampleTags = [
     'skill-v1.1.9',
     'skill-v1.1.35',
-    'skill-v1.1.44',
+    'skill-v1.1.45',
     'skill-v1.1.10',
     'cli-v0.4.191',
     'random-tag'
   ];
   const latest = getLatestSkillTag(sampleTags);
   assert.ok(latest);
-  assert.equal(latest.tag, 'skill-v1.1.44');
-  assert.equal(latest.version, '1.1.44');
+  assert.equal(latest.tag, 'skill-v1.1.45');
+  assert.equal(latest.version, '1.1.45');
 });
 
 test('check-release-version: verifySkillPinGate passes when pinned version is current or newer', () => {
-  const tags = ['skill-v1.1.35', 'skill-v1.1.44'];
+  const tags = ['skill-v1.1.35', 'skill-v1.1.45'];
 
-  const passEqual = verifySkillPinGate({ pinnedVersion: '1.1.44', tagList: tags });
+  const passEqual = verifySkillPinGate({ pinnedVersion: '1.1.45', tagList: tags });
   assert.equal(passEqual.ok, true);
-  assert.equal(passEqual.latestVersion, '1.1.44');
+  assert.equal(passEqual.latestVersion, '1.1.45');
 
-  const passNewer = verifySkillPinGate({ pinnedVersion: '1.1.45', tagList: tags });
+  const passNewer = verifySkillPinGate({ pinnedVersion: '1.1.46', tagList: tags });
   assert.equal(passNewer.ok, true);
 });
 
 test('check-release-version: verifySkillPinGate fails closed when pinned version is older than latest skill tag', () => {
-  const tags = ['skill-v1.1.35', 'skill-v1.1.44'];
+  const tags = ['skill-v1.1.35', 'skill-v1.1.45'];
 
   const failOlder = verifySkillPinGate({ pinnedVersion: '1.1.35', tagList: tags });
   assert.equal(failOlder.ok, false);
-  assert.equal(failOlder.latestVersion, '1.1.44');
+  assert.equal(failOlder.latestVersion, '1.1.45');
   assert.match(failOlder.error, /older than the latest skill tag/);
 });
 
@@ -105,26 +105,26 @@ test('check-release-version CLI gate: fails closed with exit code 1 when pinned 
 });
 
 test('check-release-version: compareSemver throws when either version is invalid', () => {
-  assert.throws(() => compareSemver('invalid', '1.1.44'), /Cannot compare invalid semver/);
-  assert.throws(() => compareSemver('1.1.44', 'bad'), /Cannot compare invalid semver/);
-  assert.throws(() => compareSemver('', '1.1.44'), /Cannot compare invalid semver/);
-  assert.throws(() => compareSemver(null, '1.1.44'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver('invalid', '1.1.45'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver('1.1.45', 'bad'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver('', '1.1.45'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver(null, '1.1.45'), /Cannot compare invalid semver/);
 });
 
 test('check-release-version: verifySkillPinGate fails when pinnedVersion is invalid semver', () => {
-  const res = verifySkillPinGate({ pinnedVersion: 'invalid', tagList: ['skill-v1.1.44'] });
+  const res = verifySkillPinGate({ pinnedVersion: 'invalid', tagList: ['skill-v1.1.45'] });
   assert.equal(res.ok, false);
   assert.match(res.error, /not a valid semver/);
 });
 
 test('check-release-version: verifySkillPinGate fails closed when requireTags is true and no tags found', () => {
-  const res = verifySkillPinGate({ pinnedVersion: '1.1.44', tagList: [], requireTags: true });
+  const res = verifySkillPinGate({ pinnedVersion: '1.1.45', tagList: [], requireTags: true });
   assert.equal(res.ok, false);
   assert.match(res.error, /No skill-v tags found/);
 });
 
 test('check-release-version: verifySkillPinGate skips with explicit warning when requireTags is false and no tags found', () => {
-  const res = verifySkillPinGate({ pinnedVersion: '1.1.44', tagList: [], requireTags: false });
+  const res = verifySkillPinGate({ pinnedVersion: '1.1.45', tagList: [], requireTags: false });
   assert.equal(res.ok, true);
   assert.equal(res.skipped, true);
   assert.match(res.warning, /No skill-v tags found in git repository; skill pin gate check was skipped/);

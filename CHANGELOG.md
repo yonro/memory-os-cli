@@ -8,7 +8,7 @@ All notable changes to the XMemo CLI client will be documented in this file.
 
 ### Changed
 - **Skill Version Pin & Release Gate**:
-  - Updated pinned XMemo Skill version (`PINNED_SKILL_VERSION` and `PINNED_OPENCLAW_SKILL_VERSION`) in `src/core/pins.js` from `1.1.35` to `1.1.44` with dual-verified SHA-512 SRI integrity (`sha512-WlqPDElpc4oYcGHj5UvVQur2xz11c9owl4x1cfhQ/XUzphBkOR5xms5SQGw0tIuPYHFlFwk3e2K2QDO2OCNHog==`).
+  - Updated pinned XMemo Skill version (`PINNED_SKILL_VERSION` and `PINNED_OPENCLAW_SKILL_VERSION`) in `src/core/pins.js` from `1.1.35` to `1.1.45` with dual-verified SHA-512 SRI integrity (`sha512-UGUKUlorT+YQs6/hb6sHHTrQqkm9n1aKtxgOUpKrhRONeDFHTceijpRHRvptKdpODOlA0fvwqDCoo3vw8l1Zng==`).
   - Added release gate in `scripts/check-release-version.mjs` enforcing that `PINNED_SKILL_VERSION` must not be older than the latest `skill-v` tag in git during CLI release checks; fails closed when tags cannot be resolved in release mode, emits explicit warnings in non-release mode, and strictly throws on unparseable semver values instead of treating them as equal.
   - Documented strict release ordering (Skill First, CLI Second) in `src/core/pins.js` header comments and `docs/maintainers/xmemo-skill-release.md`.
 
