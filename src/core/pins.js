@@ -4,6 +4,23 @@
  * Single source of truth for third-party plugin and skill installs across
  * OpenClaw, Hermes, and the standalone XMemo Skill installer.
  *
+ * Release Ordering Requirement (发布顺序约束):
+ * Always release XMemo Skill FIRST, and release XMemo CLI SECOND (先发 Skill，再发 CLI；严禁颠倒).
+ *
+ * Why this order is required:
+ * 1. CLI pins the standalone @xmemo/skill version and its SHA-512 SRI integrity string.
+ *    The integrity hash must be verified against the published npm package (@xmemo/skill dist.integrity).
+ * 2. CLI release gate (`scripts/check-release-version.mjs`) checks git `skill-v*` tags. If
+ *    PINNED_SKILL_VERSION in this file is older than the latest `skill-v*` tag in git, CLI release
+ *    is blocked with exit code 1.
+ * 3. OpenClaw skill pin (`PINNED_OPENCLAW_SKILL_VERSION`) must stay synchronized with PINNED_SKILL_VERSION.
+ *
+ * Correct Release Workflow Sequence:
+ * Step 1: Release XMemo Skill (PR -> merge to main -> tag skill-vX.Y.Z -> GitHub Release Latest -> npm/ClawHub/SkillHub).
+ * Step 2: Update this file (PINNED_SKILL_VERSION, PINNED_OPENCLAW_SKILL_VERSION, PINNED_SKILL_INTEGRITY) on a branch.
+ * Step 3: Run verification tests (npm test, release:check, verify-release-packaging).
+ * Step 4: Release XMemo CLI (PR -> merge to main -> tag cli-vX.Y.Z -> GitHub Release --latest=false -> npm OIDC).
+ *
  * How to bump pinned versions:
  * 1. OpenClaw plugin:
  *    - Check latest release at https://github.com/yonro/xmemo-openclaw-memory/releases
@@ -13,9 +30,10 @@
  *    - Check latest release at https://github.com/yonro/hermes-xmemo-plugin/releases
  *      or on PyPI: pip index versions hermes-xmemo
  *    - Update PINNED_HERMES_PLUGIN_VERSION.
- * 3. XMemo Skill:
+ * 3. XMemo Skill (MUST BE PUBLISHED BEFORE BUMPING CLI):
  *    - Check latest release on npm: npm view @xmemo/skill version dist.integrity
- *    - Update PINNED_SKILL_VERSION and PINNED_SKILL_INTEGRITY (sha512 SRI string).
+ *    - Double-check integrity by downloading tarball and computing sha512 SRI.
+ *    - Update PINNED_SKILL_VERSION, PINNED_OPENCLAW_SKILL_VERSION, and PINNED_SKILL_INTEGRITY.
  * 4. Run tests:
  *    npm test
  */

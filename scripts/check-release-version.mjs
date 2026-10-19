@@ -20,7 +20,10 @@ export function parseSemver(str) {
 export function compareSemver(a, b) {
   const pa = typeof a === 'string' ? parseSemver(a) : a;
   const pb = typeof b === 'string' ? parseSemver(b) : b;
-  if (!pa || !pb) return 0;
+  if (!pa || !pb) {
+    const invalid = !pa ? a : b;
+    throw new Error(`Cannot compare invalid semver: ${JSON.stringify(invalid)}`);
+  }
   if (pa.major !== pb.major) return pa.major - pb.major;
   if (pa.minor !== pb.minor) return pa.minor - pb.minor;
   if (pa.patch !== pb.patch) return pa.patch - pb.patch;
@@ -58,12 +61,53 @@ export function getLatestSkillTag(tagList) {
   return valid.length > 0 ? valid[valid.length - 1] : null;
 }
 
-export function verifySkillPinGate({ pinnedVersion = PINNED_SKILL_VERSION, tagList } = {}) {
+export function verifySkillPinGate({ pinnedVersion = PINNED_SKILL_VERSION, tagList, requireTags = false } = {}) {
+  const parsedPinned = parseSemver(pinnedVersion);
+  if (!parsedPinned) {
+    return {
+      ok: false,
+      pinnedVersion,
+      error: `CLI release gate failed: PINNED_SKILL_VERSION (${pinnedVersion}) in src/core/pins.js is not a valid semver.`
+    };
+  }
+
   const latestTag = getLatestSkillTag(tagList);
   if (!latestTag) {
-    return { ok: true, skipped: true, reason: 'no_skill_tags_found' };
+    if (requireTags) {
+      return {
+        ok: false,
+        pinnedVersion,
+        error: 'CLI release gate failed: No skill-v tags found in git repository. Cannot verify PINNED_SKILL_VERSION synchronization for release. Run git fetch --tags.'
+      };
+    }
+    return {
+      ok: true,
+      skipped: true,
+      reason: 'no_skill_tags_found',
+      warning: 'Warning: No skill-v tags found in git repository; skill pin gate check was skipped. Fetch git tags with "git fetch --tags" to verify skill pin synchronization.'
+    };
   }
-  const cmp = compareSemver(pinnedVersion, latestTag.version);
+
+  if (!latestTag.semver) {
+    return {
+      ok: false,
+      pinnedVersion,
+      latestTag: latestTag.tag,
+      error: `CLI release gate failed: latest skill tag (${latestTag.tag}) has invalid semver (${latestTag.version}).`
+    };
+  }
+
+  let cmp;
+  try {
+    cmp = compareSemver(parsedPinned, latestTag.semver);
+  } catch (err) {
+    return {
+      ok: false,
+      pinnedVersion,
+      error: `CLI release gate failed: ${err.message}`
+    };
+  }
+
   if (cmp < 0) {
     return {
       ok: false,
@@ -84,6 +128,10 @@ export function verifySkillPinGate({ pinnedVersion = PINNED_SKILL_VERSION, tagLi
 export async function checkReleaseVersion(args = process.argv.slice(2)) {
   const tag = readTagArgument(args);
   const channel = readChannelArgument(args);
+  const isReleaseMode = Boolean(tag) ||
+    args.includes('--release') ||
+    args.includes('--require-tags') ||
+    process.env.npm_lifecycle_event === 'prepublishOnly';
   const packageJson = await readJson('package.json');
   const packageLock = await readJson('package-lock.json');
   const server = await readJson('server.json');
@@ -124,10 +172,14 @@ export async function checkReleaseVersion(args = process.argv.slice(2)) {
 
   // CLI release gate: locked skill version in pins.js must not be older than the latest skill-v tag
   if (channel !== 'mcp') {
-    const pinGateResult = verifySkillPinGate();
+    const pinGateResult = verifySkillPinGate({ requireTags: isReleaseMode });
     if (!pinGateResult.ok) {
       console.error(pinGateResult.error);
       hasErrors = true;
+    } else if (pinGateResult.skipped) {
+      if (pinGateResult.warning) {
+        console.warn(pinGateResult.warning);
+      }
     } else if (pinGateResult.latestTag) {
       console.log(`CLI pinned skill version is synchronized (${PINNED_SKILL_VERSION} >= ${pinGateResult.latestTag}).`);
     }

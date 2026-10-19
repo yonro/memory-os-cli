@@ -95,6 +95,52 @@ test('check-release-version CLI gate: fails closed with exit code 1 when pinned 
   assert.match(res.stderr, /is older than the latest skill tag \(skill-v9\.9\.9 -> 9\.9\.9\)/);
 });
 
+test('check-release-version: compareSemver throws when either version is invalid', () => {
+  assert.throws(() => compareSemver('invalid', '1.1.44'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver('1.1.44', 'bad'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver('', '1.1.44'), /Cannot compare invalid semver/);
+  assert.throws(() => compareSemver(null, '1.1.44'), /Cannot compare invalid semver/);
+});
+
+test('check-release-version: verifySkillPinGate fails when pinnedVersion is invalid semver', () => {
+  const res = verifySkillPinGate({ pinnedVersion: 'invalid', tagList: ['skill-v1.1.44'] });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /not a valid semver/);
+});
+
+test('check-release-version: verifySkillPinGate fails closed when requireTags is true and no tags found', () => {
+  const res = verifySkillPinGate({ pinnedVersion: '1.1.44', tagList: [], requireTags: true });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /No skill-v tags found/);
+});
+
+test('check-release-version: verifySkillPinGate skips with explicit warning when requireTags is false and no tags found', () => {
+  const res = verifySkillPinGate({ pinnedVersion: '1.1.44', tagList: [], requireTags: false });
+  assert.equal(res.ok, true);
+  assert.equal(res.skipped, true);
+  assert.match(res.warning, /No skill-v tags found in git repository; skill pin gate check was skipped/);
+});
+
+test('check-release-version CLI gate: in release mode (--tag), fails closed with exit code 1 when tags cannot be obtained', () => {
+  const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli', '--tag', 'cli-v0.4.191'], {
+    cwd: repoRoot,
+    env: { ...process.env, XMEMO_OVERRIDE_SKILL_TAGS: ' ' },
+    encoding: 'utf8'
+  });
+  assert.equal(res.status, 1, 'Release mode must fail when tags are missing');
+  assert.match(res.stderr, /CLI release gate failed: No skill-v tags found in git repository/);
+});
+
+test('check-release-version CLI gate: in non-release mode without tags, logs explicit warning', () => {
+  const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli'], {
+    cwd: repoRoot,
+    env: { ...process.env, XMEMO_OVERRIDE_SKILL_TAGS: ' ' },
+    encoding: 'utf8'
+  });
+  assert.equal(res.status, 0, `Non-release check without tags should succeed with warning: ${res.stderr}`);
+  assert.match(res.stderr, /Warning: No skill-v tags found in git repository; skill pin gate check was skipped/);
+});
+
 test('check-release-version CLI gate: skips skill pin check when channel is mcp', () => {
   const res = spawnSync(process.execPath, [scriptPath, '--channel', 'mcp'], {
     cwd: repoRoot,
