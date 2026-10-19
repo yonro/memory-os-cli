@@ -576,4 +576,3 @@ test('online read-only smoke check against xmemo.dev (skipped in offline CI)', {
   assert.equal(typeof parsed.latest, 'string');
   assert.equal(typeof parsed.update_available, 'boolean');
 });
-
