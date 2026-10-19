@@ -110,6 +110,12 @@ function createMockServer(options = {}) {
         return;
       }
 
+      if (req.url === '/v1/auth/token/validate' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, scopes: ['memory:read', 'memory:write'], setup_state: 'complete' }));
+        return;
+      }
+
       if (req.url === '/v1/status' || req.url === '/v1/doctor') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -541,10 +547,21 @@ test('other commands do not perform update checks', async () => {
       XMEMO_FORCE_TTY: '1',
     };
 
-    await runSkill(['auth', 'status', '--terminal'], env);
+    // 1. auth status
+    await runSkill(['auth', 'status', '--terminal', '--base-url', mock.baseUrl], env);
+
+    // 2. auth status --verify (explicitly assert 0 requests to agent-discovery.json with empty cache)
+    await runSkill(['auth', 'status', '--verify', '--terminal', '--base-url', mock.baseUrl], env);
+
+    // 3. remember
+    await runSkill(['remember', '--content', 'Test note', '--terminal', '--base-url', mock.baseUrl], env);
 
     const discoveryReqs = mock.requests.filter((r) => r.url === '/.well-known/agent-discovery.json');
-    assert.equal(discoveryReqs.length, 0, 'auth status must not trigger update check');
+    assert.equal(discoveryReqs.length, 0, 'auth status, auth status --verify, and remember must make 0 update discovery requests');
+
+    // Verify auth validate request actually succeeded
+    const validateReqs = mock.requests.filter((r) => r.url === '/v1/auth/token/validate');
+    assert.equal(validateReqs.length, 1, 'auth status --verify should have called /v1/auth/token/validate');
   } finally {
     await mock.close();
     await rm(tempHome, { recursive: true, force: true }).catch(() => {});

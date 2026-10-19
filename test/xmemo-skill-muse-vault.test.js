@@ -97,6 +97,7 @@ async function runCli(args, { homeDir, env = {}, stdin } = {}) {
       HOME: homeDir || process.env.HOME,
       USERPROFILE: homeDir || process.env.USERPROFILE,
       XMEMO_FORCE_TTY: '1',
+      XMEMO_NO_UPDATE_CHECK: '1',
       ...env,
     };
 

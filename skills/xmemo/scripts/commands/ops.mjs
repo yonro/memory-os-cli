@@ -231,7 +231,6 @@ export async function handleOps(ctx) {
       const isValid = !!data.result?.auth_valid;
       if (isValid) {
         console.log(`XMemo Service Status: OK\nAuthentication: Valid\nScopes: ${extractList(data.result?.scopes).join(', ')}`);
-        await checkUpdate(ctx);
       } else {
         console.log(`XMemo Service Status: OK\nAuthentication: Invalid`);
         process.exit(EXIT_CODE.AUTH_ERROR);
