@@ -56,18 +56,18 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
       let callCode = code;
       if (code === 0) {
         if (args.includes('view')) {
-          callStdout = JSON.stringify('sha512-WlqPDElpc4oYcGHj5UvVQur2xz11c9owl4x1cfhQ/XUzphBkOR5xms5SQGw0tIuPYHFlFwk3e2K2QDO2OCNHog==');
+          callStdout = JSON.stringify('sha512-UGUKUlorT+YQs6/hb6sHHTrQqkm9n1aKtxgOUpKrhRONeDFHTceijpRHRvptKdpODOlA0fvwqDCoo3vw8l1Zng==');
         } else if (args.includes('pack')) {
           const destIdx = args.indexOf('--pack-destination');
           if (destIdx !== -1 && args[destIdx + 1]) {
             const destDir = args[destIdx + 1];
-            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.44.fixture');
-            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.44.tgz');
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.45.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.45.tgz');
             try {
               fsSync.copyFileSync(fixturePath, tgzPath);
             } catch {}
           }
-          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.44.tgz' }]);
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.45.tgz' }]);
         } else if (command === 'openclaw') {
           callStdout = 'Installed @xmemo/xmemo successfully.\n';
         } else if (args.includes('install')) {
@@ -80,20 +80,20 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null } =
             fsSync.mkdirSync(path.join(targetPath, 'scripts'), { recursive: true });
             fsSync.writeFileSync(
               path.join(targetPath, 'SKILL.md'),
-              '# XMemo Skill\nVersion: 1.1.44\nXMemo memory assistant.\n'
+              '# XMemo Skill\nVersion: 1.1.45\nXMemo memory assistant.\n'
             );
             fsSync.writeFileSync(
               path.join(targetPath, 'scripts', 'xmemo-skill.mjs'),
-              "const SKILL_VERSION = '1.1.44';\n"
+              "const SKILL_VERSION = '1.1.45';\n"
             );
             fsSync.writeFileSync(
               path.join(targetPath, 'package.json'),
-              JSON.stringify({ name: '@xmemo/skill', version: '1.1.44' })
+              JSON.stringify({ name: '@xmemo/skill', version: '1.1.45' })
             );
           } catch {}
           callStdout = JSON.stringify({
             package: '@xmemo/skill',
-            skillVersion: '1.1.44',
+            skillVersion: '1.1.45',
             target: targetPath,
             installed: true,
             replaced: args.includes('--force')
@@ -260,13 +260,13 @@ test('skill install --client: installs to correct agent skill folders for codex,
     assert.equal(report4.client, 'openclaw');
     assert.equal(report4.installed, true);
     assert.equal(report4.skill, '@xmemo/xmemo');
-    assert.equal(report4.version, '1.1.44');
+    assert.equal(report4.version, '1.1.45');
     assert.deepEqual(calls4[0].args, [
       'skills',
       'install',
       '@xmemo/xmemo',
       '--version',
-      '1.1.44'
+      '1.1.45'
     ]);
     // Assert openclaw skill install never runs plugin commands
     assert.ok(!calls4.some((c) => c.args.includes('plugins')));
@@ -286,7 +286,7 @@ test('skill install --client: installs to correct agent skill folders for codex,
       'install',
       '@xmemo/xmemo',
       '--version',
-      '1.1.44',
+      '1.1.45',
       '--global',
       '--force'
     ]);
@@ -371,15 +371,15 @@ test('skill status: checks installed path and version for clients', async () => 
     // Install codex skill
     const targetDir = path.join(tmpHome, '.codex', 'skills', 'xmemo-memory');
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
-    await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill v1.1.44\nxmemo');
-    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.44';");
+    await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill v1.1.45\nxmemo');
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.45';");
 
     // Status after install
     const res2 = await invoke(['skill', 'status', '--client', 'codex', '--json'], { env });
     assert.equal(res2.code, 0);
     const parsed2 = JSON.parse(res2.stdout);
     assert.equal(parsed2.targets[0].installed, true);
-    assert.equal(parsed2.targets[0].version, '1.1.44');
+    assert.equal(parsed2.targets[0].version, '1.1.45');
 
     // Status --all
     const resAll = await invoke(['skill', 'status', '--all', '--json'], { env, cwd: tmpCwd });
@@ -394,7 +394,7 @@ test('skill status: checks installed path and version for clients', async () => 
     assert.equal(resHuman.code, 0);
     assert.match(resHuman.stdout, /Client: Codex \(codex\) \[user\]/);
     assert.match(resHuman.stdout, /Status: installed/);
-    assert.match(resHuman.stdout, /Version: 1\.1\.44/);
+    assert.match(resHuman.stdout, /Version: 1\.1\.45/);
   } finally {
     await fs.rm(tmpHome, { recursive: true, force: true });
     await fs.rm(tmpCwd, { recursive: true, force: true });
@@ -425,7 +425,7 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
     // 3. Make it a legitimate XMemo skill folder and create a pre-existing backup outside the skills dir
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
     await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill\nxmemo');
-    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.44';");
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.45';");
     await fs.mkdir(expectedBackupDir, { recursive: true });
     await fs.writeFile(path.join(expectedBackupDir, 'backup-proof.txt'), 'preserved');
 
@@ -457,7 +457,7 @@ test('skill remove: removes installed skill, handles consent, and refuses foreig
     // Recreate skill and remove human mode
     await fs.mkdir(path.join(targetDir, 'scripts'), { recursive: true });
     await fs.writeFile(path.join(targetDir, 'SKILL.md'), '# XMemo Skill\nxmemo');
-    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.44';");
+    await fs.writeFile(path.join(targetDir, 'scripts', 'xmemo-skill.mjs'), "const SKILL_VERSION = '1.1.45';");
 
     const resHumanRemove = await invoke(['skill', 'remove', '--client', 'codex', '--yes'], { env });
     assert.equal(resHumanRemove.code, 0);
@@ -543,7 +543,7 @@ test('skill remove --client openclaw: handles absent skill, absent clawhub, cons
       child.stderr = new EventEmitter();
       queueMicrotask(() => {
         if (command === 'openclaw' && args[0] === 'skills' && args[1] === 'list') {
-          child.stdout.emit('data', '@xmemo/xmemo@1.1.44\n');
+          child.stdout.emit('data', '@xmemo/xmemo@1.1.45\n');
           child.emit('close', 0);
         } else if (command === 'clawhub') {
           const err = new Error('spawn clawhub ENOENT');
@@ -583,7 +583,7 @@ test('skill remove --client openclaw: handles absent skill, absent clawhub, cons
       child.stderr = new EventEmitter();
       queueMicrotask(() => {
         if (command === 'openclaw' && args[0] === 'skills' && args[1] === 'list') {
-          child.stdout.emit('data', '@xmemo/xmemo@1.1.44\n');
+          child.stdout.emit('data', '@xmemo/xmemo@1.1.45\n');
           child.emit('close', 0);
         } else if (command === 'clawhub' && args[0] === '--version') {
           child.stdout.emit('data', 'clawhub/0.4.0\n');
