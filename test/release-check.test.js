@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   parseSemver,
   compareSemver,
+  getGitSkillTags,
   getLatestSkillTag,
   verifySkillPinGate
 } from '../scripts/check-release-version.mjs';
@@ -13,6 +15,8 @@ import { PINNED_SKILL_VERSION } from '../src/core/pins.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const scriptPath = path.join(repoRoot, 'scripts/check-release-version.mjs');
+const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+const CLI_VERSION = packageJson.version;
 
 test('check-release-version: parseSemver parses valid semver and rejects invalid strings', () => {
   const v1 = parseSemver('1.1.44');
@@ -76,8 +80,13 @@ test('check-release-version: verifySkillPinGate fails closed when pinned version
 });
 
 test('check-release-version CLI gate: process passes with current repo tags', () => {
+  const currentTags = getGitSkillTags();
+  const env = currentTags.length > 0
+    ? process.env
+    : { ...process.env, XMEMO_OVERRIDE_SKILL_TAGS: `skill-v${PINNED_SKILL_VERSION}` };
   const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli'], {
     cwd: repoRoot,
+    env,
     encoding: 'utf8'
   });
   assert.equal(res.status, 0, `Script failed: ${res.stderr}`);
@@ -122,7 +131,7 @@ test('check-release-version: verifySkillPinGate skips with explicit warning when
 });
 
 test('check-release-version CLI gate: in release mode (--tag), fails closed with exit code 1 when tags cannot be obtained', () => {
-  const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli', '--tag', 'cli-v0.4.191'], {
+  const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli', '--tag', `cli-v${CLI_VERSION}`], {
     cwd: repoRoot,
     env: { ...process.env, XMEMO_OVERRIDE_SKILL_TAGS: ' ' },
     encoding: 'utf8'
