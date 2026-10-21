@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add read-only Cloud Skill inspection commands: `cloud-skill-list`, `cloud-skill-show`, and `cloud-skill-render` (with `cloud-skill <list|show|render>` alias).
+- Support resolution by UUID `--id <id>` or unique name `--slug <slug>`, with optional `--team <id>` filter.
+- Prominently flag rendered Cloud Skill instructions with an untrusted context warning in both terminal and JSON outputs.
+
 ## 1.1.45
 
 ### Added

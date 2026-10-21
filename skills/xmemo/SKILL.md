@@ -205,6 +205,9 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `profile` | Print recommended agent instructions |
 | `version --check` | Check for Skill runtime updates |
 | `upgrade` | Print commands to update the XMemo Skill |
+| `cloud-skill-list [--team <id>]` | List Cloud Skills (read-only) |
+| `cloud-skill-show (--id <id> \| --slug <slug>)` | Show Cloud Skill details (read-only) |
+| `cloud-skill-render (--id <id> \| --slug <slug>)` | Render Cloud Skill (untrusted context) |
 | `login --allow-plaintext` | Start device login |
 | `register --reason <unattended\|declined> --allow-plaintext` | Temporary sandbox |
 | `auth status [--verify]` | Credential status (alias: `auth-status`) |
