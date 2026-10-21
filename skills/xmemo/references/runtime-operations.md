@@ -43,18 +43,36 @@ For other operations and guides, see:
 
 ## Session & Authentication Management
 
-### Add an existing token without command-line exposure
+### Preferred: Provide credentials via environment variable (recommended)
+
+For maximum security, supply credentials via the `XMEMO_KEY` environment variable or a managed secret store (such as OpenClaw Secret Egress or Meta Muse Secure Vault). When configured, credentials remain strictly in memory and are never written to disk.
 
 POSIX shell:
 
-```text
-printf '%s' "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+```bash
+export XMEMO_KEY="your-token-here"
 ```
 
 PowerShell:
 
 ```powershell
-$env:XMEMO_KEY | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+$env:XMEMO_KEY = "your-token-here"
+```
+
+### Fallback: Store an existing token locally in plaintext
+
+When environment variables or secret managers cannot be used, an existing token can be saved to the local credential file using stdin. **Security notice**: Storing credentials locally saves the token unencrypted on this computer, allowing any process running as the same operating system user to read it. Use this only on secure, single-user systems with explicit user consent.
+
+POSIX shell:
+
+```text
+printf '%s' "$TOKEN" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
+```
+
+PowerShell:
+
+```powershell
+$TOKEN | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
 ### Inspect and verify credentials

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- Clarify in the first-run sign-in template that authentication tokens are saved unencrypted on the local machine, requiring explicit user consent before invoking `login --allow-plaintext`.
+- Update runtime operations documentation to prioritize `XMEMO_KEY` environment variable credentials over local plaintext storage, documenting file exposure risks for stdin token import.
+
 ## 1.1.46
 
 ### Added
