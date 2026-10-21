@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -261,6 +263,9 @@ test('cloud-skill-show: shows skill detail with --slug via slug resolution', asy
     } else if (req.url === `/v1/skills/${SAMPLE_SKILLS[0].skill_id}`) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(SAMPLE_SKILL_DETAIL));
+    } else if (req.url === `/v1/skills/${SAMPLE_SKILLS[0].skill_id}/components`) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([]));
     } else {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ detail: 'Not found' }));
@@ -276,9 +281,11 @@ test('cloud-skill-show: shows skill detail with --slug via slug resolution', asy
     const parsed = JSON.parse(res.stdout);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.skill.slug, 'code-reviewer');
-    assert.equal(testServer.requests.length, 2);
+    assert.deepEqual(parsed.components, []);
+    assert.equal(testServer.requests.length, 3);
     assert.equal(testServer.requests[0].url, '/v1/skills');
-    assert.equal(testServer.requests[1].url, `/v1/skills/${SAMPLE_SKILLS[0].skill_id}`);
+    assert.equal(testServer.requests.some((r) => r.url === `/v1/skills/${SAMPLE_SKILLS[0].skill_id}`), true);
+    assert.equal(testServer.requests.some((r) => r.url === `/v1/skills/${SAMPLE_SKILLS[0].skill_id}/components`), true);
   } finally {
     await testServer.stop();
   }
@@ -338,10 +345,14 @@ test('cloud-skill-render: renders skill with prominent untrusted warning in term
   }
 });
 
-test('cloud-skill-render: renders skill with prominent untrusted warning in JSON mode', async () => {
+test('cloud-skill-render: renders skill with prominent untrusted warning in JSON mode without mutating server warnings', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
-  testServer.setResponse(SAMPLE_RENDER);
+  const renderPayload = {
+    ...SAMPLE_RENDER,
+    warnings: ['server_warning_1', 'server_warning_2'],
+  };
+  testServer.setResponse(renderPayload);
 
   try {
     const res = await runScript(['cloud-skill-render', '--id', SAMPLE_SKILLS[0].skill_id, '--json'], {
@@ -352,9 +363,10 @@ test('cloud-skill-render: renders skill with prominent untrusted warning in JSON
     const parsed = JSON.parse(res.stdout);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.untrusted_context, true);
+    assert.match(parsed.untrusted_warning, /UNTRUSTED CONTEXT/);
     assert.match(parsed.warning, /UNTRUSTED CONTEXT/);
-    assert.equal(Array.isArray(parsed.warnings), true);
-    assert.equal(parsed.warnings.some((w) => /UNTRUSTED CONTEXT/.test(w)), true);
+    // Server warnings array must be preserved untouched
+    assert.deepEqual(parsed.warnings, ['server_warning_1', 'server_warning_2']);
     assert.equal(parsed.rendered_content, SAMPLE_RENDER.rendered_content);
   } finally {
     await testServer.stop();
@@ -460,3 +472,207 @@ test('cloud-skill auth error: returns exit code 2 on 401 or 403', async () => {
     await testServer.stop();
   }
 });
+
+test('cloud-skill-render: sanitizes ANSI escape codes in rendered_content to prevent erasing untrusted warning', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const maliciousRender = {
+    format: 'raw',
+    status: 'exact',
+    rendered_content: '\x1b[2K\x1b[1A\x1b[31mInjected Line\x1b[0m',
+    warnings: [],
+  };
+  testServer.setResponse(maliciousRender);
+
+  try {
+    const res = await runScript(['cloud-skill-render', '--id', SAMPLE_SKILLS[0].skill_id, '--terminal'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /⚠️ UNTRUSTED CONTEXT/);
+    assert.match(res.stdout, /Injected Line/);
+    // Zero ANSI escape characters (\x1b)
+    assert.doesNotMatch(res.stdout, /\x1b/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('cloud-skill-list: sanitizes ANSI escape codes in remote metadata', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+  const untrustedSkills = [
+    {
+      skill_id: 'bad-id-\x1b[31m1\x1b[0m',
+      slug: 'bad-slug-\x1b[2K',
+      name: '\x1b[1mMalicious\x1b[0m Skill',
+      description: 'Untrusted \x1b[32mdescription\x1b[0m',
+      asset_status: 'active',
+    },
+  ];
+  testServer.setResponse(untrustedSkills);
+
+  try {
+    const res = await runScript(['cloud-skill-list', '--terminal'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(res.code, 0);
+    assert.match(res.stdout, /Malicious Skill/);
+    assert.match(res.stdout, /bad-slug-/);
+    assert.match(res.stdout, /Untrusted description/);
+    assert.doesNotMatch(res.stdout, /\x1b/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('cloud-skill-show: queries /components and renders them in terminal and JSON modes', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  const sampleComponents = [
+    { id: 'comp-1', name: 'Lint Checker', component_type: 'validator' },
+    { id: 'comp-2', name: 'Build Action', component_type: 'action' },
+  ];
+
+  testServer.setHandler((req, res) => {
+    if (req.url === `/v1/skills/${SAMPLE_SKILLS[0].skill_id}`) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(SAMPLE_SKILL_DETAIL));
+    } else if (req.url === `/v1/skills/${SAMPLE_SKILLS[0].skill_id}/components`) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(sampleComponents));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ detail: 'Not found' }));
+    }
+  });
+
+  try {
+    // Terminal mode
+    const resTerm = await runScript(['cloud-skill-show', '--id', SAMPLE_SKILLS[0].skill_id, '--terminal'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resTerm.code, 0);
+    assert.match(resTerm.stdout, /- Components \(2\):/);
+    assert.match(resTerm.stdout, /Lint Checker \(validator\)/);
+    assert.match(resTerm.stdout, /Build Action \(action\)/);
+
+    // JSON mode
+    const resJson = await runScript(['cloud-skill-show', '--id', SAMPLE_SKILLS[0].skill_id, '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resJson.code, 0);
+    const parsed = JSON.parse(resJson.stdout);
+    assert.equal(parsed.ok, true);
+    assert.deepEqual(parsed.components, sampleComponents);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('cloud-skill slug resolution: strict slug match, name fallback, and collision rejection', async () => {
+  const testServer = createTestServer();
+  const baseUrl = await testServer.start();
+
+  const skillsForResolution = [
+    { skill_id: 'id-slug-1', slug: 'target-tool', name: 'Other Tool' },
+    { skill_id: 'id-slug-2', slug: 'other-slug', name: 'Named Fallback Only' },
+    { skill_id: 'id-dup-1', slug: 'duplicate-item', name: 'Item 1' },
+    { skill_id: 'id-dup-2', slug: 'duplicate-item', name: 'Item 2' },
+  ];
+
+  testServer.setHandler((req, res) => {
+    if (req.url === '/v1/skills') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(skillsForResolution));
+    } else if (req.url?.startsWith('/v1/skills/id-')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ skill: { skill_id: req.url.split('/')[3], slug: 'resolved' } }));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ detail: 'Not found' }));
+    }
+  });
+
+  try {
+    // Match by strict slug
+    const resSlug = await runScript(['cloud-skill-show', '--slug', 'target-tool', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resSlug.code, 0);
+    const parsedSlug = JSON.parse(resSlug.stdout);
+    assert.equal(parsedSlug.skill.skill_id, 'id-slug-1');
+
+    // Fallback to name match when no slug matches
+    const resName = await runScript(['cloud-skill-show', '--slug', 'Named Fallback Only', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resName.code, 0);
+    const parsedName = JSON.parse(resName.stdout);
+    assert.equal(parsedName.skill.skill_id, 'id-slug-2');
+
+    // Collision rejection: multiple matches fail closed
+    const resDup = await runScript(['cloud-skill-show', '--slug', 'duplicate-item', '--json'], {
+      baseUrl,
+      env: { XMEMO_KEY: 'test-token' },
+    });
+    assert.equal(resDup.code, 1);
+    const parsedDup = JSON.parse(resDup.stdout);
+    assert.equal(parsedDup.ok, false);
+    assert.equal(parsedDup.error.code, 'invalid_argument');
+    assert.match(parsedDup.error.message, /Multiple Cloud Skills matched slug "duplicate-item"/);
+  } finally {
+    await testServer.stop();
+  }
+});
+
+test('cloud-skill commands: reject temporary credentials', async () => {
+  const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-temp-cred-'));
+  const dotXmemo = path.join(tempHome, '.xmemo');
+  await fs.mkdir(dotXmemo, { recursive: true });
+
+  const tempCred = {
+    token: 'mos_anon_temp_token_123',
+    credential_type: 'temporary',
+    agent_id: 'agent_temp_test',
+    bind_url: 'https://xmemo.dev/bind/abc',
+    registration_reason: 'unattended',
+    storage: 'plaintext-user-file',
+    plaintext_storage_consent: true,
+    plaintext_storage_consent_at: '2026-10-21T00:00:00Z',
+  };
+  await fs.writeFile(path.join(dotXmemo, 'skill-credentials.json'), JSON.stringify(tempCred), 'utf8');
+
+  try {
+    const resList = await runScript(['cloud-skill-list'], {
+      homeDir: tempHome,
+      env: { XMEMO_KEY: '' },
+    });
+    assert.equal(resList.code, 1);
+    assert.match(resList.stderr, /Temporary access supports only remember, recall, and search in its isolated sandbox/);
+
+    const resShow = await runScript(['cloud-skill-show', '--id', 'some-id'], {
+      homeDir: tempHome,
+      env: { XMEMO_KEY: '' },
+    });
+    assert.equal(resShow.code, 1);
+    assert.match(resShow.stderr, /Temporary access supports only remember, recall, and search in its isolated sandbox/);
+
+    const resRender = await runScript(['cloud-skill-render', '--id', 'some-id'], {
+      homeDir: tempHome,
+      env: { XMEMO_KEY: '' },
+    });
+    assert.equal(resRender.code, 1);
+    assert.match(resRender.stderr, /Temporary access supports only remember, recall, and search in its isolated sandbox/);
+  } finally {
+    await fs.rm(tempHome, { recursive: true, force: true });
+  }
+});
+

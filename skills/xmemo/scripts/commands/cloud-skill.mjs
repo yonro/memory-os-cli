@@ -7,6 +7,7 @@ import {
   makeHttpRequest,
   handleRestError,
   outputRestError,
+  parseJsonResponse,
   safeJson,
   sanitizeTerminalText,
   describeError,
@@ -45,11 +46,22 @@ export async function resolveSkillId(flags, options, token) {
   });
 
   const skills = Array.isArray(data) ? data : (Array.isArray(data?.skills) ? data.skills : []);
-  const matched = skills.find((s) => s && (s.slug === slug || s.name === slug));
-  if (!matched || !matched.skill_id) {
+  let matches = skills.filter((s) => s && s.slug === slug);
+  if (matches.length === 0) {
+    matches = skills.filter((s) => s && s.name === slug);
+  }
+  if (matches.length === 0) {
     outputRestError('not_found', `Cloud Skill with slug "${slug}" not found.`, options, null, EXIT_CODE.USER_ERROR);
   }
-  return matched.skill_id;
+  if (matches.length > 1) {
+    outputRestError('invalid_argument', `Multiple Cloud Skills matched slug "${slug}". Specify --id instead.`, options, null, EXIT_CODE.USER_ERROR);
+  }
+  const matched = matches[0];
+  const resolvedId = matched.skill_id || matched.id;
+  if (!resolvedId) {
+    outputRestError('not_found', `Cloud Skill with slug "${slug}" has no valid ID.`, options, null, EXIT_CODE.USER_ERROR);
+  }
+  return resolvedId;
 }
 
 export async function handleCloudSkill(ctx) {
@@ -93,10 +105,10 @@ export async function handleCloudSkill(ctx) {
 
       console.log(`Cloud Skills (${skills.length}):`);
       for (const item of skills) {
-        const id = item.skill_id || item.id || '(no-id)';
-        const slug = item.slug || item.name || '';
-        const name = item.name || slug || '(unnamed)';
-        const status = item.asset_status || item.status || 'active';
+        const id = sanitizeTerminalText(item.skill_id || item.id || '(no-id)');
+        const slug = sanitizeTerminalText(item.slug || item.name || '');
+        const name = sanitizeTerminalText(item.name || slug || '(unnamed)');
+        const status = sanitizeTerminalText(item.asset_status || item.status || 'active');
         const desc = item.description ? ` - ${sanitizeTerminalText(item.description)}` : '';
         console.log(`- ${name} (slug: ${slug}, id: ${id}, status: ${status})${desc}`);
       }
@@ -110,14 +122,24 @@ export async function handleCloudSkill(ctx) {
   if (command === 'cloud-skill-show') {
     try {
       const skillId = await resolveSkillId(flags, options, token);
-      const res = await makeHttpRequest(
-        options.baseUrl,
-        `/v1/skills/${encodeURIComponent(skillId)}`,
-        'GET',
-        null,
-        { 'Authorization': `Bearer ${token}` },
-        options.timeoutMs
-      );
+      const [res, compRes] = await Promise.all([
+        makeHttpRequest(
+          options.baseUrl,
+          `/v1/skills/${encodeURIComponent(skillId)}`,
+          'GET',
+          null,
+          { 'Authorization': `Bearer ${token}` },
+          options.timeoutMs
+        ),
+        makeHttpRequest(
+          options.baseUrl,
+          `/v1/skills/${encodeURIComponent(skillId)}/components`,
+          'GET',
+          null,
+          { 'Authorization': `Bearer ${token}` },
+          options.timeoutMs
+        ),
+      ]);
 
       const data = handleRestError(res, {
         notFoundMessage: `Cloud Skill '${skillId}' not found.`,
@@ -125,10 +147,21 @@ export async function handleCloudSkill(ctx) {
         options,
       });
 
+      let components = [];
+      if (compRes.statusCode >= 200 && compRes.statusCode < 300) {
+        try {
+          const compData = parseJsonResponse(compRes, 'Fetch cloud skill components');
+          components = Array.isArray(compData) ? compData : (Array.isArray(compData?.components) ? compData.components : []);
+        } catch {
+          components = [];
+        }
+      }
+
       if (options.json) {
         console.log(safeJson({
           ok: true,
           ...data,
+          components,
         }));
         process.exit(EXIT_CODE.SUCCESS);
       }
@@ -136,22 +169,38 @@ export async function handleCloudSkill(ctx) {
       const skill = data.skill || data;
       const pubRev = data.published_revision;
       const latestRev = data.latest_revision;
-      console.log(`Cloud Skill: ${skill.name || skill.slug || skill.skill_id}`);
-      console.log(`- ID: ${skill.skill_id}`);
-      console.log(`- Slug: ${skill.slug}`);
+      const skillName = sanitizeTerminalText(skill.name || skill.slug || skill.skill_id || '(unnamed)');
+      const skillIdVal = sanitizeTerminalText(skill.skill_id || skill.id || '');
+      const skillSlug = sanitizeTerminalText(skill.slug || '');
+      const skillStatus = sanitizeTerminalText(skill.asset_status || skill.status || 'active');
+      const skillScope = sanitizeTerminalText(skill.owner_scope_type || 'personal');
+
+      console.log(`Cloud Skill: ${skillName}`);
+      console.log(`- ID: ${skillIdVal}`);
+      console.log(`- Slug: ${skillSlug}`);
       if (skill.description) {
         console.log(`- Description: ${sanitizeTerminalText(skill.description)}`);
       }
-      console.log(`- Status: ${skill.asset_status || 'active'}`);
-      console.log(`- Scope: ${skill.owner_scope_type || 'personal'}`);
+      console.log(`- Status: ${skillStatus}`);
+      console.log(`- Scope: ${skillScope}`);
       if (pubRev) {
-        console.log(`- Published Revision: #${pubRev.revision_number} (${pubRev.revision_id})`);
+        const revId = sanitizeTerminalText(pubRev.revision_id || '');
+        console.log(`- Published Revision: #${pubRev.revision_number} (${revId})`);
         if (pubRev.published_at) {
-          console.log(`  Published At: ${pubRev.published_at}`);
+          console.log(`  Published At: ${sanitizeTerminalText(pubRev.published_at)}`);
         }
       }
       if (latestRev && (!pubRev || latestRev.revision_id !== pubRev.revision_id)) {
-        console.log(`- Latest Revision: #${latestRev.revision_number} (${latestRev.revision_id})`);
+        const revId = sanitizeTerminalText(latestRev.revision_id || '');
+        console.log(`- Latest Revision: #${latestRev.revision_number} (${revId})`);
+      }
+      if (components.length > 0) {
+        console.log(`- Components (${components.length}):`);
+        for (const c of components) {
+          const cName = sanitizeTerminalText(c.name || c.component_name || c.component_id || c.id || '(unnamed)');
+          const cType = sanitizeTerminalText(c.component_type || c.type || 'unknown');
+          console.log(`  - ${cName} (${cType})`);
+        }
       }
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
@@ -179,22 +228,18 @@ export async function handleCloudSkill(ctx) {
       });
 
       if (options.json) {
-        const warnings = Array.isArray(data.warnings) ? [...data.warnings] : [];
-        if (!warnings.includes(UNTRUSTED_CONTEXT_WARNING_MESSAGE)) {
-          warnings.unshift(UNTRUSTED_CONTEXT_WARNING_MESSAGE);
-        }
         console.log(safeJson({
           ok: true,
-          untrusted_context: true,
-          warning: UNTRUSTED_CONTEXT_WARNING_MESSAGE,
           ...data,
-          warnings,
+          untrusted_context: true,
+          untrusted_warning: UNTRUSTED_CONTEXT_WARNING_MESSAGE,
+          warning: UNTRUSTED_CONTEXT_WARNING_MESSAGE,
         }));
         process.exit(EXIT_CODE.SUCCESS);
       }
 
       console.log(UNTRUSTED_CONTEXT_TERMINAL_WARNING);
-      console.log(data.rendered_content ?? '');
+      console.log(sanitizeTerminalText(data.rendered_content ?? ''));
       process.exit(EXIT_CODE.SUCCESS);
     } catch (e) {
       console.error('Render cloud skill failed:', describeError(e));
