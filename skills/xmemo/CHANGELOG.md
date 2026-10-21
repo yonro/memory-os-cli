@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## 1.1.47
+
+### Documentation
+
+- Clarify in the first-run sign-in template that authentication tokens are saved unencrypted on the local machine (with `XMEMO_KEY` environment configuration as an alternative), requiring explicit user consent before invoking `login --allow-plaintext`.
+- Update runtime operations documentation to prioritize `XMEMO_KEY` environment credentials via non-echoing terminal input or managed secret stores over local plaintext storage, documenting history exposure and unencrypted file risks.
+- Update `SKILL.md` frontmatter description to declare agent instruction configuration and runtime update capabilities.
+- Clarify post-login recall offer setup in first-run sign-in flow.
+
 ## 1.1.46
 
 ### Added
