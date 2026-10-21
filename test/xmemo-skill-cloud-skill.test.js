@@ -676,3 +676,13 @@ test('cloud-skill commands: reject temporary credentials', async () => {
   }
 });
 
+test('SKILL.md frontmatter description declares read user Cloud Skills (read-only)', async () => {
+  const skillPath = path.join(repoRoot, 'skills/xmemo/SKILL.md');
+  const content = await fs.readFile(skillPath, 'utf8');
+  const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  assert.ok(fmMatch, 'Frontmatter not found in SKILL.md');
+  const descMatch = fmMatch[1].match(/^description:\s*(.+)$/m);
+  assert.ok(descMatch, 'description field not found in frontmatter');
+  assert.match(descMatch[1], /read user Cloud Skills \(read-only\)/i);
+});
+

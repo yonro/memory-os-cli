@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
+description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, read user Cloud Skills (read-only), or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
 ---
 
 # XMemo Memory
