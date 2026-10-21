@@ -153,6 +153,22 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'upgrade',
     desc: 'Print commands to update the XMemo Skill runtime',
   },
+  'cloud-skill-list': {
+    usage: 'cloud-skill-list [--team <id>]',
+    desc: 'List available Cloud Skills (read-only)',
+  },
+  'cloud-skill-show': {
+    usage: 'cloud-skill-show (--id <id> | --slug <slug>) [--team <id>]',
+    desc: 'Show Cloud Skill details and revisions (read-only)',
+  },
+  'cloud-skill-render': {
+    usage: 'cloud-skill-render (--id <id> | --slug <slug>) [--team <id>]',
+    desc: 'Render Cloud Skill content with untrusted context warning',
+  },
+  'cloud-skill': {
+    usage: 'cloud-skill <list|show|render> [options] (subcommand alias)',
+    aliasOf: 'cloud-skill-list',
+  },
 };
 
 export function buildTopLevelHelp() {
@@ -200,6 +216,11 @@ export function printUsage(command) {
 
   if (command === 'auth' || command === 'auth-status') {
     console.log(`Usage:\n  ${SCRIPT_COMMAND} auth status [--verify] ${commonOptions}\n  ${SCRIPT_COMMAND} auth add --from-stdin --allow-plaintext\n  ${SCRIPT_COMMAND} auth claim-status [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-confirm [--allow-plaintext]\n  ${SCRIPT_COMMAND} auth claim-deny [--allow-plaintext]\n\nAlias: ${SCRIPT_COMMAND} auth-status [--verify]\nXMEMO_KEY remains the preferred non-file credential source. --allow-plaintext explicitly permits unencrypted user-file storage.\nRun \`${SCRIPT_COMMAND} --help\` to list all commands.`);
+    return;
+  }
+
+  if (command === 'cloud-skill') {
+    console.log(`Usage:\n  ${SCRIPT_COMMAND} cloud-skill list [--team <id>] ${commonOptions}\n  ${SCRIPT_COMMAND} cloud-skill show (--id <id> | --slug <slug>) [--team <id>] ${commonOptions}\n  ${SCRIPT_COMMAND} cloud-skill render (--id <id> | --slug <slug>) [--team <id>] ${commonOptions}\n\nAliases: cloud-skill-list, cloud-skill-show, cloud-skill-render\nRendered Cloud Skill content is user-authored remote context; review before use.`);
     return;
   }
 

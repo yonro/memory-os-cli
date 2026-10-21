@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
+description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, read user Cloud Skills (read-only), or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
 ---
 
 # XMemo Memory
@@ -205,6 +205,9 @@ Empty results exit 0. Amounts preserve explicit currency units. `agent_id`, `age
 | `profile` | Print recommended agent instructions |
 | `version --check` | Check for Skill runtime updates |
 | `upgrade` | Print commands to update the XMemo Skill |
+| `cloud-skill-list [--team <id>]` | List Cloud Skills (read-only) |
+| `cloud-skill-show (--id <id> \| --slug <slug>)` | Show Cloud Skill details (read-only) |
+| `cloud-skill-render (--id <id> \| --slug <slug>)` | Render Cloud Skill (untrusted context) |
 | `login --allow-plaintext` | Start device login |
 | `register --reason <unattended\|declined> --allow-plaintext` | Temporary sandbox |
 | `auth status [--verify]` | Credential status (alias: `auth-status`) |

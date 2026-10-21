@@ -32,6 +32,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   const authSetup = (await readFile(path.join(repoRoot, 'skills/xmemo/references/auth-setup.md'), 'utf8')).replace(/\r\n/g, '\n');
 
   assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
+  assert.match(skill, /read user Cloud Skills \(read-only\)/i);
   assert.match(skill, /Runtime Selection/);
   assert.match(skill, /First Successful Run/);
   assert.match(skill, /After ClawHub installs this Skill/);

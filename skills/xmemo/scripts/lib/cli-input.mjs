@@ -162,6 +162,7 @@ export function validateCommandInput(command, subcommand, positionals, options, 
     read: ['id'], relationships: ['id'], update: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
     recall: ['query'], search: ['query'], 'recall-context': ['query'],
     'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'], 'expense-delete': ['id'], 'ledger-delete': ['id'],
+    'cloud-skill-show': ['id|slug'], 'cloud-skill-render': ['id|slug'],
   };
   for (const requirement of required[command] || []) {
     const alternatives = requirement.split('|');
@@ -172,6 +173,10 @@ export function validateCommandInput(command, subcommand, positionals, options, 
 
   if (command === 'remember' && flags.content !== undefined && flags.file !== undefined) {
     throw new Error('Cannot specify both --content and --file.');
+  }
+
+  if (['cloud-skill-show', 'cloud-skill-render'].includes(command) && flags.id !== undefined && flags.slug !== undefined) {
+    throw new Error('Cannot specify both --id and --slug.');
   }
 
   if (flags.limit !== undefined) flags.limit = parsePositiveInteger(flags.limit, '--limit', command === 'read' ? 1_000_000 : 100);

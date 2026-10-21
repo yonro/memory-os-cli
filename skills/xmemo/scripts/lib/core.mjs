@@ -140,6 +140,7 @@ export const REST_COMMANDS = new Set([
   'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'expense-delete', 'ledger-delete', 'doctor',
   'version', 'upgrade',
+  'cloud-skill-list', 'cloud-skill-show', 'cloud-skill-render', 'cloud-skill',
 ]);
 
 export const COMMAND_FLAGS = {
@@ -150,6 +151,10 @@ export const COMMAND_FLAGS = {
   logout: new Set(),
   profile: new Set(['status', 'if-unset', 'if_unset']),
   doctor: new Set(),
+  'cloud-skill-list': new Set(['team', 'team-id', 'team_id']),
+  'cloud-skill-show': new Set(['id', 'slug', 'team', 'team-id', 'team_id']),
+  'cloud-skill-render': new Set(['id', 'slug', 'team', 'team-id', 'team_id']),
+  'cloud-skill': new Set(['id', 'slug', 'team', 'team-id', 'team_id']),
   read: new Set(['id', 'offset', 'limit', 'bucket', 'scope']),
   relationships: new Set(['id', 'limit', 'cursor']),
   restore: new Set(['id', 'reason', 'confirm']),

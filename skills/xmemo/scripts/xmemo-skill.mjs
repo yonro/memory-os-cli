@@ -61,8 +61,9 @@ import { handleOps } from './commands/ops.mjs';
 import { handleProfile, armRecallNote } from './commands/profile.mjs';
 import { handleVersionCheck } from './lib/update-check.mjs';
 import { handleUpgrade } from './commands/upgrade.mjs';
+import { handleCloudSkill } from './commands/cloud-skill.mjs';
 
-const SKILL_VERSION = '1.1.45';
+const SKILL_VERSION = '1.1.46';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
@@ -71,6 +72,22 @@ async function main() {
     command = 'auth';
     subcommand = 'status';
     positionals = ['auth', 'status', ...positionals.slice(1)];
+  }
+
+  if (command === 'cloud-skill') {
+    if (['list', 'show', 'render'].includes(subcommand)) {
+      command = `cloud-skill-${subcommand}`;
+      subcommand = undefined;
+      positionals = [command, ...positionals.slice(2)];
+    } else if (!subcommand && !options.help) {
+      console.error('Error: cloud-skill requires a subcommand: list, show, or render.');
+      printUsage('cloud-skill');
+      process.exit(EXIT_CODE.USER_ERROR);
+    } else if (subcommand && !['list', 'show', 'render'].includes(subcommand) && !options.help) {
+      console.error(`Error: Unknown cloud-skill subcommand: ${subcommand}. Expected list, show, or render.`);
+      printUsage('cloud-skill');
+      process.exit(EXIT_CODE.USER_ERROR);
+    }
   }
 
   if (options.help) {
@@ -183,6 +200,11 @@ async function main() {
 
   if (['overview', 'activity', 'stats'].includes(command)) {
     await handleAccount(authCtx);
+    return;
+  }
+
+  if (['cloud-skill-list', 'cloud-skill-show', 'cloud-skill-render'].includes(command)) {
+    await handleCloudSkill(authCtx);
     return;
   }
 
