@@ -45,18 +45,20 @@ For other operations and guides, see:
 
 ### Preferred: Provide credentials via environment variable (recommended)
 
-For maximum security, supply credentials via the `XMEMO_KEY` environment variable or a managed secret store (such as OpenClaw Secret Egress or Meta Muse Secure Vault). When configured, credentials remain strictly in memory and are never written to disk.
+For maximum security, supply credentials via a managed secret store (such as OpenClaw Secret Egress or Meta Muse Secure Vault) or inject `XMEMO_KEY` through your environment configuration. Avoid typing tokens directly into command-line arguments to prevent recording credentials in shell history files.
 
-POSIX shell:
+When setting credentials interactively in a terminal session, read the token with echo disabled:
+
+POSIX shell (interactive non-echoing prompt):
 
 ```bash
-export XMEMO_KEY="your-token-here"
+read -rsp "Enter XMemo token: " XMEMO_KEY && export XMEMO_KEY
 ```
 
-PowerShell:
+PowerShell (interactive masked prompt):
 
 ```powershell
-$env:XMEMO_KEY = "your-token-here"
+$env:XMEMO_KEY = Read-Host -Prompt "Enter XMemo token" -MaskInput
 ```
 
 ### Fallback: Store an existing token locally in plaintext

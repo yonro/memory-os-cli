@@ -541,7 +541,7 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
 
   assert.match(skill, /### First-run sign-in \(keep it short\)/);
   assert.match(skill, /Ask once in the user's language/);
-  assert.match(skill, /XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself\. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer\. Sign in or create an account to get started\?/);
+  assert.match(skill, /XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself\. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer \(or configure XMEMO_KEY in your environment\)\. Sign in or create an account to get started\?/);
   assert.match(skill, /Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup\./);
   assert.match(skill, /do not start login or create temporary access/);
   assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
