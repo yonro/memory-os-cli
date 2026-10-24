@@ -7,7 +7,6 @@ import {
   makeHttpRequest,
   handleRestError,
   outputRestError,
-  parseJsonResponse,
   safeJson,
   sanitizeTerminalText,
   describeError,
@@ -147,14 +146,14 @@ export async function handleCloudSkill(ctx) {
         options,
       });
 
-      let components = [];
-      if (compRes.statusCode >= 200 && compRes.statusCode < 300) {
-        try {
-          const compData = parseJsonResponse(compRes, 'Fetch cloud skill components');
-          components = Array.isArray(compData) ? compData : (Array.isArray(compData?.components) ? compData.components : []);
-        } catch {
-          components = [];
-        }
+      const compData = handleRestError(compRes, {
+        notFoundMessage: `Cloud Skill '${skillId}' components not found.`,
+        context: 'Fetch cloud skill components',
+        options,
+      });
+      const components = Array.isArray(compData) ? compData : compData?.components;
+      if (!Array.isArray(components)) {
+        outputRestError('invalid_response', 'Cloud Skill components response must contain an array.', options, compData, EXIT_CODE.SERVER_ERROR);
       }
 
       if (options.json) {

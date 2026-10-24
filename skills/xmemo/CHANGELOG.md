@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## 1.1.48
+
+### Fixed
+
+- Return a nonzero server-error exit code when a successful HTTP response cannot be decoded, rather than reporting success for empty or non-JSON responses.
+- Fail Cloud Skill detail reads when component retrieval fails or returns an invalid response, preserving authorization errors instead of reporting an empty component list.
+- Reject non-finite ledger amount filters and reversed minimum/maximum ranges locally before sending any request.
+
 ## 1.1.47
 
 ### Documentation

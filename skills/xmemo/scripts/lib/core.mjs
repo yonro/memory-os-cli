@@ -97,7 +97,8 @@ export function exitCodeForError(err) {
   }
   const status = Number(err.statusCode || err.status || err.httpStatus);
   if (Number.isInteger(status) && status > 0) {
-    return exitCodeForHttpStatus(status);
+    // A thrown error must never become success just because transport returned 2xx.
+    return exitCodeForHttpStatus(status) || EXIT_CODE.SERVER_ERROR;
   }
   const code = String(err.code || '').toUpperCase();
   if (['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ECONNRESET', 'ETIMEDOUT', 'ESOCKETTIMEDOUT', 'EAI_AGAIN', 'EPIPE'].includes(code)) {
