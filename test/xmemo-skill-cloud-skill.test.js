@@ -234,7 +234,9 @@ test('cloud-skill-list: reports empty list cleanly in terminal mode', async () =
 test('cloud-skill-show: shows skill detail with --id', async () => {
   const testServer = createTestServer();
   const baseUrl = await testServer.start();
-  testServer.setResponse(SAMPLE_SKILL_DETAIL);
+  testServer.setHandler((req, res) => {
+    res.end(JSON.stringify(req.url.endsWith('/components') ? [] : SAMPLE_SKILL_DETAIL));
+  });
 
   try {
     const res = await runScript(['cloud-skill-show', '--id', SAMPLE_SKILLS[0].skill_id, '--terminal'], {
@@ -590,6 +592,8 @@ test('cloud-skill slug resolution: strict slug match, name fallback, and collisi
     if (req.url === '/v1/skills') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(skillsForResolution));
+    } else if (req.url?.endsWith('/components')) {
+      res.end(JSON.stringify([]));
     } else if (req.url?.startsWith('/v1/skills/id-')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ skill: { skill_id: req.url.split('/')[3], slug: 'resolved' } }));

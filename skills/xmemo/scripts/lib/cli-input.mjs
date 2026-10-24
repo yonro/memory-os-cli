@@ -205,9 +205,13 @@ export function validateCommandInput(command, subcommand, positionals, options, 
     throw new Error('--month must be formatted as YYYY-MM.');
   }
   for (const m of ['min-amount', 'max-amount']) {
-    if (flags[m] !== undefined && (Number.isNaN(Number(flags[m])) || Number(flags[m]) < 0)) {
-      throw new Error(`--${m} must be a non-negative number.`);
+    if (flags[m] !== undefined && (!Number.isFinite(Number(flags[m])) || Number(flags[m]) < 0)) {
+      throw new Error(`--${m} must be a finite non-negative number.`);
     }
+  }
+  if (flags['min-amount'] !== undefined && flags['max-amount'] !== undefined
+      && Number(flags['min-amount']) > Number(flags['max-amount'])) {
+    throw new Error('--min-amount must not exceed --max-amount.');
   }
   if (flags.threshold !== undefined) {
     const threshold = Number(flags.threshold);
