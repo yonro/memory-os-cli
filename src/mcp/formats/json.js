@@ -347,7 +347,7 @@ export async function removeJsonClientMcpConfig(clientId, configPath, options = 
   }
 
   if (!options.preview) {
-    await atomicWriteJsonConfig(configPath, parsed);
+    await writeJsonConfigFile(configPath, parsed, clientId);
   }
   return { removed: true };
 }
@@ -405,19 +405,33 @@ function isDeepEqual(a, b) {
 }
 
 async function atomicWriteJsonConfig(filePath, data) {
-  const dir = path.dirname(filePath);
+  let targetPath = filePath;
+  try {
+    targetPath = await fs.realpath(filePath);
+  } catch {}
+  const dir = path.dirname(targetPath);
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   const content = `${JSON.stringify(data, null, 2)}\n`;
-  const tempPath = path.join(dir, `.${path.basename(filePath)}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`);
+  const tempPath = path.join(dir, `.${path.basename(targetPath)}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`);
   try {
     await fs.writeFile(tempPath, content, { mode: 0o600 });
     await bestEffortChmod(tempPath, 0o600);
-    await fs.rename(tempPath, filePath);
+    await fs.rename(tempPath, targetPath);
   } catch {
     try {
       await fs.unlink(tempPath);
     } catch {}
-    await fs.writeFile(filePath, content, { mode: 0o600 });
+    await fs.writeFile(targetPath, content, { mode: 0o600 });
+    await bestEffortChmod(targetPath, 0o600);
+  }
+}
+
+async function writeJsonConfigFile(filePath, data, clientId = null) {
+  if (clientId === 'muse-code') {
+    await atomicWriteJsonConfig(filePath, data);
+  } else {
+    await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+    await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
     await bestEffortChmod(filePath, 0o600);
   }
 }
@@ -474,7 +488,7 @@ async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, dup
   }
   parsed[sectionName][MCP_SERVER_NAME] = serverConfig;
   afterMerge?.(parsed);
-  await atomicWriteJsonConfig(configPath, parsed);
+  await writeJsonConfigFile(configPath, parsed, clientId);
   return { written: true, configPath };
 }
 

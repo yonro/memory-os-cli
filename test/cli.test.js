@@ -3221,3 +3221,41 @@ test('setup muse shorthand writes config with --yes, outputs OAuth login instruc
   // Verify behavior profile is not written because Muse does not read it
   assert.equal(fsSync.existsSync(path.join(tempDir, '.config', 'muse', 'AGENTS.md')), false);
 });
+
+test('mcp add preserves symlinked configuration files without replacing them with regular files', async (t) => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-symlink-test-'));
+  const dotfilesDir = path.join(tempDir, 'dotfiles');
+  await fs.mkdir(dotfilesDir, { recursive: true });
+
+  // 1. Test Cursor with symlink (regression defense: ensures atomic write changes do not break existing clients)
+  const realCursorConfig = path.join(dotfilesDir, 'cursor-mcp.json');
+  await fs.writeFile(realCursorConfig, JSON.stringify({ mcpServers: {} }, null, 2));
+  const linkCursorConfig = path.join(tempDir, 'cursor-symlink.json');
+  try {
+    await fs.symlink(realCursorConfig, linkCursorConfig, 'file');
+  } catch (err) {
+    t.skip(`Symlinks not supported in this environment: ${err.message}`);
+    return;
+  }
+
+  const cursorResult = await invoke(['mcp', 'add', 'cursor', '--url', 'https://api.example.test', '--write', '--config', linkCursorConfig]);
+  assert.equal(cursorResult.code, 0);
+  const cursorStat = await fs.lstat(linkCursorConfig);
+  assert.ok(cursorStat.isSymbolicLink(), 'Cursor config symlink must be preserved');
+  const cursorContent = JSON.parse(await fs.readFile(realCursorConfig, 'utf8'));
+  assert.ok(cursorContent.mcpServers?.XMemo, 'Target file must receive XMemo config');
+
+  // 2. Test Muse Code with symlink (verifies atomicWriteJsonConfig preserves symlinks via realpath)
+  const realMuseConfig = path.join(dotfilesDir, 'muse-settings.json');
+  await fs.writeFile(realMuseConfig, JSON.stringify({ schema_version: 1, mcpServers: {} }, null, 2));
+  const linkMuseConfig = path.join(tempDir, 'muse-symlink.json');
+  await fs.symlink(realMuseConfig, linkMuseConfig, 'file');
+
+  const museResult = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', linkMuseConfig]);
+  assert.equal(museResult.code, 0);
+  assert.match(museResult.stdout, /muse mcp login XMemo/);
+  const museStat = await fs.lstat(linkMuseConfig);
+  assert.ok(museStat.isSymbolicLink(), 'Muse Code config symlink must be preserved');
+  const museContent = JSON.parse(await fs.readFile(realMuseConfig, 'utf8'));
+  assert.ok(museContent.mcpServers?.XMemo, 'Target file must receive XMemo config');
+});
