@@ -462,7 +462,7 @@ async function populateAllClientsCandidates(env) {
   }
 }
 
-test('init all-Enter run with all 24 clients detected writes nothing and exits 0', async () => {
+test('init all-Enter run with all registered clients detected writes nothing and exits 0', async () => {
   const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-init-all24-enter-home-'));
   const tempCwd = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-init-all24-enter-cwd-'));
 
@@ -490,12 +490,12 @@ test('init all-Enter run with all 24 clients detected writes nothing and exits 0
   assert.deepEqual(homeAfter, homeBefore, 'tempHome must be completely unmodified by all-Enter run');
   assert.deepEqual(cwdAfter, cwdBefore, 'tempCwd must be completely unmodified by all-Enter run');
 
-  assert.match(res.stdout, /Detected 24 clients:/);
+  assert.match(res.stdout, new RegExp(`Detected ${CLIENT_REGISTRY.length} clients:`));
   assert.match(res.stdout, /Copilot CLI \(copilot-cli\)/);
   assert.match(res.stdout, /xmemo mcp add copilot-cli --write/);
 });
 
-test('init --dry-run --json with all 24 clients detected outputs valid plan with zero writes', async () => {
+test('init --dry-run --json with all registered clients detected outputs valid plan with zero writes', async () => {
   const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-init-all24-dry-home-'));
   const tempCwd = await fs.mkdtemp(path.join(os.tmpdir(), 'xmemo-init-all24-dry-cwd-'));
 
@@ -524,8 +524,8 @@ test('init --dry-run --json with all 24 clients detected outputs valid plan with
   assert.equal(parsed.command, 'init');
   assert.equal(parsed.data.dryRun, true);
   assert.equal(parsed.data.executed, false);
-  assert.equal(parsed.data.detectedClients.length, 24);
-  assert.equal(parsed.data.clients.length, 24);
+  assert.equal(parsed.data.detectedClients.length, CLIENT_REGISTRY.length);
+  assert.equal(parsed.data.clients.length, CLIENT_REGISTRY.length);
 
   const copilotEntry = parsed.data.clients.find((c) => c.id === 'copilot-cli');
   assert.ok(copilotEntry, 'copilot-cli must be in detected clients');

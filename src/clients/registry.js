@@ -25,6 +25,7 @@ import {
   defaultJetbrainsConfigPath,
   defaultKimiCodeConfigPath,
   defaultKiroConfigPath,
+  defaultMuseCodeConfigPath,
   defaultOpencodeConfigPath,
   defaultOpenclawConfigPath,
   defaultQwenConfigPath,
@@ -897,6 +898,55 @@ export const CLIENT_REGISTRY = [
     pluginId: null,
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('copilot-cli', env, options)
+  },
+  // 25. Muse Code
+  {
+    id: 'muse-code',
+    label: 'Muse Code',
+    aliases: ['muse', 'muse-cli'],
+    setupAlias: 'muse',
+    mcp: {
+      configKind: 'json',
+      defaultConfigPath: defaultMuseCodeConfigPath,
+      configPathCandidates: (env) => {
+        const candidates = [];
+        if (env?.XDG_CONFIG_HOME) {
+          candidates.push(path.join(env.XDG_CONFIG_HOME, 'muse', 'settings.json'));
+        }
+        const home = userHome(env);
+        candidates.push(path.join(home, '.config', 'muse', 'settings.json'));
+        return candidates;
+      },
+      buildSnippet: (mcpUrl, identity, options = {}) =>
+        jsonClientSnippet('muse-code', mcpUrl, identity, options),
+      writeConfig: (configPath, mcpUrl, identity, options = {}) =>
+        mergeJsonClientMcpConfig('muse-code', configPath, mcpUrl, identity, options.force, options),
+      removeConfig: (configPath, options = {}) =>
+        removeJsonClientMcpConfig('muse-code', configPath, options),
+      section: 'mcp_servers',
+      serverKind: 'http',
+      urlKey: 'url',
+      authentication: 'env-bearer',
+      bearerSyntax: 'plain'
+    },
+    profile: {
+      label: 'Muse Code',
+      setupAlias: 'muse',
+      profileVersion: 'muse-code-mcp-depth-v1',
+      requiredTokenEnv: TOKEN_ENV_VAR,
+      markerDir: '.muse',
+      defaultTarget: (env, options = {}) => {
+        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
+        if (isRepo(cwd, env, '.muse')) {
+          return path.join(cwd, '.muse', 'AGENTS.md');
+        }
+        return path.join(userHome(env), '.config', 'muse', 'AGENTS.md');
+      }
+    },
+    skillDir: null,
+    pluginId: null,
+    doctor: null,
+    detect: async (env, options = {}) => detectClientByCandidates('muse-code', env, options)
   }
 ];
 

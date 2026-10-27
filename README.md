@@ -184,7 +184,7 @@ All client configurations, recipes, and capabilities are declared centrally in `
 | **Other MCP clients** | `xmemo mcp config --client generic` | Generated template |
 
 The client registry also covers Devin Desktop (formerly Windsurf), Cline, Continue, Claude Desktop,
-Claude Code, Kimi Code, Zed, JetBrains, OpenCode, Qwen, Trae, and compatible
+Claude Code, Kimi Code, Muse Code, Zed, JetBrains, OpenCode, Qwen, Trae, and compatible
 MCP hosts. Run `xmemo mcp list` for the current machine-readable catalog.
 
 For VS Code users looking for the dedicated editor extension, see the [yonro/xmemo-vscode](https://github.com/yonro/xmemo-vscode) repository.

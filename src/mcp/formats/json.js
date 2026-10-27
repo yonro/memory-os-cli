@@ -32,6 +32,18 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   httpClientDefinition('openclaw', 'OpenClaw', 'defaultOpenclawConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
   httpClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath', { urlKey: 'url', authentication: 'oauth' }),
   httpClientDefinition('kimi-code', 'Kimi Code', 'defaultKimiCodeConfigPath', { urlKey: 'url', authentication: 'bearer-token-env-var', bearerTokenEnvVar: 'XMEMO_KEY' }),
+  httpClientDefinition('muse-code', 'Muse Code', 'defaultMuseCodeConfigPath', {
+    urlKey: 'url',
+    authentication: 'env-bearer',
+    bearerSyntax: 'plain',
+    section: 'mcp_servers',
+    requiredTopLevel: { schema_version: 1 },
+    extra: {
+      transport: 'streamable_http',
+      mode: 'optional',
+      enabled: true
+    }
+  }),
   commandClientDefinition('zed', 'Zed', 'defaultZedConfigPath', { section: 'context_servers' }),
   nestedTransportClientDefinition('jetbrains', 'JetBrains', 'defaultJetbrainsConfigPath'),
   remoteClientDefinition('opencode', 'OpenCode', 'defaultOpencodeConfigPath'),
@@ -116,7 +128,14 @@ export function jsonMcpClientIds() {
 
 export function jsonClientConfig(clientId, mcpUrl, identity, options = {}) {
   const definition = requireJsonMcpClientDefinition(clientId);
-  return sectionConfig(definition.section, jsonClientServerConfig(clientId, mcpUrl, identity, options));
+  const serverCfg = sectionConfig(definition.section, jsonClientServerConfig(clientId, mcpUrl, identity, options));
+  if (definition.requiredTopLevel && isPlainObject(definition.requiredTopLevel)) {
+    return {
+      ...definition.requiredTopLevel,
+      ...serverCfg
+    };
+  }
+  return serverCfg;
 }
 
 export function jsonClientSnippet(clientId, mcpUrl, identity, options = {}) {
@@ -136,7 +155,7 @@ export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, ide
     if (definition.mergeExperimentalModelContextProtocolServers && isPlainObject(parsed.experimental)) {
       mergeExperimentalModelContextProtocolServers(parsed, serverConfig, mcpUrl);
     }
-  }, force);
+  }, force, definition.requiredTopLevel);
 }
 
 function requireJsonMcpClientDefinition(clientId) {
@@ -361,11 +380,20 @@ function isDeepEqual(a, b) {
   return keysA.every((k) => Object.prototype.hasOwnProperty.call(b, k) && isDeepEqual(a[k], b[k]));
 }
 
-async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false) {
+async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false, requiredTopLevel = null) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
   if (!isPlainObject(parsed)) {
     throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+  let missingTopLevel = false;
+  if (requiredTopLevel && isPlainObject(requiredTopLevel)) {
+    for (const [key, val] of Object.entries(requiredTopLevel)) {
+      if (!(key in parsed)) {
+        parsed[key] = val;
+        missingTopLevel = true;
+      }
+    }
   }
   if (!isPlainObject(parsed[sectionName])) {
     parsed[sectionName] = {};
@@ -373,7 +401,7 @@ async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, dup
   const existingName = existingJsonMcpServerName(parsed[sectionName]);
   if (existingName) {
     const existingEntry = parsed[sectionName][existingName];
-    if (existingName === MCP_SERVER_NAME && isDeepEqual(existingEntry, serverConfig)) {
+    if (existingName === MCP_SERVER_NAME && isDeepEqual(existingEntry, serverConfig) && !missingTopLevel) {
       return { unchanged: true, configPath };
     }
     if (existingName !== MCP_SERVER_NAME && !force) {
@@ -509,4 +537,9 @@ export const kimiCodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('kimi
 export const kimiCodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientSnippet('kimi-code', mcpUrl, identity);
 export const kimiCodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientServerConfig('kimi-code', mcpUrl, identity);
 export const mergeKimiCodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('kimi-code', configPath, mcpUrl, identity);
+
+export const museCodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('muse-code')) => jsonClientConfig('muse-code', mcpUrl, identity);
+export const museCodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('muse-code')) => jsonClientSnippet('muse-code', mcpUrl, identity);
+export const museCodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('muse-code')) => jsonClientServerConfig('muse-code', mcpUrl, identity);
+export const mergeMuseCodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('muse-code', configPath, mcpUrl, identity);
 

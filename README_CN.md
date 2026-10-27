@@ -160,7 +160,7 @@ XMemo CLI 采用一致性与健壮性导向的四层核心架构设计：
 4. **顺序执行与幂等保障**：按依赖顺序应用各个步骤，遇到首个错误立即停止。对已配置完成的客户端重复执行会自动检测已是最新状态并提示 `Nothing to do`。
 
 ### 4. 声明式客户端注册表
-所有 24 个客户端的配置结构、安装配方与能力均集中声明于 `src/clients/registry.js`。命令业务层完全通用化，零客户端 ID 硬编码。支持通过 `registerClient()` 在运行时动态扩展新平台支持。
+所有 25 个客户端的配置结构、安装配方与能力均集中声明于 `src/clients/registry.js`。命令业务层完全通用化，零客户端 ID 硬编码。支持通过 `registerClient()` 在运行时动态扩展新平台支持。
 
 ## 支持的客户端集成
 
@@ -177,7 +177,7 @@ XMemo CLI 采用一致性与健壮性导向的四层核心架构设计：
 | **Grok** | `xmemo setup grok` | 托管 MCP |
 | **其他 MCP 客户端** | `xmemo mcp config --client generic` | 通用配置模板生成 |
 
-客户端注册表同时还支持 Devin Desktop (formerly Windsurf)、Cline、Continue、Claude Desktop、Claude Code、Kimi Code、Zed、JetBrains、OpenCode、Qwen、Trae 等众多兼容 MCP 宿主。运行 `xmemo mcp list` 可获取当前完整的机器可读目录。
+客户端注册表同时还支持 Devin Desktop (formerly Windsurf)、Cline、Continue、Claude Desktop、Claude Code、Kimi Code、Muse Code、Zed、JetBrains、OpenCode、Qwen、Trae 等众多兼容 MCP 宿主。运行 `xmemo mcp list` 可获取当前完整的机器可读目录。
 
 VS Code 用户如需专用编辑器扩展插件，请参阅 [yonro/xmemo-vscode](https://github.com/yonro/xmemo-vscode) 仓库。
 Cursor 用户如需专用编辑器插件，请参阅 [yonro/xmemo-cursor-plugin](https://github.com/yonro/xmemo-cursor-plugin) 仓库。

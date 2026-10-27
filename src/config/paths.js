@@ -17,6 +17,7 @@ export {
   defaultJetbrainsConfigPath,
   defaultKimiCodeConfigPath,
   defaultKiroConfigPath,
+  defaultMuseCodeConfigPath,
   defaultOpencodeConfigPath,
   defaultOpenclawConfigPath,
   defaultQwenConfigPath,

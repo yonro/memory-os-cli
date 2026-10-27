@@ -154,6 +154,27 @@ httpClientDefinition('client-id', 'Client Label', 'defaultConfigPath', {
 })
 ```
 
+### Required Top-Level Configuration Defaults
+
+For clients that require top-level configuration keys (such as Muse Code requiring `"schema_version": 1`):
+
+```javascript
+httpClientDefinition('muse-code', 'Muse Code', 'defaultMuseCodeConfigPath', {
+  urlKey: 'url',
+  authentication: 'env-bearer',
+  bearerSyntax: 'plain',
+  section: 'mcp_servers',
+  requiredTopLevel: { schema_version: 1 },
+  extra: {
+    transport: 'streamable_http',
+    mode: 'optional',
+    enabled: true
+  }
+})
+```
+
+`requiredTopLevel` properties are initialized only if absent from the configuration, preserving any existing settings and schema versions.
+
 ### Custom JSON Section
 
 By default, server config is added to `mcpServers` section. To use a different section:

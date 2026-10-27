@@ -88,11 +88,11 @@ async function invoke(args, options = {}) {
   return { code, stdout, stderr };
 }
 
-test('client registry: contains exactly 24 supported clients with complete schema', () => {
-  assert.equal(CLIENT_REGISTRY.length, 24);
+test('client registry: contains exactly 25 supported clients with complete schema', () => {
+  assert.equal(CLIENT_REGISTRY.length, 25);
   const ids = allClientIds();
-  assert.equal(ids.length, 24);
-  assert.equal(new Set(ids).size, 24, 'All client IDs must be unique');
+  assert.equal(ids.length, 25);
+  assert.equal(new Set(ids).size, 25, 'All client IDs must be unique');
 
   for (const client of CLIENT_REGISTRY) {
     assert.ok(client.id, 'client must have id');
@@ -115,15 +115,15 @@ test('client registry: contains exactly 24 supported clients with complete schem
 });
 
 test('client registry: helper functions query registry correctly', () => {
-  assert.equal(allClients().length, 24);
-  assert.equal(supportedSetupClientIds().length, 24);
-  assert.equal(supportedMcpClientIds().length, 24);
-  assert.equal(supportedMcpClients().length, 24);
-  assert.equal(supportedUninstallClientIds().length, 24);
+  assert.equal(allClients().length, 25);
+  assert.equal(supportedSetupClientIds().length, 25);
+  assert.equal(supportedMcpClientIds().length, 25);
+  assert.equal(supportedMcpClients().length, 25);
+  assert.equal(supportedUninstallClientIds().length, 25);
 
-  // Profile clients: 11 supported
+  // Profile clients: 12 supported
   const profileIds = supportedProfileClientIds();
-  assert.equal(profileIds.length, 11);
+  assert.equal(profileIds.length, 12);
   for (const pid of profileIds) {
     assert.ok(getClient(pid)?.profile !== null, `${pid} must have profile`);
   }
@@ -152,6 +152,8 @@ test('client registry: resolveClientId and resolveClientAlias handle canonical I
   assert.equal(resolveClientId('gemini'), 'gemini-cli');
   assert.equal(resolveClientId('kimi'), 'kimi-code');
   assert.equal(resolveClientId('kimi-cli'), 'kimi-code');
+  assert.equal(resolveClientId('muse'), 'muse-code');
+  assert.equal(resolveClientId('muse-cli'), 'muse-code');
   assert.equal(resolveClientId('claudecode'), 'claude-code');
   assert.equal(resolveClientId('claude-cli'), 'claude-code');
   assert.equal(resolveClientId('devin-desktop'), 'windsurf');
@@ -189,9 +191,10 @@ test('client registry: usesClientOAuth identifies OAuth clients', () => {
   assert.equal(usesClientOAuth('kiro'), true);
   assert.equal(usesClientOAuth('opencode'), true);
   assert.equal(usesClientOAuth('qwen'), true);
+  assert.equal(usesClientOAuth('muse-code'), false);
 });
 
-test('command acceptance: mcp config --client accepts all 24 supported MCP client IDs', async () => {
+test('command acceptance: mcp config --client accepts all 25 supported MCP client IDs', async () => {
   for (const clientId of supportedMcpClientIds()) {
     const result = await invoke(['mcp', 'config', '--client', clientId, '--json']);
     assert.equal(result.code, 0, `mcp config --client ${clientId} must exit 0: ${result.stderr}`);
@@ -200,7 +203,7 @@ test('command acceptance: mcp config --client accepts all 24 supported MCP clien
   }
 });
 
-test('command acceptance: mcp add accepts all 24 supported MCP client IDs with --json', async () => {
+test('command acceptance: mcp add accepts all 25 supported MCP client IDs with --json', async () => {
   for (const clientId of supportedMcpClientIds()) {
     const result = await invoke(['mcp', 'add', clientId, '--json']);
     assert.equal(result.code, 0, `mcp add ${clientId} --json must exit 0: ${result.stderr}`);
@@ -209,7 +212,7 @@ test('command acceptance: mcp add accepts all 24 supported MCP client IDs with -
   }
 });
 
-test('command acceptance: profile show accepts all 11 supported profile client IDs', async () => {
+test('command acceptance: profile show accepts all 12 supported profile client IDs', async () => {
   for (const clientId of supportedProfileClientIds()) {
     const result = await invoke(['profile', 'show', clientId, '--json']);
     assert.equal(result.code, 0, `profile show ${clientId} --json must exit 0: ${result.stderr}`);
@@ -290,7 +293,7 @@ test('uninstall error text: no duplicate openclaw in uninstall error', async () 
   assert.equal(openclawCount, 1, 'openclaw must appear exactly once');
 
   assert.equal(new Set(clientList).size, clientList.length, 'Every client ID must appear exactly once');
-  assert.equal(clientList.length, 24, 'All 24 registry client IDs must appear in uninstall error');
+  assert.equal(clientList.length, 25, 'All 25 registry client IDs must appear in uninstall error');
 });
 
 test('doctor output: labels remote discovery clients clearly as server-supported', async () => {
