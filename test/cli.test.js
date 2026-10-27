@@ -529,7 +529,7 @@ test('mcp list exposes supported clients without token values', async () => {
 
   assert.equal(result.code, 0);
   const clients = JSON.parse(result.stdout);
-  assert.deepEqual(clients.map((client) => client.id), ['codex', 'grok', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'openclaw', 'kiro', 'kimi-code', 'zed', 'jetbrains', 'opencode', 'hermes', 'qwen', 'trae', 'trae-solo', 'claude-code', 'copilot-cli']);
+  assert.deepEqual(clients.map((client) => client.id), ['codex', 'grok', 'cursor', 'gemini-cli', 'antigravity', 'antigravity-ide', 'antigravity2', 'antigravity-cli', 'windsurf', 'cline', 'continue', 'claude-desktop', 'openclaw', 'kiro', 'kimi-code', 'zed', 'jetbrains', 'opencode', 'hermes', 'qwen', 'trae', 'trae-solo', 'claude-code', 'copilot-cli', 'muse-code']);
   assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
 });
 
@@ -2981,4 +2981,281 @@ test('mcp add and setup support windsurf and devin-desktop alias, writing server
   });
   assert.equal(rSetupDevin.code, 2);
   assert.match(rSetupDevin.stderr, /Unsupported setup client: devin/);
+});
+
+test('mcp add muse-code snippet includes schema_version, type streamable-http, mode optional, no Authorization header', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-dry-'));
+  const result = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--dry-run'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XDG_CONFIG_HOME: path.join(tempDir, '.config'),
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  const jsonMatch = result.stdout.match(/\{[\s\S]*\}/);
+  assert.ok(jsonMatch, 'Output must contain JSON snippet');
+  const snippet = JSON.parse(jsonMatch[0]);
+  assert.equal(snippet.schema_version, 1);
+  assert.ok(snippet.mcpServers, 'Must contain mcpServers (camelCase) section');
+  assert.equal(snippet.mcp_servers, undefined, 'Must NOT contain mcp_servers');
+  assert.ok(snippet.mcpServers.XMemo, 'Must contain XMemo server');
+  assert.equal(snippet.mcpServers.XMemo.type, 'streamable-http');
+  assert.equal(snippet.mcpServers.XMemo.mode, 'optional');
+  assert.equal(snippet.mcpServers.XMemo.url, 'https://api.example.test/mcp');
+  assert.equal(snippet.mcpServers.XMemo.headers?.Authorization, undefined, 'Must not contain Authorization header');
+  assert.equal(snippet.mcpServers.XMemo.headers?.['X-Memory-OS-Agent-ID'], 'muse-code');
+});
+
+test('mcp add muse-code --write creates new settings.json with schema_version 1 and mcpServers.XMemo without token', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-fresh-'));
+  const configPath = path.join(tempDir, '.config', 'muse', 'settings.json');
+  const result = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.ok(fsSync.existsSync(configPath), 'settings.json must be written');
+  const raw = await fs.readFile(configPath, 'utf8');
+  assert.doesNotMatch(raw, /secret-token-that-must-not-leak/);
+  const config = JSON.parse(raw);
+  assert.equal(config.schema_version, 1);
+  assert.ok(config.mcpServers?.XMemo);
+  assert.equal(config.mcp_servers, undefined);
+  assert.equal(config.mcpServers.XMemo.type, 'streamable-http');
+  assert.equal(config.mcpServers.XMemo.mode, 'optional');
+  assert.equal(config.mcpServers.XMemo.url, 'https://api.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.headers?.Authorization, undefined);
+  assert.equal(config.mcpServers.XMemo.headers?.['X-Memory-OS-Agent-ID'], 'muse-code');
+  assert.match(config.mcpServers.XMemo.headers?.['X-Memory-OS-Agent-Instance-ID'], /^xmemo-/);
+});
+
+test('mcp add muse-code --write migrates existing mcp_servers to mcpServers and preserves unrelated keys', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-migrate-'));
+  const configPath = path.join(tempDir, 'settings.json');
+  const initial = {
+    schema_version: 1,
+    model: 'meta/llama-3.1-70b',
+    telemetry: false,
+    mcp_servers: {
+      other_server: {
+        type: 'streamable-http',
+        url: 'https://other.example.test/mcp'
+      }
+    }
+  };
+  await fs.writeFile(configPath, JSON.stringify(initial, null, 2), 'utf8');
+
+  const result = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token' }
+  });
+
+  assert.equal(result.code, 0);
+  const after = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(after.schema_version, 1);
+  assert.equal(after.model, 'meta/llama-3.1-70b');
+  assert.equal(after.telemetry, false);
+  assert.equal(after.mcp_servers, undefined, 'mcp_servers must be migrated and removed');
+  assert.ok(after.mcpServers.other_server, 'Existing other_server must be preserved under mcpServers');
+  assert.ok(after.mcpServers.XMemo, 'XMemo must be added under mcpServers');
+
+  // Idempotency check: second run produces exact same structure
+  const result2 = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token' }
+  });
+  assert.equal(result2.code, 0);
+  const after2 = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.deepEqual(after, after2);
+});
+
+test('mcp add muse-code fails closed if both mcp_servers and mcpServers exist in config', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-dual-'));
+  const configPath = path.join(tempDir, 'settings.json');
+  const dual = {
+    schema_version: 1,
+    mcp_servers: { srv1: { url: 'https://srv1.example.test' } },
+    mcpServers: { srv2: { url: 'https://srv2.example.test' } }
+  };
+  await fs.writeFile(configPath, JSON.stringify(dual, null, 2), 'utf8');
+
+  const result = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token' }
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /Both mcp_servers and mcpServers are present/);
+  // Unmodified
+  const current = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.deepEqual(current, dual);
+});
+
+test('mcp add muse-code detects lowercase xmemo under mcpServers, errors without --force, and replaces cleanly with --force', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-conflict-'));
+  const configPath = path.join(tempDir, 'settings.json');
+
+  // 1. Invalid JSON fails closed
+  await fs.writeFile(configPath, '{malformed json: true,', 'utf8');
+  const resInvalid = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token' }
+  });
+  assert.equal(resInvalid.code, 2);
+  assert.match(resInvalid.stderr, /Invalid JSON/);
+  assert.equal(await fs.readFile(configPath, 'utf8'), '{malformed json: true,');
+
+  // 2. Existing user-written lowercase 'xmemo' server
+  const conflict = {
+    schema_version: 1,
+    mcpServers: {
+      xmemo: {
+        type: 'streamable-http',
+        url: 'https://old.example.test/mcp'
+      }
+    }
+  };
+  await fs.writeFile(configPath, JSON.stringify(conflict, null, 2), 'utf8');
+  const resConflict = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', configPath], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token' }
+  });
+  assert.equal(resConflict.code, 2);
+  assert.match(resConflict.stderr, /already contains mcpServers\.xmemo/);
+
+  // 3. With --force, overwrites, creates backup, and removes the conflicting 'xmemo' key so it never duplicates
+  const resForce = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', configPath, '--force'], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir, XMEMO_KEY: 'secret-token' }
+  });
+  assert.equal(resForce.code, 0);
+  assert.ok(fsSync.existsSync(`${configPath}.bak`));
+  const forced = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.ok(forced.mcpServers.XMemo, 'Must have XMemo');
+  assert.equal(forced.mcpServers.xmemo, undefined, 'Lowercase xmemo must be removed to avoid duplication');
+});
+
+test('mcp remove muse-code deletes XMemo server entry, preserves schema_version, and migrates legacy mcp_servers if needed', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-remove-'));
+  const configPath = path.join(tempDir, 'settings.json');
+  const initial = {
+    schema_version: 1,
+    model: 'meta/llama-3.1-70b',
+    mcp_servers: {
+      other_server: { url: 'https://other.example.test' },
+      XMemo: {
+        type: 'streamable-http',
+        mode: 'optional',
+        url: 'https://api.example.test/mcp'
+      }
+    }
+  };
+  await fs.writeFile(configPath, JSON.stringify(initial, null, 2), 'utf8');
+
+  const result = await invoke(['mcp', 'remove', 'muse-code', '--config', configPath], {
+    cwd: tempDir,
+    env: { HOME: tempDir, USERPROFILE: tempDir }
+  });
+
+  assert.equal(result.code, 0);
+  const after = JSON.parse(await fs.readFile(configPath, 'utf8'));
+  assert.equal(after.schema_version, 1);
+  assert.equal(after.model, 'meta/llama-3.1-70b');
+  assert.equal(after.mcp_servers, undefined, 'Legacy mcp_servers must be cleaned up on remove');
+  assert.ok(after.mcpServers.other_server, 'other_server preserved under mcpServers');
+  assert.equal(after.mcpServers.XMemo, undefined, 'XMemo removed');
+});
+
+test('mcp add muse-code respects XDG_CONFIG_HOME when present', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-muse-code-xdg-'));
+  const xdgDir = path.join(tempDir, 'custom-xdg');
+  const result = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XDG_CONFIG_HOME: xdgDir,
+      XMEMO_KEY: 'secret-token'
+    }
+  });
+
+  assert.equal(result.code, 0);
+  assert.ok(fsSync.existsSync(path.join(xdgDir, 'muse', 'settings.json')));
+});
+
+test('setup muse shorthand writes config with --yes, outputs OAuth login instructions, and skips behavior profile', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-setup-muse-code-'));
+  const result = await invoke(['setup', 'muse', '--url', 'https://api.example.test', '--yes'], {
+    cwd: tempDir,
+    env: {
+      HOME: tempDir,
+      USERPROFILE: tempDir,
+      XMEMO_KEY: 'secret-token-that-must-not-leak'
+    },
+    fetch: discoveryFetch()
+  });
+
+  assert.equal(result.code, 0);
+  assert.doesNotMatch(result.stdout, /secret-token-that-must-not-leak/);
+  assert.match(result.stdout, /muse mcp login XMemo/);
+  assert.match(result.stdout, /Restart Muse/);
+
+  const config = JSON.parse(await fs.readFile(path.join(tempDir, '.config', 'muse', 'settings.json'), 'utf8'));
+  assert.equal(config.schema_version, 1);
+  assert.equal(config.mcpServers.XMemo.url, 'https://mcp.example.test/mcp');
+  assert.equal(config.mcpServers.XMemo.type, 'streamable-http');
+  assert.equal(config.mcpServers.XMemo.mode, 'optional');
+  assert.equal(config.mcpServers.XMemo.headers?.Authorization, undefined);
+  assert.equal(config.mcpServers.XMemo.headers?.['X-Memory-OS-Agent-ID'], 'muse-code');
+
+  // Verify behavior profile is not written because Muse does not read it
+  assert.equal(fsSync.existsSync(path.join(tempDir, '.config', 'muse', 'AGENTS.md')), false);
+});
+
+test('mcp add preserves symlinked configuration files without replacing them with regular files', async (t) => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memory-os-symlink-test-'));
+  const dotfilesDir = path.join(tempDir, 'dotfiles');
+  await fs.mkdir(dotfilesDir, { recursive: true });
+
+  // 1. Test Cursor with symlink (regression defense: ensures atomic write changes do not break existing clients)
+  const realCursorConfig = path.join(dotfilesDir, 'cursor-mcp.json');
+  await fs.writeFile(realCursorConfig, JSON.stringify({ mcpServers: {} }, null, 2));
+  const linkCursorConfig = path.join(tempDir, 'cursor-symlink.json');
+  try {
+    await fs.symlink(realCursorConfig, linkCursorConfig, 'file');
+  } catch (err) {
+    t.skip(`Symlinks not supported in this environment: ${err.message}`);
+    return;
+  }
+
+  const cursorResult = await invoke(['mcp', 'add', 'cursor', '--url', 'https://api.example.test', '--write', '--config', linkCursorConfig]);
+  assert.equal(cursorResult.code, 0);
+  const cursorStat = await fs.lstat(linkCursorConfig);
+  assert.ok(cursorStat.isSymbolicLink(), 'Cursor config symlink must be preserved');
+  const cursorContent = JSON.parse(await fs.readFile(realCursorConfig, 'utf8'));
+  assert.ok(cursorContent.mcpServers?.XMemo, 'Target file must receive XMemo config');
+
+  // 2. Test Muse Code with symlink (verifies atomicWriteJsonConfig preserves symlinks via realpath)
+  const realMuseConfig = path.join(dotfilesDir, 'muse-settings.json');
+  await fs.writeFile(realMuseConfig, JSON.stringify({ schema_version: 1, mcpServers: {} }, null, 2));
+  const linkMuseConfig = path.join(tempDir, 'muse-symlink.json');
+  await fs.symlink(realMuseConfig, linkMuseConfig, 'file');
+
+  const museResult = await invoke(['mcp', 'add', 'muse-code', '--url', 'https://api.example.test', '--write', '--config', linkMuseConfig]);
+  assert.equal(museResult.code, 0);
+  assert.match(museResult.stdout, /muse mcp login XMemo/);
+  const museStat = await fs.lstat(linkMuseConfig);
+  assert.ok(museStat.isSymbolicLink(), 'Muse Code config symlink must be preserved');
+  const museContent = JSON.parse(await fs.readFile(realMuseConfig, 'utf8'));
+  assert.ok(museContent.mcpServers?.XMemo, 'Target file must receive XMemo config');
 });

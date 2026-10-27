@@ -288,6 +288,11 @@ export function writeSetupSummary(plan, io) {
         if (plan.tokenPortalUrl) {
           writeLine(io.stdout, `     (Token portal: ${plan.tokenPortalUrl})`);
         }
+      } else if (cid === 'muse-code') {
+        writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
+        writeLine(io.stdout, '  1. Run `muse mcp login XMemo` in an external terminal to complete OAuth authorization.');
+        writeLine(io.stdout, '  2. Restart Muse to load the new MCP configuration.');
+        writeLine(io.stdout, '  Note: Run setup and login from an external terminal, not inside a Muse session (Muse sandboxes file edits).');
       } else if (usesClientOAuth(cid) && plan.selectedClient.authentication !== 'env-bearer') {
         writeLine(io.stdout, `💡 Next steps for ${plan.selectedClient.label}:`);
         writeLine(io.stdout, '  1. When the agent starts or first makes an XMemo tool call, a browser window will automatically pop up requesting OAuth authorization.');

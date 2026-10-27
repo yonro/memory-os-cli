@@ -359,6 +359,9 @@ export async function mcpCommand(args, io) {
     }
     writeCredentialHint(io, client, mcpUrl);
     writeLine(io.stdout, `Agent instance ID stored outside git: ${identity.path}`);
+    if (typeof client.mcp?.writeNextSteps === 'function') {
+      client.mcp.writeNextSteps(io);
+    }
     return 0;
   }
 

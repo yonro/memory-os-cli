@@ -181,4 +181,10 @@ export function defaultKimiCodeConfigPath(env) {
   const home = env.USERPROFILE || env.HOME || os.homedir();
   return path.join(home, '.kimi-code', 'mcp.json');
 }
-
+export function defaultMuseCodeConfigPath(env) {
+  if (env.XDG_CONFIG_HOME) {
+    return path.join(env.XDG_CONFIG_HOME, 'muse', 'settings.json');
+  }
+  const home = env.HOME || env.USERPROFILE || os.homedir();
+  return path.join(home, '.config', 'muse', 'settings.json');
+}

@@ -25,6 +25,7 @@ import {
   defaultJetbrainsConfigPath,
   defaultKimiCodeConfigPath,
   defaultKiroConfigPath,
+  defaultMuseCodeConfigPath,
   defaultOpencodeConfigPath,
   defaultOpenclawConfigPath,
   defaultQwenConfigPath,
@@ -63,6 +64,7 @@ import {
 } from '../core/pins.js';
 import { openclawSetupRecipe, hermesSetupRecipe } from './setup-recipes.js';
 import { isRepo, userHome } from '../core/runtime.js';
+import { writeLine } from '../core/io.js';
 
 export const CLIENT_REGISTRY = [
   // 1. Codex
@@ -897,6 +899,46 @@ export const CLIENT_REGISTRY = [
     pluginId: null,
     doctor: null,
     detect: async (env, options = {}) => detectClientByCandidates('copilot-cli', env, options)
+  },
+  // 25. Muse Code
+  {
+    id: 'muse-code',
+    label: 'Muse Code',
+    aliases: ['muse', 'muse-cli'],
+    setupAlias: 'muse',
+    mcp: {
+      configKind: 'json',
+      defaultConfigPath: defaultMuseCodeConfigPath,
+      configPathCandidates: (env) => {
+        const candidates = [];
+        if (env?.XDG_CONFIG_HOME) {
+          candidates.push(path.join(env.XDG_CONFIG_HOME, 'muse', 'settings.json'));
+        }
+        const home = userHome(env);
+        candidates.push(path.join(home, '.config', 'muse', 'settings.json'));
+        return candidates;
+      },
+      buildSnippet: (mcpUrl, identity, options = {}) =>
+        jsonClientSnippet('muse-code', mcpUrl, identity, options),
+      writeConfig: (configPath, mcpUrl, identity, options = {}) =>
+        mergeJsonClientMcpConfig('muse-code', configPath, mcpUrl, identity, options.force, options),
+      removeConfig: (configPath, options = {}) =>
+        removeJsonClientMcpConfig('muse-code', configPath, options),
+      section: 'mcpServers',
+      serverKind: 'http',
+      urlKey: 'url',
+      authentication: 'oauth',
+      writeNextSteps: (io) => {
+        writeLine(io.stdout, 'Next steps:');
+        writeLine(io.stdout, '  1. Run `muse mcp login XMemo` in an external terminal to complete OAuth authorization.');
+        writeLine(io.stdout, '  2. Restart Muse to activate the MCP server.');
+      }
+    },
+    profile: null,
+    skillDir: null,
+    pluginId: null,
+    doctor: null,
+    detect: async (env, options = {}) => detectClientByCandidates('muse-code', env, options)
   }
 ];
 

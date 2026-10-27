@@ -32,6 +32,16 @@ export const JSON_MCP_CLIENT_DEFINITIONS = Object.freeze([
   httpClientDefinition('openclaw', 'OpenClaw', 'defaultOpenclawConfigPath', { urlKey: 'url', authentication: 'env-bearer' }),
   httpClientDefinition('kiro', 'Kiro', 'defaultKiroConfigPath', { urlKey: 'url', authentication: 'oauth' }),
   httpClientDefinition('kimi-code', 'Kimi Code', 'defaultKimiCodeConfigPath', { urlKey: 'url', authentication: 'bearer-token-env-var', bearerTokenEnvVar: 'XMEMO_KEY' }),
+  httpClientDefinition('muse-code', 'Muse Code', 'defaultMuseCodeConfigPath', {
+    urlKey: 'url',
+    authentication: 'oauth',
+    section: 'mcpServers',
+    requiredTopLevel: { schema_version: 1 },
+    extra: {
+      type: 'streamable-http',
+      mode: 'optional'
+    }
+  }),
   commandClientDefinition('zed', 'Zed', 'defaultZedConfigPath', { section: 'context_servers' }),
   nestedTransportClientDefinition('jetbrains', 'JetBrains', 'defaultJetbrainsConfigPath'),
   remoteClientDefinition('opencode', 'OpenCode', 'defaultOpencodeConfigPath'),
@@ -116,7 +126,14 @@ export function jsonMcpClientIds() {
 
 export function jsonClientConfig(clientId, mcpUrl, identity, options = {}) {
   const definition = requireJsonMcpClientDefinition(clientId);
-  return sectionConfig(definition.section, jsonClientServerConfig(clientId, mcpUrl, identity, options));
+  const serverCfg = sectionConfig(definition.section, jsonClientServerConfig(clientId, mcpUrl, identity, options));
+  if (definition.requiredTopLevel && isPlainObject(definition.requiredTopLevel)) {
+    return {
+      ...definition.requiredTopLevel,
+      ...serverCfg
+    };
+  }
+  return serverCfg;
 }
 
 export function jsonClientSnippet(clientId, mcpUrl, identity, options = {}) {
@@ -136,7 +153,7 @@ export async function mergeJsonClientMcpConfig(clientId, configPath, mcpUrl, ide
     if (definition.mergeExperimentalModelContextProtocolServers && isPlainObject(parsed.experimental)) {
       mergeExperimentalModelContextProtocolServers(parsed, serverConfig, mcpUrl);
     }
-  }, force);
+  }, force, definition.requiredTopLevel, definition.id);
 }
 
 function requireJsonMcpClientDefinition(clientId) {
@@ -196,14 +213,29 @@ function serverConfigFromDefinition(definition, mcpUrl, identity, options = {}) 
     };
   }
 
-  return {
+  const headers = headersForDefinition(definition, identity);
+  const config = {
     ...(definition.extra ?? {}),
-    [definition.urlKey]: mcpUrl,
-    headers: headersForDefinition(definition, identity)
+    [definition.urlKey]: mcpUrl
   };
+  if (headers && Object.keys(headers).length > 0) {
+    config.headers = headers;
+  }
+  return config;
 }
 
 function headersForDefinition(definition, identity) {
+  if (definition.id === 'muse-code') {
+    const headers = {};
+    if (identity?.agentId && !identity.agentId.includes('${')) {
+      headers[AGENT_ID_HEADER] = identity.agentId;
+    }
+    if (identity?.agentInstanceId && !identity.agentInstanceId.includes('${')) {
+      headers[AGENT_INSTANCE_HEADER] = identity.agentInstanceId;
+    }
+    return Object.keys(headers).length > 0 ? headers : undefined;
+  }
+
   const headers = {
     [AGENT_ID_HEADER]: identity.agentId,
     [AGENT_INSTANCE_HEADER]: identity.agentInstanceId
@@ -270,6 +302,18 @@ export async function removeJsonClientMcpConfig(clientId, configPath, options = 
     throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
   }
 
+  if (clientId === 'muse-code') {
+    const hasSnake = isPlainObject(parsed.mcp_servers);
+    const hasCamel = isPlainObject(parsed.mcpServers);
+    if (hasSnake && hasCamel) {
+      throw new UsageError(`Both mcp_servers and mcpServers are present in ${configPath}. Muse drops the entire MCP configuration when both keys exist; please consolidate them into mcpServers manually.`);
+    }
+    if (hasSnake && !hasCamel) {
+      parsed.mcpServers = parsed.mcp_servers;
+      delete parsed.mcp_servers;
+    }
+  }
+
   let removed = false;
   const removedUrls = [];
 
@@ -303,8 +347,7 @@ export async function removeJsonClientMcpConfig(clientId, configPath, options = 
   }
 
   if (!options.preview) {
-    await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
-    await bestEffortChmod(configPath, 0o600);
+    await writeJsonConfigFile(configPath, parsed, clientId);
   }
   return { removed: true };
 }
@@ -361,11 +404,65 @@ function isDeepEqual(a, b) {
   return keysA.every((k) => Object.prototype.hasOwnProperty.call(b, k) && isDeepEqual(a[k], b[k]));
 }
 
-async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false) {
+async function atomicWriteJsonConfig(filePath, data) {
+  let targetPath = filePath;
+  try {
+    targetPath = await fs.realpath(filePath);
+  } catch {}
+  const dir = path.dirname(targetPath);
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  const content = `${JSON.stringify(data, null, 2)}\n`;
+  const tempPath = path.join(dir, `.${path.basename(targetPath)}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`);
+  try {
+    await fs.writeFile(tempPath, content, { mode: 0o600 });
+    await bestEffortChmod(tempPath, 0o600);
+    await fs.rename(tempPath, targetPath);
+  } catch {
+    try {
+      await fs.unlink(tempPath);
+    } catch {}
+    await fs.writeFile(targetPath, content, { mode: 0o600 });
+    await bestEffortChmod(targetPath, 0o600);
+  }
+}
+
+async function writeJsonConfigFile(filePath, data, clientId = null) {
+  if (clientId === 'muse-code') {
+    await atomicWriteJsonConfig(filePath, data);
+  } else {
+    await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+    await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+    await bestEffortChmod(filePath, 0o600);
+  }
+}
+
+async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, duplicatePath = sectionName, afterMerge, force = false, requiredTopLevel = null, clientId = null) {
   const existing = await readTextIfExists(configPath);
   const parsed = existing.trim().length === 0 ? {} : parseJsonConfig(existing, configPath);
   if (!isPlainObject(parsed)) {
     throw new UsageError(`MCP JSON config must be an object: ${configPath}`);
+  }
+
+  if (clientId === 'muse-code') {
+    const hasSnake = isPlainObject(parsed.mcp_servers);
+    const hasCamel = isPlainObject(parsed.mcpServers);
+    if (hasSnake && hasCamel) {
+      throw new UsageError(`Both mcp_servers and mcpServers are present in ${configPath}. Muse drops the entire MCP configuration when both keys exist; please consolidate them into mcpServers manually.`);
+    }
+    if (hasSnake && !hasCamel) {
+      parsed.mcpServers = parsed.mcp_servers;
+      delete parsed.mcp_servers;
+    }
+  }
+
+  let missingTopLevel = false;
+  if (requiredTopLevel && isPlainObject(requiredTopLevel)) {
+    for (const [key, val] of Object.entries(requiredTopLevel)) {
+      if (!(key in parsed)) {
+        parsed[key] = val;
+        missingTopLevel = true;
+      }
+    }
   }
   if (!isPlainObject(parsed[sectionName])) {
     parsed[sectionName] = {};
@@ -373,7 +470,7 @@ async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, dup
   const existingName = existingJsonMcpServerName(parsed[sectionName]);
   if (existingName) {
     const existingEntry = parsed[sectionName][existingName];
-    if (existingName === MCP_SERVER_NAME && isDeepEqual(existingEntry, serverConfig)) {
+    if (existingName === MCP_SERVER_NAME && isDeepEqual(existingEntry, serverConfig) && !missingTopLevel) {
       return { unchanged: true, configPath };
     }
     if (existingName !== MCP_SERVER_NAME && !force) {
@@ -385,12 +482,13 @@ async function mergeJsonSectionConfig(configPath, sectionName, serverConfig, dup
         await fs.writeFile(backupPath, existing, { mode: 0o600 });
       } catch {}
     }
+    if (existingName !== MCP_SERVER_NAME && force) {
+      delete parsed[sectionName][existingName];
+    }
   }
   parsed[sectionName][MCP_SERVER_NAME] = serverConfig;
   afterMerge?.(parsed);
-  await fs.mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
-  await fs.writeFile(configPath, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
-  await bestEffortChmod(configPath, 0o600);
+  await writeJsonConfigFile(configPath, parsed, clientId);
   return { written: true, configPath };
 }
 
@@ -509,4 +607,9 @@ export const kimiCodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('kimi
 export const kimiCodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientSnippet('kimi-code', mcpUrl, identity);
 export const kimiCodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('kimi-code')) => jsonClientServerConfig('kimi-code', mcpUrl, identity);
 export const mergeKimiCodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('kimi-code', configPath, mcpUrl, identity);
+
+export const museCodeJsonConfig = (mcpUrl, identity = envReferenceIdentity('muse-code')) => jsonClientConfig('muse-code', mcpUrl, identity);
+export const museCodeJsonSnippet = (mcpUrl, identity = envReferenceIdentity('muse-code')) => jsonClientSnippet('muse-code', mcpUrl, identity);
+export const museCodeJsonServerConfig = (mcpUrl, identity = envReferenceIdentity('muse-code')) => jsonClientServerConfig('muse-code', mcpUrl, identity);
+export const mergeMuseCodeMcpConfig = (configPath, mcpUrl, identity) => mergeJsonClientMcpConfig('muse-code', configPath, mcpUrl, identity);
 
