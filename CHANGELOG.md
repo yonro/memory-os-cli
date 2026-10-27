@@ -2,7 +2,7 @@
 
 All notable changes to the XMemo CLI client will be documented in this file.
 
-## [Unreleased]
+## [0.4.193] - 2026-10-28
 
 ### Added
 - **Muse Code (Meta) MCP Client Support**:
@@ -11,9 +11,13 @@ All notable changes to the XMemo CLI client will be documented in this file.
   - Automatically initializes `schema_version: 1` when creating a new settings file while preserving existing settings and schema versions.
   - Seamlessly migrates legacy `mcp_servers` to `mcpServers` while failing closed if both coexist to prevent Muse loader member drop.
   - Detects pre-existing lowercase `xmemo` or legacy `memory-os` server entries to prevent duplicate definitions.
-  - Uses atomic write via temporary file and rename to prevent file corruption.
+  - Scopes atomic write via temporary file and rename to `muse-code` while preserving symlinks via `fs.realpath` across all JSON clients.
   - Config path defaults to `$XDG_CONFIG_HOME/muse/settings.json` or `~/.config/muse/settings.json`.
+  - Next steps guidance printed on `xmemo mcp add muse-code --write` and `xmemo setup muse`.
 
+### Changed
+- **Skill Version Pin Synchronization**:
+  - Updated pinned XMemo Skill version (`PINNED_SKILL_VERSION` and `PINNED_OPENCLAW_SKILL_VERSION`) in `src/core/pins.js` from `1.1.45` to `1.1.48` with dual-verified SHA-512 SRI integrity (`sha512-GlAxEoo1eOq0GBcVem+hbqEKrBegpRuIhv9asblgFvrAGz79cZM7FcOXLjz2R9DaK9lexL89yEIYTqnuaeKiig==`).
 
 ## [0.4.192] - 2026-10-19
 
