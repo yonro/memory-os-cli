@@ -98,13 +98,13 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, ta
       let callCode = code;
       if (code === 0) {
         if (args.includes('view')) {
-          callStdout = JSON.stringify('sha512-UGUKUlorT+YQs6/hb6sHHTrQqkm9n1aKtxgOUpKrhRONeDFHTceijpRHRvptKdpODOlA0fvwqDCoo3vw8l1Zng==');
+          callStdout = JSON.stringify('sha512-GlAxEoo1eOq0GBcVem+hbqEKrBegpRuIhv9asblgFvrAGz79cZM7FcOXLjz2R9DaK9lexL89yEIYTqnuaeKiig==');
         } else if (args.includes('pack')) {
           const destIdx = args.indexOf('--pack-destination');
           if (destIdx !== -1 && args[destIdx + 1]) {
             const destDir = args[destIdx + 1];
-            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.45.fixture');
-            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.45.tgz');
+            const fixturePath = path.resolve(__dirname, 'fixtures', 'xmemo-skill-1.1.48.fixture');
+            const tgzPath = path.join(destDir, 'xmemo-skill-1.1.48.tgz');
             try {
               if (tarballContent !== null) {
                 fsSync.writeFileSync(tgzPath, tarballContent);
@@ -113,7 +113,7 @@ function spawnStub(calls, { code = 0, stdout = '', stderr = '', error = null, ta
               }
             } catch {}
           }
-          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.45.tgz' }]);
+          callStdout = JSON.stringify([{ filename: 'xmemo-skill-1.1.48.tgz' }]);
         }
       }
       if (callStdout) {

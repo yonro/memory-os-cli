@@ -27,7 +27,7 @@ const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-ski
 
 const entrypointContent = await readFile(skillScript, 'utf8');
 const versionMatch = entrypointContent.match(/const\s+SKILL_VERSION\s*=\s*['"]([^'"]+)['"]/);
-const CURRENT_SKILL_VERSION = versionMatch ? versionMatch[1] : '1.1.45';
+const CURRENT_SKILL_VERSION = versionMatch ? versionMatch[1] : '1.1.48';
 const currentSemver = parseSemver(CURRENT_SKILL_VERSION);
 const NEWER_SKILL_VERSION = `${currentSemver.major}.${currentSemver.minor}.${currentSemver.patch + 1}`;
 const NEWER_TAG = `skill-v${NEWER_SKILL_VERSION}`;
@@ -211,8 +211,8 @@ test('readUpdateCheckCache and writeUpdateCheckCache handle file I/O safely', as
 
     const testData = {
       lastCheck: '2026-10-19T10:00:00.000Z',
-      latestVersion: '1.1.45',
-      notifiedVersion: '1.1.45',
+      latestVersion: '1.1.48',
+      notifiedVersion: '1.1.48',
       notifiedAt: '2026-10-19T10:00:00.000Z',
     };
     await writeUpdateCheckCache(cachePath, testData);

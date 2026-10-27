@@ -18,7 +18,7 @@ const skillScript = path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'xmemo-ski
 
 const entrypointContent = await fs.readFile(skillScript, 'utf8');
 const versionMatch = entrypointContent.match(/const\s+SKILL_VERSION\s*=\s*['"]([^'"]+)['"]/);
-const CURRENT_SKILL_VERSION = versionMatch ? versionMatch[1] : '1.1.45';
+const CURRENT_SKILL_VERSION = versionMatch ? versionMatch[1] : '1.1.48';
 const semverParts = CURRENT_SKILL_VERSION.split('.').map(Number);
 const NEWER_SKILL_VERSION = `${semverParts[0]}.${semverParts[1]}.${semverParts[2] + 1}`;
 const NEWER_TAG = `skill-v${NEWER_SKILL_VERSION}`;
