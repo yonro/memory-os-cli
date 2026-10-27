@@ -359,10 +359,8 @@ export async function mcpCommand(args, io) {
     }
     writeCredentialHint(io, client, mcpUrl);
     writeLine(io.stdout, `Agent instance ID stored outside git: ${identity.path}`);
-    if (target === 'muse-code') {
-      writeLine(io.stdout, 'Next steps:');
-      writeLine(io.stdout, '  1. Run `muse mcp login XMemo` in an external terminal to complete OAuth authorization.');
-      writeLine(io.stdout, '  2. Restart Muse to activate the MCP server.');
+    if (typeof client.mcp?.writeNextSteps === 'function') {
+      client.mcp.writeNextSteps(io);
     }
     return 0;
   }

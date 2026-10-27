@@ -64,6 +64,7 @@ import {
 } from '../core/pins.js';
 import { openclawSetupRecipe, hermesSetupRecipe } from './setup-recipes.js';
 import { isRepo, userHome } from '../core/runtime.js';
+import { writeLine } from '../core/io.js';
 
 export const CLIENT_REGISTRY = [
   // 1. Codex
@@ -926,7 +927,12 @@ export const CLIENT_REGISTRY = [
       section: 'mcpServers',
       serverKind: 'http',
       urlKey: 'url',
-      authentication: 'oauth'
+      authentication: 'oauth',
+      writeNextSteps: (io) => {
+        writeLine(io.stdout, 'Next steps:');
+        writeLine(io.stdout, '  1. Run `muse mcp login XMemo` in an external terminal to complete OAuth authorization.');
+        writeLine(io.stdout, '  2. Restart Muse to activate the MCP server.');
+      }
     },
     profile: null,
     skillDir: null,
