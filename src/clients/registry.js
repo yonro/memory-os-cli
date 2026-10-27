@@ -923,26 +923,12 @@ export const CLIENT_REGISTRY = [
         mergeJsonClientMcpConfig('muse-code', configPath, mcpUrl, identity, options.force, options),
       removeConfig: (configPath, options = {}) =>
         removeJsonClientMcpConfig('muse-code', configPath, options),
-      section: 'mcp_servers',
+      section: 'mcpServers',
       serverKind: 'http',
       urlKey: 'url',
-      authentication: 'env-bearer',
-      bearerSyntax: 'plain'
+      authentication: 'oauth'
     },
-    profile: {
-      label: 'Muse Code',
-      setupAlias: 'muse',
-      profileVersion: 'muse-code-mcp-depth-v1',
-      requiredTokenEnv: TOKEN_ENV_VAR,
-      markerDir: '.muse',
-      defaultTarget: (env, options = {}) => {
-        const cwd = options.cwd ?? env?.CWD ?? process.cwd();
-        if (isRepo(cwd, env, '.muse')) {
-          return path.join(cwd, '.muse', 'AGENTS.md');
-        }
-        return path.join(userHome(env), '.config', 'muse', 'AGENTS.md');
-      }
-    },
+    profile: null,
     skillDir: null,
     pluginId: null,
     doctor: null,

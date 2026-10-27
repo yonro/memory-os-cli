@@ -121,9 +121,9 @@ test('client registry: helper functions query registry correctly', () => {
   assert.equal(supportedMcpClients().length, 25);
   assert.equal(supportedUninstallClientIds().length, 25);
 
-  // Profile clients: 12 supported
+  // Profile clients: 11 supported
   const profileIds = supportedProfileClientIds();
-  assert.equal(profileIds.length, 12);
+  assert.equal(profileIds.length, 11);
   for (const pid of profileIds) {
     assert.ok(getClient(pid)?.profile !== null, `${pid} must have profile`);
   }
@@ -191,7 +191,8 @@ test('client registry: usesClientOAuth identifies OAuth clients', () => {
   assert.equal(usesClientOAuth('kiro'), true);
   assert.equal(usesClientOAuth('opencode'), true);
   assert.equal(usesClientOAuth('qwen'), true);
-  assert.equal(usesClientOAuth('muse-code'), false);
+  assert.equal(usesClientOAuth('muse-code'), true);
+  assert.equal(usesClientOAuth('muse'), true);
 });
 
 test('command acceptance: mcp config --client accepts all 25 supported MCP client IDs', async () => {
@@ -212,7 +213,7 @@ test('command acceptance: mcp add accepts all 25 supported MCP client IDs with -
   }
 });
 
-test('command acceptance: profile show accepts all 12 supported profile client IDs', async () => {
+test('command acceptance: profile show accepts all 11 supported profile client IDs', async () => {
   for (const clientId of supportedProfileClientIds()) {
     const result = await invoke(['profile', 'show', clientId, '--json']);
     assert.equal(result.code, 0, `profile show ${clientId} --json must exit 0: ${result.stderr}`);

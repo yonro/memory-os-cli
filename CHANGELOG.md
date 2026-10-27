@@ -7,8 +7,11 @@ All notable changes to the XMemo CLI client will be documented in this file.
 ### Added
 - **Muse Code (Meta) MCP Client Support**:
   - Registered `muse-code` as a supported MCP client (Meta's Muse Code agent).
-  - Generates `mcp_servers` section with `transport: "streamable_http"`, `mode: "optional"`, and plain `${VAR}` syntax.
+  - Generates camelCase `mcpServers` section with `type: "streamable-http"`, `mode: "optional"`, and OAuth authentication default (`muse mcp login XMemo`).
   - Automatically initializes `schema_version: 1` when creating a new settings file while preserving existing settings and schema versions.
+  - Seamlessly migrates legacy `mcp_servers` to `mcpServers` while failing closed if both coexist to prevent Muse loader member drop.
+  - Detects pre-existing lowercase `xmemo` or legacy `memory-os` server entries to prevent duplicate definitions.
+  - Uses atomic write via temporary file and rename to prevent file corruption.
   - Config path defaults to `$XDG_CONFIG_HOME/muse/settings.json` or `~/.config/muse/settings.json`.
 
 

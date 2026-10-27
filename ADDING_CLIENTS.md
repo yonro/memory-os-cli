@@ -161,14 +161,12 @@ For clients that require top-level configuration keys (such as Muse Code requiri
 ```javascript
 httpClientDefinition('muse-code', 'Muse Code', 'defaultMuseCodeConfigPath', {
   urlKey: 'url',
-  authentication: 'env-bearer',
-  bearerSyntax: 'plain',
-  section: 'mcp_servers',
+  authentication: 'oauth',
+  section: 'mcpServers',
   requiredTopLevel: { schema_version: 1 },
   extra: {
-    transport: 'streamable_http',
-    mode: 'optional',
-    enabled: true
+    type: 'streamable-http',
+    mode: 'optional'
   }
 })
 ```
