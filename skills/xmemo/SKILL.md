@@ -14,7 +14,7 @@ After ClawHub installs this Skill, follow First-run sign-in below:
 ### First-run sign-in (keep it short)
 
 When no credential exists, follow this exact sequence:
-1. Ask once in the user's language using this canonical first-message template (translate when addressing the user in another language, but keep the template in English): "XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer (or configure XMEMO_KEY in your environment). Sign in or create an account to get started?" Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup.
+1. Ask once in the user's language, preserving the meaning of this example: "XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer (or configure XMEMO_KEY in your environment). Sign in or create an account to get started?" Translate the example when appropriate. Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup.
 2. On explicit user consent (yes): run `node scripts/xmemo-skill.mjs login --allow-plaintext` directly so output is visible while the command is waiting (for example a background task or streaming shell). As soon as the verification URL and one-time code appear, show only those plus "approve it in your browser" — nothing else. Then wait for the command to exit. A short tool timeout must not kill it before approval or expiry.
 3. When login succeeds: run `node scripts/xmemo-skill.mjs auth status --verify`, tell the user in one line that XMemo is connected and that recall can offer setup assistance, run `node scripts/xmemo-skill.mjs profile --status later --if-unset` to record this preference, and continue the original task.
 4. On no: do not start login or create temporary access; continue the original task without XMemo; do not ask again in the same session unless the user brings it up.
@@ -36,6 +36,8 @@ When stderr reports `XMEMO_UPDATE_AVAILABLE: ...`, ask the user once whether to 
 Two parallel integration paths:
 1. **Bundled Skill script** at `scripts/xmemo-skill.mjs` (direct REST API integration, Node.js >= 22.22.0).
 2. **XMemo MCP tools** (`create_restart_snapshot`, `restore_restart_snapshot`, etc., when running with an XMemo MCP server).
+
+The standalone runtime needs a shell to run Node.js, network access to the configured XMemo service, and access to XMemo credentials from `XMEMO_KEY`, a supported managed store, or the consent-gated local credential file. It reads a user-selected file only when a file input is requested. The host controls tool and filesystem permissions; this description does not grant or preapprove them. Project instruction edits and destructive operations remain subject to the confirmation rules below.
 
 ## Core Memory Workflows
 
