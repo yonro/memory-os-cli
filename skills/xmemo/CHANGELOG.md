@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## 1.1.49
+
+### Documentation
+
+- Clarify that onboarding is localized while preserving the meaning of the example, and describe the standalone runtime's access needs and host-enforced permissions.
+
 ## 1.1.48
 
 ### Fixed
@@ -95,7 +101,7 @@
 
 ### Changed
 
-- Update first-run sign-in guidance in SKILL.md to use the canonical English onboarding template ("XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself. Sign in to get started?") and require a separate unencrypted-storage disclosure before initiating login.
+- Update first-run sign-in guidance in SKILL.md with an example onboarding template to localize for the user and require a separate unencrypted-storage disclosure before initiating login.
 
 ## 1.1.36
 
