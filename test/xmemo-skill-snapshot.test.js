@@ -502,7 +502,40 @@ async function runSnapshotScript(args, { baseUrl, homeDir, stdin, env = {} }) {
 }
 
 // Full test case catalog across all commands, error cases, json, and prerequisite paths
+const dreamRunId = '12345678-1234-4321-8123-123456789abc';
+const dreamDigestArgs = ['dream-digest', '--id', dreamRunId, '--json'];
+
+function mockDreamDigest(status, body) {
+  return (req, res) => {
+    if (req.method !== 'GET' || req.url !== `/v1/me/dream/runs/${dreamRunId}/outcomes?kind=digest&limit=1`) return false;
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+    return true;
+  };
+}
+
 const SNAPSHOT_CASES = [
+  {
+    id: 'dream-digest-json', group: 'dream', args: dreamDigestArgs, useAuth: true,
+    serverHandler: mockDreamDigest(200, {
+      items: [{
+        kind: 'digest', read_only: true, title: 'Run digest',
+        digest_summary: { changed: { accepted: 1 }, open_loops: [], health: {} },
+      }],
+    }),
+  },
+  {
+    id: 'dream-digest-empty', group: 'dream', args: dreamDigestArgs, useAuth: true,
+    serverHandler: mockDreamDigest(200, { items: [] }),
+  },
+  {
+    id: 'dream-digest-forbidden', group: 'dream', args: dreamDigestArgs, useAuth: true,
+    serverHandler: mockDreamDigest(403, { detail: 'Access denied' }),
+  },
+  {
+    id: 'dream-digest-invalid-id', group: 'dream',
+    args: ['dream-digest', '--id', '../other'], useAuth: true,
+  },
   // Flags & Top-level
   { id: 'flags-version', group: 'flags', args: ['--version'] },
   { id: 'flags-help', group: 'flags', args: ['--help'] },

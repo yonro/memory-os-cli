@@ -77,6 +77,10 @@ export const COMMAND_USAGE_REGISTRY = {
     usage: 'stats [--scope <scope>] [--path <path>] [--bucket <bucket>] [--memory-type <type>] [--status <status>] [--source <src>] [--since <iso>] [--until <iso>] [--group-by <dims>] [--top-n <1..200>] [--team-id <id>]',
     desc: 'Show memory statistics and breakdown',
   },
+  'dream-digest': {
+    usage: 'dream-digest --id <run-uuid>',
+    desc: 'Read the summary of a personal Dream run',
+  },
   remember: {
     usage: 'remember (--content <text> | --content - | --file <path>) [--path <path>] [--metadata <json-object>]',
     desc: 'Save a memory from text, stdin, or file',
