@@ -136,7 +136,7 @@ export function exitCodeForError(err) {
 export const REST_COMMANDS = new Set([
   'read', 'relationships', 'restore', 'update', 'forget',
   'ledger-list', 'ledger-summary',
-  'overview', 'activity', 'stats',
+  'overview', 'activity', 'stats', 'dream-digest',
   'remember', 'recall', 'search', 'save-state', 'restore-state', 'state-save', 'state-restore',
   'restart-snapshot', 'restart-restore', 'recall-context',
   'todo-add', 'todo-list', 'todo-done', 'expense-add', 'expense-delete', 'ledger-delete', 'doctor',
@@ -165,6 +165,7 @@ export const COMMAND_FLAGS = {
   'ledger-summary': new Set(['months', 'currency', 'type']),
   overview: new Set(),
   activity: new Set(['limit']),
+  'dream-digest': new Set(['id']),
   stats: new Set(['scope', 'path', 'bucket', 'memory-type', 'memory_type', 'status', 'source', 'since', 'until', 'group-by', 'group_by', 'top-n', 'top_n', 'team-id', 'team_id']),
   remember: new Set(['content', 'file', 'path', 'metadata', 'logic_path', 'bucket', 'scope', 'team_id']),
   recall: new Set(['query', 'limit', 'threshold', 'path', 'bucket', 'scope', 'team_id', 'memory_type', 'explain', 'prefer_working', 'since', 'until', 'time_order', 'owner_timezone', 'reference_time', 'temporal_axis_mode', 'query_mode', 'expand-documents', 'expand_documents']),

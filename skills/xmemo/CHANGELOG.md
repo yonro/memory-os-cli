@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 1.1.50
+
+- Added `dream-digest --id <run-uuid>` to read a personal Dream run's summary, including changes, open loops, and run health.
+
 ## 1.1.49
 
 ### Documentation

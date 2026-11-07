@@ -1,0 +1,80 @@
+{
+  "dream-digest-json": {
+    "id": "dream-digest-json",
+    "args": [
+      "dream-digest",
+      "--id",
+      "12345678-1234-4321-8123-123456789abc",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"run_id\":\"12345678-1234-4321-8123-123456789abc\",\"digest\":{\"kind\":\"digest\",\"read_only\":true,\"title\":\"Run digest\",\"digest_summary\":{\"changed\":{\"accepted\":1},\"open_loops\":[],\"health\":{}}}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/me/dream/runs/12345678-1234-4321-8123-123456789abc/outcomes?kind=digest&limit=1",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "dream-digest-empty": {
+    "id": "dream-digest-empty",
+    "args": [
+      "dream-digest",
+      "--id",
+      "12345678-1234-4321-8123-123456789abc",
+      "--json"
+    ],
+    "code": 0,
+    "stdout": "{\"ok\":true,\"run_id\":\"12345678-1234-4321-8123-123456789abc\",\"digest\":null}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/me/dream/runs/12345678-1234-4321-8123-123456789abc/outcomes?kind=digest&limit=1",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "dream-digest-forbidden": {
+    "id": "dream-digest-forbidden",
+    "args": [
+      "dream-digest",
+      "--id",
+      "12345678-1234-4321-8123-123456789abc",
+      "--json"
+    ],
+    "code": 2,
+    "stdout": "{\"ok\":false,\"error\":{\"code\":\"forbidden\",\"message\":\"Access denied. Re-authorization is required to explicitly grant the required scope.\"}}\n",
+    "stderr": "⚠️ Sending an XMemo credential to custom origin http://127.0.0.1:<PORT>. Continue only if this host is trusted.\n",
+    "httpRequests": [
+      {
+        "method": "GET",
+        "url": "/v1/me/dream/runs/12345678-1234-4321-8123-123456789abc/outcomes?kind=digest&limit=1",
+        "headers": {
+          "authorization": "Bearer mos_test_token_golden",
+          "content-type": "application/json"
+        }
+      }
+    ]
+  },
+  "dream-digest-invalid-id": {
+    "id": "dream-digest-invalid-id",
+    "args": [
+      "dream-digest",
+      "--id",
+      "../other"
+    ],
+    "code": 1,
+    "stdout": "",
+    "stderr": "Error: --id must be a UUID.\n",
+    "httpRequests": []
+  }
+}

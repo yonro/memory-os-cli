@@ -150,7 +150,7 @@ export function validateCommandInput(command, subcommand, positionals, options, 
 
   validateTimeFilters(command, flags);
 
-  if (command === 'relationships') {
+  if (command === 'relationships' || command === 'dream-digest') {
     for (const key of ['id', 'cursor']) {
       if (flags[key] !== undefined && !UUID_PATTERN.test(String(flags[key]))) {
         throw new Error(`--${key} must be a UUID.`);
@@ -159,7 +159,7 @@ export function validateCommandInput(command, subcommand, positionals, options, 
   }
 
   const required = {
-    read: ['id'], relationships: ['id'], update: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
+    read: ['id'], relationships: ['id'], 'dream-digest': ['id'], update: ['id'], forget: ['id'], restore: ['id'], remember: ['content|file'],
     recall: ['query'], search: ['query'], 'recall-context': ['query'],
     'todo-add': ['content'], 'todo-done': ['id|todo_id'], 'expense-add': ['item', 'amount'], 'expense-delete': ['id'], 'ledger-delete': ['id'],
     'cloud-skill-show': ['id|slug'], 'cloud-skill-render': ['id|slug'],

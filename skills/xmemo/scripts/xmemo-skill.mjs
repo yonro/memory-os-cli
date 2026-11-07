@@ -63,7 +63,7 @@ import { handleVersionCheck } from './lib/update-check.mjs';
 import { handleUpgrade } from './commands/upgrade.mjs';
 import { handleCloudSkill } from './commands/cloud-skill.mjs';
 
-const SKILL_VERSION = '1.1.49';
+const SKILL_VERSION = '1.1.50';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
@@ -198,7 +198,7 @@ async function main() {
     return;
   }
 
-  if (['overview', 'activity', 'stats'].includes(command)) {
+  if (['overview', 'activity', 'stats', 'dream-digest'].includes(command)) {
     await handleAccount(authCtx);
     return;
   }

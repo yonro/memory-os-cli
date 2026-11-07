@@ -6,6 +6,7 @@ import {
 import {
   makeHttpRequest,
   handleRestError,
+  outputRestError,
   safeJson,
   sanitizeTerminalText,
   describeError,
@@ -13,6 +14,36 @@ import {
 
 export async function handleAccount(ctx) {
   const { command, options, flags, token } = ctx;
+
+  if (command === 'dream-digest') {
+    try {
+      const endpoint = `/v1/me/dream/runs/${encodeURIComponent(flags.id)}/outcomes?kind=digest&limit=1`;
+      const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
+        Authorization: `Bearer ${token}`,
+      }, options.timeoutMs);
+      const data = handleRestError(res, {
+        notFoundMessage: 'Dream run not found.',
+        context: 'Read Dream run digest',
+        options,
+      });
+      const digest = data.items?.[0] ?? null;
+      if (!Array.isArray(data.items) || (data.items.length && (digest?.kind !== 'digest' || !digest.digest_summary))) {
+        outputRestError('invalid_response', 'Invalid Dream digest response from server.', options, data, EXIT_CODE.SERVER_ERROR);
+      }
+      if (options.json) {
+        console.log(safeJson({ ok: true, run_id: flags.id, digest }));
+      } else if (digest) {
+        console.log(sanitizeTerminalText(digest.title || 'Dream run digest'));
+        console.log(sanitizeTerminalText(safeJson(digest.digest_summary)));
+      } else {
+        console.log('No digest has been recorded for this Dream run.');
+      }
+      process.exit(EXIT_CODE.SUCCESS);
+    } catch (e) {
+      console.error('Read Dream digest failed:', describeError(e));
+      process.exit(exitCodeForError(e));
+    }
+  }
 
   if (command === 'overview') {
     try {
