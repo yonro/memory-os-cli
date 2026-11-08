@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 1.1.52
+
+- Declare the standalone command scope and OpenClaw prerequisites, consolidate command examples, and clarify read-only Dream digests.
+
 ## 1.1.51
 
 - Block credential-bearing requests to custom origins unless the operator sets `XMEMO_TRUSTED_ORIGIN` to the exact destination origin. Managed credential restrictions still apply.
