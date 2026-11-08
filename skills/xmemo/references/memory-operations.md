@@ -79,9 +79,7 @@ node scripts/xmemo-skill.mjs read --id <memory_id> --json
 
 ```text
 node scripts/xmemo-skill.mjs update --id <memory_id> --content "Updated content text"
-node scripts/xmemo-skill.mjs update --id <memory_id> --path "projects/demo/architecture"
-node scripts/xmemo-skill.mjs update --id <memory_id> --metadata '{"revised":true}' --bucket "docs"
-node scripts/xmemo-skill.mjs update --id <memory_id> --content "New text" --json
+node scripts/xmemo-skill.mjs update --id <memory_id> --metadata '{"revised":true}' --json
 ```
 
 `update` sends a `PATCH /v1/memories/{id}` request with `--content`, `--path`, `--metadata` (JSON), `--bucket`, and `--scope`. Requires `memory:write` scope. 400 `invalid_memory_id` is reported as a parameter error; missing targets return 404 `not_found`. Under `--json`, returns `{ ok: true, id, path, updated: true, ... }`. See [command-details.md](command-details.md) for details.
@@ -90,9 +88,7 @@ node scripts/xmemo-skill.mjs update --id <memory_id> --content "New text" --json
 
 ```text
 node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm
-node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --reason "Deprecated convention"
-node scripts/xmemo-skill.mjs forget --id <transaction_id> --confirm
-node scripts/xmemo-skill.mjs forget --id <id> --confirm --json
+node scripts/xmemo-skill.mjs forget --id <transaction_id> --confirm --json
 ```
 
 `forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }`. Accepts a memory UUID or a `ledger-list` transaction ID. Requires an owner-scoped key with a delete-capable scope (e.g. `memory:delete`, `memory:write`).
@@ -117,7 +113,7 @@ Content input options:
 - `--content -`: Reads the full content from standard input until EOF.
 - `--file <path>`: Reads the full content from the specified file path.
 - **Mutual exclusion**: Specifying both `--content` and `--file`, or multiple `--content` / `--file` flags, is rejected locally with exit code 1 and **zero network requests**.
-- **Payload & validation consistency**: Stdin and file inputs undergo identical validation and outbound formatting (`arguments: { content: <text>, path: ... }`). Server request structure and byte integrity are preserved across all input paths.
+- **Payload & validation consistency**: Stdin and file content undergo identical validation and are transmitted in the same outbound payload format (`arguments: { content: <text>, path: ... }`). Server request structure and byte integrity are preserved exactly across all input paths.
 - **Size Limit Enforcement**: Total content bytes are bounded by `MAX_MEMORY_CONTENT_BYTES` (524,288 bytes). `--file` verifies file size prior to reading; stdin validates stream bytes incrementally. Exceeding the limit halts immediately with `content_too_large` and zero network requests.
 - **File read failures**: If the target file does not exist (`ENOENT`) or is inaccessible (`EACCES`), the command immediately reports a local error with exit code 1 and makes **zero network requests**.
 - Empty or whitespace-only content is rejected locally before request transmission.
@@ -208,9 +204,11 @@ node scripts/xmemo-skill.mjs restart-restore --source_session_id handoff-a --tar
 
 All limits are client-validated against the hosted contract. Snapshot item
 limits accept `0..100`; `--ttl_seconds` accepts `0..2592000` (30 days).
-Terminal output prints only status, ID, and time fields; use `--json` for the
-full response. Native MCP hosts should use `create_restart_snapshot` and
-`restore_restart_snapshot` instead of spawning the script.
+The direct REST responses can contain the captured continuity pack, so normal
+human output prints only status, ID, and time fields. Use `--json` only when a
+trusted caller needs the complete redacted response. Native MCP hosts should
+use `create_restart_snapshot` and `restore_restart_snapshot` instead of
+spawning the script.
 
 ### Manage action items (`todo-add`, `todo-list`, `todo-done`)
 
