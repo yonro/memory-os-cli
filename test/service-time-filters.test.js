@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { run } from '../src/cli.js';
+import { validateTimeFilters, normalizeTimeFilterAliases } from '../skills/xmemo/scripts/lib/time-filters.mjs';
 
 class Stream {
   constructor() { this.value = ''; }
@@ -745,4 +746,111 @@ test('context recall rejects simultaneous temporal_axis_mode and query_mode flag
   assert.equal(code2, 2);
   assert.equal(calls, 0);
   assert.match(JSON.parse(io.stdout.value).error.message, /Cannot specify both --query_mode and --query-mode/);
+});
+
+test('time-filters RFC 3339 RegExp idiom normalization parity (.exec vs .match)', () => {
+  const inlineExecRegex = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i;
+  const inlineMatchRegex = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i;
+
+  const testCases = [
+    // valid Z
+    { input: "2026-09-01T12:00:00Z", valid: true },
+    // valid +09:00
+    { input: "2026-09-01T12:00:00+09:00", valid: true },
+    // fractional seconds
+    { input: "2026-09-01T12:00:00.123456Z", valid: true },
+    { input: "2026-09-01T12:00:00.999+05:30", valid: true },
+    // lowercase 't'/'z' (the i flag)
+    { input: "2026-09-01t12:00:00z", valid: true },
+    { input: "2026-09-01t12:00:00.500z", valid: true },
+    // invalid month 13
+    { input: "2026-13-01T12:00:00Z", valid: false },
+    // invalid day 32
+    { input: "2026-01-32T12:00:00Z", valid: false },
+    // invalid hour 24
+    { input: "2026-01-01T24:00:00Z", valid: false },
+    // offset like +24:00
+    { input: "2026-01-01T12:00:00+24:00", valid: false },
+    { input: "2026-01-01T12:00:00-24:00", valid: false },
+    // missing seconds
+    { input: "2026-01-01T12:00Z", valid: false },
+    // date-only
+    { input: "2026-01-01", valid: false },
+    // leading/trailing whitespace
+    { input: " 2026-01-01T12:00:00Z", valid: false },
+    { input: "2026-01-01T12:00:00Z ", valid: false },
+    { input: " 2026-01-01T12:00:00Z ", valid: false },
+    // empty string
+    { input: "", valid: false },
+    // non-string inputs
+    { input: 123, valid: false },
+    { input: null, valid: false },
+    { input: undefined, valid: false },
+    { input: {}, valid: false },
+    { input: true, valid: false },
+  ];
+
+  for (const { input, valid } of testCases) {
+    const text = String(input);
+    const execResult = inlineExecRegex.exec(text);
+    const matchResult = text.match(inlineMatchRegex);
+
+    if (execResult === null) {
+      assert.equal(matchResult, null, `Expected null match for input ${String(input)}`);
+    } else {
+      assert.notEqual(matchResult, null, `Expected non-null match for input ${String(input)}`);
+      assert.equal(execResult.length, matchResult.length);
+      for (let i = 0; i < execResult.length; i++) {
+        assert.equal(matchResult[i], execResult[i], `Group ${i} mismatch for input ${String(input)}`);
+      }
+      assert.equal(execResult.index, matchResult.index);
+      assert.equal(execResult.input, matchResult.input);
+    }
+
+    if (valid) {
+      assert.doesNotThrow(() => {
+        validateTimeFilters("recall", { since: input });
+      }, `Expected valid parse for ${String(input)}`);
+      assert.doesNotThrow(() => {
+        validateTimeFilters("search", { until: input });
+      }, `Expected valid parse for ${String(input)}`);
+    } else {
+      if (input !== undefined) {
+        assert.throws(() => {
+          validateTimeFilters("recall", { since: input });
+        }, /--since must be an RFC 3339 timestamp with a timezone offset/, `Expected rejection for ${String(input)}`);
+        assert.throws(() => {
+          validateTimeFilters("search", { until: input });
+        }, /--until must be an RFC 3339 timestamp with a timezone offset/, `Expected rejection for ${String(input)}`);
+      }
+    }
+  }
+
+  // Range validation checks
+  assert.doesNotThrow(() => {
+    validateTimeFilters("recall", {
+      since: "2026-09-01T10:00:00Z",
+      until: "2026-09-01T12:00:00Z",
+    });
+  });
+
+  assert.throws(() => {
+    validateTimeFilters("recall", {
+      since: "2026-09-01T12:00:00Z",
+      until: "2026-09-01T10:00:00Z",
+    });
+  }, /--until must be later than --since\./);
+
+  assert.throws(() => {
+    validateTimeFilters("recall", {
+      since: "2026-09-01T12:00:00Z",
+      until: "2026-09-01T12:00:00Z",
+    });
+  }, /--until must be later than --since\./);
+
+  // Alias normalization check
+  const flags = { "owner-timezone": "Asia/Tokyo" };
+  normalizeTimeFilterAliases("recall", flags);
+  assert.equal(flags.owner_timezone, "Asia/Tokyo");
+  assert.equal(flags["owner-timezone"], undefined);
 });
