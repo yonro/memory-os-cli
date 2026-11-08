@@ -1,6 +1,6 @@
 ---
 name: xmemo-memory
-description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, read user Cloud Skills (read-only), configure agent instructions, check for updates or upgrade runtime, or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
+description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, read user Cloud Skills (read-only) and Dream-run digests (read-only), configure agent instructions, check for updates or upgrade runtime, or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
 compatibility: Standalone use requires Node.js >= 22.22.0 and HTTPS access to xmemo.dev or an operator-configured trusted XMemo origin. Credentials can come from XMEMO_KEY, a managed store, or the consent-gated local credential file.
 metadata: '{"openclaw":{"requires":{"bins":["node"]},"primaryEnv":"XMEMO_KEY"}}'
 ---
@@ -246,6 +246,7 @@ Do not request that the user pastes a raw token into chat, logs, or repository f
 The temporary sandbox is limited (as reported by the service: 100 items, 14 days inactivity, 30 days max lifetime); run `register` only with `--reason unattended` or `--reason declined`.
 Read [references/auth-setup.md](references/auth-setup.md) before running any auth, login, register or logout command other than the first-run login above.
 Read [references/agent-profile.md](references/agent-profile.md) before writing to AGENTS.md, CLAUDE.md, or any other agent instruction file.
+Write a profile block only after the user explicitly approves the exact block shown; never add it automatically. The user can remove it by deleting the marked section. `profile --status later|never` records the offer choice locally without editing instruction files.
 
 ## Exit Codes
 

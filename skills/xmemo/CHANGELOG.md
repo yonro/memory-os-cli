@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 1.1.53
+
+- Disclose query and summary transfers in the generated profile, document explicit approval before profile writes, and declare read-only Dream-run digests.
+
 ## 1.1.52
 
 - Declare the standalone command scope and OpenClaw prerequisites, consolidate command examples, and clarify read-only Dream digests.
