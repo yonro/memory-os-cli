@@ -31,7 +31,8 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   const memoryOps = (await readFile(path.join(repoRoot, 'skills/xmemo/references/memory-operations.md'), 'utf8')).replace(/\r\n/g, '\n');
   const authSetup = (await readFile(path.join(repoRoot, 'skills/xmemo/references/auth-setup.md'), 'utf8')).replace(/\r\n/g, '\n');
 
-  assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\n---\n/);
+  assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\nallowed-tools: Bash\(node scripts\/xmemo-skill\.mjs:\*\)\ncompatibility: .+\nmetadata: .+\n---\n/);
+  assert.match(skill, /"requires":\{"bins":\["node"\]\},"primaryEnv":"XMEMO_KEY"/);
   assert.match(skill, /read user Cloud Skills \(read-only\)/i);
   assert.match(skill, /Runtime Selection/);
   assert.match(skill, /First Successful Run/);
@@ -41,7 +42,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   assert.match(skill, /managed\n+   secret store/);
   assert.match(skill, /scripts\/xmemo-skill\.mjs/);
   assert.doesNotMatch(skill, /node skills\/xmemo\/scripts\/xmemo-skill\.mjs/);
-  assert.match(skill, /xmemo-skill\.mjs login/);
+  assert.match(skill, /`login --allow-plaintext`/);
   assert.match(skill, /auth add --from-stdin/);
   assert.match(skill, /XMEMO_KEY/);
   assert.match(skill, /--allow-plaintext/);
@@ -494,38 +495,39 @@ test('Part B: resolveCredentialSource and formatAuthErrorHint map credential sou
 test('SKILL.md retains standalone first-run and daily-use command lines and exit code table', async () => {
   const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
 
+  assert.match(skill, /`node scripts\/xmemo-skill\.mjs <command> \[options\]`/);
   // First run: doctor --anonymous, login --allow-plaintext, auth status --verify
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs doctor --anonymous/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
+  assert.match(skill, /doctor --anonymous/);
+  assert.match(skill, /login --allow-plaintext/);
+  assert.match(skill, /auth status --verify/);
 
   // Daily use: recall, search, recall-context, remember, read, update, forget,
   // save-state, restore-state, restart-snapshot, restart-restore, todo-add,
   // todo-list, todo-done, expense-add, ledger-list, ledger-summary, overview,
   // activity, stats, doctor
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs recall --query/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs search --query/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs recall-context --query/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs remember --content/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs remember --content -/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs remember --file/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs read --id/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs update --id/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs forget --id/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs save-state --key/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs restore-state --key/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs restart-snapshot/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs restart-restore/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs todo-add --content/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs todo-list/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs todo-done --id/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs expense-add --item/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs ledger-list/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs ledger-summary/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs overview/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs activity/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs stats/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs doctor/);
+  assert.match(skill, /recall --query/);
+  assert.match(skill, /search --query/);
+  assert.match(skill, /recall-context --query/);
+  assert.match(skill, /remember --content/);
+  assert.match(skill, /remember --content -/);
+  assert.match(skill, /remember --file/);
+  assert.match(skill, /read --id/);
+  assert.match(skill, /update --id/);
+  assert.match(skill, /forget --id/);
+  assert.match(skill, /save-state --key/);
+  assert.match(skill, /restore-state --key/);
+  assert.match(skill, /restart-snapshot/);
+  assert.match(skill, /restart-restore/);
+  assert.match(skill, /todo-add --content/);
+  assert.match(skill, /todo-list/);
+  assert.match(skill, /todo-done --id/);
+  assert.match(skill, /expense-add --item/);
+  assert.match(skill, /ledger-list/);
+  assert.match(skill, /ledger-summary/);
+  assert.match(skill, /overview/);
+  assert.match(skill, /activity/);
+  assert.match(skill, /stats/);
+  assert.match(skill, /doctor/);
 
   // Failure handling and exit codes table
   assert.match(skill, /\| Exit Code \| Classification \| Conditions & Semantics \| Next Action \|/);
@@ -544,11 +546,11 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself\. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer \(or configure XMEMO_KEY in your environment\)\. Sign in or create an account to get started\?/);
   assert.match(skill, /Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup\./);
   assert.match(skill, /do not start login or create temporary access/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
+  assert.match(skill, /login --allow-plaintext/);
   assert.match(skill, /approve it in your browser/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
+  assert.match(skill, /auth status --verify/);
   assert.match(skill, /tell the user in one line that XMemo is connected/);
-  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile --status later --if-unset/);
+  assert.match(skill, /profile --status later --if-unset/);
   assert.match(skill, /Read \[references\/agent-profile\.md\]\(references\/agent-profile\.md\) before writing to AGENTS\.md, CLAUDE\.md, or any other agent instruction file\./);
   assert.match(skill, /\|\s*`profile`\s*\|\s*Print recommended agent instructions\s*\|/);
   assert.match(skill, /do not ask again in the same session/);
