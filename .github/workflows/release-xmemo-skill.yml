@@ -301,7 +301,6 @@ jobs:
       cancel-in-progress: false
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
-      CLAWHUB_CONFIG_PATH: ${{ runner.temp }}/xmemo-clawhub-config.json
     steps:
       - uses: actions/checkout@v5
         with:
@@ -334,6 +333,7 @@ jobs:
       - name: Submit once and verify the public version
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+          CLAWHUB_CONFIG_PATH: ${{ runner.temp }}/xmemo-clawhub-config.json
         shell: bash
         run: |
           set -euo pipefail
