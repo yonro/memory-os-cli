@@ -33,7 +33,7 @@ export function normalizeTimeFilterAliases(command, flags) {
 function parseRFC3339Instant(value, name) {
   const message = `${name} must be an RFC 3339 timestamp with a timezone offset, such as 2026-09-01T00:00:00+09:00.`;
   const text = String(value);
-  const match = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i.exec(text);
+  const match = text.match(/^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(\.\d+)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i);
   if (!match) throw new Error(message);
 
   const year = Number(match[1]);
