@@ -63,7 +63,7 @@ import { handleVersionCheck } from './lib/update-check.mjs';
 import { handleUpgrade } from './commands/upgrade.mjs';
 import { handleCloudSkill } from './commands/cloud-skill.mjs';
 
-const SKILL_VERSION = '1.1.52';
+const SKILL_VERSION = '1.1.53';
 
 async function main() {
   let { command, subcommand, positionals, options, flags } = parseArgs(process.argv.slice(2));
