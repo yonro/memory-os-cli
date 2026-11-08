@@ -63,7 +63,10 @@ test('ClawHub is gated in the Skill release workflow and verifies the tagged arc
   assert.match(job, /diff -r --no-dereference skills\/xmemo "\$payload"/);
   assert.match(job, /case "\$\(publication "\$version"\)" in\s*404\)/);
   assert.match(job, /clawhub skill publish .* --dry-run --json/);
-  assert.match(job, /\.version\.security\.status == "clean"/);
+  assert.match(job, /\.moderation\.updatedAt > \$previous/);
+  assert.match(job, /\.moderation\.verdict/);
+  assert.match(job, /PUBLISHED_PENDING/);
+  assert.match(job, /::warning::ClawHub version scan status/);
   assert.match(job, /sha256sum/);
 });
 

@@ -113,7 +113,9 @@ with permission to publish under `xmemo`. Set the repository variable
 
 The job checks owner-visible publication status before uploading. If the exact
 version already exists, it verifies that submission. A successful job requires
-the exact public latest version, a clean scan and matching file hashes.
+the exact public latest version, a fresh clean platform moderation verdict and
+matching file hashes. Version-level scanner results may be reported separately
+as warnings. `PUBLISHED_PENDING` means to verify the existing submission again.
 When resuming an approved release, dispatch the existing
 `release-xmemo-skill.yml` workflow with its `release_tag`.
 

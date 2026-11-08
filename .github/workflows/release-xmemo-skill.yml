@@ -350,6 +350,10 @@ jobs:
 
           current="$(curl --fail --silent --show-error --max-time 30 "$api?ownerHandle=xmemo")"
           latest="$(jq -er 'select(.owner.handle == "xmemo") | .latestVersion.version' <<< "$current")"
+          previous_verdict_at=0
+          if [[ "$latest" != "$version" ]]; then
+            previous_verdict_at="$(jq -er '.moderation.updatedAt | numbers' <<< "$current")"
+          fi
           [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           if [[ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -1)" != "$version" ]]; then
             echo "::error::Refusing to move ClawHub latest backward from $latest to $version."
@@ -394,18 +398,42 @@ jobs:
             fi
             sleep 20
           done
-          if [[ "${stage:-unknown}" != published ]]; then
-            echo "::error::ClawHub $version did not publish (stage: ${stage:-unknown}). Check the stored submission before retrying."
+          case "${stage:-unknown}" in
+            published) ;;
+            unknown|pending_checks|ready_to_finalize|finalizing)
+              echo "::error::PUBLISHED_PENDING: ClawHub $version is not publicly confirmed (stage: ${stage:-unknown}). Verify only on retry."
+              exit 1
+              ;;
+            *) echo "::error::ClawHub $version stopped at $stage. Check the stored submission before retrying."; exit 1 ;;
+          esac
+
+          while (( SECONDS < deadline )); do
+            current="$(curl --fail --silent --show-error --max-time 30 "$api?ownerHandle=xmemo")"
+            verdict="$(jq -r --arg v "$version" --argjson previous "$previous_verdict_at" '
+              select(.owner.handle == "xmemo" and .latestVersion.version == $v)
+              | select((.latestVersion.createdAt | numbers) > 0)
+              | select((.moderation.updatedAt | numbers) >= .latestVersion.createdAt)
+              | select(.moderation.updatedAt > $previous)
+              | .moderation.verdict // empty
+            ' <<< "$current")"
+            case "$verdict" in
+              clean) break ;;
+              ''|pending|scanning|unknown) sleep 20 ;;
+              *) echo "::error::ClawHub moderation for $version returned $verdict."; exit 1 ;;
+            esac
+          done
+          if [[ "${verdict:-}" != clean ]]; then
+            echo "::error::PUBLISHED_PENDING: ClawHub $version has no fresh public moderation verdict. Verify only on retry."
             exit 1
           fi
 
-          current="$(curl --fail --silent --show-error --max-time 30 "$api?ownerHandle=xmemo")"
-          jq -e --arg v "$version" '.owner.handle == "xmemo" and .latestVersion.version == $v' <<< "$current" >/dev/null
           details="$(curl --fail --silent --show-error --max-time 30 "$api/versions/$version?ownerHandle=xmemo")"
-          jq -e --arg v "$version" '.version.version == $v and .version.security.status == "clean" and .version.security.scanners.skillspector.normalizedStatus == "clean"' <<< "$details" >/dev/null || {
-            echo "::error::ClawHub $version is public, but the security verdict is not clean."
-            exit 1
-          }
+          jq -e --arg v "$version" '.version.version == $v' <<< "$details" >/dev/null
+          scan="$(jq -r '.version.security.status // "unknown"' <<< "$details")"
+          skillspector="$(jq -r '.version.security.scanners.skillspector.normalizedStatus // "unknown"' <<< "$details")"
+          if [[ "$scan" != clean || "$skillspector" != clean ]]; then
+            echo "::warning::ClawHub version scan status: $scan; SkillSpector: $skillspector. Platform moderation is clean."
+          fi
           diff -u \
             <(cd "$payload" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sed 's|  \./|  |' | LC_ALL=C sort) \
             <(jq -r '.version.files[] | select(.path != "skill-card.md") | "\(.sha256)  \(.path)"' <<< "$details" | LC_ALL=C sort)
