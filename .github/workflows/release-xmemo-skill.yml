@@ -159,7 +159,7 @@ jobs:
             release-assets/xmemo-skill.zip \
             --clobber
 
-      - name: Notify xmemo.dev after assets are available
+      - name: Verify xmemo.dev serves this release
         env:
           GH_TOKEN: ${{ github.token }}
           XMEMO_SKILL_RELEASE_WEBHOOK_SECRET: ${{ secrets.XMEMO_SKILL_RELEASE_WEBHOOK_SECRET }}
@@ -173,8 +173,7 @@ jobs:
 
           release_json="$(mktemp)"
           webhook_payload="$(mktemp)"
-          response_body="$(mktemp)"
-          trap 'rm -f "$release_json" "$webhook_payload" "$response_body"' EXIT
+          trap 'rm -f "$release_json" "$webhook_payload"' EXIT
 
           release_id="$(gh release view "$RELEASE_TAG" --json databaseId --jq .databaseId)"
           gh api "/repos/$GITHUB_REPOSITORY/releases/$release_id" > "$release_json"
@@ -211,63 +210,39 @@ jobs:
 
           signature="sha256=$(openssl dgst -sha256 -hmac "$XMEMO_SKILL_RELEASE_WEBHOOK_SECRET" -hex < "$webhook_payload" | sed 's/^.* //')"
 
-          # A 4xx answer will not become a 2xx on retry, so it is reported at
-          # once instead of being retried until the step times out.
-          attempt=1
-          max_attempts=3
-          while :; do
-            http_code="$(curl --silent --show-error --output "$response_body" --write-out '%{http_code}' \
+          announce_release() {
+            last_announcement=$SECONDS
+            http_code="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' \
               --header 'Content-Type: application/json' \
               --header 'X-GitHub-Event: release' \
               --header "X-Hub-Signature-256: $signature" \
               --data-binary "@$webhook_payload" \
               "$XMEMO_BASE_URL/v1/skill/package/webhook" || true)"
+            http_code="${http_code:-000}"
+            echo "Release announcement returned HTTP $http_code"
             case "$http_code" in
-              2*)
-                echo "Announcement accepted: HTTP $http_code"
-                break
-                ;;
-              000 | 408 | 429 | 5*)
-                # A transport failure, a timeout, a rate limit, or a server
-                # error can each succeed later, so these share the retry
-                # handling below.
-                : ;;
+              2* | 000 | 408 | 429 | 5*) ;;
               *)
                 # Any other answer will not become a 2xx on retry, so it is
                 # reported at once instead of retried until the step times out.
                 echo "Announcement rejected with HTTP ${http_code:-none}; not retrying." >&2
-                head -c 500 "$response_body" >&2 || true
-                echo >&2
                 exit 1
                 ;;
             esac
-
-            if [[ "$attempt" -ge "$max_attempts" ]]; then
-              echo "Announcement failed after $attempt attempts (last status: ${http_code:-none})." >&2
-              head -c 500 "$response_body" >&2 || true
-              echo >&2
-              exit 1
-            fi
-            echo "Announcement attempt $attempt failed (status: ${http_code:-none}); retrying." >&2
-            sleep "$((attempt * 3))"
-            attempt=$((attempt + 1))
-          done
-
-      - name: Verify xmemo.dev serves this release
-        shell: bash
-        run: |
-          set -euo pipefail
+          }
 
           # The announcement only queues a refresh, so the release is not done
           # until the public endpoint actually serves this tag. The package cache
           # has no expiry of its own, so an announcement that was rejected or
           # dropped would otherwise keep the previous Skill published
-          # indefinitely, with nothing failing to show it.
-          deadline=$((SECONDS + 300))
+          # indefinitely. Re-announce the same signed payload while waiting.
+          # Leave time for the last bounded HTTP calls within a ten-minute limit.
+          deadline=$((SECONDS + 540))
+          announce_release
 
           for format in tar.gz zip; do
             while :; do
-              location="$(curl --silent --show-error --output /dev/null --dump-header - \
+              location="$(curl --silent --show-error --max-time 20 --output /dev/null --dump-header - \
                 "$XMEMO_BASE_URL/v1/skill/package?format=$format" \
                 | tr -d '\r' | sed -n 's/^[Ll]ocation:[[:space:]]*//p' | tail -n 1 || true)"
 
@@ -283,6 +258,10 @@ jobs:
                 exit 1
               fi
 
+              if (( SECONDS - last_announcement >= 60 )); then
+                echo "Re-announcing $RELEASE_TAG while $format is still stale."
+                announce_release
+              fi
               sleep 10
             done
           done
