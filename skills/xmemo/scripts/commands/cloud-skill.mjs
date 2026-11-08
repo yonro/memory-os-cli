@@ -1,6 +1,7 @@
 import {
   EXIT_CODE,
   exitCodeForError,
+  REST_ROUTES,
 } from '../lib/core.mjs';
 
 import {
@@ -23,8 +24,8 @@ export function resolveTeamId(flags) {
 }
 
 export function buildSkillsPath(teamId) {
-  if (!teamId) return '/v1/skills';
-  return `/v1/skills?team_id=${encodeURIComponent(teamId)}`;
+  if (!teamId) return REST_ROUTES.skills;
+  return `${REST_ROUTES.skills}?team_id=${encodeURIComponent(teamId)}`;
 }
 
 export async function resolveSkillId(flags, options, token) {
@@ -124,7 +125,7 @@ export async function handleCloudSkill(ctx) {
       const [res, compRes] = await Promise.all([
         makeHttpRequest(
           options.baseUrl,
-          `/v1/skills/${encodeURIComponent(skillId)}`,
+          REST_ROUTES.skillDetail(skillId),
           'GET',
           null,
           { 'Authorization': `Bearer ${token}` },
@@ -132,7 +133,7 @@ export async function handleCloudSkill(ctx) {
         ),
         makeHttpRequest(
           options.baseUrl,
-          `/v1/skills/${encodeURIComponent(skillId)}/components`,
+          REST_ROUTES.skillComponents(skillId),
           'GET',
           null,
           { 'Authorization': `Bearer ${token}` },
@@ -213,7 +214,7 @@ export async function handleCloudSkill(ctx) {
       const skillId = await resolveSkillId(flags, options, token);
       const res = await makeHttpRequest(
         options.baseUrl,
-        `/v1/skills/${encodeURIComponent(skillId)}/render`,
+        REST_ROUTES.skillRender(skillId),
         'GET',
         null,
         { 'Authorization': `Bearer ${token}` },

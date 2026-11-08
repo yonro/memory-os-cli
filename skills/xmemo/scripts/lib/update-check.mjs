@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { makeHttpRequest, parseJsonResponse, describeError } from './api.mjs';
-import { EXIT_CODE, exitCodeForError } from './core.mjs';
+import { EXIT_CODE, REST_ROUTES, exitCodeForError } from './core.mjs';
 
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const NOTIFY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -82,7 +82,7 @@ export function parseTimestamp(val) {
 }
 
 export async function fetchLatestSkillVersion(baseUrl, timeoutMs = DEFAULT_CHECK_TIMEOUT_MS) {
-  const res = await makeHttpRequest(baseUrl, '/.well-known/agent-discovery.json', 'GET', null, {}, timeoutMs);
+  const res = await makeHttpRequest(baseUrl, REST_ROUTES.agentDiscovery, 'GET', null, {}, timeoutMs);
   if (res.statusCode < 200 || res.statusCode >= 300) {
     const err = new Error(`Server returned HTTP ${res.statusCode}`);
     err.statusCode = res.statusCode;

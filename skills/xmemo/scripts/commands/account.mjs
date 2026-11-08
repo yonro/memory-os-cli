@@ -1,6 +1,7 @@
 import {
   EXIT_CODE,
   exitCodeForError,
+  REST_ROUTES,
 } from '../lib/core.mjs';
 
 import {
@@ -17,7 +18,7 @@ export async function handleAccount(ctx) {
 
   if (command === 'dream-digest') {
     try {
-      const endpoint = `/v1/me/dream/runs/${encodeURIComponent(flags.id)}/outcomes?kind=digest&limit=1`;
+      const endpoint = `${REST_ROUTES.dreamRunOutcomes(flags.id)}?kind=digest&limit=1`;
       const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, {
         Authorization: `Bearer ${token}`,
       }, options.timeoutMs);
@@ -47,7 +48,7 @@ export async function handleAccount(ctx) {
 
   if (command === 'overview') {
     try {
-      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.skillOperations, 'POST', {
         operation: 'overview',
         arguments: {},
       }, {
@@ -92,7 +93,7 @@ export async function handleAccount(ctx) {
     }
 
     try {
-      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.skillOperations, 'POST', {
         operation: 'activity',
         arguments: args,
       }, {
@@ -165,7 +166,7 @@ export async function handleAccount(ctx) {
     if (topN !== undefined) queryParams.push(`top_n=${encodeURIComponent(topN)}`);
     if (teamId) queryParams.push(`team_id=${encodeURIComponent(teamId)}`);
 
-    let endpoint = '/v1/memories/stats';
+    let endpoint = REST_ROUTES.memoryStats;
     if (queryParams.length > 0) {
       endpoint += `?${queryParams.join('&')}`;
     }

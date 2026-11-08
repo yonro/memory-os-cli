@@ -9,6 +9,7 @@ import {
   EXIT_CODE,
   exitCodeForHttpStatus,
   exitCodeForErrorCode,
+  REST_ROUTES,
 } from './core.mjs';
 
 import {
@@ -199,13 +200,13 @@ export async function requestTemporaryMemoryOperation(command, options, flags, c
     const body = Object.fromEntries(Object.entries(flags).filter(([, value]) => value !== undefined));
     body.content = flags.content || '';
     body.path = flags.path || 'memories';
-    res = await makeHttpRequest(options.baseUrl, '/v1/remember', 'POST', body, headers, options.timeoutMs);
+    res = await makeHttpRequest(options.baseUrl, REST_ROUTES.remember, 'POST', body, headers, options.timeoutMs);
   } else {
     const params = new URLSearchParams({ query: flags.query || '', limit: String(flags.limit || 5) });
     for (const key of RECALL_SEARCH_QUERY_KEYS) {
       if (key !== 'query' && key !== 'limit' && flags[key] !== undefined) params.set(key, String(flags[key]));
     }
-    const apiPath = command === 'search' ? '/v1/memories/search' : '/v1/recall';
+    const apiPath = command === 'search' ? REST_ROUTES.memorySearch : REST_ROUTES.recall;
     res = await makeHttpRequest(options.baseUrl, `${apiPath}?${params}`, 'GET', null, headers, options.timeoutMs);
   }
 
@@ -262,7 +263,7 @@ export async function requestTemporaryMemoryOperation(command, options, flags, c
 }
 
 export async function claimStatus(baseUrl, credential, options) {
-  const res = await makeHttpRequest(baseUrl, '/v1/agents/status', 'GET', null, {
+  const res = await makeHttpRequest(baseUrl, REST_ROUTES.agentStatus, 'GET', null, {
     Authorization: `Bearer ${credential.token}`,
   }, options.timeoutMs);
   const data = parseJsonResponse(res, 'Claim status request');

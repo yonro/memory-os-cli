@@ -1,0 +1,1238 @@
+[
+  {
+    "name": "account: overview",
+    "args": [
+      "overview"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "account: activity",
+    "args": [
+      "activity"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "account: stats without time flags",
+    "args": [
+      "stats"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/stats",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "account: stats with time flags",
+    "args": [
+      "stats",
+      "--since",
+      "2026-01-01T00:00:00Z",
+      "--until",
+      "2026-01-02T00:00:00Z"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/stats?since=2026-01-01T00%3A00%3A00Z&until=2026-01-02T00%3A00%3A00Z",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "account: dream-digest valid uuid",
+    "args": [
+      "dream-digest",
+      "--id",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/me/dream/runs/a1b2c3d4-e5f6-7890-abcd-ef1234567890/outcomes?kind=digest&limit=1",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-login: login",
+    "args": [
+      "login",
+      "--allow-plaintext"
+    ],
+    "options": {
+      "noStoredCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/auth/device/start",
+        "bodyKeys": [
+          "client_id",
+          "client_version",
+          "scopes",
+          "surface",
+          "token_type"
+        ]
+      },
+      {
+        "method": "POST",
+        "path": "/v1/auth/device/token",
+        "bodyKeys": [
+          "device_code",
+          "grant_type"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-login: register",
+    "args": [
+      "register",
+      "--reason",
+      "unattended",
+      "--allow-plaintext"
+    ],
+    "options": {
+      "noStoredCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/.well-known/xmemo-agent.json",
+        "bodyKeys": null
+      },
+      {
+        "method": "POST",
+        "path": "/v1/agents/temporary-register",
+        "bodyKeys": [
+          "client_name",
+          "client_version",
+          "entry_type",
+          "installation_fingerprint",
+          "metadata",
+          "requested_scopes",
+          "runtime",
+          "skill_package_id"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-login: logout",
+    "args": [
+      "logout",
+      "--revoke-environment-token"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/auth/token/revoke-self",
+        "bodyKeys": []
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-manage: auth status verify",
+    "args": [
+      "auth",
+      "status",
+      "--verify"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/auth/token/validate",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-manage: auth claim-status",
+    "args": [
+      "auth",
+      "claim-status"
+    ],
+    "options": {
+      "temporaryCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/agents/status",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-manage: auth claim-confirm",
+    "args": [
+      "auth",
+      "claim-confirm",
+      "--allow-plaintext"
+    ],
+    "options": {
+      "temporaryCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/agents/status",
+        "bodyKeys": null
+      },
+      {
+        "method": "POST",
+        "path": "/v1/agents/bind/confirm-current-user",
+        "bodyKeys": [
+          "confirmation_token"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/v1/agents/status",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-manage: auth claim-deny",
+    "args": [
+      "auth",
+      "claim-deny",
+      "--allow-plaintext"
+    ],
+    "options": {
+      "temporaryCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/agents/bind/deny-current-user",
+        "bodyKeys": []
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "auth-manage: auth-status alias verify",
+    "args": [
+      "auth-status",
+      "--verify"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/auth/token/validate",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: list without team",
+    "args": [
+      "cloud-skill-list"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: list with team",
+    "args": [
+      "cloud-skill-list",
+      "--team-id",
+      "team-abc"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills?team_id=team-abc",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: show standard id",
+    "args": [
+      "cloud-skill-show",
+      "--id",
+      "skill-123"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills/skill-123",
+        "bodyKeys": null
+      },
+      {
+        "method": "GET",
+        "path": "/v1/skills/skill-123/components",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: show encoded id with space slash unicode",
+    "args": [
+      "cloud-skill-show",
+      "--id",
+      "my skill/id/✨"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills/my%20skill%2Fid%2F%E2%9C%A8",
+        "bodyKeys": null
+      },
+      {
+        "method": "GET",
+        "path": "/v1/skills/my%20skill%2Fid%2F%E2%9C%A8/components",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: render encoded id",
+    "args": [
+      "cloud-skill-render",
+      "--id",
+      "my skill/id/✨"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills/my%20skill%2Fid%2F%E2%9C%A8/render",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: alias dispatched list",
+    "args": [
+      "cloud-skill",
+      "list"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: alias dispatched show",
+    "args": [
+      "cloud-skill",
+      "show",
+      "--id",
+      "skill-123"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills/skill-123",
+        "bodyKeys": null
+      },
+      {
+        "method": "GET",
+        "path": "/v1/skills/skill-123/components",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "cloud-skill: alias dispatched render",
+    "args": [
+      "cloud-skill",
+      "render",
+      "--id",
+      "skill-123"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/skills/skill-123/render",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ledger: ledger-list",
+    "args": [
+      "ledger-list"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ledger: ledger-summary",
+    "args": [
+      "ledger-summary"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory-lifecycle: relationships standard uuid",
+    "args": [
+      "relationships",
+      "--id",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/a1b2c3d4-e5f6-7890-abcd-ef1234567890/relationships",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory-lifecycle: relationships with cursor and limit",
+    "args": [
+      "relationships",
+      "--id",
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "--cursor",
+      "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "--limit",
+      "10"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/a1b2c3d4-e5f6-7890-abcd-ef1234567890/relationships?limit=10&cursor=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory-lifecycle: forget standard id confirmed",
+    "args": [
+      "forget",
+      "--id",
+      "mem-123",
+      "--confirm"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/memories/mem-123/forget",
+        "bodyKeys": [
+          "mode"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory-lifecycle: forget encoded id confirmed",
+    "args": [
+      "forget",
+      "--id",
+      "mem id/path/🌟",
+      "--confirm"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/memories/mem%20id%2Fpath%2F%F0%9F%8C%9F/forget",
+        "bodyKeys": [
+          "mode"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory-lifecycle: restore standard id confirmed",
+    "args": [
+      "restore",
+      "--id",
+      "mem-123",
+      "--confirm"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/memories/mem-123/restore",
+        "bodyKeys": []
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory-lifecycle: restore encoded id confirmed",
+    "args": [
+      "restore",
+      "--id",
+      "mem id/path/🌟",
+      "--confirm"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/memories/mem%20id%2Fpath%2F%F0%9F%8C%9F/restore",
+        "bodyKeys": []
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: restart-snapshot",
+    "args": [
+      "restart-snapshot"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/restart/snapshot",
+        "bodyKeys": []
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: restart-restore",
+    "args": [
+      "restart-restore",
+      "--snapshot_id",
+      "snap-1"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/restart/restore",
+        "bodyKeys": [
+          "snapshot_id"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: recall-context",
+    "args": [
+      "recall-context",
+      "--query",
+      "what was that"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/recall/context",
+        "bodyKeys": [
+          "bucket",
+          "memory_type",
+          "path",
+          "prefer_working",
+          "query",
+          "status"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: read standard id explain",
+    "args": [
+      "read",
+      "--id",
+      "mem-123"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/mem-123/explain?include_embedding=false",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: read encoded id explain with space slash unicode",
+    "args": [
+      "read",
+      "--id",
+      "mem id/path/🌟"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/mem%20id%2Fpath%2F%F0%9F%8C%9F/explain?include_embedding=false",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: read with bucket and scope",
+    "args": [
+      "read",
+      "--id",
+      "mem-123",
+      "--bucket",
+      "default",
+      "--scope",
+      "project"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/mem-123/explain?include_embedding=false&bucket=default&scope=project",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: update standard id",
+    "args": [
+      "update",
+      "--id",
+      "mem-123",
+      "--content",
+      "updated content"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "PATCH",
+        "path": "/v1/memories/mem-123",
+        "bodyKeys": [
+          "content"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: update encoded id with space slash unicode",
+    "args": [
+      "update",
+      "--id",
+      "mem id/path/🌟",
+      "--content",
+      "updated content"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "PATCH",
+        "path": "/v1/memories/mem%20id%2Fpath%2F%F0%9F%8C%9F",
+        "bodyKeys": [
+          "content"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: remember",
+    "args": [
+      "remember",
+      "--content",
+      "hello memory",
+      "--path",
+      "notes"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: recall without time filter (operations envelope)",
+    "args": [
+      "recall",
+      "--query",
+      "test"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: recall with time filter (GET recall branch)",
+    "args": [
+      "recall",
+      "--query",
+      "test",
+      "--since",
+      "2026-01-01T00:00:00Z"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/recall?query=test&since=2026-01-01T00%3A00%3A00Z",
+        "bodyKeys": null
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: search without time filter (operations envelope)",
+    "args": [
+      "search",
+      "--query",
+      "test"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "memory: search with time filter (GET search branch)",
+    "args": [
+      "search",
+      "--query",
+      "test",
+      "--since",
+      "2026-01-01T00:00:00Z"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/search?query=test&since=2026-01-01T00%3A00%3A00Z",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: save-state",
+    "args": [
+      "save-state",
+      "--content",
+      "{}"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: restore-state",
+    "args": [
+      "restore-state"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: state-save alias",
+    "args": [
+      "state-save",
+      "--content",
+      "{}"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: state-restore alias",
+    "args": [
+      "state-restore"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: todo-add",
+    "args": [
+      "todo-add",
+      "--content",
+      "buy milk"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: todo-list",
+    "args": [
+      "todo-list"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: todo-done",
+    "args": [
+      "todo-done",
+      "--id",
+      "todo-1"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: expense-add",
+    "args": [
+      "expense-add",
+      "--amount",
+      "50",
+      "--item",
+      "food"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: expense-delete confirmed",
+    "args": [
+      "expense-delete",
+      "--id",
+      "exp-1",
+      "--confirm"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: ledger-delete alias confirmed",
+    "args": [
+      "ledger-delete",
+      "--id",
+      "exp-1",
+      "--confirm"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: doctor authenticated",
+    "args": [
+      "doctor"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      },
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: doctor anonymous",
+    "args": [
+      "doctor",
+      "--anonymous"
+    ],
+    "options": {
+      "noStoredCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      },
+      {
+        "method": "POST",
+        "path": "/v1/skill/operations",
+        "bodyKeys": [
+          "arguments",
+          "operation"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: version check",
+    "args": [
+      "version",
+      "--check"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "ops: upgrade check",
+    "args": [
+      "upgrade"
+    ],
+    "options": {},
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/.well-known/agent-discovery.json",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "temporary: remember",
+    "args": [
+      "remember",
+      "--content",
+      "temp memory",
+      "--path",
+      "notes"
+    ],
+    "options": {
+      "temporaryCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "POST",
+        "path": "/v1/remember",
+        "bodyKeys": [
+          "content",
+          "path"
+        ]
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "temporary: recall",
+    "args": [
+      "recall",
+      "--query",
+      "temp recall"
+    ],
+    "options": {
+      "temporaryCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/recall?query=temp+recall&limit=5",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "temporary: search",
+    "args": [
+      "search",
+      "--query",
+      "temp search"
+    ],
+    "options": {
+      "temporaryCredential": true
+    },
+    "expectedRequests": [
+      {
+        "method": "GET",
+        "path": "/v1/memories/search?query=temp+search&limit=5",
+        "bodyKeys": null
+      }
+    ],
+    "expectedExitCode": 0
+  },
+  {
+    "name": "negative: forget missing confirm",
+    "args": [
+      "forget",
+      "--id",
+      "mem-123"
+    ],
+    "options": {},
+    "expectedRequests": [],
+    "expectedExitCode": 1
+  },
+  {
+    "name": "negative: restore missing confirm",
+    "args": [
+      "restore",
+      "--id",
+      "mem-123"
+    ],
+    "options": {},
+    "expectedRequests": [],
+    "expectedExitCode": 1
+  },
+  {
+    "name": "negative: expense-delete missing confirm",
+    "args": [
+      "expense-delete",
+      "--id",
+      "exp-1"
+    ],
+    "options": {},
+    "expectedRequests": [],
+    "expectedExitCode": 1
+  },
+  {
+    "name": "negative: untrusted origin blocked",
+    "args": [
+      "remember",
+      "--content",
+      "hello untrusted"
+    ],
+    "options": {
+      "untrustedOrigin": true
+    },
+    "expectedRequests": [],
+    "expectedExitCode": 1
+  }
+]

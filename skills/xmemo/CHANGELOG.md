@@ -4,6 +4,7 @@
 
 ## 1.1.53
 
+- Centralize REST routes in core.mjs under REST_ROUTES to provide a single auditable egress registry without changing endpoint contracts or transport semantics.
 - Optimize `SKILL.md` entrypoint via progressive disclosure, reducing entrypoint token budget by ~33% while maintaining full command discoverability, first-run consent, and confirmation guards.
 - Provide a structured Command Directory in `SKILL.md` linking every dispatched command and alias to its reference documentation.
 - Isolate agent profile instructions emitted by `profile.mjs` to the exact block for `AGENTS.md`, moving workflow and approval guidance to documentation prose.

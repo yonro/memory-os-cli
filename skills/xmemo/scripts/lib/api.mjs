@@ -6,6 +6,7 @@ import {
   MAX_RESPONSE_BYTES,
   DEFAULT_TEMPORARY_LIMITS,
   EXIT_CODE,
+  REST_ROUTES,
   exitCodeForHttpStatus,
   exitCodeForErrorCode,
   exitCodeForError,
@@ -298,7 +299,7 @@ export function makeHttpRequest(baseUrl, apiPath, method, body = null, headers =
 
 export async function fetchTemporaryLimits(baseUrl, timeoutMs) {
   try {
-    const res = await makeHttpRequest(baseUrl, '/.well-known/xmemo-agent.json', 'GET', null, {}, timeoutMs);
+    const res = await makeHttpRequest(baseUrl, REST_ROUTES.xmemoAgent, 'GET', null, {}, timeoutMs);
     if (res.statusCode < 200 || res.statusCode >= 300) return { ...DEFAULT_TEMPORARY_LIMITS };
     const data = parseJsonResponse(res, 'Temporary-memory policy discovery');
     const limits = data?.temporary_token?.limits;

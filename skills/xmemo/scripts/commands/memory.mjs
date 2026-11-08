@@ -1,4 +1,4 @@
-import { EXIT_CODE, exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError } from '../lib/core.mjs';
+import { EXIT_CODE, exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError, REST_ROUTES } from '../lib/core.mjs';
 import { printMemoryResults } from '../lib/auth-state.mjs';
 import { processDocumentStubs, flushJsonAndExit } from '../lib/document-stub.mjs';
 import {
@@ -33,7 +33,7 @@ export async function handleMemory(ctx) {
   }
 
   if (command === 'restart-snapshot' || command === 'restart-restore') {
-    const endpoint = command === 'restart-snapshot' ? '/v1/restart/snapshot' : '/v1/restart/restore';
+    const endpoint = command === 'restart-snapshot' ? REST_ROUTES.restartSnapshot : REST_ROUTES.restartRestore;
     const label = command === 'restart-snapshot' ? 'Restart snapshot' : 'Restart restore';
     try {
       const res = await makeHttpRequest(options.baseUrl, endpoint, 'POST', flags, { Authorization: `Bearer ${token}` }, options.timeoutMs);
@@ -84,7 +84,7 @@ export async function handleMemory(ctx) {
       }).filter(([, v]) => v !== undefined)
     );
     try {
-      const res = await makeHttpRequest(options.baseUrl, '/v1/recall/context', 'POST', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.recallContext, 'POST', body, { Authorization: `Bearer ${token}` }, options.timeoutMs);
       const data = parseJsonResponse(res, 'Recall context request');
       const succeeded = res.statusCode >= 200 && res.statusCode < 300 && data.ok !== false;
       if (options.json) {
@@ -111,7 +111,7 @@ export async function handleMemory(ctx) {
       flags.bucket ? `bucket=${encodeURIComponent(flags.bucket)}` : null,
       flags.scope ? `scope=${encodeURIComponent(flags.scope)}` : null,
     ].filter(Boolean);
-    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/explain?include_embedding=false${queryParams.length ? `&${queryParams.join('&')}` : ''}`;
+    const endpoint = `${REST_ROUTES.memoryExplain(flags.id)}?include_embedding=false${queryParams.length ? `&${queryParams.join('&')}` : ''}`;
     try {
       const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, { Authorization: `Bearer ${token}` }, options.timeoutMs);
 
@@ -161,7 +161,7 @@ export async function handleMemory(ctx) {
   }
 
   if (command === 'update') {
-    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}`;
+    const endpoint = REST_ROUTES.memory(flags.id);
     const body = {};
     for (const k of ['content', 'path', 'metadata', 'bucket', 'scope']) {
       if (flags[k] !== undefined) body[k] = flags[k];
@@ -212,7 +212,7 @@ export async function handleMemory(ctx) {
     try {
       const useFilteredReadEndpoint = command !== 'remember'
         && RECALL_SEARCH_TIME_FILTER_KEYS.some((key) => flags[key] !== undefined);
-      let endpoint = '/v1/skill/operations';
+      let endpoint = REST_ROUTES.skillOperations;
       let method = 'POST';
       let body = { operation: command, arguments: flags };
       if (useFilteredReadEndpoint) {
@@ -220,7 +220,7 @@ export async function handleMemory(ctx) {
         for (const key of RECALL_SEARCH_QUERY_KEYS) {
           if (flags[key] !== undefined) params.set(key, String(flags[key]));
         }
-        endpoint = `${command === 'search' ? '/v1/memories/search' : '/v1/recall'}?${params}`;
+        endpoint = `${command === 'search' ? REST_ROUTES.memorySearch : REST_ROUTES.recall}?${params}`;
         method = 'GET';
         body = null;
       }

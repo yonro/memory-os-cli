@@ -4,6 +4,7 @@ import {
   extractList,
   safeJson,
 } from './api.mjs';
+import { REST_ROUTES } from './core.mjs';
 
 export const MAX_EXPAND_DOCUMENTS = 3;
 export const MAX_EXPAND_CHARS = 20000;
@@ -91,7 +92,7 @@ export async function processDocumentStubs(rawItems, { expandDocuments, baseUrl,
       flags?.bucket ? `bucket=${encodeURIComponent(flags.bucket)}` : null,
       flags?.scope ? `scope=${encodeURIComponent(flags.scope)}` : null,
     ].filter(Boolean);
-    const endpoint = `/v1/memories/${encodeURIComponent(id)}/explain?include_embedding=false${queryParams.length ? `&${queryParams.join('&')}` : ''}`;
+    const endpoint = `${REST_ROUTES.memoryExplain(id)}?include_embedding=false${queryParams.length ? `&${queryParams.join('&')}` : ''}`;
 
     try {
       const res = await makeHttpRequest(baseUrl, endpoint, 'GET', null, {

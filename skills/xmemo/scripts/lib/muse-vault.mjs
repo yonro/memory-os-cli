@@ -1,6 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs/promises';
-import { DEFAULT_BASE_URL } from './core.mjs';
+import { DEFAULT_BASE_URL, REST_ROUTES } from './core.mjs';
 
 export const VAULT_CREDENTIAL_NAME = 'custom.xmemo';
 export const VAULT_ENTRY_NAME = 'access_token';
@@ -70,7 +70,7 @@ export async function getVaultSurrogate(options = {}) {
     const postData = JSON.stringify({ name: VAULT_CREDENTIAL_NAME });
     const reqOptions = {
       socketPath,
-      path: '/v1/credentials/surrogate',
+      path: REST_ROUTES.credentialsSurrogate,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

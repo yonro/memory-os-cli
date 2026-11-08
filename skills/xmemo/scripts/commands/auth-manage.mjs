@@ -4,6 +4,7 @@ import {
   EXIT_CODE,
   exitCodeForHttpStatus,
   exitCodeForError,
+  REST_ROUTES,
 } from '../lib/core.mjs';
 
 import {
@@ -62,7 +63,7 @@ export async function handleAuthManage(ctx) {
             : 'formal-user-credential-file';
     if (options.verify) {
       try {
-        const res = await makeHttpRequest(options.baseUrl, '/v1/auth/token/validate', 'GET', null, {
+        const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.authTokenValidate, 'GET', null, {
           'Authorization': `Bearer ${token}`
         }, options.timeoutMs);
         const data = parseJsonResponse(res, 'Token verification');
@@ -141,7 +142,7 @@ export async function handleAuthManage(ctx) {
     }
     try {
       if (subcommand === 'claim-deny') {
-        const denyRes = await makeHttpRequest(options.baseUrl, '/v1/agents/bind/deny-current-user', 'POST', {}, {
+        const denyRes = await makeHttpRequest(options.baseUrl, REST_ROUTES.agentBindDeny, 'POST', {}, {
           Authorization: `Bearer ${credential.token}`,
         }, options.timeoutMs);
         const denyData = parseJsonResponse(denyRes, 'Claim denial');
@@ -171,7 +172,7 @@ export async function handleAuthManage(ctx) {
           console.error(`No pending human claim confirmation is available. Current status: ${sanitizeTerminalText(status.status || 'unknown')}. Open the stored bind URL first: ${sanitizeTerminalText(credential.bind_url || '(unavailable)')}`);
           process.exit(EXIT_CODE.USER_ERROR);
         }
-        const confirmRes = await makeHttpRequest(options.baseUrl, '/v1/agents/bind/confirm-current-user', 'POST', { confirmation_token }, {
+        const confirmRes = await makeHttpRequest(options.baseUrl, REST_ROUTES.agentBindConfirm, 'POST', { confirmation_token }, {
           Authorization: `Bearer ${credential.token}`,
         }, options.timeoutMs);
         const confirmData = parseJsonResponse(confirmRes, 'Claim confirmation');

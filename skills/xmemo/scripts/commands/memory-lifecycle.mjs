@@ -1,4 +1,4 @@
-import { EXIT_CODE, exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError } from '../lib/core.mjs';
+import { EXIT_CODE, exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError, REST_ROUTES } from '../lib/core.mjs';
 import { flushJsonAndExit } from '../lib/document-stub.mjs';
 import {
   makeHttpRequest, parseJsonResponse, apiErrorMessage, outputRestError,
@@ -67,7 +67,7 @@ export async function handleMemoryLifecycle(ctx) {
     if (flags.limit !== undefined) params.set('limit', String(flags.limit));
     if (flags.cursor !== undefined) params.set('cursor', String(flags.cursor));
     const query = params.toString();
-    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/relationships${query ? `?${query}` : ''}`;
+    const endpoint = `${REST_ROUTES.memoryRelationships(flags.id)}${query ? `?${query}` : ''}`;
     try {
       const res = await makeHttpRequest(options.baseUrl, endpoint, 'GET', null, { Authorization: `Bearer ${token}` }, options.timeoutMs);
       const data = parseJsonResponse(res, 'Memory relationships request');
@@ -94,7 +94,7 @@ export async function handleMemoryLifecycle(ctx) {
       process.exit(EXIT_CODE.USER_ERROR);
     }
 
-    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/forget`;
+    const endpoint = REST_ROUTES.memoryForget(flags.id);
     const body = { mode: 'soft_delete' };
     if (flags.reason !== undefined && String(flags.reason).trim() !== '') {
       body.reason = String(flags.reason);
@@ -133,7 +133,7 @@ export async function handleMemoryLifecycle(ctx) {
       process.exit(EXIT_CODE.USER_ERROR);
     }
 
-    const endpoint = `/v1/memories/${encodeURIComponent(flags.id)}/restore`;
+    const endpoint = REST_ROUTES.memoryRestore(flags.id);
     const body = {};
     if (flags.reason !== undefined && String(flags.reason).trim() !== '') {
       body.reason = String(flags.reason).trim();
