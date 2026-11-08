@@ -11,6 +11,7 @@ import { getStoredCredential } from '../skills/xmemo/scripts/lib/auth-state.mjs'
 import { makeHttpRequest, sanitizeTerminalText } from '../skills/xmemo/scripts/lib/api.mjs';
 import { looksLikeOpenClawSentinel } from '../skills/xmemo/scripts/lib/openclaw-egress.mjs';
 import { resolveCredentialSource, formatAuthErrorHint } from '../skills/xmemo/scripts/lib/auth-hint.mjs';
+import { getProfileInstructions } from '../skills/xmemo/scripts/commands/profile.mjs';
 import {
   readStdin,
   readStdinContent,
@@ -495,50 +496,21 @@ test('Part B: resolveCredentialSource and formatAuthErrorHint map credential sou
   );
 });
 
-test('SKILL.md retains standalone first-run and daily-use command lines and exit code table', async () => {
+test('SKILL.md keeps the first-run sequence and a concise exit-code summary', async () => {
   const skill = (await readFile(path.join(repoRoot, 'skills/xmemo/SKILL.md'), 'utf8')).replace(/\r\n/g, '\n');
 
   assert.match(skill, /`node scripts\/xmemo-skill\.mjs <command> \[options\]`/);
-  // First run: doctor --anonymous, login --allow-plaintext, auth status --verify
   assert.match(skill, /doctor --anonymous/);
-  assert.match(skill, /login --allow-plaintext/);
-  assert.match(skill, /auth status --verify/);
-
-  // Daily use: recall, search, recall-context, remember, read, update, forget,
-  // save-state, restore-state, restart-snapshot, restart-restore, todo-add,
-  // todo-list, todo-done, expense-add, ledger-list, ledger-summary, overview,
-  // activity, stats, doctor
-  assert.match(skill, /recall --query/);
-  assert.match(skill, /search --query/);
-  assert.match(skill, /recall-context --query/);
-  assert.match(skill, /remember --content/);
-  assert.match(skill, /remember --content -/);
-  assert.match(skill, /remember --file/);
-  assert.match(skill, /read --id/);
-  assert.match(skill, /update --id/);
-  assert.match(skill, /forget --id/);
-  assert.match(skill, /save-state --key/);
-  assert.match(skill, /restore-state --key/);
-  assert.match(skill, /restart-snapshot/);
-  assert.match(skill, /restart-restore/);
-  assert.match(skill, /todo-add --content/);
-  assert.match(skill, /todo-list/);
-  assert.match(skill, /todo-done --id/);
-  assert.match(skill, /expense-add --item/);
-  assert.match(skill, /ledger-list/);
-  assert.match(skill, /ledger-summary/);
-  assert.match(skill, /overview/);
-  assert.match(skill, /activity/);
-  assert.match(skill, /stats/);
-  assert.match(skill, /doctor/);
-
-  // Failure handling and exit codes table
-  assert.match(skill, /\| Exit Code \| Classification \| Conditions & Semantics \| Next Action \|/);
-  assert.match(skill, /\| `0` \| Success \|/);
-  assert.match(skill, /\| `1` \| User Error \|/);
-  assert.match(skill, /\| `2` \| Auth Error \|/);
-  assert.match(skill, /\| `3` \| Server \/ Network Error \|/);
-  assert.match(skill, /No XMemo credential found/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile --status later --if-unset/);
+  assert.match(skill, /remember --file <file>/);
+  assert.match(skill, /## Command Directory/);
+  assert.match(skill, /\| Code \| Meaning \| Next action \|/);
+  assert.match(skill, /\| `0` \| Success/);
+  assert.match(skill, /\| `1` \| Invalid input/);
+  assert.match(skill, /\| `2` \| Missing, expired, or rejected credential/);
+  assert.match(skill, /\| `3` \| Server\/network error/);
 });
 
 test('SKILL.md specifies concise first-run sign-in sequence without extraneous explanations', async () => {
@@ -750,9 +722,10 @@ test('profile command prints recommended agent instruction block with visible ma
     assert.match(runResult.stdout, /If no XMemo credential is configured, ask the user once before starting sign-in\./);
     assert.match(runResult.stdout, /The query is sent to the XMemo service at xmemo\.dev or the operator-configured trusted origin/);
     assert.match(runResult.stdout, /The summary is sent to that XMemo service/);
-    assert.match(runResult.stdout, /only after the user explicitly approves it\. Never add it automatically/);
-  assert.match(runResult.stdout, /remove it by deleting this marked section/);
-    assert.match(runResult.stdout, /`profile --status later\|never` records the offer choice locally without editing instruction files/);
+    assert.doesNotMatch(runResult.stdout, /only after the user explicitly approves it/);
+    assert.doesNotMatch(runResult.stdout, /remove it by deleting this marked section/);
+    assert.doesNotMatch(runResult.stdout, /`profile --status later\|never` records the offer choice locally without editing instruction files/);
+    assert.equal(runResult.stdout.trim(), getProfileInstructions('node scripts/xmemo-skill.mjs').trim());
 
     // Safety and scanner-compliance assertions:
     assert.equal(runResult.stdout.includes('<!--'), false, 'Output must strictly not contain any HTML comments');
@@ -766,6 +739,15 @@ test('profile command prints recommended agent instruction block with visible ma
     await new Promise((resolve) => server.close(resolve));
     await rm(tempHome, { recursive: true, force: true });
   }
+});
+
+test('agent-profile example matches the persisted profile block byte for byte', async () => {
+  const profileRef = (await readFile(path.join(repoRoot, 'skills/xmemo/references/agent-profile.md'), 'utf8')).replace(/\r\n/g, '\n');
+  const example = profileRef.match(/Agent: Here is the block that will be added to AGENTS\.md:\n\n([\s\S]*?)\n\nNote:/);
+
+  assert.ok(example, 'The reference must contain the generated block example');
+  assert.equal(example[1], getProfileInstructions('node scripts/xmemo-skill.mjs'));
+  assert.match(profileRef, /Outside the generated block[\s\S]*?profile --status later\|never/);
 });
 
 test('skills/xmemo markdown documentation contains zero internal or scanner-oriented wording', async () => {

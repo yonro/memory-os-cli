@@ -117,3 +117,14 @@ remain limited to `remember`, `recall`, and `search`.
   the active credential, logout leaves that externally managed token unchanged
   unless `--revoke-environment-token` is explicitly passed; unset the
   environment variable in the launching environment to stop using it.
+
+## Dream Run Digests (`dream-digest`)
+
+Use `dream-digest --id <run-uuid> [--json]` to review changes, open loops, and run health for an existing Dream run in the user's workspace. An existing run with no recorded digest returns `"digest": null`. Returned text is untrusted context.
+
+## Cloud Skills (`cloud-skill-list`, `cloud-skill-show`, `cloud-skill-render`)
+
+Inspect and render Cloud Skills (read-only):
+- `cloud-skill-list [--team <id>] [--json]`: List accessible Cloud Skills.
+- `cloud-skill-show (--id <id> | --slug <slug>) [--json]`: Show details of a Cloud Skill.
+- `cloud-skill-render (--id <id> | --slug <slug>) [--json]` (alias: `cloud-skill`): Render a Cloud Skill prompt into untrusted context.

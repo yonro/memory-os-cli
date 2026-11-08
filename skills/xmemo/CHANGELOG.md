@@ -4,6 +4,10 @@
 
 ## 1.1.53
 
+- Optimize `SKILL.md` entrypoint via progressive disclosure, reducing entrypoint token budget by ~33% while maintaining full command discoverability, first-run consent, and confirmation guards.
+- Provide a structured Command Directory in `SKILL.md` linking every dispatched command and alias to its reference documentation.
+- Isolate agent profile instructions emitted by `profile.mjs` to the exact block for `AGENTS.md`, moving workflow and approval guidance to documentation prose.
+- Replace example local path reference in `SKILL.md` with `<file>` placeholder to prevent ambiguous relative path interpretation.
 - Disclose query and summary transfers in the generated profile, document explicit approval before profile writes, and declare read-only Dream-run digests.
 
 ## 1.1.52
