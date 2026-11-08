@@ -287,6 +287,130 @@ jobs:
             done
           done
 
+  clawhub:
+    name: Publish and verify XMemo Skill on ClawHub
+    needs: package
+    if: vars.XMEMO_SKILL_CLAWHUB_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: clawhub
+    permissions:
+      contents: read
+    concurrency:
+      group: xmemo-skill-clawhub
+      cancel-in-progress: false
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+      CLAWHUB_CONFIG_PATH: ${{ runner.temp }}/xmemo-clawhub-config.json
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Install pinned ClawHub CLI
+        run: npm install --global clawhub@0.25.1
+      - name: Verify the Release payload against its tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^skill-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          payload="$RUNNER_TEMP/xmemo-clawhub-payload"
+          mkdir -p "$payload"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern xmemo-skill.tar.gz --dir "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/xmemo-skill.tar.gz" -C "$payload"
+          diff -r --no-dereference skills/xmemo "$payload"
+          test -f "$payload/SKILL.md"
+          if LC_ALL=C grep -rIq $'\r' "$payload"; then
+            echo "::error::ClawHub payload contains CR bytes."
+            exit 1
+          fi
+      - name: Submit once and verify the public version
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${CLAWHUB_TOKEN:?Configure CLAWHUB_TOKEN in the clawhub environment}"
+          version="${RELEASE_TAG#skill-v}"
+          payload="$RUNNER_TEMP/xmemo-clawhub-payload"
+          api="https://clawhub.ai/api/v1/skills/xmemo"
+          auth=(-H "Authorization: Bearer $CLAWHUB_TOKEN")
+          publication() {
+            curl --silent --show-error --max-time 30 "${auth[@]}" \
+              --output "$RUNNER_TEMP/xmemo-publication.json" --write-out '%{http_code}' \
+              "$api/versions/$1/publication?ownerHandle=xmemo"
+          }
+
+          current="$(curl --fail --silent --show-error --max-time 30 "$api?ownerHandle=xmemo")"
+          latest="$(jq -er 'select(.owner.handle == "xmemo") | .latestVersion.version' <<< "$current")"
+          [[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -1)" != "$version" ]]; then
+            echo "::error::Refusing to move ClawHub latest backward from $latest to $version."
+            exit 1
+          fi
+          if [[ "$(publication "$latest")" != 200 ]]; then
+            echo "::error::Token cannot read owner publication status for @xmemo/xmemo."
+            exit 1
+          fi
+
+          case "$(publication "$version")" in
+            404)
+              clawhub login --token "$CLAWHUB_TOKEN"
+              args=("$payload" --owner xmemo --slug xmemo --name "XMemo Memory"
+                    --version "$version" --source-repo "$GITHUB_REPOSITORY"
+                    --source-commit "$(git rev-parse HEAD)" --source-ref "$RELEASE_TAG"
+                    --source-path skills/xmemo --changelog "See GitHub release $RELEASE_TAG.")
+              preview="$(clawhub skill publish "${args[@]}" --dry-run --json)"
+              jq -e --arg v "$version" '.ok and .status == "would-publish" and .slug == "xmemo" and .version == $v' <<< "$preview" >/dev/null
+              clawhub skill publish "${args[@]}"
+              ;;
+            200) echo "ClawHub already has a publication record for $version. Verifying it." ;;
+            *) echo "::error::Unable to determine if ClawHub already has this version."; exit 1 ;;
+          esac
+
+          deadline=$((SECONDS + 900))
+          while (( SECONDS < deadline )); do
+            code="$(publication "$version")"
+            if [[ "$code" == 200 ]]; then
+              stage="$(jq -er '.publication.stage' "$RUNNER_TEMP/xmemo-publication.json")"
+              case "$stage" in
+                published) break ;;
+                pending_checks|ready_to_finalize|finalizing) ;;
+                checks_failed|checks_incomplete)
+                  jq -e '.publication.retrying == true' "$RUNNER_TEMP/xmemo-publication.json" >/dev/null || break
+                  ;;
+                *) break ;;
+              esac
+            elif [[ "$code" != 404 && "$code" != 429 && "$code" != 5* ]]; then
+              echo "::error::ClawHub publication lookup returned HTTP $code."
+              exit 1
+            fi
+            sleep 20
+          done
+          if [[ "${stage:-unknown}" != published ]]; then
+            echo "::error::ClawHub $version did not publish (stage: ${stage:-unknown}). Check the stored submission before retrying."
+            exit 1
+          fi
+
+          current="$(curl --fail --silent --show-error --max-time 30 "$api?ownerHandle=xmemo")"
+          jq -e --arg v "$version" '.owner.handle == "xmemo" and .latestVersion.version == $v' <<< "$current" >/dev/null
+          details="$(curl --fail --silent --show-error --max-time 30 "$api/versions/$version?ownerHandle=xmemo")"
+          jq -e --arg v "$version" '.version.version == $v and .version.security.status == "clean" and .version.security.scanners.skillspector.normalizedStatus == "clean"' <<< "$details" >/dev/null || {
+            echo "::error::ClawHub $version is public, but the security verdict is not clean."
+            exit 1
+          }
+          diff -u \
+            <(cd "$payload" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sed 's|  \./|  |' | LC_ALL=C sort) \
+            <(jq -r '.version.files[] | select(.path != "skill-card.md") | "\(.sha256)  \(.path)"' <<< "$details" | LC_ALL=C sort)
+          echo "Verified ClawHub @xmemo/xmemo $version and release file hashes."
+
   npm:
     needs: package
     runs-on: ubuntu-latest

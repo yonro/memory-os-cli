@@ -19,7 +19,7 @@ When introducing updates that touch both the standalone skill (`skills/xmemo`) a
   PR on feat branch -> CI green -> merge to main
   -> tag skill-v<version> on main -> GitHub Release (with --latest)
   -> GitHub Actions publishes @xmemo/skill to npm, updates xmemo.dev, publishes to SkillHub
-  -> Publish to ClawHub with --owner xmemo --name "XMemo Memory"
+  -> GitHub Actions submits the same archive to ClawHub when enabled
         │
         ▼
 [2. Update CLI Pins]
@@ -104,6 +104,20 @@ In contrast, CLI releases (`.github/workflows/release.yml`) are explicitly confi
 ---
 
 ## 3. Publishing to ClawHub
+
+The Skill release workflow's ClawHub job uses the same GitHub Release archive
+as the other channels. To enable submissions, configure an Actions environment
+named `clawhub` with required reviewers and add its `CLAWHUB_TOKEN` secret
+with permission to publish under `xmemo`. Set the repository variable
+`XMEMO_SKILL_CLAWHUB_PUBLISH=true` after the ClawHub release hold is lifted.
+
+The job checks owner-visible publication status before uploading. If the exact
+version already exists, it verifies that submission. A successful job requires
+the exact public latest version, a clean scan and matching file hashes.
+When resuming an approved release, dispatch the existing
+`release-xmemo-skill.yml` workflow with its `release_tag`.
+
+### Manual fallback
 
 When publishing updates for `skills/xmemo` to ClawHub:
 
