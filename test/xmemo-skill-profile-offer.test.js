@@ -32,6 +32,7 @@ function runSkill(args, env = {}) {
       env: {
         ...process.env,
         XMEMO_NO_UPDATE_CHECK: '1',
+        XMEMO_TRUSTED_ORIGIN: args[args.indexOf('--base-url') + 1],
         ...env,
       },
     });

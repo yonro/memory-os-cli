@@ -540,6 +540,39 @@ test('openclaw-egress: redaction covers sentinel strings and look-alikes', () =>
   assert.equal(sanitizeSensitiveValue('prefix oc-sent-v3.abc.end suffix'), 'prefix [REDACTED] suffix');
 });
 
+test('credential egress requires an exact operator-approved origin, including on loopback', async () => {
+  const received = [];
+  const server = http.createServer((req, res) => {
+    received.push(req.headers.authorization);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ items: [] }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const key = 'synthetic-egress-regression';
+  const args = ['dream-digest', '--id', '12345678-1234-4321-8123-123456789abc', '--json'];
+
+  try {
+    for (const trustedOrigin of ['', 'http://127.0.0.1', `${origin}/`]) {
+      const result = await runCli([...args, '--base-url', origin], {
+        env: { XMEMO_KEY: key, XMEMO_TRUSTED_ORIGIN: trustedOrigin },
+      });
+      assert.equal(result.code, 1);
+      assert.match(result.stderr, /Credential request blocked/);
+      assert.ok(!result.stderr.includes(key));
+      assert.deepEqual(received, []);
+    }
+
+    const approved = await runCli(args, {
+      env: { XMEMO_KEY: key, XMEMO_BASE_URL: origin, XMEMO_TRUSTED_ORIGIN: origin },
+    });
+    assert.equal(approved.code, 0, approved.stderr);
+    assert.deepEqual(received, [`Bearer ${key}`]);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('openclaw-egress: look-alike sentinels fail closed with exit code 1, zero requests, and no value printed', async () => {
   let requestsMade = 0;
   const mockServer = http.createServer((req, res) => {

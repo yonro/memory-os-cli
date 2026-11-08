@@ -85,6 +85,7 @@ async function runChildScript(scriptPath, args, options = {}) {
     const child = spawn(process.execPath, [scriptPath, ...args], {
       env: {
         ...process.env,
+        XMEMO_TRUSTED_ORIGIN: args[args.indexOf('--base-url') + 1],
         ...(options.env || {}),
       },
       cwd: repoRoot,

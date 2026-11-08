@@ -50,7 +50,7 @@ node scripts/xmemo-skill-smoke-test.mjs --base-url https://xmemo.dev
 node scripts/xmemo-skill-smoke-test.mjs --json
 
 # Execute write-side commands against disposable test accounts or local mocks
-node scripts/xmemo-skill-smoke-test.mjs --execute-writes --base-url http://127.0.0.1:8080
+XMEMO_TRUSTED_ORIGIN=http://127.0.0.1:8080 node scripts/xmemo-skill-smoke-test.mjs --execute-writes --base-url http://127.0.0.1:8080
 ```
 
 ### Safety & Write Gating

@@ -665,6 +665,7 @@ test('skill read --id --json correctly decodes CJK response split across TCP chu
         env: {
           ...process.env,
           XMEMO_KEY: 'test-token-cjk',
+          XMEMO_TRUSTED_ORIGIN: `http://127.0.0.1:${port}`,
           XMEMO_NO_UPDATE_CHECK: '1',
         },
       });

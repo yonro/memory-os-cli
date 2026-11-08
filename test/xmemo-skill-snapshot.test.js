@@ -470,6 +470,7 @@ async function runSnapshotScript(args, { baseUrl, homeDir, stdin, env = {} }) {
     childEnv.HOME = homeDir;
     childEnv.USERPROFILE = homeDir;
     childEnv.XMEMO_BASE_URL = baseUrl;
+    childEnv.XMEMO_TRUSTED_ORIGIN = baseUrl;
     childEnv.XMEMO_FORCE_TTY = '1';
     childEnv.XMEMO_NO_UPDATE_CHECK = '1';
     Object.assign(childEnv, env);

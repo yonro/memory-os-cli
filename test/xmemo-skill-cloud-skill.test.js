@@ -74,6 +74,7 @@ async function runScript(args, options = {}) {
       HOME: options.homeDir || process.env.HOME,
       USERPROFILE: options.homeDir || process.env.USERPROFILE,
       XMEMO_BASE_URL: options.baseUrl,
+      XMEMO_TRUSTED_ORIGIN: options.baseUrl && new URL(options.baseUrl).origin,
       XMEMO_KEY: options.env?.XMEMO_KEY,
       XMEMO_FORCE_TTY: forceTty,
       XMEMO_NO_UPDATE_CHECK: '1',
