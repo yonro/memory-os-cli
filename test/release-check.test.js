@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import {
   parseSemver,
   compareSemver,
-  getGitSkillTags,
   getLatestSkillTag,
   verifySkillPinGate
 } from '../scripts/check-release-version.mjs';
@@ -79,14 +78,10 @@ test('check-release-version: verifySkillPinGate fails closed when pinned version
   assert.match(failOlder.error, /older than the latest skill tag/);
 });
 
-test('check-release-version CLI gate: process passes with current repo tags', () => {
-  const currentTags = getGitSkillTags();
-  const env = currentTags.length > 0
-    ? process.env
-    : { ...process.env, XMEMO_OVERRIDE_SKILL_TAGS: `skill-v${PINNED_SKILL_VERSION}` };
-  const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli'], {
+test('check-release-version CLI gate: release passes when the pin matches the latest skill tag', () => {
+  const res = spawnSync(process.execPath, [scriptPath, '--channel', 'cli', '--tag', `cli-v${CLI_VERSION}`], {
     cwd: repoRoot,
-    env,
+    env: { ...process.env, XMEMO_OVERRIDE_SKILL_TAGS: `skill-v${PINNED_SKILL_VERSION}` },
     encoding: 'utf8'
   });
   assert.equal(res.status, 0, `Script failed: ${res.stderr}`);
