@@ -31,7 +31,7 @@ test('XMemo Skill describes standalone CLI-backed runtime selection', async () =
   const memoryOps = (await readFile(path.join(repoRoot, 'skills/xmemo/references/memory-operations.md'), 'utf8')).replace(/\r\n/g, '\n');
   const authSetup = (await readFile(path.join(repoRoot, 'skills/xmemo/references/auth-setup.md'), 'utf8')).replace(/\r\n/g, '\n');
 
-  assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\nallowed-tools: Bash\(node scripts\/xmemo-skill\.mjs:\*\)\ncompatibility: .+\nmetadata: .+\n---\n/);
+  assert.match(skill, /^---\nname: xmemo-memory\ndescription: .+\ncompatibility: .+\nmetadata: .+\n---\n/);
   assert.match(skill, /"requires":\{"bins":\["node"\]\},"primaryEnv":"XMEMO_KEY"/);
   assert.match(skill, /read user Cloud Skills \(read-only\)/i);
   assert.match(skill, /Runtime Selection/);
@@ -546,11 +546,11 @@ test('SKILL.md specifies concise first-run sign-in sequence without extraneous e
   assert.match(skill, /XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself\. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer \(or configure XMEMO_KEY in your environment\)\. Sign in or create an account to get started\?/);
   assert.match(skill, /Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup\./);
   assert.match(skill, /do not start login or create temporary access/);
-  assert.match(skill, /login --allow-plaintext/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs login --allow-plaintext/);
   assert.match(skill, /approve it in your browser/);
-  assert.match(skill, /auth status --verify/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs auth status --verify/);
   assert.match(skill, /tell the user in one line that XMemo is connected/);
-  assert.match(skill, /profile --status later --if-unset/);
+  assert.match(skill, /node scripts\/xmemo-skill\.mjs profile --status later --if-unset/);
   assert.match(skill, /Read \[references\/agent-profile\.md\]\(references\/agent-profile\.md\) before writing to AGENTS\.md, CLAUDE\.md, or any other agent instruction file\./);
   assert.match(skill, /\|\s*`profile`\s*\|\s*Print recommended agent instructions\s*\|/);
   assert.match(skill, /do not ask again in the same session/);

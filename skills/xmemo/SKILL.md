@@ -1,8 +1,7 @@
 ---
 name: xmemo-memory
 description: Persistent, user-owned memory for agents. Use the standalone runtime to remember, recall, search, preserve restart continuity, manage TODOs and expenses, inspect account overview, activity and stats diagnostics, read user Cloud Skills (read-only), configure agent instructions, check for updates or upgrade runtime, or diagnose XMemo when MCP tools are unavailable. Not for codebase search, web search, or short-lived in-session notes.
-allowed-tools: Bash(node scripts/xmemo-skill.mjs:*)
-compatibility: Standalone use requires Node.js >= 22.22.0 and HTTPS access to xmemo.dev or an operator-configured trusted XMemo origin. Credentials can come from XMEMO_KEY, a managed store, or the consent-gated ~/.xmemo/skill-credentials.json file.
+compatibility: Standalone use requires Node.js >= 22.22.0 and HTTPS access to xmemo.dev or an operator-configured trusted XMemo origin. Credentials can come from XMEMO_KEY, a managed store, or the consent-gated local credential file.
 metadata: '{"openclaw":{"requires":{"bins":["node"]},"primaryEnv":"XMEMO_KEY"}}'
 ---
 
@@ -10,7 +9,7 @@ metadata: '{"openclaw":{"requires":{"bins":["node"]},"primaryEnv":"XMEMO_KEY"}}'
 
 Give your agent durable memory that survives across sessions, projects, and tools.
 
-For standalone examples below, run the command and arguments as `node scripts/xmemo-skill.mjs <command> [options]` from the Skill directory. Only the bundled entrypoint is in the declared shell scope.
+For standalone examples below, run the command and arguments as `node scripts/xmemo-skill.mjs <command> [options]` from the Skill directory. Use the shell only to invoke the bundled entrypoint for these operations.
 
 ## First Successful Run
 
@@ -20,8 +19,8 @@ After ClawHub installs this Skill, follow First-run sign-in below:
 
 When no credential exists, follow this exact sequence:
 1. Ask once in the user's language, preserving the meaning of this example: "XMemo is your personal cloud memory — it lets AI remember your projects, preferences, and todos across sessions and tools, so you never have to repeat yourself. Using XMemo requires an account; signing in saves an authentication token unencrypted on this computer (or configure XMEMO_KEY in your environment). Sign in or create an account to get started?" Translate the example when appropriate. Show only this simple introduction and login question first, without doctor, MCP, token, commands, diagnostics, or technical setup.
-2. On explicit user consent (yes): run `login --allow-plaintext` directly so output is visible while the command is waiting (for example a background task or streaming shell). As soon as the verification URL and one-time code appear, show only those plus "approve it in your browser" — nothing else. Then wait for the command to exit. A short tool timeout must not kill it before approval or expiry.
-3. When login succeeds: run `auth status --verify`, tell the user in one line that XMemo is connected and that recall can offer setup assistance, run `profile --status later --if-unset` to record this preference, and continue the original task.
+2. On explicit user consent (yes): run `node scripts/xmemo-skill.mjs login --allow-plaintext` directly so output is visible while the command is waiting (for example a background task or streaming shell). As soon as the verification URL and one-time code appear, show only those plus "approve it in your browser" — nothing else. Then wait for the command to exit. A short tool timeout must not kill it before approval or expiry.
+3. When login succeeds: run `node scripts/xmemo-skill.mjs auth status --verify`, tell the user in one line that XMemo is connected and that recall can offer setup assistance, run `node scripts/xmemo-skill.mjs profile --status later --if-unset` to record this preference, and continue the original task.
 4. On no: do not start login or create temporary access; continue the original task without XMemo; do not ask again in the same session unless the user brings it up.
 5. Do not explain runtime selection, doctor details, secret-store setup, or other features during sign-in unless the user asks.
 
