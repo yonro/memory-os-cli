@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import {
   credentialsPath, SCRIPT_COMMAND, EXIT_CODE,
   exitCodeForHttpStatus, exitCodeForErrorCode, exitCodeForError,
+  REST_ROUTES,
 } from '../lib/core.mjs';
 
 import {
@@ -26,7 +27,7 @@ export async function handleAuthLogin(ctx) {
   if (command === 'login') {
     try {
       requirePlaintextStorageConsent(options, 'Device login');
-      const res = await makeHttpRequest(options.baseUrl, '/v1/auth/device/start', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.authDeviceStart, 'POST', {
         client_id: 'xmemo-skill', surface: 'standalone_skill', token_type: 'skill_token',
         client_version: skillVersion,
         scopes: ['memory:read', 'memory:write', 'memory:restore', 'ledger:write', 'ledger:read', 'knowledge:read']
@@ -61,16 +62,14 @@ export async function handleAuthLogin(ctx) {
           process.exit(EXIT_CODE.AUTH_ERROR);
         }
         try {
-          const pollRes = await makeHttpRequest(options.baseUrl, '/v1/auth/device/token', 'POST', {
+          const pollRes = await makeHttpRequest(options.baseUrl, REST_ROUTES.authDeviceToken, 'POST', {
             device_code: deviceCode,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
           }, {}, options.timeoutMs);
           const pollData = parseJsonResponse(pollRes, 'Device login polling');
           if (pollData.error) {
-            if (pollData.error === 'authorization_pending') {
-              setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
-            } else if (pollData.error === 'slow_down') {
-              pollInterval += 5000;
+            if (pollData.error === 'authorization_pending' || pollData.error === 'slow_down') {
+              if (pollData.error === 'slow_down') pollInterval += 5000;
               setTimeout(poll, Math.min(pollInterval, Math.max(1, loginDeadline - Date.now())));
             } else {
               console.error(`Login failed: ${sanitizeTerminalText(pollData.error_description || pollData.error)}`);
@@ -126,7 +125,7 @@ export async function handleAuthLogin(ctx) {
     try {
       const limits = await fetchTemporaryLimits(options.baseUrl, options.timeoutMs);
       const installation_fingerprint = await getInstallationFingerprint();
-      const res = await makeHttpRequest(options.baseUrl, '/v1/agents/temporary-register', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.authTemporaryRegister, 'POST', {
         entry_type: 'skill',
         client_name: 'xmemo-skill',
         requested_scopes: ['read:temporary_memory', 'write:temporary_memory'],
@@ -143,10 +142,8 @@ export async function handleAuthLogin(ctx) {
         throw err;
       }
       await saveToken(data.temporary_token, {
-        credential_type: 'temporary',
-        agent_id: data.agent_id,
-        bind_url: data.bind_url,
-        registration_reason: reason,
+        credential_type: 'temporary', agent_id: data.agent_id,
+        bind_url: data.bind_url, registration_reason: reason,
       }, { allowPlaintext: options.allowPlaintext, warn: true });
       if (options.json) {
         console.log(safeJson({ agent_id: data.agent_id, bind_url: data.bind_url, status: data.status, limits }));
@@ -193,7 +190,7 @@ export async function handleAuthLogin(ctx) {
     let remoteRevoked = false;
     let revokeError = null;
     try {
-      const revokeRes = await makeHttpRequest(options.baseUrl, '/v1/auth/token/revoke-self', 'POST', {}, {
+      const revokeRes = await makeHttpRequest(options.baseUrl, REST_ROUTES.authTokenRevokeSelf, 'POST', {}, {
         'Authorization': `Bearer ${token}`
       }, options.timeoutMs);
       remoteRevoked = revokeRes.statusCode >= 200 && revokeRes.statusCode < 300;

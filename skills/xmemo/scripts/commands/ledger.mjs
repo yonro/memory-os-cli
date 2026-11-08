@@ -1,6 +1,7 @@
 import {
   EXIT_CODE,
   exitCodeForError,
+  REST_ROUTES,
 } from '../lib/core.mjs';
 
 import {
@@ -49,7 +50,7 @@ export async function handleLedger(ctx) {
 
     try {
       // Dispatches query to XMemo API over HTTPS with Bearer authorization.
-      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.skillOperations, 'POST', {
         operation: 'ledger-list',
         arguments: args,
       }, {
@@ -112,7 +113,7 @@ export async function handleLedger(ctx) {
 
     try {
       // Dispatches query to XMemo API over HTTPS with Bearer authorization.
-      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.skillOperations, 'POST', {
         operation: 'ledger-summary',
         arguments: args,
       }, {

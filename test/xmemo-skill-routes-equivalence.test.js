@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, readFile, readdir } from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -134,6 +134,8 @@ async function runCommandWithServer(args, options = {}) {
     XDG_CONFIG_HOME: tempHome,
   };
   delete env.XMEMO_KEY;
+  delete env.CI;
+  delete env.XMEMO_NO_UPDATE_CHECK;
 
   if (options.untrustedOrigin) {
     delete env.XMEMO_TRUSTED_ORIGIN;
@@ -187,3 +189,27 @@ test('route equivalence: all commands match recorded pre-refactor routes fixture
     });
   }
 });
+
+test('centralized routes: no hardcoded /v1/ literals remain outside core.mjs', async () => {
+  const dirs = [
+    path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'commands'),
+    path.join(repoRoot, 'skills', 'xmemo', 'scripts', 'lib'),
+    path.join(repoRoot, 'skills', 'xmemo', 'scripts'),
+  ];
+  const filesWithV1 = [];
+  for (const dir of dirs) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith('.mjs')) {
+        if (entry.name === 'core.mjs') continue;
+        const filePath = path.join(dir, entry.name);
+        const content = await readFile(filePath, 'utf8');
+        if (content.includes('/v1/')) {
+          filesWithV1.push({ file: entry.name, path: filePath });
+        }
+      }
+    }
+  }
+  assert.deepEqual(filesWithV1, [], `Found hardcoded '/v1/' literals in files outside core.mjs: ${filesWithV1.map((f) => f.file).join(', ')}`);
+});
+

@@ -6,6 +6,38 @@ export const registrationPath = path.join(os.homedir(), '.xmemo', 'skill-registr
 export const SCRIPT_COMMAND = 'node scripts/xmemo-skill.mjs';
 export const PLAINTEXT_STORAGE = 'plaintext-user-file';
 export const DEFAULT_BASE_URL = 'https://xmemo.dev';
+export const REST_ROUTES = Object.freeze({
+  skillOperations: '/v1/skill/operations',
+  recall: '/v1/recall',
+  recallContext: '/v1/recall/context',
+  memorySearch: '/v1/memories/search',
+  memoryStats: '/v1/memories/stats',
+  remember: '/v1/remember',
+  memory: (id) => `/v1/memories/${encodeURIComponent(id)}`,
+  memoryExplain: (id) => `/v1/memories/${encodeURIComponent(id)}/explain`,
+  memoryRelationships: (id) => `/v1/memories/${encodeURIComponent(id)}/relationships`,
+  memoryForget: (id) => `/v1/memories/${encodeURIComponent(id)}/forget`,
+  memoryRestore: (id) => `/v1/memories/${encodeURIComponent(id)}/restore`,
+  restartSnapshot: '/v1/restart/snapshot',
+  restartRestore: '/v1/restart/restore',
+  authDeviceStart: '/v1/auth/device/start',
+  authDeviceToken: '/v1/auth/device/token',
+  authTemporaryRegister: '/v1/agents/temporary-register',
+  authTokenRevokeSelf: '/v1/auth/token/revoke-self',
+  authTokenValidate: '/v1/auth/token/validate',
+  agentStatus: '/v1/agents/status',
+  agentBindConfirm: '/v1/agents/bind/confirm-current-user',
+  agentBindDeny: '/v1/agents/bind/deny-current-user',
+  skills: '/v1/skills',
+  skillDetail: (id) => `/v1/skills/${encodeURIComponent(id)}`,
+  skillComponents: (id) => `/v1/skills/${encodeURIComponent(id)}/components`,
+  skillRender: (id) => `/v1/skills/${encodeURIComponent(id)}/render`,
+  dreamRunOutcomes: (runId) => `/v1/me/dream/runs/${encodeURIComponent(runId)}/outcomes`,
+  // Local Muse vault Unix-socket endpoint (not a remote egress route)
+  credentialsSurrogate: '/v1/credentials/surrogate',
+  agentDiscovery: '/.well-known/agent-discovery.json',
+  xmemoAgent: '/.well-known/xmemo-agent.json',
+});
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const MAX_TIMEOUT_MS = 300_000;
 export const MAX_RESPONSE_BYTES = 8_388_608;
@@ -41,41 +73,13 @@ export function exitCodeForHttpStatus(statusCode) {
 export function exitCodeForErrorCode(code) {
   if (!code || typeof code !== 'string') return null;
   const normalized = code.toLowerCase();
-  if (
-    normalized === 'unauthorized' ||
-    normalized === 'forbidden' ||
-    normalized === 'tenant_forbidden' ||
-    normalized === 'auth_error' ||
-    normalized === 'invalid_token' ||
-    normalized === 'token_expired' ||
-    normalized === 'authentication_required' ||
-    normalized === 'missing_credentials'
-  ) {
+  if (['unauthorized', 'forbidden', 'tenant_forbidden', 'auth_error', 'invalid_token', 'token_expired', 'authentication_required', 'missing_credentials'].includes(normalized)) {
     return EXIT_CODE.AUTH_ERROR;
   }
-  if (
-    normalized === 'server_error' ||
-    normalized === 'internal_error' ||
-    normalized === 'timeout' ||
-    normalized === 'bad_gateway' ||
-    normalized === 'service_unavailable' ||
-    normalized === 'econnrefused' ||
-    normalized === 'enotfound' ||
-    normalized === 'ehostunreach' ||
-    normalized === 'econnreset' ||
-    normalized === 'etimedout' ||
-    normalized === 'esockettimedout'
-  ) {
+  if (['server_error', 'internal_error', 'timeout', 'bad_gateway', 'service_unavailable', 'econnrefused', 'enotfound', 'ehostunreach', 'econnreset', 'etimedout', 'esockettimedout'].includes(normalized)) {
     return EXIT_CODE.SERVER_ERROR;
   }
-  if (
-    normalized === 'bad_request' ||
-    normalized === 'invalid_argument' ||
-    normalized === 'not_found' ||
-    normalized === 'rate_limited' ||
-    normalized === 'rate_limit_exceeded' ||
-    normalized === 'precondition_required'
-  ) {
+  if (['bad_request', 'invalid_argument', 'not_found', 'rate_limited', 'rate_limit_exceeded', 'precondition_required'].includes(normalized)) {
     return EXIT_CODE.USER_ERROR;
   }
   if (/^http 40[13](?!\d)/.test(normalized)) {

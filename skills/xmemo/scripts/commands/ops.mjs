@@ -4,6 +4,7 @@ import {
   exitCodeForHttpStatus,
   exitCodeForErrorCode,
   exitCodeForError,
+  REST_ROUTES,
 } from '../lib/core.mjs';
 
 import {
@@ -71,10 +72,10 @@ function discoveryFailureCode(error) {
 }
 
 async function fetchDoctorDiscovery(baseUrl, timeoutMs) {
-  const discoveryUrl = new URL('/.well-known/agent-discovery.json', baseUrl).toString();
+  const discoveryUrl = new URL(REST_ROUTES.agentDiscovery, baseUrl).toString();
 
   const attempt = async () => {
-    const res = await makeHttpRequest(baseUrl, '/.well-known/agent-discovery.json', 'GET', null, {}, timeoutMs);
+    const res = await makeHttpRequest(baseUrl, REST_ROUTES.agentDiscovery, 'GET', null, {}, timeoutMs);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       return {
         status: 'unavailable',
@@ -140,7 +141,7 @@ export async function handleOps(ctx) {
       const discovery = options.json
         ? await fetchDoctorDiscovery(options.baseUrl, options.timeoutMs)
         : null;
-      const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+      const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.skillOperations, 'POST', {
         operation: 'doctor',
         arguments: {}
       }, {}, options.timeoutMs);
@@ -192,7 +193,7 @@ export async function handleOps(ctx) {
       ? await fetchDoctorDiscovery(options.baseUrl, options.timeoutMs)
       : null;
     // Dispatches operation query to XMemo API over HTTPS with Bearer authorization.
-    const res = await makeHttpRequest(options.baseUrl, '/v1/skill/operations', 'POST', {
+    const res = await makeHttpRequest(options.baseUrl, REST_ROUTES.skillOperations, 'POST', {
       operation: opName,
       arguments: opArgs,
     }, {
