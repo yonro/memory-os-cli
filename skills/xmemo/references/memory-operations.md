@@ -117,7 +117,7 @@ Content input options:
 - `--content -`: Reads the full content from standard input until EOF.
 - `--file <path>`: Reads the full content from the specified file path.
 - **Mutual exclusion**: Specifying both `--content` and `--file`, or multiple `--content` / `--file` flags, is rejected locally with exit code 1 and **zero network requests**.
-- **Payload & validation consistency**: Stdin and file content undergo identical validation and are transmitted in the same outbound payload format (`arguments: { content: <text>, path: ... }`). Server request structure and byte integrity are preserved exactly across all input paths.
+- **Payload & validation consistency**: Stdin and file inputs undergo identical validation and outbound formatting (`arguments: { content: <text>, path: ... }`). Server request structure and byte integrity are preserved across all input paths.
 - **Size Limit Enforcement**: Total content bytes are bounded by `MAX_MEMORY_CONTENT_BYTES` (524,288 bytes). `--file` verifies file size prior to reading; stdin validates stream bytes incrementally. Exceeding the limit halts immediately with `content_too_large` and zero network requests.
 - **File read failures**: If the target file does not exist (`ENOENT`) or is inaccessible (`EACCES`), the command immediately reports a local error with exit code 1 and makes **zero network requests**.
 - Empty or whitespace-only content is rejected locally before request transmission.
@@ -127,6 +127,8 @@ Content input options:
 ```text
 node scripts/xmemo-skill.mjs recall --query "package manager convention for memory-os-cli" --compact
 ```
+
+Document-backed memories returned by `recall` or `search` appear as a one-line stub (`Document-backed memory: <title>`); the stub is not the full record. To retrieve the full text, run `read --id <id>` with the `id` from the result (no `--limit` needed), or pass `--expand-documents` to `recall` or `search`. Before telling the user a document was not saved in full, run `read --id` on the stub.
 
 ### Recall and Search with Time Filtering
 
@@ -167,7 +169,7 @@ node scripts/xmemo-skill.mjs remember --content "Verified decision" --path "proj
 node scripts/xmemo-skill.mjs search --query "active implementation" --explain true --prefer_working false --compact
 ```
 
-### Save handoff state
+### Save handoff state (`save-state`)
 
 ```text
 node scripts/xmemo-skill.mjs save-state --key active_task
@@ -177,7 +179,7 @@ node scripts/xmemo-skill.mjs save-state --key active_task
 state-operation contract. A value of `0` requests the server's non-expiring
 state behavior for that item.
 
-### Restore handoff state
+### Restore handoff state (`restore-state`)
 
 ```text
 node scripts/xmemo-skill.mjs restore-state --key active_task
@@ -206,13 +208,11 @@ node scripts/xmemo-skill.mjs restart-restore --source_session_id handoff-a --tar
 
 All limits are client-validated against the hosted contract. Snapshot item
 limits accept `0..100`; `--ttl_seconds` accepts `0..2592000` (30 days).
-The direct REST responses can contain the captured continuity pack, so normal
-human output prints only status, ID, and time fields. Use `--json` only when a
-trusted caller needs the complete redacted response. Native MCP hosts should
-use `create_restart_snapshot` and `restore_restart_snapshot` instead of
-spawning the script.
+Terminal output prints only status, ID, and time fields; use `--json` for the
+full response. Native MCP hosts should use `create_restart_snapshot` and
+`restore_restart_snapshot` instead of spawning the script.
 
-### Add a TODO
+### Manage action items (`todo-add`, `todo-list`, `todo-done`)
 
 ```text
 node scripts/xmemo-skill.mjs todo-add --content "Add unit tests for ledger expense command"

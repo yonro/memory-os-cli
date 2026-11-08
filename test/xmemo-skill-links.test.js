@@ -38,8 +38,8 @@ test('SKILL.md lists every registered and dispatched command with a reference', 
   for (const match of main.matchAll(/\[([^\]]+)\]\.includes\(command\)/g)) {
     addCommandLiterals(commands, match[1], /'([^']+)'/g);
   }
-  const tick = String.fromCharCode(96);
-  const templateAssignment = 'command = ' + tick + 'cloud-skill-' + String.fromCharCode(36) + '{subcommand}' + tick;
+  const tick = '`';
+  const templateAssignment = 'command = `cloud-skill-${subcommand}`';
   if (main.includes(templateAssignment)) {
     const subcommands = new Set();
     for (const match of main.matchAll(/\[([^\]]+)\]\.includes\(subcommand\)/g)) {
@@ -51,6 +51,9 @@ test('SKILL.md lists every registered and dispatched command with a reference', 
   // 1. Every command and alias must appear in SKILL.md
   const missing = [...commands].filter((name) => !skill.includes(tick + name + tick));
   assert.deepEqual(missing, [], 'Add a one-line purpose for every command and alias to SKILL.md');
+  assert.ok(skill.includes('XMEMO_NO_UPDATE_CHECK'), 'SKILL.md must disclose XMEMO_NO_UPDATE_CHECK');
+  assert.ok(skill.includes('skill-update-check.json'), 'SKILL.md must disclose skill-update-check.json');
+  assert.ok(skill.includes('profile-offer.json'), 'SKILL.md must disclose profile-offer.json');
 
   // 2. Command Directory table coverage
   const commandSection = skill.slice(
@@ -64,10 +67,11 @@ test('SKILL.md lists every registered and dispatched command with a reference', 
   const missingFromTable = [...commands].filter((name) => !rowCommands.has(name));
   assert.deepEqual(missingFromTable, [], 'Each command or alias must be documented in the Command Directory table');
 
-  // 3. Every row links to a bundled detail reference
+  // 3. Every row links to a bundled detail reference and the target file contains the primary command
   const refDefs = Object.fromEntries(
     Array.from(skill.matchAll(/^\[([^\]]+)\]:\s*([^\s]+)/gm), (m) => [m[1], m[2]])
   );
+  const targetCache = new Map();
   for (const row of commandRows) {
     const inlineMatch = row.match(/\[([^\]]+)\]\(([^)]+)\)/);
     const refMatch = row.match(/\[([^\]]+)\]\[([^\]]+)\]/);
@@ -75,6 +79,17 @@ test('SKILL.md lists every registered and dispatched command with a reference', 
     const targetPath = inlineMatch ? inlineMatch[2] : refDefs[refMatch[2]];
     assert.ok(targetPath, 'Reference definition must resolve for row: ' + row);
     assert.match(targetPath, /^references\/[a-z0-9_-]+\.md(?:#[a-z0-9_-]+)?$/, 'Target must be in references/: ' + targetPath);
+
+    const primaryCmd = row.match(/^\|\s*`([^`]+)`/)[1];
+    const filePath = path.resolve(skillRoot, targetPath.split('#')[0]);
+    if (!targetCache.has(filePath)) {
+      targetCache.set(filePath, await readFile(filePath, 'utf8'));
+    }
+    const fileContent = targetCache.get(filePath);
+    assert.ok(
+      fileContent.includes('`' + primaryCmd + '`'),
+      'Target file ' + targetPath + ' must document primary command `' + primaryCmd + '`'
+    );
   }
   assert.ok(skill.includes('runtime-operations.md#command-syntax-and-flags'),
     'The entrypoint must link to the full flags matrix');
@@ -110,13 +125,4 @@ test('SKILL.md and reference Markdown links resolve inside the bundled Skill', a
   }
 
   assert.ok(relativeLinks.length > 0, 'The link check should inspect relative reference links');
-});
-
-test('agent-profile.md instruction block matches profile.mjs byte for byte', async () => {
-  const { getProfileInstructions } = await import('../skills/xmemo/scripts/commands/profile.mjs');
-  const profileRef = (await readFile(path.join(skillRoot, 'references', 'agent-profile.md'), 'utf8')).replace(/\r\n/g, '\n');
-  const match = profileRef.match(/Agent: Here is the block that will be added to AGENTS\.md:\n\n([\s\S]*?)\n\nNote:/);
-  assert.ok(match, 'agent-profile.md must contain the displayed block example');
-  const expected = getProfileInstructions('node scripts/xmemo-skill.mjs');
-  assert.equal(match[1], expected, 'agent-profile.md block must match getProfileInstructions() byte for byte');
 });

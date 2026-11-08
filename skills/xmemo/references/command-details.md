@@ -53,9 +53,18 @@ For other operations and guides, see:
 
 `update` requires an update-capable scope (`memory:update`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
 `forget` requires a delete-capable scope (`memory:delete`, `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
-Both operations strictly require BOTH an owner-scoped API key AND an accepted scope.
+`restore` requires a restore-capable scope (`memory:restore`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
+All modification and deletion operations strictly require BOTH an owner-scoped API key AND an accepted scope.
 Target IDs from either memory records or `ledger-list` transaction records (`transaction.id`)
 can be passed directly to `forget --id <id> --confirm`.
+
+## Relationship Graph Links (`relationships`)
+
+`relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]` lists active relationships where the requested memory is either endpoint backed by `GET /v1/memories/{memory_id}/relationships`. Pass the logical `memory_id` (the `memory_id` field in recall/search `--json` output, not the row `id`). Terminal output shows each edge kind, the other memory ID, and relationship version. The JSON response preserves the server body (`contract_version` and `relationships`). Cursor pagination is exclusive on `relationship_id`. Terminal output omits `relationship_id`, so use `--json` for manual pagination. The current endpoint does not return a `next_cursor` field.
+
+## Restoring Soft-Deleted Memories (`restore`)
+
+`restore --id <id> --confirm [--reason <text>]` restores a previously soft-deleted memory record backed by `POST /v1/memories/{id}/restore`. The ID may be a physical row `id` or logical `memory_id`. With a tenant-scoped credential, use the physical row `id` because the restore scope precheck does not resolve logical IDs. `forget` echoes the supplied ID, and ledger transaction IDs are not restore targets. `--confirm` is required; omitting `--confirm` exits non-zero without dispatching a network request. If the token lacks the `memory:restore` scope, an authentication hint directs the user to re-login.
 
 ## Context Assembly & Knowledge (`recall-context`)
 

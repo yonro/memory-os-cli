@@ -35,6 +35,7 @@ Troubleshooting / non-interactive:
 - Inspect credentials: `auth status --verify`
 
 If a command fails, follow its printed next action and read [references/troubleshooting.md](references/troubleshooting.md). If stderr reports `XMEMO_UPDATE_AVAILABLE: ...`, ask user once whether to update; continue task regardless.
+Successful recalls may check the service discovery endpoint for release metadata, cached locally in `~/.xmemo/skill-update-check.json` (set `XMEMO_NO_UPDATE_CHECK=1` to disable). Profile setup reminders store local recall and offer counts in `~/.xmemo/profile-offer.json`; run `profile --status never` to disable them and stop counting.
 
 ## Runtime Selection
 
@@ -42,7 +43,7 @@ Two parallel integration paths:
 1. **Bundled Skill runtime** using the command prefix above (direct REST API, Node.js >= 22.22.0).
 2. **XMemo MCP tools** (`create_restart_snapshot`, `restore_restart_snapshot`, etc., with an XMemo MCP server).
 
-Requires network access to the service and credentials from `XMEMO_KEY`, a managed store, or the consent-gated local credential file.
+The standalone runtime needs a shell to run Node.js, network access to the configured XMemo service, and credentials from `XMEMO_KEY`, a supported managed store, or the consent-gated local credential file. It reads a user-selected file only when a file input is requested. The host controls tool and filesystem permissions; this description does not grant or preapprove them. Project instruction edits and destructive operations remain subject to the confirmation rules below.
 
 ## Core Memory Workflows
 
@@ -50,7 +51,7 @@ Queries and saved content are sent to xmemo.dev (or trusted origin). Keep secret
 
 ### Session Start & Recall (Before Acting)
 
-Recall context before non-trivial work (`read --id <id>` retrieves full document stubs):
+Recall context before non-trivial work (a document-backed result is a stub; `read --id <id>` returns the full record):
 
 ```text
 recall --query "<topic>" [--limit <n>] [--expand-documents] [--compact]
@@ -125,10 +126,10 @@ Every command provided by the bundled Skill entrypoint, its primary purpose, and
 | `recall` | Recall memories by query | [Details][mem] |
 | `search` | Keyword memory search | [Details][mem] |
 | `read` | Read memory or document by ID | [Details][cmd] |
-| `relationships` | List memory relationship links | [Details][run] |
+| `relationships` | List memory relationship links | [Details][cmd] |
 | `update` | In-place memory update | [Details][cmd] |
 | `forget` | Soft-delete record (`--confirm`) | [Details][cmd] |
-| `restore` | Restore soft-deleted memory (`--confirm`) | [Details][run] |
+| `restore` | Restore soft-deleted memory (`--confirm`) | [Details][cmd] |
 | `recall-context` | Assemble prompt context | [Details][cmd] |
 | `save-state` | Save task state (alias: `state-save`) | [Details][mem] |
 | `restore-state` | Restore task state (alias: `state-restore`) | [Details][mem] |
@@ -196,16 +197,6 @@ Write a profile block only after the user explicitly approves the exact block sh
 | `3` | Server/network error (HTTP 5xx, connection refused, timeout) | Retry with backoff or check `doctor --anonymous` |
 
 When a command returns exit code 2 with "No XMemo credential found", follow First Successful Run above.
-
-## Operational References
-
-- [agent-profile.md](references/agent-profile.md): Agent instruction profile setup.
-- [auth-setup.md](references/auth-setup.md): Authentication and secret stores.
-- [command-details.md](references/command-details.md): Direct memory operations and REST endpoints.
-- [memory-operations.md](references/memory-operations.md): Memory, knowledge, and continuity workflows.
-- [ledger-operations.md](references/ledger-operations.md): Ledger accounting and diagnostics.
-- [runtime-operations.md](references/runtime-operations.md): Command matrix and exit codes.
-- [troubleshooting.md](references/troubleshooting.md): Diagnosis and recovery.
 
 ## Good Memory Candidates
 

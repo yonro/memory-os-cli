@@ -118,12 +118,14 @@ without putting the value in the command line or shell history.
 POSIX shell:
 
 ```text
+read -rsp "Enter XMemo token: " XMEMO_KEY && export XMEMO_KEY
 printf '%s' "$XMEMO_KEY" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
 PowerShell:
 
 ```powershell
+$env:XMEMO_KEY = Read-Host -Prompt "Enter XMemo token" -MaskInput
 $env:XMEMO_KEY | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
 ```
 
@@ -131,8 +133,9 @@ Standard input for `auth add --from-stdin` is bounded to a maximum of 64 KiB.
 Collect credentials only through `XMEMO_KEY` or the device login flow; do not
 request raw tokens in chat, logs, or project files.
 
-## Session & Credential Lifecycle
+## Session & Credential Lifecycle (`auth`, `logout`)
 
+- `auth`: Inspect, import, or manage credentials and sandbox tokens.
 - `auth status`: Displays the current local credential status without revealing
   token values. Append `--verify` to validate credentials against the server.
   The `auth-status` spelling remains supported as an alias.
