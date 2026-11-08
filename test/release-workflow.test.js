@@ -43,6 +43,9 @@ test('the Skill release is verified against the public endpoint before it is cal
   assert.match(workflow, /for format in tar\.gz zip; do/);
   assert.match(workflow, /\[\[ "\$location" == \*"\/\$RELEASE_TAG" \]\]/);
   assert.match(workflow, /still does not serve \$RELEASE_TAG/);
+  assert.match(workflow, /deadline=\$\(\(SECONDS \+ 540\)\)/);
+  assert.match(workflow, /for format in tar\.gz zip; do[\s\S]*?if \(\( SECONDS - last_announcement >= 60 \)\); then[\s\S]*?announce_release\s+fi/);
+  assert.match(workflow, /Announcement rejected with HTTP .*not retrying\." >&2\s+exit 1/);
 });
 
 test('CLI release workflow creates releases with --latest=false and explicit CLI title', async () => {
