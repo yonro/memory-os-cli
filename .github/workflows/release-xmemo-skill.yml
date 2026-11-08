@@ -333,10 +333,10 @@ jobs:
       - name: Submit once and verify the public version
         env:
           CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
-          CLAWHUB_CONFIG_PATH: ${{ runner.temp }}/xmemo-clawhub-config.json
         shell: bash
         run: |
           set -euo pipefail
+          export CLAWHUB_CONFIG_PATH="$RUNNER_TEMP/xmemo-clawhub-config.json"
           : "${CLAWHUB_TOKEN:?Configure CLAWHUB_TOKEN in the clawhub environment}"
           version="${RELEASE_TAG#skill-v}"
           payload="$RUNNER_TEMP/xmemo-clawhub-payload"
