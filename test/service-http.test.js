@@ -234,7 +234,10 @@ test('CLI-09 actual npm archive runs outside repo with CLI and independent Skill
   const cli = await child(process.execPath, [path.join(cliOnly, 'bin/memory-os.js'), 'memory', 'search', 'synthetic', '--json'], { cwd: cliOnly, env: isolatedEnv });
   assert.equal(cli.code, 0, cli.stderr + cli.stdout);
   assert.equal(JSON.parse(cli.stdout).data[0].memory_id, 'packaged');
-  const skill = await child(process.execPath, [path.join(skillOnly, 'scripts/xmemo-skill.mjs'), 'recall', '--query', 'synthetic', '--json'], { cwd: skillOnly, env: isolatedEnv });
+  const skill = await child(process.execPath, [path.join(skillOnly, 'scripts/xmemo-skill.mjs'), 'recall', '--query', 'synthetic', '--json'], {
+    cwd: skillOnly,
+    env: { ...isolatedEnv, XMEMO_TRUSTED_ORIGIN: api.origin },
+  });
   assert.equal(skill.code, 0, skill.stderr + skill.stdout);
   assert.ok(JSON.parse(skill.stdout));
 });

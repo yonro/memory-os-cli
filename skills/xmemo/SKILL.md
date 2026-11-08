@@ -22,6 +22,8 @@ When no credential exists, follow this exact sequence:
 
 ### Diagnostics and Advanced Setup
 
+Use the official XMemo service by default. For a custom deployment, the operator must configure the trusted credential origin as described in [references/auth-setup.md](references/auth-setup.md).
+
 For troubleshooting or non-interactive environments:
 - Check public service reachability: `node scripts/xmemo-skill.mjs doctor --anonymous`
 - For account-backed memory, prefer an `XMEMO_KEY` supplied by a managed
@@ -30,6 +32,8 @@ For troubleshooting or non-interactive environments:
 
 If a command fails, follow its printed next action and read [references/troubleshooting.md](references/troubleshooting.md).
 When stderr reports `XMEMO_UPDATE_AVAILABLE: ...`, ask the user once whether to update; regardless of the answer, continue the current task and do not ask again.
+
+Successful recalls can check the service's public discovery endpoint for release metadata. The result is cached locally in `~/.xmemo/skill-update-check.json`. Set `XMEMO_NO_UPDATE_CHECK=1` to disable automatic update checks. If the user chooses to be reminded about profile setup, the Skill stores local recall and reminder counts in `~/.xmemo/profile-offer.json`. Use `profile --status never` to stop those reminders and their recall counting.
 
 ## Runtime Selection
 
@@ -279,6 +283,6 @@ When a command returns exit code 2 with "No XMemo credential found", follow Firs
 
 - Keep XMemo credentials private. Never paste tokens into prompts, screenshots, repos, issue comments, or shared logs.
 - Prefer `XMEMO_KEY` or a managed secret store. Use `--allow-plaintext` only after accepting that processes running as the same operating-system user may read the local credential file.
-- Default service is `https://xmemo.dev`. Custom HTTPS origins receive credentials; use only trusted hosts. Plain HTTP is rejected except for localhost development.
+- Default service is `https://xmemo.dev`. Authenticated requests to a custom origin require the operator's exact `XMEMO_TRUSTED_ORIGIN` setting. Use a credential issued for that deployment. Plain HTTP is accepted only for loopback development.
 - Use synthetic data for demos. Do not claim uncertified integrations.
 - Do not simulate a successful memory read or write when no runtime path is available. Report the exact failing check and the next repair command.

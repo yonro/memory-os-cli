@@ -178,9 +178,9 @@ All CLI operations conform to normalized, deterministic exit codes across all ex
 ## Limitations
 
 - The commands call the hosted endpoints on `xmemo.dev`. They require a network connection and a valid credential.
-- Custom HTTPS origins are supported and receive the credential used by
-  authenticated commands. Use only trusted origins. Plain HTTP is accepted only
-  for localhost/loopback development.
+- A custom deployment receives credentials only if the operator sets
+  `XMEMO_TRUSTED_ORIGIN` to its exact origin. Use a credential issued for that
+  deployment. Plain HTTP is accepted only for loopback development.
 - Responses larger than 8 MiB are rejected, and requests default to a 30-second
   timeout.
 - `save-state` / `restore-state` map to `update_state` / `_get_active_state_item` under the hood; they capture/resume server-side active task state.

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 1.1.51
+
+- Block credential-bearing requests to custom origins unless the operator sets `XMEMO_TRUSTED_ORIGIN` to the exact destination origin. Managed credential restrictions still apply.
+
 ## 1.1.50
 
 - Added `dream-digest --id <run-uuid>` to read a personal Dream run's summary, including changes, open loops, and run health.

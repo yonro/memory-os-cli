@@ -147,3 +147,9 @@ request raw tokens in chat, logs, or project files.
   environment variable in the launching environment to stop using it. OpenClaw
   secrets and Muse vault credentials are preserved by logout; manage them via
   their respective platform controls.
+
+## Custom service origin
+
+Credential-bearing requests use `https://xmemo.dev` by default. For an operator-managed XMemo deployment, set `XMEMO_TRUSTED_ORIGIN` in the host configuration to the exact destination origin, such as `https://memory.example.com:8443`. Use only the scheme, host, and port, with no path or trailing slash. Set the base URL separately with `--base-url` or `XMEMO_BASE_URL` and use a credential issued for that deployment.
+
+Agents must leave the trust setting to the operator. OpenClaw secret sentinels and Muse Vault surrogates remain restricted to the official origin.

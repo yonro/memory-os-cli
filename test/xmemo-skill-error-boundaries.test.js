@@ -30,7 +30,13 @@ async function withServer(handler, run) {
 function runSkill(baseUrl, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [fileURLToPath(script), ...args], {
-      env: { ...process.env, XMEMO_KEY: 'synthetic-boundary-test', XMEMO_BASE_URL: baseUrl, XMEMO_NO_UPDATE_CHECK: '1' },
+      env: {
+        ...process.env,
+        XMEMO_KEY: 'synthetic-boundary-test',
+        XMEMO_BASE_URL: baseUrl,
+        XMEMO_TRUSTED_ORIGIN: baseUrl,
+        XMEMO_NO_UPDATE_CHECK: '1',
+      },
     });
     let stdout = '', stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });

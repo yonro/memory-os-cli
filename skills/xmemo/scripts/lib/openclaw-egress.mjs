@@ -77,4 +77,12 @@ export function assertEgressSecurity(authHeader, targetUrl, env = process.env) {
 
 export function configureEgressRequest(reqOptions, authHeader, targetUrl, env = process.env) {
   assertEgressSecurity(authHeader, targetUrl, env);
+  if (authHeader && targetUrl.origin !== ALLOWED_EGRESS_ORIGIN
+      && targetUrl.origin !== env.XMEMO_TRUSTED_ORIGIN) {
+    const error = new Error(
+      `Credential request blocked for ${targetUrl.origin}. Use https://xmemo.dev or have the operator configure XMEMO_TRUSTED_ORIGIN for this exact origin.`
+    );
+    error.exitCode = EXIT_CODE.USER_ERROR;
+    throw error;
+  }
 }
