@@ -53,6 +53,23 @@ test('CLI release workflow creates releases with --latest=false and explicit CLI
   assert.match(cliWorkflow, /--title "XMemo CLI v\$\{VERSION\}"/);
 });
 
+test('ClawHub is gated in the Skill release workflow and verifies the tagged archive', async () => {
+  const workflow = await readFile(workflowPath, 'utf8');
+  const job = workflow.split(/^  clawhub:\r?$/m)[1]?.split(/^  npm:\r?$/m)[0];
+  assert.ok(job);
+  assert.match(job, /needs: package/);
+  assert.match(job, /if: vars\.XMEMO_SKILL_CLAWHUB_PUBLISH == 'true'/);
+  assert.match(job, /environment: clawhub/);
+  assert.match(job, /diff -r --no-dereference skills\/xmemo "\$payload"/);
+  assert.match(job, /case "\$\(publication "\$version"\)" in\s*404\)/);
+  assert.match(job, /clawhub skill publish .* --dry-run --json/);
+  assert.match(job, /\.moderation\.updatedAt > \$previous/);
+  assert.match(job, /\.moderation\.verdict/);
+  assert.match(job, /PUBLISHED_PENDING/);
+  assert.match(job, /::warning::ClawHub version scan status/);
+  assert.match(job, /sha256sum/);
+});
+
 test('CLI release and recovery workflows use OIDC trusted publishing with zero NPM_TOKEN secrets', async () => {
   const workflowsDir = path.join(repoRoot, '.github/workflows');
   const files = await readdir(workflowsDir);
