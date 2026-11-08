@@ -73,51 +73,26 @@ node scripts/xmemo-skill.mjs read --id <memory_id> --offset 0 --limit 500
 node scripts/xmemo-skill.mjs read --id <memory_id> --json
 ```
 
-`read` performs an exact-ID lookup backed by `GET /v1/memories/{id}/explain?include_embedding=false`.
-Unlike semantic `recall` or query `search`, `read` requires a known `--id` and retrieves the targeted memory record directly.
-Optional `--offset` and `--limit` paginate the text content by character offset and window size, setting `truncated: true` when content extends beyond the requested window.
-Empty content is treated as a valid memory value. Soft-deleted or missing memories return `not_found`.
-Authentication and permission errors (401/403) are preserved and never downgraded to `not_found`.
-Under `--json`, it returns `{ ok: true, id, path, content, version, truncated }` (`version` is `null` if unversioned or absent).
+`read` performs an exact-ID lookup backed by `GET /v1/memories/{id}/explain?include_embedding=false`. Optional `--offset` and `--limit` paginate content by character offset and window size. Missing memories return 404 `not_found`; authentication/authorization errors (401/403) are preserved. Under `--json`, returns `{ ok: true, id, path, content, version, truncated }`. For complete endpoint and envelope details, see [command-details.md](command-details.md).
 
 ### Update an existing memory
 
 ```text
 node scripts/xmemo-skill.mjs update --id <memory_id> --content "Updated content text"
-node scripts/xmemo-skill.mjs update --id <memory_id> --path "projects/demo/architecture"
-node scripts/xmemo-skill.mjs update --id <memory_id> --metadata '{"revised":true}' --bucket "docs"
-node scripts/xmemo-skill.mjs update --id <memory_id> --content "New text" --json
+node scripts/xmemo-skill.mjs update --id <memory_id> --metadata '{"revised":true}' --json
 ```
 
-`update` sends a `PATCH /v1/memories/{id}` request with fields specified in `--content`, `--path`,
-`--metadata` (parsed JSON object), `--bucket`, and `--scope`.
-Validation and authorization:
-- A 400 response with `invalid_memory_id` is passed through cleanly as a parameter/validation error and is never downgraded to `not_found`.
-- Missing target memories return 404 `not_found`.
-- Authentication (401) and permission (403) rejections remain accurately categorized.
-- Under `--json`, successful update returns `{ ok: true, id, path, updated: true, ... }`.
+`update` sends a `PATCH /v1/memories/{id}` request with `--content`, `--path`, `--metadata` (JSON), `--bucket`, and `--scope`. Requires `memory:write` scope. 400 `invalid_memory_id` is reported as a parameter error; missing targets return 404 `not_found`. Under `--json`, returns `{ ok: true, id, path, updated: true, ... }`. See [command-details.md](command-details.md) for details.
 
 ### Forget a memory or ledger transaction with confirmation
 
 ```text
 node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm
-node scripts/xmemo-skill.mjs forget --id <memory_id> --confirm --reason "Deprecated convention"
-node scripts/xmemo-skill.mjs forget --id <transaction_id> --confirm
-node scripts/xmemo-skill.mjs forget --id <id> --confirm --json
+node scripts/xmemo-skill.mjs forget --id <transaction_id> --confirm --json
 ```
 
-`forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }` to perform a safe soft deletion.
-Target references:
-- Accepts a memory UUID, logical memory reference, or a ledger transaction ID (obtained via `ledger-list`).
-- When a transaction ID is provided, the server lifecycle resolver resolves the backing ledger memory record and soft-deletes it, omitting it from future `ledger-list` queries.
-Scope & Authorization:
-- Authorization strictly requires BOTH an owner-scoped API key AND an accepted delete-capable scope: `memory:delete`, `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, or `*`.
-- Standard credentials carrying `memory:write` are accepted. Read-only tokens (such as `ledger:read` or `memory:read` alone) or unclaimed agent keys trigger HTTP 403 `delete scope required` / `Access denied`.
-**Accidental Deletion Guard**:
-- If `--confirm` is not passed, the script exits immediately with code 1, prints the target ID, and **issues 0 HTTP requests**.
-- When confirmed, successful soft deletion returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`.
-- A 404 response reports `not_found` (e.g. non-existent memory or transaction record).
-- 401/403 errors are reported without downgrade.
+`forget` calls `POST /v1/memories/{id}/forget` with `{ mode: 'soft_delete', reason }`. Accepts a memory UUID or a `ledger-list` transaction ID. Requires an owner-scoped key with a delete-capable scope (e.g. `memory:delete`, `memory:write`).
+**Accidental Deletion Guard**: If `--confirm` is omitted, the script exits code 1, prints the target ID, and **issues 0 HTTP requests**. When confirmed, returns `{ ok: true, id, mode: 'soft_delete', forgotten: true }` under `--json`. See [command-details.md](command-details.md).
 
 ### Remember a decision
 
@@ -126,10 +101,10 @@ Scope & Authorization:
 node scripts/xmemo-skill.mjs remember --content "Use pnpm for package management in this repo" --path "projects/memory-os-cli/conventions"
 
 # Read content from standard input (stdin)
-cat docs/conventions.md | node scripts/xmemo-skill.mjs remember --content - --path "projects/memory-os-cli/conventions"
+cat <file> | node scripts/xmemo-skill.mjs remember --content - --path "projects/memory-os-cli/conventions"
 
 # Import content from a local file
-node scripts/xmemo-skill.mjs remember --file docs/conventions.md --path "projects/memory-os-cli/conventions"
+node scripts/xmemo-skill.mjs remember --file <file> --path "projects/memory-os-cli/conventions"
 ```
 
 `remember` creates a durable memory record via `POST /v1/skill/operations` (or `POST /v1/remember` in temporary mode).
@@ -148,6 +123,19 @@ Content input options:
 ```text
 node scripts/xmemo-skill.mjs recall --query "package manager convention for memory-os-cli" --compact
 ```
+
+Document-backed memories returned by `recall` or `search` appear as a one-line stub (`Document-backed memory: <title>`); the stub is not the full record. To retrieve the full text, run `read --id <id>` with the `id` from the result (no `--limit` needed), or pass `--expand-documents` to `recall` or `search`. Before telling the user a document was not saved in full, run `read --id` on the stub.
+
+### Recall and Search with Time Filtering
+
+Both `recall` and `search` support optional temporal bounds and filtering flags:
+
+```text
+node scripts/xmemo-skill.mjs recall --query "<topic>" [--limit <n>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--temporal_axis_mode <mode>] [--query_mode <mode>] [--expand-documents] [--compact]
+node scripts/xmemo-skill.mjs search --query "<keywords>" [--limit <n>] [--since <RFC3339>] [--until <RFC3339>] [--time_order <desc|asc>] [--owner_timezone <IANA>] [--reference_time <RFC3339>] [--temporal_axis_mode <mode>] [--query_mode <mode>] [--expand-documents] [--compact]
+```
+
+Time bounds must use RFC 3339 with `Z` or a numeric timezone offset; when both are supplied, `until` must be later than `since`. `time_order` accepts `desc` or `asc`. `temporal_axis_mode` accepts `created_at`, `updated_at`, or `split_filter_created_order_updated`. `query_mode` accepts `topic` or `activity_log`; `activity_log` requires both `since` and `until`. The kebab-case aliases `--time-order`, `--owner-timezone`, `--reference-time`, `--temporal-axis-mode`, `--query-mode`, and `--hypothetical-answer` are also accepted. `hypothetical_answer` is available only for `recall-context` and is sent as query expansion text.
 
 ### Include Knowledge deliberately
 
@@ -177,7 +165,7 @@ node scripts/xmemo-skill.mjs remember --content "Verified decision" --path "proj
 node scripts/xmemo-skill.mjs search --query "active implementation" --explain true --prefer_working false --compact
 ```
 
-### Save handoff state
+### Save handoff state (`save-state`)
 
 ```text
 node scripts/xmemo-skill.mjs save-state --key active_task
@@ -187,7 +175,7 @@ node scripts/xmemo-skill.mjs save-state --key active_task
 state-operation contract. A value of `0` requests the server's non-expiring
 state behavior for that item.
 
-### Restore handoff state
+### Restore handoff state (`restore-state`)
 
 ```text
 node scripts/xmemo-skill.mjs restore-state --key active_task
@@ -222,7 +210,7 @@ trusted caller needs the complete redacted response. Native MCP hosts should
 use `create_restart_snapshot` and `restore_restart_snapshot` instead of
 spawning the script.
 
-### Add a TODO
+### Manage action items (`todo-add`, `todo-list`, `todo-done`)
 
 ```text
 node scripts/xmemo-skill.mjs todo-add --content "Add unit tests for ledger expense command"

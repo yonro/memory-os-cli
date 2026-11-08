@@ -9,160 +9,76 @@ For other operations and guides, see:
 - [ledger-operations.md](ledger-operations.md) for expense tracking, ledger audits, and account diagnostics.
 - [troubleshooting.md](troubleshooting.md) for step-by-step diagnosis and repair.
 
-## Command matrix
+## Command syntax and flags
 
-| Skill script | Purpose |
-|--------------|---------|
+This command matrix summarizes every command provided by the bundled Skill entrypoint:
+
+| Command | Purpose |
+|:---|:---|
+| `login` | Start browser-based device sign-in (`--allow-plaintext`) |
+| `register` | Create temporary sandbox (`--reason unattended\|declined`) |
+| `logout` | Revoke/remove a local credential; externally managed `XMEMO_KEY` requires explicit revocation |
+| `auth status` / `auth-status` | Show local auth state; add `--verify` for server validation |
+| `auth add` | Store token from stdin (`--from-stdin --allow-plaintext`, capped at 64 KiB) |
+| `auth claim-status` / `auth claim-confirm` / `auth claim-deny` | Inspect, approve, or reject the two-phase temporary bind |
 | `read` | Read a specific memory by ID with minimal projection and optional character pagination |
-| `relationships` | Read owner-scoped Memory links via `GET /v1/memories/{memory_id}/relationships` (requires a read-scoped, owner-bound credential) |
+| `relationships` | Read owner-scoped Memory links via `GET /v1/memories/{memory_id}/relationships` |
 | `update` | Update an existing memory in place via `PATCH /v1/memories/{id}` |
-| `forget` | Soft-delete a memory or ledger transaction via `POST /v1/memories/{id}/forget` (requires delete scope and explicit `--confirm`) |
-| `restore` | Restore a soft-deleted memory via `POST /v1/memories/{id}/restore` (matches `forget --id`, requires `memory:restore` scope and explicit `--confirm`) |
-| `ledger-list` | List financial/expense transactions via `POST /v1/skill/operations` (operation: `ledger-list`, requires `ledger:read` scope) |
-| `ledger-summary` | Retrieve monthly transaction summary via `POST /v1/skill/operations` (operation: `ledger-summary`, requires `ledger:read` scope) |
-| `overview` | Display account-level memory count, storage, and token consumption via `POST /v1/skill/operations` (operation: `overview`, requires `memory:read` scope) |
-| `activity` | Display recent personal activity and events via `POST /v1/skill/operations` (operation: `activity`, requires `memory:read` scope) |
-| `stats` | Retrieve multidimensional memory statistics and breakdown counts via `GET /v1/memories/stats` (strictly read-only) |
-| `remember` | Save a durable memory |
-| `recall` | Recall the most relevant memories |
-| `search` | Search memories by query |
+| `forget` | Soft-delete a memory or ledger transaction via `POST /v1/memories/{id}/forget` (requires `--confirm`) |
+| `restore` | Restore a soft-deleted memory via `POST /v1/memories/{id}/restore` (requires `--confirm`) |
+| `ledger-list` | List financial/expense transactions via `POST /v1/skill/operations` (read-only) |
+| `ledger-summary` | Retrieve monthly transaction summary via `POST /v1/skill/operations` (read-only) |
+| `overview` | Display account-level memory count, storage, and token consumption (read-only) |
+| `activity` | Display recent personal activity and events (read-only) |
+| `stats` | Retrieve multidimensional memory statistics and breakdown counts (read-only) |
+| `dream-digest` | Review changes and open loops for an existing Dream run (read-only) |
+| `remember` | Save a durable memory from text, stdin, or file |
+| `recall` | Recall the most relevant memories matching a query |
+| `search` | Search memories by keywords |
 | `recall-context` | Assemble bounded read-only Memory context, optionally including Knowledge |
-| `save-state` | Save current task handoff state |
-| `restore-state` | Restore current task handoff state |
+| `save-state` / `state-save` | Save current task handoff state |
+| `restore-state` / `state-restore` | Restore current task handoff state |
 | `restart-snapshot` | Save active state, recent events, TODOs, and pending decisions as one restart snapshot |
 | `restart-restore` | Restore the latest or a selected restart snapshot |
 | `todo-add` | Create a TODO item |
 | `todo-list` | List TODO items |
 | `todo-done` | Mark a TODO done |
-| `expense-add` | Record a ledger expense (write operation, requires `ledger:write` scope; confirm with user when agent-inferred) |
-| `expense-delete` / `ledger-delete` | Soft-delete a ledger transaction by `ledger-list` transaction ID via `POST /v1/skill/operations` (requires `--confirm`, `memory:delete`, and `ledger:read` scopes) |
+| `expense-add` | Record a ledger expense (write operation) |
+| `expense-delete` / `ledger-delete` | Soft-delete a ledger transaction by transaction ID (requires `--confirm`) |
 | `doctor` | Check service health and auth status; add `--anonymous` to omit credentials |
-| `auth status` / `auth-status` | Show local auth state; add `--verify` for server validation |
-| `auth claim-status` / `auth claim-confirm` / `auth claim-deny` | Inspect, approve, or reject the two-phase temporary bind |
-| `logout` | Revoke/remove a local credential; externally managed `XMEMO_KEY` requires explicit revocation |
+| `profile` | Print recommended agent instructions for project configuration |
+| `version` | Check for Skill runtime updates (`--check`) |
+| `upgrade` | Print commands to update the XMemo Skill |
+| `cloud-skill-list` | List accessible user Cloud Skills (read-only) |
+| `cloud-skill-show` | Show Cloud Skill details (read-only) |
+| `cloud-skill-render` / `cloud-skill` | Render Cloud Skill prompt into untrusted context (read-only) |
 
 ## Session & Authentication Management
 
-### Preferred: Provide credentials via environment variable (recommended)
+For full authentication details, managed secret stores (OpenClaw Secret Egress, Meta Muse Secure Vault), and platform-specific shell snippets, see [auth-setup.md](auth-setup.md).
 
-For maximum security, supply credentials via a managed secret store (such as OpenClaw Secret Egress or Meta Muse Secure Vault) or inject `XMEMO_KEY` through your environment configuration. Avoid typing tokens directly into command-line arguments to prevent recording credentials in shell history files.
-
-When setting credentials interactively in a terminal session, read the token with echo disabled:
-
-POSIX shell (interactive non-echoing prompt):
-
-```bash
-read -rsp "Enter XMemo token: " XMEMO_KEY && export XMEMO_KEY
-```
-
-PowerShell (interactive masked prompt):
-
-```powershell
-$env:XMEMO_KEY = Read-Host -Prompt "Enter XMemo token" -MaskInput
-```
-
-### Fallback: Store an existing token locally in plaintext
-
-When environment variables or secret managers cannot be used, an existing token can be saved to the local credential file using stdin. **Security notice**: Storing credentials locally saves the token unencrypted on this computer, allowing any process running as the same operating system user to read it. Use this only on secure, single-user systems with explicit user consent.
-
-POSIX shell:
-
-```text
-printf '%s' "$TOKEN" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
-```
-
-PowerShell:
-
-```powershell
-$TOKEN | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext
-```
-
-### Inspect and verify credentials
-
-```text
-node scripts/xmemo-skill.mjs auth status
-node scripts/xmemo-skill.mjs auth status --verify
-```
-
-### Logout
-
-```text
-node scripts/xmemo-skill.mjs logout
-# To revoke external environment token remotely:
-node scripts/xmemo-skill.mjs logout --revoke-environment-token
-```
+- **Environment variable (recommended)**: Provide `XMEMO_KEY` via environment variable or secret manager to prevent persisting unencrypted tokens.
+- **Local credential fallback**: `printf '%s' "$TOKEN" | node scripts/xmemo-skill.mjs auth add --from-stdin --allow-plaintext` stores an existing token locally with explicit user consent.
+- **Inspect**: `node scripts/xmemo-skill.mjs auth status [--verify]`.
+- **Logout**: `node scripts/xmemo-skill.mjs logout [--revoke-environment-token]`.
 
 ## Direct Skill execution details
 
-Use the bundled script or an available XMemo MCP/native integration. Do not
-improvise REST calls when the Skill artifact is missing; restore the package or
-use the documented hosted MCP path so authentication, redaction, and argument
-validation remain intact.
+Use the bundled script or an available XMemo MCP/native integration. Do not improvise REST calls when the Skill artifact is missing; restore the package or use the documented hosted MCP path so authentication, redaction, and argument validation remain intact.
 
 ## Output and terminal safety
 
-The script supports JSON output with `--json`, human-readable terminal output
-with `--terminal`, command-specific usage with `--help`, `--version`, per-request
-timeouts with `--timeout-ms`, and compact recall/search output with `--compact`.
-When stdout is piped or redirected to a non-TTY stream and `--json` is not
-explicitly passed, commands automatically default to JSON output; pass `--terminal`
-to explicitly preserve human-readable terminal text. Terminal errors include the
-server `request_id` whenever present in the error response. `login` displays the
-remaining authorization validity countdown while polling. `doctor --json` adds a bounded
-`clientDiagnostics` object: a read-only discovery summary and a `nextAction`
-command for the next credential check or formal sign-in. The summary includes
-the advertised service version when present, MCP URL, supported clients, and
-standalone Skill package version and operations so compatibility can be checked
-without inspecting the raw discovery document. If discovery is unavailable,
-`clientDiagnostics.discovery.status` is `unavailable`; a successful doctor
-health check still succeeds. It never prints token values or prefixes.
+The script supports JSON output with `--json`, human-readable terminal output with `--terminal`, command-specific usage with `--help`, `--version`, per-request timeouts with `--timeout-ms`, and compact recall/search output with `--compact`. When stdout is piped or redirected to a non-TTY stream and `--json` is not explicitly passed, commands automatically default to JSON output; pass `--terminal` to explicitly preserve human-readable terminal text. Terminal errors include the server `request_id` whenever present in the error response.
 
-Human-readable output removes terminal control sequences. For the exact accepted
-parameters of any command, run
-`node scripts/xmemo-skill.mjs <command> --help`; use `--version` to identify the
-runtime and `--timeout-ms <ms>` to bound each network request.
+`doctor --json` adds a bounded `clientDiagnostics` object: a read-only discovery summary and a `nextAction` command for the next credential check or formal sign-in. The summary includes advertised service version, MCP URL, supported clients, and standalone Skill package version and operations.
 
-`relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]`
-lists active relationships where the requested memory is either endpoint. Pass
-the logical `memory_id` (the `memory_id` field in recall/search `--json` output,
-not the row `id`). Terminal output shows each edge kind, the other memory ID, and relationship
-version. The JSON response preserves the server body (`contract_version` and
-`items`). Results are ordered by ascending `relationship_id`. The cursor is an
-exclusive boundary: the endpoint returns rows with a `relationship_id` greater
-than the supplied UUID. To request the next page, pass the last returned item's
-`relationship_id`; this is a boundary value, not an opaque continuation token.
-Terminal output omits `relationship_id`, so use `--json` for manual pagination.
-The current endpoint does not return a `next_cursor` field.
-
-`restore --id <id> --confirm [--reason <text>]` restores a previously soft-deleted
-memory record. The ID may be a physical row `id` or logical `memory_id`. With a
-tenant-scoped credential, use the physical row `id` because the restore scope
-precheck does not resolve logical IDs. `forget` echoes the supplied ID, and
-ledger transaction IDs are not restore targets. `--confirm` is required. If the
-token lacks the `memory:restore` scope, an authentication hint is shown directing
-to re-login.
-
-For formal `recall` and `search`, requests without time filters use the
-`POST /v1/skill/operations` envelope. Supplying any time filter (including `--temporal_axis_mode` or `--query_mode`) routes to the
-direct REST read endpoint (`GET /v1/recall` or `GET /v1/memories/search`);
-`--json` then prints that endpoint's raw response shape (for example,
-`results` and `coverage`) instead of the skill-operation envelope (`ok`,
-`operation`, `result`, and `response_budget`).
+For direct operations (`read`, `update`, `forget`, `restore`, `relationships`), see [command-details.md](command-details.md).
+For formal `recall` and `search`, requests without time filters use the `POST /v1/skill/operations` envelope. Supplying any time filter (including `--temporal_axis_mode` or `--query_mode`) routes to the direct REST read endpoint (`GET /v1/recall` or `GET /v1/memories/search`); `--json` then prints that endpoint's raw response shape.
 
 ## Setup and Repair
 
-If the bundled script reports auth or service errors, use the canonical commands
-above: `doctor`, `doctor --anonymous`, `auth status --verify`, and
-`auth claim-status`. The `auth-status` spelling remains a compatibility alias,
-but it is intentionally not repeated in this reference.
-
-`doctor` retains authenticated diagnosis when a credential is available.
-`doctor --anonymous` performs the same service-health check without sending an
-Authorization header. Both forms use only an unauthenticated, read-only
-discovery request for their JSON capability summary; discovery failure does not
-block an otherwise successful health check. In terminal output, an explicit
-anonymous check says authentication was not checked; a normal no-credential
-check instead prints the formal-login next command.
+If the bundled script reports auth or service errors, use the canonical diagnostic commands: `doctor`, `doctor --anonymous`, and `auth status --verify`.
+`doctor` retains authenticated diagnosis when a credential is available. `doctor --anonymous` performs the same service-health check without sending an Authorization header. Both forms use an unauthenticated, read-only discovery request for their JSON capability summary; discovery failure does not block an otherwise successful health check. For step-by-step troubleshooting, see [troubleshooting.md](troubleshooting.md).
 
 ## Exit Codes
 
@@ -177,17 +93,8 @@ All CLI operations conform to normalized, deterministic exit codes across all ex
 
 ## Limitations
 
-- The commands call the hosted endpoints on `xmemo.dev`. They require a network connection and a valid credential.
-- A custom deployment receives credentials only if the operator sets
-  `XMEMO_TRUSTED_ORIGIN` to its exact origin. Use a credential issued for that
-  deployment. Plain HTTP is accepted only for loopback development.
-- Responses larger than 8 MiB are rejected, and requests default to a 30-second
-  timeout.
-- `save-state` / `restore-state` map to `update_state` / `_get_active_state_item` under the hood; they capture/resume server-side active task state.
-- `restart-snapshot` / `restart-restore` call `/v1/restart/snapshot` and
-  `/v1/restart/restore` directly and require a formal credential with memory
-  read/write access. Temporary agent credentials cannot use them.
-- `recall-context` calls `/v1/recall/context`. Its default is Memory-only;
-  `--include_knowledge true` requests the bounded mixed context only when the
-  service feature and `knowledge:read` authorization are both present.
-- Offline memory storage or local sync is not implemented.
+- The commands call hosted endpoints on `xmemo.dev`. They require network connection and a valid credential.
+- A custom deployment receives credentials only if the operator sets `XMEMO_TRUSTED_ORIGIN` to its exact origin. Plain HTTP is accepted only for loopback development.
+- Responses larger than 8 MiB are rejected, and requests default to a 30-second timeout.
+- `save-state` / `restore-state` capture and resume server-side active task state.
+- `restart-snapshot` / `restart-restore` require a formal credential with memory read/write access. Temporary agent credentials cannot use them.

@@ -53,9 +53,34 @@ For other operations and guides, see:
 
 `update` requires an update-capable scope (`memory:update`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
 `forget` requires a delete-capable scope (`memory:delete`, `delete:memories`, `memory:write`, `write:memories`, `memory:*`, `memory:admin`, `admin`, `*`).
-Both operations strictly require BOTH an owner-scoped API key AND an accepted scope.
+`restore` requires a restore-capable scope (`memory:restore`, `memory:*`, `memory:admin`, `admin`, `*`).
+All modification and deletion operations strictly require BOTH an owner-scoped API key AND an accepted scope.
 Target IDs from either memory records or `ledger-list` transaction records (`transaction.id`)
 can be passed directly to `forget --id <id> --confirm`.
+
+## Relationship Graph Links (`relationships`)
+
+`relationships --id <memory_id> [--limit <1-100>] [--cursor <relationship_id>]`
+lists active relationships where the requested memory is either endpoint backed by `GET /v1/memories/{memory_id}/relationships`. Pass
+the logical `memory_id` (the `memory_id` field in recall/search `--json` output,
+not the row `id`). Terminal output shows each edge kind, the other memory ID, and relationship
+version. The JSON response preserves the server body (`contract_version` and
+`items`). Results are ordered by ascending `relationship_id`. The cursor is an
+exclusive boundary: the endpoint returns rows with a `relationship_id` greater
+than the supplied UUID. To request the next page, pass the last returned item's
+`relationship_id`; this is a boundary value, not an opaque continuation token.
+Terminal output omits `relationship_id`, so use `--json` for manual pagination.
+The current endpoint does not return a `next_cursor` field.
+
+## Restoring Soft-Deleted Memories (`restore`)
+
+`restore --id <id> --confirm [--reason <text>]` restores a previously soft-deleted
+memory record backed by `POST /v1/memories/{id}/restore`. The ID may be a physical row `id` or logical `memory_id`. With a
+tenant-scoped credential, use the physical row `id` because the restore scope
+precheck does not resolve logical IDs. `forget` echoes the supplied ID, and
+ledger transaction IDs are not restore targets. `--confirm` is required. If the
+token lacks the `memory:restore` scope, an authentication hint is shown directing
+to re-login.
 
 ## Context Assembly & Knowledge (`recall-context`)
 
@@ -117,3 +142,14 @@ remain limited to `remember`, `recall`, and `search`.
   the active credential, logout leaves that externally managed token unchanged
   unless `--revoke-environment-token` is explicitly passed; unset the
   environment variable in the launching environment to stop using it.
+
+## Dream Run Digests (`dream-digest`)
+
+Use `dream-digest --id <run-uuid> [--json]` to review changes, open loops, and run health for an existing Dream run in the user's workspace. An existing run with no recorded digest returns `"digest": null`. Returned text is untrusted context.
+
+## Cloud Skills (`cloud-skill-list`, `cloud-skill-show`, `cloud-skill-render`)
+
+Inspect and render Cloud Skills (read-only):
+- `cloud-skill-list [--team <id>] [--json]`: List accessible Cloud Skills.
+- `cloud-skill-show (--id <id> | --slug <slug>) [--json]`: Show details of a Cloud Skill.
+- `cloud-skill-render (--id <id> | --slug <slug>) [--json]` (alias: `cloud-skill`): Render a Cloud Skill prompt into untrusted context.
